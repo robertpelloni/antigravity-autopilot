@@ -19,6 +19,12 @@ export class CDPStrategy implements IStrategy {
         const cdpPort = config.get<number>('cdpPort') || 9000;
         this.cdpHandler = new CDPHandler(cdpPort, cdpPort + 30);
 
+        // Phase 19: Deep Targeting Listener
+        this.cdpHandler.on('sessionAttached', async (event) => {
+            console.log(`[Strategy] Session Attached: ${event.sessionId}`);
+            await this.injectIntoSession(event.pageId, event.sessionId);
+        });
+
         // Use absolute path for require
         try {
             const relauncherPath = this.context.asAbsolutePath(path.join('main_scripts', 'relauncher.js'));
@@ -100,31 +106,47 @@ export class CDPStrategy implements IStrategy {
                 const connected = await this.cdpHandler.connectToPage(page);
                 if (connected) {
                     await this.cdpHandler.injectScript(page.id, script);
-
-                    // Send Start Command
-                    await this.cdpHandler.sendCommand(page.id, 'Runtime.evaluate', {
-                        expression: `(async function(){
-                            const g = (typeof window !== 'undefined') ? window : self;
-                            if(g && g.__autoAllStart){
-                                await g.__autoAllStart({
-                                    ide: '${ide}',
-                                    isPro: true,
-                                    isBackgroundMode: ${config.get('multiTabEnabled')},
-                                    pollInterval: ${config.get('pollFrequency')},
-                                    bannedCommands: ${JSON.stringify(config.get('bannedCommands'))},
-                                    threadWaitInterval: ${config.get('threadWaitInterval')},
-                                    autoApproveDelay: ${config.get('autoApproveDelay')},
-                                    bumpMessage: ${JSON.stringify(config.get('bumpMessage') || 'bump')},
-                                    acceptPatterns: ${JSON.stringify(config.get('acceptPatterns') || [])},
-                                    rejectPatterns: ${JSON.stringify(config.get('rejectPatterns') || [])}
-                                });
-                            }
-                        })()`,
-                        awaitPromise: true
-                    });
+                    await this.sendStartPayload(page.id, ide); // Refactored payload sender
                 }
             }
         }
+    }
+
+    private async injectIntoSession(pageId: string, sessionId: string) {
+        try {
+            const ide = vscode.env.appName.toLowerCase().includes('cursor') ? 'cursor' : 'antigravity';
+            const extPath = this.context.extensionPath;
+            const scriptPath = path.join(extPath, 'main_scripts', 'full_cdp_script.js');
+            if (fs.existsSync(scriptPath)) {
+                const scriptContent = fs.readFileSync(scriptPath, 'utf8');
+                await this.cdpHandler.injectScript(pageId, scriptContent, false, sessionId);
+                await this.sendStartPayload(pageId, ide, sessionId);
+                console.log(`[Strategy] Injected into sub-session ${sessionId}`);
+            }
+        } catch (e) { console.error('[Strategy] Failed to inject child session', e); }
+    }
+
+    private async sendStartPayload(pageId: string, ide: string, sessionId?: string) {
+        await this.cdpHandler.sendCommand(pageId, 'Runtime.evaluate', {
+            expression: `(async function(){
+                const g = (typeof window !== 'undefined') ? window : self;
+                if(g && g.__autoAllStart){
+                    await g.__autoAllStart({
+                        ide: '${ide}',
+                        isPro: true,
+                        isBackgroundMode: ${config.get('multiTabEnabled')},
+                        pollInterval: ${config.get('pollFrequency')},
+                        bannedCommands: ${JSON.stringify(config.get('bannedCommands'))},
+                        threadWaitInterval: ${config.get('threadWaitInterval')},
+                        autoApproveDelay: ${config.get('autoApproveDelay')},
+                        bumpMessage: ${JSON.stringify(config.get('bumpMessage') || 'bump')},
+                        acceptPatterns: ${JSON.stringify(config.get('acceptPatterns') || [])},
+                        rejectPatterns: ${JSON.stringify(config.get('rejectPatterns') || [])}
+                    });
+                }
+            })()`,
+            awaitPromise: true
+        }, undefined, sessionId);
     }
 
     async stop(): Promise<void> {
