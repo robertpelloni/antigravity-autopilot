@@ -372,16 +372,26 @@
 
     async function remoteType(text) {
         if (!text) return;
-        // Send command to Extension via Bridge (Binding preferred)
-        const payload = `__ANTIGRAVITY_TYPE__:${text}`;
+        sendCommandToExtension(`__ANTIGRAVITY_TYPE__:${text}`);
+        await workerDelay(50);
+    }
+
+    function sendCommandToBridge(commandId, args) {
+        let payload = `__ANTIGRAVITY_COMMAND__:${commandId}`;
+        if (args) {
+            payload += `|${JSON.stringify(args)}`;
+        }
+        sendCommandToExtension(payload);
+    }
+
+    function sendCommandToExtension(payload) {
         if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
             window.__ANTIGRAVITY_BRIDGE__(payload);
-            log(`[Bridge] Sent Type via Binding: "${text}"`);
+            log(`[Bridge] Sent: ${payload}`);
         } else {
             console.log(payload);
-            log(`[Bridge] Sent Type via Console: "${text}"`);
+            log(`[Bridge] Console: ${payload}`);
         }
-        await workerDelay(50);
     }
 
     // Polyfill for RequestIdleCallback if needed
@@ -776,8 +786,21 @@
 
         const isCommandButton = text.includes('run') || text.includes('execute') || text.includes('accept');
 
-        // Special Case: "Accept" in Diff Editor or SCM
-        if (text === 'accept' || text === 'accept all' || text.includes('accept changes')) {
+        // Special Case: "Accept" in Diff Editor
+        if (text === 'accept' || text.includes('accept changes')) {
+            // Check if it's the global "Accept All" in SCM title
+            // or a specific file accept.
+            // For SCM "Accept All", we can use git.stageAll
+            // But how do we know?
+            // Heuristic: If it's in a view with "Source Control" title?
+            // Actually, keep clicking for now, BUT if it fails (stuck), we might want to use command.
+            // Let's use command if possible.
+            // "Accept All" in SCM view -> git.stageAll
+            if (el.closest('[id*="scm-view"]')) {
+                log('Detected SCM Accept All -> Using Command');
+                sendCommandToBridge('git.stageAll');
+                return true;
+            }
             return true;
         }
 
@@ -1114,366 +1137,442 @@
         const state = window.__autoAllState;
         if (!state.clickHistory) state.clickHistory = { signature: '', count: 0 };
 
-        for (const el of uniqueFound) {
-            if (isAcceptButton(el)) {
-                const buttonText = (el.textContent || "").trim();
+        if (isAcceptButton(el)) {
+            // Hybrid Strategy: Check if we can use a command instead of click
+            const txt = (el.textContent || el.getAttribute('aria-label') || '').toLowerCase();
 
-                // create signature based on text and approx location to identify "Same Button"
-                // rounding to 10px to account for minute layout shifts
-                const r = el.getBoundingClientRect();
-                const sig = `${buttonText}|${Math.round(r.top / 20)}|${Math.round(r.left / 20)}`;
+            if (txt.includes('run') && (txt.includes('terminal') || el.closest('.terminal'))) {
+                log('Detected Terminal Run -> Using Hybrid Strategy');
 
-                if (state.clickHistory.signature === sig) {
-                    state.clickHistory.count++;
-                    if (state.clickHistory.count > 3) {
-                        log(`[StuckGuard] Ignoring stuck button: "${buttonText}" (clicked ${state.clickHistory.count} times)`);
-                        continue; // SKIP THIS CLICK
+                // 1. Find the code
+                // Usually "Run" button is near a code block or inside a cell
+                // DOM: button -> container -> code block?
+                // Heuristic: Look for closest .code-block or pre or code
+                // Actually, in Chat, "Run in Terminal" is in the toolbar ABOVE the code usually.
+                // Or in the footer.
+                // Let's look for `pre` logic relative to button.
+                // Strategy: DOM traversal up, then search for `code`.
+                // If not found, abort fallback.
+
+                const container = el.closest('[data-code-block-index], .monaco-list-row, .chat-response, .markdown-body');
+                const codeEl = container ? container.querySelector('code, .code-block') : null;
+
+                if (codeEl) {
+                    const code = codeEl.textContent;
+                    if (code) {
+                        log(`[Hybrid] Copying ${code.length} chars to clipboard...`);
+                        // Use Clipboard API
+                        // Requires permission? Usually allowed in extension context if focused.
+                        try {
+                            // We can't use navigator.clipboard easily in background?
+                            // We can use `document.execCommand('copy')` with hidden textarea?
+
+                            const ta = document.createElement('textarea');
+                            ta.value = code;
+                            document.body.appendChild(ta);
+                            ta.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(ta);
+
+                            log('[Hybrid] Copied. Focusing terminal...');
+                            sendCommandToBridge('workbench.action.terminal.focus');
+                            await workerDelay(100);
+
+                            log('[Hybrid] Pasting...');
+                            sendCommandToBridge('workbench.action.terminal.paste');
+                            await workerDelay(100);
+
+                            // Send Enter? Paste usually doesn't run?
+                            // Depends on settings.
+                            // Let's send a newline sequence just in case.
+                            log('[Hybrid] Sending Enter...');
+                            sendCommandToBridge('workbench.action.terminal.sendSequence', { text: '\u000D' });
+
+                            clicked++;
+
+                            // Flash Blue
+                            const originalBorder = el.style.border;
+                            el.style.border = '2px solid #3b82f6';
+                            setTimeout(() => el.style.border = originalBorder, 500);
+
+                            continue;
+                        } catch (e) {
+                            log('[Hybrid] Run failed: ' + e.message);
+                        }
                     }
-                } else {
-                    // New button interaction reset
-                    state.clickHistory.signature = sig;
-                    state.clickHistory.count = 1;
                 }
+            } else if (txt.includes('accept') && el.closest('[id*="scm"]')) {
+                log('Detected SCM Accept -> Sending git.stageAll');
+                sendCommandToBridge('git.stageAll');
 
-                log(`Clicking: "${buttonText}"`);
+                // Visual feedback
+                const originalBorder = el.style.border;
+                el.style.border = '2px solid #3b82f6'; // Blue for Command
+                setTimeout(() => el.style.border = originalBorder, 500);
 
-                await remoteClick(el);
+                // We assume it worked?
                 clicked++;
+                continue;
+            }
 
-                const disappeared = await waitForDisappear(el);
+            const buttonText = (el.textContent || "").trim();
 
-                if (disappeared) {
-                    Analytics.trackClick(buttonText, log);
-                    verified++;
-                    log(`[Stats] Click verified (button disappeared)`);
-                    // If it disappeared, reset stuck count? 
-                    // No, because we might click the NEXT button which has same signature?
-                    // Actually if it disappeared, it's NOT the same button instance usually.
-                    // But if a NEW button appears in exact same spot?
-                    state.clickHistory.count = 0; // Reset if successful action
-                } else {
-                    log(`[Stats] Click not verified (button still visible)`);
-                    // Don't reset count, so we detect stuckness next loop
+            // create signature based on text and approx location to identify "Same Button"
+            // rounding to 10px to account for minute layout shifts
+            const r = el.getBoundingClientRect();
+            const sig = `${buttonText}|${Math.round(r.top / 20)}|${Math.round(r.left / 20)}`;
+
+            if (state.clickHistory.signature === sig) {
+                state.clickHistory.count++;
+                if (state.clickHistory.count > 3) {
+                    log(`[StuckGuard] Ignoring stuck button: "${buttonText}" (clicked ${state.clickHistory.count} times)`);
+                    continue; // SKIP THIS CLICK
                 }
+            } else {
+                // New button interaction reset
+                state.clickHistory.signature = sig;
+                state.clickHistory.count = 1;
+            }
+
+            log(`Clicking: "${buttonText}"`);
+
+            await remoteClick(el);
+            clicked++;
+
+            const disappeared = await waitForDisappear(el);
+
+            if (disappeared) {
+                Analytics.trackClick(buttonText, log);
+                verified++;
+                log(`[Stats] Click verified (button disappeared)`);
+                // If it disappeared, reset stuck count? 
+                // No, because we might click the NEXT button which has same signature?
+                // Actually if it disappeared, it's NOT the same button instance usually.
+                // But if a NEW button appears in exact same spot?
+                state.clickHistory.count = 0; // Reset if successful action
+            } else {
+                log(`[Stats] Click not verified (button still visible)`);
+                // Don't reset count, so we detect stuckness next loop
             }
         }
-
-        if (clicked > 0) {
-            log(`[Click] Attempted: ${clicked}, Verified: ${verified}`);
-            lastClickTime = Date.now();
-        }
-        return verified; // We return verified count. But caller checks 'clicked > 0' usually?
-        // Wait, caller uses `clicked` from `performClick` return? 
-        // No, caller logic is: `const clicked = await performClick(...)`. 
-        // `performClick` returns `verified` count.
-        // So if we SKIP via stuck guard, `verified` will be 0.
-        // And caller sees 0.
-        // And `autoBump` triggers.
-        // PERFECT.
     }
+
+    if (clicked > 0) {
+        log(`[Click] Attempted: ${clicked}, Verified: ${verified}`);
+        lastClickTime = Date.now();
+    }
+    return verified; // We return verified count. But caller checks 'clicked > 0' usually?
+    // Wait, caller uses `clicked` from `performClick` return? 
+    // No, caller logic is: `const clicked = await performClick(...)`. 
+    // `performClick` returns `verified` count.
+    // So if we SKIP via stuck guard, `verified` will be 0.
+    // And caller sees 0.
+    // And `autoBump` triggers.
+    // PERFECT.
+}
 
     async function cursorLoop(sid) {
-        log('[Loop] cursorLoop STARTED');
-        let index = 0;
-        let cycle = 0;
-        while (window.__autoAllState.isRunning && window.__autoAllState.sessionID === sid) {
-            try {
-                cycle++;
-                log(`[Loop] Cycle ${cycle}: Starting...`);
-
-                const clicked = await performClick(['button', '[class*="button"]', '[class*="anysphere"]']);
-                if (clicked > 0) {
-                    log(`[Loop] Cycle ${cycle}: Clicked ${clicked} buttons`);
-                } else {
-                    const bumped = await autoBump();
-                    if (bumped) {
-                        log(`[Loop] Cycle ${cycle}: Auto-bumped conversation`);
-                        await workerDelay(3000);
-                    }
-                }
-
-                await workerDelay(800);
-
-                const tabSelectors = [
-                    '#workbench\\.parts\\.auxiliarybar ul[role="tablist"] li[role="tab"]',
-                    '.monaco-pane-view .monaco-list-row[role="listitem"]',
-                    'div[role="tablist"] div[role="tab"]',
-                    '.chat-session-item'
-                ];
-
-                let tabs = [];
-                for (const selector of tabSelectors) {
-                    tabs = queryAll(selector);
-                    if (tabs.length > 0) {
-                        log(`[Loop] Cycle ${cycle}: Found ${tabs.length} tabs using selector: ${selector}`);
-                        break;
-                    }
-                }
-
-                if (tabs.length === 0) {
-                    log(`[Loop] Cycle ${cycle}: No tabs found in any known locations.`);
-                }
-
-                updateTabNames(tabs);
-
-                if (tabs.length > 0) {
-                    const targetTab = tabs[index % tabs.length];
-                    const tabLabel = targetTab.getAttribute('aria-label') || targetTab.textContent?.trim() || 'unnamed tab';
-                    log(`[Loop] Cycle ${cycle}: Clicking tab "${tabLabel}"`);
-                    targetTab.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
-                    index++;
-                }
-
-                const state = window.__autoAllState;
-                log(`[Loop] Cycle ${cycle}: State = { tabs: ${state.tabNames?.length || 0}, isRunning: ${state.isRunning}, sid: ${state.sessionID} }`);
-
-                updateOverlay();
-
-                const waitTime = window.__autoAllState.threadWaitInterval || 5000;
-                log(`[Loop] Cycle ${cycle}: Overlay updated, waiting ${waitTime}ms...`);
-                await workerDelay(waitTime);
-            } catch (loopErr) {
-                log(`[Loop] Cycle ${cycle}: ERROR - ${loopErr.message}`);
-                await workerDelay(2000);
-            }
-        }
-        log('[Loop] cursorLoop STOPPED');
-    }
-
-    async function antigravityLoop(sid) {
-        log('[Loop] antigravityLoop STARTED');
-        let index = 0;
-        let cycle = 0;
-
-        while (window.__autoAllState.isRunning && window.__autoAllState.sessionID === sid) {
-            try {
-                cycle++;
-                log(`[Loop] Cycle ${cycle}: Starting...`);
-
-                // Expand any collapsed sections (e.g. "Step Requires Input")
-                await expandCollapsedSections();
-
-                // Just click accept buttons directly - no dropdown interaction needed
-                // Added selectors for Diff Editor actions and SCM titles
-                const clicked = await performClick([
-                    '.bg-ide-button-background',
-                    'button',
-                    '[role="button"]',
-                    '[class*="button"]',
-                    '.monaco-action-bar .action-label',
-                    '[title*="Accept"]',
-                    '[aria-label*="Accept"]'
-                ]);
-                if (clicked > 0) {
-                    log(`[Loop] Cycle ${cycle}: Clicked ${clicked} accept buttons`);
-                } else {
-                    // No buttons found — check if AI is idle and auto-bump
-                    const bumped = await autoBump();
-                    if (bumped) {
-                        log(`[Loop] Cycle ${cycle}: Auto-bumped conversation`);
-                        await workerDelay(3000);
-                    }
-                }
-
-                await workerDelay(1500);
-
-                const tabs = queryAll('button.grow');
-                log(`[Loop] Cycle ${cycle}: Found ${tabs.length} tabs`);
-                updateTabNames(tabs);
-
-                if (tabs.length > 1) {
-                    const targetTab = tabs[index % tabs.length];
-                    const tabName = stripTimeSuffix(targetTab.textContent);
-
-                    const state = window.__autoAllState;
-                    if (state.completionStatus[tabName] !== 'done') {
-                        log(`[Loop] Cycle ${cycle}: Switching to tab "${tabName}"`);
-                        targetTab.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
-                        index++;
-
-                        await workerDelay(2000);
-
-                        const badges = queryAll('span').filter(s => {
-                            const t = s.textContent.trim();
-                            return t === 'Good' || t === 'Bad';
-                        });
-
-                        if (badges.length > 0) {
-                            updateConversationCompletionState(tabName, 'done');
-                            log(`[Loop] Cycle ${cycle}: Tab "${tabName}" marked as DONE`);
-                        }
-                    } else {
-
-                        index++;
-                        log(`[Loop] Cycle ${cycle}: Skipping completed tab "${tabName}"`);
-                    }
-                }
-
-                updateOverlay();
-
-                const waitTime = window.__autoAllState.threadWaitInterval || 5000;
-                await workerDelay(waitTime);
-            } catch (loopErr) {
-                log(`[Loop] antigravityLoop Cycle ${cycle}: ERROR - ${loopErr.message}`);
-                await workerDelay(2000);
-            }
-        }
-        log('[Loop] antigravityLoop STOPPED');
-    }
-
-    window.__autoAllUpdateBannedCommands = function (bannedList) {
-        const state = window.__autoAllState;
-        state.bannedCommands = Array.isArray(bannedList) ? bannedList : [];
-        log(`[Config] Updated banned commands list: ${state.bannedCommands.length} patterns`);
-        if (state.bannedCommands.length > 0) {
-            log(`[Config] Banned patterns: ${state.bannedCommands.join(', ')}`);
-        }
-    };
-
-    window.__autoAllUpdateAcceptPatterns = function (patternList) {
-        const state = window.__autoAllState;
-        state.acceptPatterns = Array.isArray(patternList) && patternList.length > 0 ? patternList : null;
-        log(`[Config] Updated accept patterns: ${state.acceptPatterns ? state.acceptPatterns.length + ' patterns' : 'using defaults'}`);
-    };
-
-    window.__autoAllUpdateRejectPatterns = function (patternList) {
-        const state = window.__autoAllState;
-        state.rejectPatterns = Array.isArray(patternList) ? patternList : [];
-        log(`[Config] Updated reject patterns: ${state.rejectPatterns.length} patterns`);
-    };
-
-    window.__autoAllGetStats = function () {
-        const stats = Analytics.getStats();
-        return {
-            clicks: stats.clicksThisSession || 0,
-            blocked: stats.blockedThisSession || 0,
-            sessionStart: stats.sessionStartTime,
-            fileEdits: stats.fileEditsThisSession || 0,
-            terminalCommands: stats.terminalCommandsThisSession || 0,
-            actionsWhileAway: stats.actionsWhileAway || 0
-        };
-    };
-
-    window.__autoAllResetStats = function () {
-        return Analytics.collectROI(log);
-    };
-
-    window.__autoAllGetSessionSummary = function () {
-        return Analytics.getSessionSummary();
-    };
-
-    window.__autoAllGetAwayActions = function () {
-        return Analytics.consumeAwayActions(log);
-    };
-
-    window.__autoAllSetFocusState = function (isFocused) {
-        Analytics.setFocusState(isFocused, log);
-    };
-
-    // Helper for visual feedback
-    window.showAutoAllToast = function (text, duration = 3000, color = 'rgba(0,100,0,0.8)') {
-        const toast = document.createElement('div');
-        toast.style.cssText = `position:fixed;top:10px;right:10px;z-index:99999;background:${color};color:white;padding:10px;border-radius:5px;font-family:sans-serif;pointer-events:none;transition:opacity 1s;`;
-        toast.textContent = text;
-        document.body.appendChild(toast);
-        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 1000); }, duration);
-    };
-
-    window.__autoAllStart = async function (config) {
+    log('[Loop] cursorLoop STARTED');
+    let index = 0;
+    let cycle = 0;
+    while (window.__autoAllState.isRunning && window.__autoAllState.sessionID === sid) {
         try {
-            const ide = (config.ide || 'cursor').toLowerCase();
-            const isPro = config.isPro !== false;
-            const isBG = config.isBackgroundMode === true;
+            cycle++;
+            log(`[Loop] Cycle ${cycle}: Starting...`);
 
-            // Visual confirmation of injection
-            window.showAutoAllToast('Antigravity v4.2.6 Active 🚀');
-
-            if (config.bannedCommands) {
-                window.__autoAllUpdateBannedCommands(config.bannedCommands);
-            }
-            if (config.acceptPatterns) {
-                window.__autoAllUpdateAcceptPatterns(config.acceptPatterns);
-            }
-            if (config.rejectPatterns) {
-                window.__autoAllUpdateRejectPatterns(config.rejectPatterns);
+            const clicked = await performClick(['button', '[class*="button"]', '[class*="anysphere"]']);
+            if (clicked > 0) {
+                log(`[Loop] Cycle ${cycle}: Clicked ${clicked} buttons`);
+            } else {
+                const bumped = await autoBump();
+                if (bumped) {
+                    log(`[Loop] Cycle ${cycle}: Auto-bumped conversation`);
+                    await workerDelay(3000);
+                }
             }
 
-            log(`__autoAllStart called: ide=${ide}, isPro=${isPro}, isBG=${isBG}`);
+            await workerDelay(800);
+
+            const tabSelectors = [
+                '#workbench\\.parts\\.auxiliarybar ul[role="tablist"] li[role="tab"]',
+                '.monaco-pane-view .monaco-list-row[role="listitem"]',
+                'div[role="tablist"] div[role="tab"]',
+                '.chat-session-item'
+            ];
+
+            let tabs = [];
+            for (const selector of tabSelectors) {
+                tabs = queryAll(selector);
+                if (tabs.length > 0) {
+                    log(`[Loop] Cycle ${cycle}: Found ${tabs.length} tabs using selector: ${selector}`);
+                    break;
+                }
+            }
+
+            if (tabs.length === 0) {
+                log(`[Loop] Cycle ${cycle}: No tabs found in any known locations.`);
+            }
+
+            updateTabNames(tabs);
+
+            if (tabs.length > 0) {
+                const targetTab = tabs[index % tabs.length];
+                const tabLabel = targetTab.getAttribute('aria-label') || targetTab.textContent?.trim() || 'unnamed tab';
+                log(`[Loop] Cycle ${cycle}: Clicking tab "${tabLabel}"`);
+                targetTab.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
+                index++;
+            }
 
             const state = window.__autoAllState;
+            log(`[Loop] Cycle ${cycle}: State = { tabs: ${state.tabNames?.length || 0}, isRunning: ${state.isRunning}, sid: ${state.sessionID} }`);
 
-            // If already running, just update config and return — do NOT restart
-            // The 5-second poll timer calls this repeatedly; restarting would kill the loop
-            if (state.isRunning) {
-                // Update config values in-place (hot reload)
-                state.bumpMessage = config.bumpMessage || '';
-                state.autoApproveDelay = (config.autoApproveDelay || 30) * 1000;
-                state.bumpEnabled = !!config.bumpMessage;
-                state.threadWaitInterval = (config.threadWaitInterval || 5) * 1000;
-                log(`[Config] Hot-reloaded config (loop still running)`);
-                return;
+            updateOverlay();
+
+            const waitTime = window.__autoAllState.threadWaitInterval || 5000;
+            log(`[Loop] Cycle ${cycle}: Overlay updated, waiting ${waitTime}ms...`);
+            await workerDelay(waitTime);
+        } catch (loopErr) {
+            log(`[Loop] Cycle ${cycle}: ERROR - ${loopErr.message}`);
+            await workerDelay(2000);
+        }
+    }
+    log('[Loop] cursorLoop STOPPED');
+}
+
+async function antigravityLoop(sid) {
+    log('[Loop] antigravityLoop STARTED');
+    let index = 0;
+    let cycle = 0;
+
+    while (window.__autoAllState.isRunning && window.__autoAllState.sessionID === sid) {
+        try {
+            cycle++;
+            log(`[Loop] Cycle ${cycle}: Starting...`);
+
+            // Expand any collapsed sections (e.g. "Step Requires Input")
+            await expandCollapsedSections();
+
+            // Just click accept buttons directly - no dropdown interaction needed
+            // Added selectors for Diff Editor actions and SCM titles
+            const clicked = await performClick([
+                '.bg-ide-button-background',
+                'button',
+                '[role="button"]',
+                '[class*="button"]',
+                '.monaco-action-bar .action-label',
+                '[title*="Accept"]',
+                '[aria-label*="Accept"]'
+            ]);
+            if (clicked > 0) {
+                log(`[Loop] Cycle ${cycle}: Clicked ${clicked} accept buttons`);
+            } else {
+                // No buttons found — check if AI is idle and auto-bump
+                const bumped = await autoBump();
+                if (bumped) {
+                    log(`[Loop] Cycle ${cycle}: Auto-bumped conversation`);
+                    await workerDelay(3000);
+                }
             }
 
-            state.isRunning = true;
-            state.currentMode = ide;
-            state.isBackgroundMode = isBG;
-            state.sessionID++;
-            const sid = state.sessionID;
+            await workerDelay(1500);
 
-            // Store user config in state for bump/loops to use
+            const tabs = queryAll('button.grow');
+            log(`[Loop] Cycle ${cycle}: Found ${tabs.length} tabs`);
+            updateTabNames(tabs);
+
+            if (tabs.length > 1) {
+                const targetTab = tabs[index % tabs.length];
+                const tabName = stripTimeSuffix(targetTab.textContent);
+
+                const state = window.__autoAllState;
+                if (state.completionStatus[tabName] !== 'done') {
+                    log(`[Loop] Cycle ${cycle}: Switching to tab "${tabName}"`);
+                    targetTab.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
+                    index++;
+
+                    await workerDelay(2000);
+
+                    const badges = queryAll('span').filter(s => {
+                        const t = s.textContent.trim();
+                        return t === 'Good' || t === 'Bad';
+                    });
+
+                    if (badges.length > 0) {
+                        updateConversationCompletionState(tabName, 'done');
+                        log(`[Loop] Cycle ${cycle}: Tab "${tabName}" marked as DONE`);
+                    }
+                } else {
+
+                    index++;
+                    log(`[Loop] Cycle ${cycle}: Skipping completed tab "${tabName}"`);
+                }
+            }
+
+            updateOverlay();
+
+            const waitTime = window.__autoAllState.threadWaitInterval || 5000;
+            await workerDelay(waitTime);
+        } catch (loopErr) {
+            log(`[Loop] antigravityLoop Cycle ${cycle}: ERROR - ${loopErr.message}`);
+            await workerDelay(2000);
+        }
+    }
+    log('[Loop] antigravityLoop STOPPED');
+}
+
+window.__autoAllUpdateBannedCommands = function (bannedList) {
+    const state = window.__autoAllState;
+    state.bannedCommands = Array.isArray(bannedList) ? bannedList : [];
+    log(`[Config] Updated banned commands list: ${state.bannedCommands.length} patterns`);
+    if (state.bannedCommands.length > 0) {
+        log(`[Config] Banned patterns: ${state.bannedCommands.join(', ')}`);
+    }
+};
+
+window.__autoAllUpdateAcceptPatterns = function (patternList) {
+    const state = window.__autoAllState;
+    state.acceptPatterns = Array.isArray(patternList) && patternList.length > 0 ? patternList : null;
+    log(`[Config] Updated accept patterns: ${state.acceptPatterns ? state.acceptPatterns.length + ' patterns' : 'using defaults'}`);
+};
+
+window.__autoAllUpdateRejectPatterns = function (patternList) {
+    const state = window.__autoAllState;
+    state.rejectPatterns = Array.isArray(patternList) ? patternList : [];
+    log(`[Config] Updated reject patterns: ${state.rejectPatterns.length} patterns`);
+};
+
+window.__autoAllGetStats = function () {
+    const stats = Analytics.getStats();
+    return {
+        clicks: stats.clicksThisSession || 0,
+        blocked: stats.blockedThisSession || 0,
+        sessionStart: stats.sessionStartTime,
+        fileEdits: stats.fileEditsThisSession || 0,
+        terminalCommands: stats.terminalCommandsThisSession || 0,
+        actionsWhileAway: stats.actionsWhileAway || 0
+    };
+};
+
+window.__autoAllResetStats = function () {
+    return Analytics.collectROI(log);
+};
+
+window.__autoAllGetSessionSummary = function () {
+    return Analytics.getSessionSummary();
+};
+
+window.__autoAllGetAwayActions = function () {
+    return Analytics.consumeAwayActions(log);
+};
+
+window.__autoAllSetFocusState = function (isFocused) {
+    Analytics.setFocusState(isFocused, log);
+};
+
+// Helper for visual feedback
+window.showAutoAllToast = function (text, duration = 3000, color = 'rgba(0,100,0,0.8)') {
+    const toast = document.createElement('div');
+    toast.style.cssText = `position:fixed;top:10px;right:10px;z-index:99999;background:${color};color:white;padding:10px;border-radius:5px;font-family:sans-serif;pointer-events:none;transition:opacity 1s;`;
+    toast.textContent = text;
+    document.body.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 1000); }, duration);
+};
+
+window.__autoAllStart = async function (config) {
+    try {
+        const ide = (config.ide || 'cursor').toLowerCase();
+        const isPro = config.isPro !== false;
+        const isBG = config.isBackgroundMode === true;
+
+        // Visual confirmation of injection
+        window.showAutoAllToast('Antigravity v4.2.6 Active 🚀');
+
+        if (config.bannedCommands) {
+            window.__autoAllUpdateBannedCommands(config.bannedCommands);
+        }
+        if (config.acceptPatterns) {
+            window.__autoAllUpdateAcceptPatterns(config.acceptPatterns);
+        }
+        if (config.rejectPatterns) {
+            window.__autoAllUpdateRejectPatterns(config.rejectPatterns);
+        }
+
+        log(`__autoAllStart called: ide=${ide}, isPro=${isPro}, isBG=${isBG}`);
+
+        const state = window.__autoAllState;
+
+        // If already running, just update config and return — do NOT restart
+        // The 5-second poll timer calls this repeatedly; restarting would kill the loop
+        if (state.isRunning) {
+            // Update config values in-place (hot reload)
             state.bumpMessage = config.bumpMessage || '';
-            state.bumpMessage = config.bumpMessage || '';
-            state.autoApproveDelay = (config.autoApproveDelay || 15) * 1000; // Default 15s
-            state.bumpEnabled = !!config.bumpMessage;
-            state.threadWaitInterval = (config.threadWaitInterval || 3) * 1000;
+            state.autoApproveDelay = (config.autoApproveDelay || 30) * 1000;
             state.bumpEnabled = !!config.bumpMessage;
             state.threadWaitInterval = (config.threadWaitInterval || 5) * 1000;
-            log(`[Config] bumpMessage="${state.bumpMessage}", autoApproveDelay=${state.autoApproveDelay}ms, threadWait=${state.threadWaitInterval}ms`);
-
-            if (!state.stats.sessionStartTime) {
-                state.stats.sessionStartTime = Date.now();
-            }
-
-            log(`Agent Loaded (IDE: ${ide}, BG: ${isBG}, isPro: ${isPro})`, true);
-
-            if (isBG && isPro) {
-                log(`[BG] Starting background loop (no overlay)...`);
-
-                log(`[BG] Starting ${ide} loop...`);
-                if (ide === 'cursor') cursorLoop(sid);
-                else antigravityLoop(sid);
-            } else if (isBG && !isPro) {
-                log(`[BG] Background mode without Pro...`);
-
-                if (ide === 'cursor') cursorLoop(sid);
-                else antigravityLoop(sid);
-            } else {
-                hideOverlay();
-                log(`Starting static poll loop...`);
-                (async function staticLoop() {
-                    while (state.isRunning && state.sessionID === sid) {
-                        try {
-                            const clicks = await performClick(['button', '[class*="button"]', '[class*="anysphere"]']);
-                            if (clicks === 0) await autoBump();
-                            await workerDelay(config.pollInterval || 1000);
-                        } catch (loopErr) {
-                            log(`[Loop] staticLoop ERROR: ${loopErr.message}`);
-                            await workerDelay(2000);
-                        }
-                    }
-                })();
-            }
-        } catch (e) {
-            log(`ERROR in __autoAllStart: ${e.message}`);
-            console.error('[autoAll] Start error:', e);
+            log(`[Config] Hot-reloaded config (loop still running)`);
+            return;
         }
-    };
 
-    window.__autoAllStop = function () {
-        window.__autoAllState.isRunning = false;
-        hideOverlay();
-        log("Agent Stopped.");
-    };
+        state.isRunning = true;
+        state.currentMode = ide;
+        state.isBackgroundMode = isBG;
+        state.sessionID++;
+        const sid = state.sessionID;
 
-    log("Core Bundle Initialized.", true);
-})();
+        // Store user config in state for bump/loops to use
+        state.bumpMessage = config.bumpMessage || '';
+        state.bumpMessage = config.bumpMessage || '';
+        state.autoApproveDelay = (config.autoApproveDelay || 15) * 1000; // Default 15s
+        state.bumpEnabled = !!config.bumpMessage;
+        state.threadWaitInterval = (config.threadWaitInterval || 3) * 1000;
+        state.bumpEnabled = !!config.bumpMessage;
+        state.threadWaitInterval = (config.threadWaitInterval || 5) * 1000;
+        log(`[Config] bumpMessage="${state.bumpMessage}", autoApproveDelay=${state.autoApproveDelay}ms, threadWait=${state.threadWaitInterval}ms`);
+
+        if (!state.stats.sessionStartTime) {
+            state.stats.sessionStartTime = Date.now();
+        }
+
+        log(`Agent Loaded (IDE: ${ide}, BG: ${isBG}, isPro: ${isPro})`, true);
+
+        if (isBG && isPro) {
+            log(`[BG] Starting background loop (no overlay)...`);
+
+            log(`[BG] Starting ${ide} loop...`);
+            if (ide === 'cursor') cursorLoop(sid);
+            else antigravityLoop(sid);
+        } else if (isBG && !isPro) {
+            log(`[BG] Background mode without Pro...`);
+
+            if (ide === 'cursor') cursorLoop(sid);
+            else antigravityLoop(sid);
+        } else {
+            hideOverlay();
+            log(`Starting static poll loop...`);
+            (async function staticLoop() {
+                while (state.isRunning && state.sessionID === sid) {
+                    try {
+                        const clicks = await performClick(['button', '[class*="button"]', '[class*="anysphere"]']);
+                        if (clicks === 0) await autoBump();
+                        await workerDelay(config.pollInterval || 1000);
+                    } catch (loopErr) {
+                        log(`[Loop] staticLoop ERROR: ${loopErr.message}`);
+                        await workerDelay(2000);
+                    }
+                }
+            })();
+        }
+    } catch (e) {
+        log(`ERROR in __autoAllStart: ${e.message}`);
+        console.error('[autoAll] Start error:', e);
+    }
+};
+
+window.__autoAllStop = function () {
+    window.__autoAllState.isRunning = false;
+    hideOverlay();
+    log("Agent Stopped.");
+};
+
+log("Core Bundle Initialized.", true);
+}) ();

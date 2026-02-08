@@ -204,6 +204,34 @@ export class CDPHandler extends EventEmitter {
                 if (content) {
                     await this.sendCommand(pageId, 'Input.insertText', { text: content });
                 }
+            } else if (text.startsWith('__ANTIGRAVITY_COMMAND__:')) {
+                const raw = text.substring('__ANTIGRAVITY_COMMAND__:'.length).trim();
+                if (raw) {
+                    // Format: "commandId|jsonArgs"
+                    const pipeIndex = raw.indexOf('|');
+                    let commandId = raw;
+                    let args = undefined;
+
+                    if (pipeIndex > 0) {
+                        commandId = raw.substring(0, pipeIndex).trim();
+                        try {
+                            args = JSON.parse(raw.substring(pipeIndex + 1));
+                        } catch (e) {
+                            console.error('[Bridge] Failed to parse args for command ' + commandId);
+                        }
+                    }
+
+                    if (commandId) {
+                        console.log(`[Bridge] Executing Command: ${commandId}`, args);
+                        const vscode = require('vscode');
+                        try {
+                            if (args) await vscode.commands.executeCommand(commandId, args);
+                            else await vscode.commands.executeCommand(commandId);
+                        } catch (e: any) {
+                            console.error(`[Bridge] Command execution failed: ${e.message}`);
+                        }
+                    }
+                }
             }
         } catch (e) {
             console.error('Bridge Message Handler Error', e);
