@@ -13,6 +13,7 @@ import { cdpClient } from '../providers/cdp-client';
 import { config } from '../utils/config';
 import { createLogger } from '../utils/logger';
 import { testLoopDetector } from './test-loop-detector';
+import { memoryManager } from './memory-manager';
 
 const log = createLogger('AutonomousLoop');
 // const circuitBreaker = new CircuitBreaker(); // Use local instance for now or singleton if preferred
@@ -64,6 +65,7 @@ export class AutonomousLoop {
         this.loopCount = 0;
         this.goal = loopConfig.goal || '';
         progressTracker.startSession();
+        memoryManager.startSession();
         rateLimiter.reset();
         exitDetector.reset(); // Added reset
         this.previousModel = null;
@@ -84,6 +86,7 @@ export class AutonomousLoop {
         }
 
         log.info(`Loop stopped: ${reason}`);
+        memoryManager.endSession(reason);
         this.showSummary(reason);
         this.updateStatus();
     }
@@ -241,6 +244,9 @@ export class AutonomousLoop {
 
             exitDetector.reportSuccess();
 
+            // Memory: Remember the conversation
+            memoryManager.rememberConversation(this.currentTask || 'Unknown Task', response);
+
             // Auto-Bump: Send a message to reveal the feedback buttons for the next loop
             const bumpMessage = config.get<string>('bumpMessage') || 'bump';
             if (bumpMessage) {
@@ -264,7 +270,18 @@ export class AutonomousLoop {
 
     private buildPrompt(): string {
         if (!this.currentTask) return '';
-        return `${this.currentTask}\n\n[Note: Running in autonomous mode.]`;
+
+        let prompt = this.currentTask;
+
+        // Inject Memory Context
+        if (config.get('enableMemory')) {
+            const context = memoryManager.getContextForPrompt(this.currentTask);
+            if (context) {
+                prompt += `\n\n[Relevant Memory]\n${context}`;
+            }
+        }
+
+        return `${prompt}\n\n[Note: Running in autonomous mode.]`;
     }
 
     private wait(ms: number): Promise<void> {

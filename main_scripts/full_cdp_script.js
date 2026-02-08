@@ -937,6 +937,9 @@
     async function sendMessage(text) {
         if (!text) return false;
 
+        // VISUAL DEBUG: Toast start
+        if (window.showAutoAllToast) window.showAutoAllToast(`Bump: "${text}"`, 2000, 'rgba(0,100,200,0.8)');
+
         // heuristics to find chat input - improved selectors
         const inputs = queryAll('textarea, [contenteditable="true"], [role="textbox"], [class*="input"], [class*="editor-container"]');
         let chatInput = null;
@@ -955,6 +958,16 @@
             }
         }
 
+        // Fallback: If no "obvious" chat input, check if active element is an input
+        if (!chatInput && document.activeElement) {
+            const active = document.activeElement;
+            const tag = active.tagName.toLowerCase();
+            if (tag === 'textarea' || (active.getAttribute('contenteditable') === 'true')) {
+                chatInput = active;
+                log('[Chat] Fallback to active element');
+            }
+        }
+
         // Fallback to the first visible textarea/textbox
         if (!chatInput) {
             chatInput = inputs.find(i => isElementVisible(i));
@@ -962,6 +975,12 @@
 
         if (chatInput) {
             log(`[Chat] Found input, typing: "${text}"`);
+
+            // VISUAL DEBUG: Flash Input
+            const originalBorder = chatInput.style.border;
+            chatInput.style.border = '2px solid red';
+            setTimeout(() => chatInput.style.border = originalBorder, 500);
+
             chatInput.focus();
 
             // Clear existing if needed (optional, but safer for bump)
@@ -984,6 +1003,7 @@
                 if (sendBtn) {
                     await remoteClick(sendBtn);
                     log('[Chat] Clicked send button');
+                    if (window.showAutoAllToast) window.showAutoAllToast('Bump: Clicked Send', 2000, 'rgba(0,200,0,0.8)');
                     return true;
                 }
             }
@@ -1017,7 +1037,9 @@
             if (sendCandidate && isElementVisible(sendCandidate)) {
                 log('[Chat] Found send/run button, clicking: ' + (sendCandidate.getAttribute('aria-label') || sendCandidate.textContent || '').trim());
                 await remoteClick(sendCandidate);
+                if (window.showAutoAllToast) window.showAutoAllToast('Bump: Found Send Btn', 2000, 'rgba(0,200,0,0.8)');
             }
+            if (window.showAutoAllToast) window.showAutoAllToast('Bump Triggered', 2000, 'rgba(0,200,0,0.8)');
             return true;
         } else {
             // Toast failure

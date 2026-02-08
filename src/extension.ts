@@ -151,9 +151,22 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
         vscode.commands.registerCommand('antigravity.showMemory', async () => {
-            const memories = memoryManager.getRecentMemories(10);
-            const items = memories.map(m => ({ label: m.content, description: new Date(m.timestamp).toLocaleString() }));
-            await vscode.window.showQuickPick(items, { placeHolder: 'Recent Memories' });
+            const memories = memoryManager.getRecentMemories(20);
+            const items = memories.map(m => {
+                const lines = m.content.split('\n');
+                const preview = lines[0].substring(0, 60) + (lines[0].length > 60 ? '...' : '');
+                return {
+                    label: `[${m.type.toUpperCase()}] ${preview}`,
+                    description: new Date(m.timestamp).toLocaleString(),
+                    detail: m.content // Full content accessible? VS Code might truncate detail.
+                };
+            });
+            const selection = await vscode.window.showQuickPick(items, { placeHolder: 'Recent Memories (Select to view full)' });
+            if (selection && selection.detail) {
+                // Show full content in a document or nice output
+                const doc = await vscode.workspace.openTextDocument({ content: selection.detail, language: 'markdown' });
+                await vscode.window.showTextDocument(doc);
+            }
         }),
         vscode.commands.registerCommand('antigravity.showStatusMenu', async () => {
             const items = [
