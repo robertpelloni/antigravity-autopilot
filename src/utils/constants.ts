@@ -6,7 +6,7 @@
 // ============ Extension Metadata ============
 export const EXTENSION_NAME = 'antigravity-autopilot-unified';
 export const EXTENSION_DISPLAY_NAME = 'Antigravity Autopilot';
-export const VERSION = '4.2.1';
+export const VERSION = '4.3.3';
 
 // ============ CDP Ports ============
 export const CDP_PORT_MIN = 9000;

@@ -251,6 +251,29 @@
     const getDocuments = (root = document) => {
         let docs = [root];
         try {
+            // Traverse Shadow DOM
+            const traverse = (node) => {
+                if (node.shadowRoot) {
+                    docs.push(node.shadowRoot);
+                    traverse(node.shadowRoot);
+                }
+                const children = node.children || node.querySelectorAll('*');
+                for (const child of children) {
+                    traverse(child);
+                }
+            };
+            // traverse(root.body || root); // Can be expensive, but necessary for deep shadow roots
+            // Optimized approach: Query all elements and check for shadowRoot
+            const allElements = root.querySelectorAll('*');
+            for (const el of allElements) {
+                if (el.shadowRoot) {
+                    docs.push(el.shadowRoot);
+                    // Recursively get docs from shadow root
+                    docs.push(...getDocuments(el.shadowRoot));
+                }
+            }
+
+            // Traverse Iframes
             const iframes = root.querySelectorAll('iframe, frame');
             for (const iframe of iframes) {
                 try {
@@ -272,6 +295,104 @@
 
     const stripTimeSuffix = (text) => {
         return (text || '').trim().replace(/\s*\d+[smh]$/, '').trim();
+    };
+
+    // --- Remote Interactions (Bypassing Trusted Event Reqs) ---
+    // --- Remote Interactions (Bypassing Trusted Event Reqs) ---
+    async function remoteClick(el) {
+        if (!el || !isElementVisible(el)) return false;
+
+        // Calculate Global Coordinates (handling iframes)
+        let x = 0;
+        let y = 0;
+        let width = 0;
+        let height = 0;
+
+        try {
+            const rect = el.getBoundingClientRect();
+            width = rect.width;
+            height = rect.height;
+
+            // Start with local coordinates within the element's document (viewport-relative)
+            x = rect.left;
+            y = rect.top;
+
+            let currentWin = el.ownerDocument.defaultView;
+
+            // Traverse up the frame chain until we reach the script's execution context (window)
+            while (currentWin && currentWin !== window) {
+                try {
+                    const frameElement = currentWin.frameElement;
+                    if (!frameElement) break; // Can't go higher (cross-origin or top)
+
+                    const frameRect = frameElement.getBoundingClientRect();
+                    x += frameRect.left;
+                    y += frameRect.top;
+
+                    // Adjust if frame has borders? Usually getBoundingClientRect handles content box vs border box
+                    // But here we just want the offset of the frame in the parent.
+                    // The inner window's (0,0) is at (frameRect.left + borderLeft, frameRect.top + borderTop)
+                    // But getting border width is hard. Assuming minimal borders for now.
+                    // Actually, frameRect includes border.
+                    const style = window.getComputedStyle(frameElement);
+                    x += parseFloat(style.borderLeftWidth || '0') + parseFloat(style.paddingLeft || '0');
+                    y += parseFloat(style.borderTopWidth || '0') + parseFloat(style.paddingTop || '0');
+
+                    currentWin = currentWin.parent;
+                } catch (e) { break; }
+            }
+        } catch (e) {
+            // Fallback
+            const r = el.getBoundingClientRect();
+            x = r.left; y = r.top; width = r.width; height = r.height;
+        }
+
+        if (width === 0 || height === 0) return false;
+
+        const centerX = Math.round(x + (width / 2));
+        const centerY = Math.round(y + (height / 2));
+
+        // Send command to Extension via Console Bridge
+        // Send command to Extension via Bridge (Binding preferred)
+        const payload = `__ANTIGRAVITY_CLICK__:${centerX}:${centerY}`;
+        if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
+            window.__ANTIGRAVITY_BRIDGE__(payload);
+            log(`[Bridge] Sent Click via Binding: ${centerX},${centerY}`);
+        } else {
+            console.log(payload);
+            log(`[Bridge] Sent Click via Console: ${centerX},${centerY}`);
+        }
+
+        // Also fire standard click for immediate UI feedback (hover states etc)
+        try { el.click(); } catch (e) { }
+
+        await workerDelay(100);
+        return true;
+    }
+
+    async function remoteType(text) {
+        if (!text) return;
+        // Send command to Extension via Bridge (Binding preferred)
+        const payload = `__ANTIGRAVITY_TYPE__:${text}`;
+        if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
+            window.__ANTIGRAVITY_BRIDGE__(payload);
+            log(`[Bridge] Sent Type via Binding: "${text}"`);
+        } else {
+            console.log(payload);
+            log(`[Bridge] Sent Type via Console: "${text}"`);
+        }
+        await workerDelay(50);
+    }
+
+    // Polyfill for RequestIdleCallback if needed
+    window.requestIdleCallback = window.requestIdleCallback || function (cb) {
+        return setTimeout(() => {
+            const start = Date.now();
+            cb({
+                didTimeout: false,
+                timeRemaining: () => Math.max(0, 50 - (Date.now() - start))
+            });
+        }, 1);
     };
 
     const deduplicateNames = (names) => {
@@ -465,6 +586,34 @@
                 if (bar) bar.style.width = progressWidth;
             }
         });
+
+        // Add Bump Timer Display
+        let timerSlot = container.querySelector('.aab-timer-slot');
+        if (!timerSlot) {
+            timerSlot = document.createElement('div');
+            timerSlot.className = 'aab-timer-slot';
+            timerSlot.style.cssText = 'font-size: 10px; color: #888; margin-top: 8px; text-align: center;';
+            container.appendChild(timerSlot);
+        }
+
+        if (state.bumpEnabled) {
+            const now = Date.now();
+            const cooldown = state.autoApproveDelay || 30000;
+            // logic: max delay - (now - lastAction)
+            let referenceTime = Math.max(lastClickTime || state.stats.sessionStartTime, lastBumpTime || 0);
+            const timeSinceRef = now - referenceTime;
+            const remaining = Math.max(0, Math.ceil((cooldown - timeSinceRef) / 1000));
+
+            if (remaining > 0) {
+                timerSlot.textContent = `Auto-Bump in ${remaining}s...`;
+                timerSlot.style.color = '#aaa';
+            } else {
+                timerSlot.textContent = `Auto-Bump: Ready`;
+                timerSlot.style.color = '#4ade80';
+            }
+        } else {
+            timerSlot.textContent = '';
+        }
     }
 
     function hideOverlay() {
@@ -625,9 +774,15 @@
         if (rejects.some(r => text.includes(r))) return false;
         if (!patterns.some(p => text.includes(p))) return false;
 
-        const isCommandButton = text.includes('run command') || text.includes('execute') || text.includes('run');
+        const isCommandButton = text.includes('run') || text.includes('execute') || text.includes('accept');
+
+        // Special Case: "Accept" in Diff Editor or SCM
+        if (text === 'accept' || text === 'accept all' || text.includes('accept changes')) {
+            return true;
+        }
 
         if (isCommandButton) {
+            // Only ban if explicitly banned by nearby text
             const nearbyText = findNearbyCommandText(el);
             if (isCommandBanned(nearbyText)) {
                 log(`[BANNED] Skipping button: "${text}" - command is banned`);
@@ -668,7 +823,7 @@
     // Track if we've already clicked it to avoid re-triggering the dropdown
     let alwaysRunClicked = false;
 
-    function clickAlwaysRunDropdown() {
+    async function clickAlwaysRunDropdown() {
         // If we've already clicked "Always run", don't interact with dropdown anymore
         if (alwaysRunClicked) {
             return false;
@@ -704,7 +859,7 @@
 
                     if (isVisible) {
                         log('[Dropdown] Clicking "Always run" option - will not click again');
-                        item.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
+                        await remoteClick(item);
                         alwaysRunClicked = true;  // Remember we clicked it
                         return true;
                     }
@@ -726,50 +881,39 @@
         const expandTargets = [];
         let clicked = 0;
 
-        // Scope: only look inside chat/response containers
-        const chatContainers = queryAll('.chat-response, .interactive-session, .monaco-list-row, .interactive-result-editor-wrapper, [class*="chat-widget"], [class*="aideagent"]');
+        // Scope: broad search within the active editor/workbench area
+        // We look for any element with aria-expanded="false" that is inside a relevant container
+        const workbench = document.querySelector('.monaco-workbench') || document.body;
 
-        for (const container of chatContainers) {
-            // 1. Explicit expand/show buttons
-            const buttons = container.querySelectorAll('[role="button"], .monaco-button, .clickable');
-            for (const el of buttons) {
-                const text = (el.textContent || '').trim().toLowerCase();
-                const aria = (el.getAttribute('aria-label') || '').toLowerCase();
-                const title = (el.getAttribute('title') || '').toLowerCase();
+        // 1. Generic aria-expanded check (most reliable)
+        const candidates = workbench.querySelectorAll('[aria-expanded="false"]');
+        for (const el of candidates) {
+            if (!isElementVisible(el)) continue;
 
-                const isExpand = text.includes('expand') || text.includes('show') ||
-                    aria.includes('expand') || aria.includes('show') ||
-                    title.includes('expand') || title.includes('show');
-
-                if (isExpand && isElementVisible(el)) {
+            // Filter out obvious noise (like file explorer trees if we are not focused there)
+            // But keep it broad enough to catch chat response toggles
+            if (el.matches('.monaco-list-row, .monaco-tl-row, .monaco-tree-row')) {
+                // Check if it looks like a "step" or "run" item
+                const text = (el.textContent || '').toLowerCase();
+                if (text.includes('run') || text.includes('step') || text.includes('command') || text.includes('terminal')) {
                     expandTargets.push(el);
                 }
-            }
-
-            // 2. Collapsed chevrons (right-pointing = collapsed)
-            const chevrons = container.querySelectorAll('.codicon-chevron-right, [aria-expanded="false"]');
-            for (const chev of chevrons) {
-                if (isElementVisible(chev)) {
-                    const nearbyText = (chev.closest('.monaco-list-row') || container).textContent.toLowerCase();
-                    if (nearbyText.includes('run') || nearbyText.includes('step') ||
-                        nearbyText.includes('command') || nearbyText.includes('terminal') ||
-                        nearbyText.includes('output') || nearbyText.includes('diff')) {
-                        expandTargets.push(chev);
-                    }
-                }
+            } else {
+                // Chevrons/Buttons
+                expandTargets.push(el);
             }
         }
 
-        // 3. Hunt for hidden "Run" buttons — traverse up parents to find collapse toggle
-        //    Scoped: only Run buttons that are already inside a chat response
-        const runBtns = queryAll('.chat-response div[title*="Run"], .interactive-session div[title*="Run"], .chat-response [aria-label*="Run"], .interactive-session [aria-label*="Run"]');
-        for (const btn of runBtns) {
-            if (!isElementVisible(btn)) {
-                let parent = btn.parentElement;
-                for (let d = 0; parent && d < 5; d++, parent = parent.parentElement) {
-                    const toggles = parent.querySelectorAll('.codicon-chevron-right, [aria-expanded="false"]');
-                    toggles.forEach(t => { if (isElementVisible(t)) expandTargets.push(t); });
-                }
+        // 2. Explicit "Show" / "Expand" buttons
+        const explicitButtons = queryAll('button, [role="button"], .clickable');
+        for (const el of explicitButtons) {
+            if (!isElementVisible(el)) continue;
+            const text = (el.textContent || '').trim().toLowerCase();
+            const label = (el.getAttribute('aria-label') || '').toLowerCase();
+
+            if ((text === 'show' || text === 'expand' || label.includes('show') || label.includes('expand')) &&
+                !text.includes('explorer') && !label.includes('explorer')) {
+                expandTargets.push(el);
             }
         }
 
@@ -778,7 +922,7 @@
         if (unique.length > 0) {
             log('[Expand] Found ' + unique.length + ' collapse toggles in chat area. Expanding...');
             for (const btn of unique) {
-                try { btn.click(); clicked++; } catch (e) { }
+                try { await remoteClick(btn); clicked++; } catch (e) { }
                 await new Promise(r => setTimeout(r, 50));
             }
             if (clicked > 0) {
@@ -793,23 +937,25 @@
     async function sendMessage(text) {
         if (!text) return false;
 
-        // heuristics to find chat input
-        const inputs = queryAll('textarea, [contenteditable="true"]');
+        // heuristics to find chat input - improved selectors
+        const inputs = queryAll('textarea, [contenteditable="true"], [role="textbox"], [class*="input"], [class*="editor-container"]');
         let chatInput = null;
 
         // Prioritize inputs that look like chat
         for (const input of inputs) {
             const placeholder = (input.getAttribute('placeholder') || '').toLowerCase();
             const aria = (input.getAttribute('aria-label') || '').toLowerCase();
+            const className = (input.className || '').toLowerCase();
 
             if (placeholder.includes('chat') || placeholder.includes('ask') || placeholder.includes('follow up') ||
-                aria.includes('chat') || aria.includes('input')) {
+                aria.includes('chat') || aria.includes('input') || aria.includes('message') ||
+                className.includes('monaco-editor') || className.includes('input-box')) {
                 chatInput = input;
                 break;
             }
         }
 
-        // Fallback to the first visible textarea if no specific match
+        // Fallback to the first visible textarea/textbox
         if (!chatInput) {
             chatInput = inputs.find(i => isElementVisible(i));
         }
@@ -818,15 +964,11 @@
             log(`[Chat] Found input, typing: "${text}"`);
             chatInput.focus();
 
-            // Try modern method first
-            const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
-            if (nativeTextAreaValueSetter && chatInput.tagName === 'TEXTAREA') {
-                nativeTextAreaValueSetter.call(chatInput, text);
-            } else {
-                chatInput.value = text;
-            }
+            // Clear existing if needed (optional, but safer for bump)
+            // chatInput.textContent = ''; 
 
-            chatInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+            // USE REMOTE TYPE via Bridge
+            await remoteType(text);
             await workerDelay(100);
 
             // Try to find send button
@@ -840,7 +982,7 @@
                 });
 
                 if (sendBtn) {
-                    sendBtn.click();
+                    await remoteClick(sendBtn);
                     log('[Chat] Clicked send button');
                     return true;
                 }
@@ -870,38 +1012,30 @@
             const allBtns = inputForm ? Array.from(inputForm.querySelectorAll('button, [role="button"], a')) : Array.from(document.querySelectorAll('button, [role="button"]'));
             const sendCandidate = allBtns.find(b => {
                 const lbl = ((b.getAttribute('aria-label') || '') + ' ' + (b.getAttribute('title') || '') + ' ' + (b.textContent || '') + ' ' + (b.className || '')).toLowerCase();
-                return lbl.includes('send') || lbl.includes('submit') || lbl.includes('run') || lbl.includes('arrow') || lbl.includes('codicon-send');
+                return lbl.includes('send') || lbl.includes('submit') || lbl.includes('run') || lbl.includes('arrow') || lbl.includes('codicon-send') || lbl.includes('codicon-run');
             });
             if (sendCandidate && isElementVisible(sendCandidate)) {
                 log('[Chat] Found send/run button, clicking: ' + (sendCandidate.getAttribute('aria-label') || sendCandidate.textContent || '').trim());
-                sendCandidate.click();
+                await remoteClick(sendCandidate);
             }
             return true;
+        } else {
+            // Toast failure
+            if (window.showAutoAllToast) window.showAutoAllToast('Bump Failed: No Input Found! ❌', 3000, 'rgba(200,0,0,0.8)');
         }
-
-        log('[Chat] Could not find chat input');
         return false;
     }
 
     // Detect if the AI conversation is idle (Good/Bad feedback badges visible)
     function isConversationIdle() {
-        const badges = queryAll('span, [class*="badge"], [class*="feedback"]');
-        for (const b of badges) {
-            const text = (b.textContent || '').trim();
-            if (text === 'Good' || text === 'Bad') {
-                if (isElementVisible(b)) return true;
-            }
-        }
-        // Also check for thumbs up/down icons
-        const thumbIcons = queryAll('.codicon-thumbsup, .codicon-thumbsdown, [aria-label*="thumbs"], [aria-label*="feedback"]');
-        for (const icon of thumbIcons) {
-            if (isElementVisible(icon)) return true;
-        }
+        // ... unused now ...
         return false;
     }
 
-    // Auto-bump: send a message when the conversation is idle
+    // Auto-bump: send a message when no buttons were found and cooldown has elapsed
+    // Called only when clicked === 0, so the absence of buttons IS the idle signal
     let lastBumpTime = 0;
+    let lastClickTime = 0;
     async function autoBump() {
         const state = window.__autoAllState;
         const bumpMsg = state.bumpMessage;
@@ -912,21 +1046,25 @@
 
         // Don't bump more often than the cooldown
         if (now - lastBumpTime < cooldown) {
-            const remaining = Math.round((cooldown - (now - lastBumpTime)) / 1000);
-            log(`[Bump] Cooldown: ${remaining}s remaining`);
             return false;
         }
 
-        if (isConversationIdle()) {
-            log(`[Bump] AI is idle (Good/Bad visible). Sending: "${bumpMsg}"`);
-            const sent = await sendMessage(bumpMsg);
-            if (sent) {
-                lastBumpTime = now;
-                log('[Bump] Bump sent successfully!');
-                return true;
-            } else {
-                log('[Bump] Failed to send bump');
-            }
+        // Don't bump if we recently clicked a button (AI might still be processing)
+        if (now - lastClickTime < cooldown) {
+            return false;
+        }
+
+        log(`[Bump] No buttons found and cooldown elapsed. Sending: "${bumpMsg}"`);
+        if (window.showAutoAllToast) window.showAutoAllToast(`Auto-Bumping: "${bumpMsg}"... ⏳`, 2000, 'rgba(0,0,200,0.8)');
+
+        const sent = await sendMessage(bumpMsg);
+        if (sent) {
+            lastBumpTime = now;
+            log('[Bump] ✅ Bump sent successfully!');
+            if (window.showAutoAllToast) window.showAutoAllToast('Bump Sent! ✅', 2000);
+            return true;
+        } else {
+            log('[Bump] ❌ Failed to send bump (no chat input found)');
         }
         return false;
     }
@@ -950,20 +1088,34 @@
         let verified = 0;
         const uniqueFound = [...new Set(found)];
 
-        // Get configured delay
-        const autoApproveDelay = window.__autoAllState.autoApproveDelay || 30000;
-        const bumpMessage = window.__autoAllState.bumpMessage;
+        // Stuck Button Detection
+        const state = window.__autoAllState;
+        if (!state.clickHistory) state.clickHistory = { signature: '', count: 0 };
 
         for (const el of uniqueFound) {
             if (isAcceptButton(el)) {
                 const buttonText = (el.textContent || "").trim();
 
-                // Wait/Delay logic could go here if we wanted to enforce the delay *before* clicking
-                // For now, adhering to standard "click available" logic, but respecting the user flow request
+                // create signature based on text and approx location to identify "Same Button"
+                // rounding to 10px to account for minute layout shifts
+                const r = el.getBoundingClientRect();
+                const sig = `${buttonText}|${Math.round(r.top / 20)}|${Math.round(r.left / 20)}`;
+
+                if (state.clickHistory.signature === sig) {
+                    state.clickHistory.count++;
+                    if (state.clickHistory.count > 3) {
+                        log(`[StuckGuard] Ignoring stuck button: "${buttonText}" (clicked ${state.clickHistory.count} times)`);
+                        continue; // SKIP THIS CLICK
+                    }
+                } else {
+                    // New button interaction reset
+                    state.clickHistory.signature = sig;
+                    state.clickHistory.count = 1;
+                }
 
                 log(`Clicking: "${buttonText}"`);
 
-                el.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
+                await remoteClick(el);
                 clicked++;
 
                 const disappeared = await waitForDisappear(el);
@@ -972,18 +1124,30 @@
                     Analytics.trackClick(buttonText, log);
                     verified++;
                     log(`[Stats] Click verified (button disappeared)`);
-
-
+                    // If it disappeared, reset stuck count? 
+                    // No, because we might click the NEXT button which has same signature?
+                    // Actually if it disappeared, it's NOT the same button instance usually.
+                    // But if a NEW button appears in exact same spot?
+                    state.clickHistory.count = 0; // Reset if successful action
                 } else {
-                    log(`[Stats] Click not verified (button still visible after 500ms)`);
+                    log(`[Stats] Click not verified (button still visible)`);
+                    // Don't reset count, so we detect stuckness next loop
                 }
             }
         }
 
         if (clicked > 0) {
             log(`[Click] Attempted: ${clicked}, Verified: ${verified}`);
+            lastClickTime = Date.now();
         }
-        return verified;
+        return verified; // We return verified count. But caller checks 'clicked > 0' usually?
+        // Wait, caller uses `clicked` from `performClick` return? 
+        // No, caller logic is: `const clicked = await performClick(...)`. 
+        // `performClick` returns `verified` count.
+        // So if we SKIP via stuck guard, `verified` will be 0.
+        // And caller sees 0.
+        // And `autoBump` triggers.
+        // PERFECT.
     }
 
     async function cursorLoop(sid) {
@@ -1068,7 +1232,16 @@
                 await expandCollapsedSections();
 
                 // Just click accept buttons directly - no dropdown interaction needed
-                const clicked = await performClick(['.bg-ide-button-background', 'button', '[role="button"]', '[class*="button"]']);
+                // Added selectors for Diff Editor actions and SCM titles
+                const clicked = await performClick([
+                    '.bg-ide-button-background',
+                    'button',
+                    '[role="button"]',
+                    '[class*="button"]',
+                    '.monaco-action-bar .action-label',
+                    '[title*="Accept"]',
+                    '[aria-label*="Accept"]'
+                ]);
                 if (clicked > 0) {
                     log(`[Loop] Cycle ${cycle}: Clicked ${clicked} accept buttons`);
                 } else {
@@ -1175,11 +1348,23 @@
         Analytics.setFocusState(isFocused, log);
     };
 
+    // Helper for visual feedback
+    window.showAutoAllToast = function (text, duration = 3000, color = 'rgba(0,100,0,0.8)') {
+        const toast = document.createElement('div');
+        toast.style.cssText = `position:fixed;top:10px;right:10px;z-index:99999;background:${color};color:white;padding:10px;border-radius:5px;font-family:sans-serif;pointer-events:none;transition:opacity 1s;`;
+        toast.textContent = text;
+        document.body.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 1000); }, duration);
+    };
+
     window.__autoAllStart = async function (config) {
         try {
             const ide = (config.ide || 'cursor').toLowerCase();
             const isPro = config.isPro !== false;
             const isBG = config.isBackgroundMode === true;
+
+            // Visual confirmation of injection
+            window.showAutoAllToast('Antigravity v4.2.6 Active 🚀');
 
             if (config.bannedCommands) {
                 window.__autoAllUpdateBannedCommands(config.bannedCommands);
@@ -1195,11 +1380,16 @@
 
             const state = window.__autoAllState;
 
-            // Always stop previous session and restart fresh
+            // If already running, just update config and return — do NOT restart
+            // The 5-second poll timer calls this repeatedly; restarting would kill the loop
             if (state.isRunning) {
-                log(`Stopping previous session to restart with fresh config...`);
-                state.isRunning = false;
-                await new Promise(r => setTimeout(r, 500)); // Let old loops exit
+                // Update config values in-place (hot reload)
+                state.bumpMessage = config.bumpMessage || '';
+                state.autoApproveDelay = (config.autoApproveDelay || 30) * 1000;
+                state.bumpEnabled = !!config.bumpMessage;
+                state.threadWaitInterval = (config.threadWaitInterval || 5) * 1000;
+                log(`[Config] Hot-reloaded config (loop still running)`);
+                return;
             }
 
             state.isRunning = true;
@@ -1210,7 +1400,10 @@
 
             // Store user config in state for bump/loops to use
             state.bumpMessage = config.bumpMessage || '';
-            state.autoApproveDelay = (config.autoApproveDelay || 30) * 1000;
+            state.bumpMessage = config.bumpMessage || '';
+            state.autoApproveDelay = (config.autoApproveDelay || 15) * 1000; // Default 15s
+            state.bumpEnabled = !!config.bumpMessage;
+            state.threadWaitInterval = (config.threadWaitInterval || 3) * 1000;
             state.bumpEnabled = !!config.bumpMessage;
             state.threadWaitInterval = (config.threadWaitInterval || 5) * 1000;
             log(`[Config] bumpMessage="${state.bumpMessage}", autoApproveDelay=${state.autoApproveDelay}ms, threadWait=${state.threadWaitInterval}ms`);

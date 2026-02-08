@@ -58,19 +58,34 @@ export class CDPHandler extends EventEmitter {
     async connectToPage(page: any): Promise<boolean> {
         return new Promise((resolve) => {
             const ws = new WebSocket(page.webSocketDebuggerUrl);
-            ws.on('open', () => {
+            ws.on('open', async () => {
                 this.connections.set(page.id, { ws, injected: false });
+
+                // Enable Runtime to receive console messages & binding calls
+                this.sendCommand(page.id, 'Runtime.enable');
+                this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' });
+
                 resolve(true);
             });
-            ws.on('message', (data: any) => {
+            ws.on('message', async (data: any) => {
                 try {
                     const msg = JSON.parse(data.toString());
                     if (msg.id && this.pendingMessages.has(msg.id)) {
                         const { resolve: res, reject: rej } = this.pendingMessages.get(msg.id)!;
                         this.pendingMessages.delete(msg.id);
                         msg.error ? rej(new Error(msg.error.message)) : res(msg.result);
+                    } else if (msg.method === 'Runtime.bindingCalled' && msg.params.name === '__ANTIGRAVITY_BRIDGE__') {
+                        // ROBUST Binding Bridge
+                        const payload = msg.params.payload;
+                        this.handleBridgeMessage(page.id, payload);
+                    } else if (msg.method === 'Runtime.consoleAPICalled') {
+                        // Fallback Console Bridge
+                        const text = msg.params.args[0]?.value || '';
+                        this.handleBridgeMessage(page.id, text);
                     }
-                } catch (e) { }
+                } catch (e) {
+                    console.error('[CDP Bridge Error]', e);
+                }
             });
             ws.on('error', (err: Error) => {
                 console.log(`WS Error on ${page.id}: ${err.message}`);
@@ -82,8 +97,6 @@ export class CDPHandler extends EventEmitter {
             });
         });
     }
-
-    // ... (rest of class)
 
     async sendCommand(pageId: string, method: string, params: any = {}, timeoutMs?: number): Promise<any> {
         const conn = this.connections.get(pageId);
@@ -108,6 +121,19 @@ export class CDPHandler extends EventEmitter {
         if (!conn) return;
 
         if (force) conn.injected = false;
+
+        // Verify if script is actually present (page might have reloaded)
+        if (conn.injected) {
+            try {
+                const check = await this.sendCommand(pageId, 'Runtime.evaluate', {
+                    expression: "typeof window.__autoAllStart",
+                    returnByValue: true
+                }, 1000);
+                if (check?.result?.value !== 'function') conn.injected = false;
+            } catch (e) {
+                conn.injected = false;
+            }
+        }
 
         if (!conn.injected) {
             try {
@@ -135,6 +161,7 @@ export class CDPHandler extends EventEmitter {
         }
         this.connections.clear();
     }
+
     isConnected(): boolean {
         return this.connections.size > 0;
     }
@@ -142,5 +169,44 @@ export class CDPHandler extends EventEmitter {
     async connect(): Promise<boolean> {
         const instances = await this.scanForInstances();
         return instances.length > 0;
+    }
+
+    private async handleBridgeMessage(pageId: string, text: string) {
+        if (typeof text !== 'string') return;
+
+        try {
+            if (text.startsWith('__ANTIGRAVITY_CLICK__:')) {
+                const parts = text.split(':');
+                const x = parseInt(parts[1]);
+                const y = parseInt(parts[2]);
+                if (!isNaN(x) && !isNaN(y)) {
+                    // Click = Pressed (buttons=1) + Delay + Released
+                    await this.sendCommand(pageId, 'Input.dispatchMouseEvent', {
+                        type: 'mousePressed',
+                        x, y,
+                        button: 'left',
+                        buttons: 1, // Bitmask: Left button down
+                        clickCount: 1
+                    });
+
+                    await new Promise(r => setTimeout(r, 50));
+
+                    await this.sendCommand(pageId, 'Input.dispatchMouseEvent', {
+                        type: 'mouseReleased',
+                        x, y,
+                        button: 'left',
+                        buttons: 0,
+                        clickCount: 1
+                    });
+                }
+            } else if (text.startsWith('__ANTIGRAVITY_TYPE__:')) {
+                const content = text.substring('__ANTIGRAVITY_TYPE__:'.length);
+                if (content) {
+                    await this.sendCommand(pageId, 'Input.insertText', { text: content });
+                }
+            }
+        } catch (e) {
+            console.error('Bridge Message Handler Error', e);
+        }
     }
 }
