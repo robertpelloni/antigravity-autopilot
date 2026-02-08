@@ -1,0 +1,24 @@
+[submodule "antigravity-auto-accept"]
+	path = antigravity-auto-accept
+	url = https://github.com/pesoszpesosz/antigravity-auto-accept
+[submodule "auto-accept-agent"]
+	path = auto-accept-agent
+	url = https://github.com/Munkhin/auto-accept-agent
+[submodule "yoke-antigravity"]
+	path = yoke-antigravity
+	url = https://github.com/ai-dev-2024/yoke-antigravity
+[submodule "AUTO-ALL-AntiGravity"]
+	path = AUTO-ALL-AntiGravity
+	url = https://github.com/ai-dev-2024/AUTO-ALL-AntiGravity
+[submodule "free-auto-accept-antigravity"]
+	path = free-auto-accept-antigravity
+	url = https://github.com/RendezvousP/free-auto-accept-antigravity
+[submodule "AntiBridge-Antigravity-remote"]
+	path = AntiBridge-Antigravity-remote
+	url = https://github.com/linhbq82/AntiBridge-Antigravity-remote
+[submodule "AntigravityMobile"]
+	path = AntigravityMobile
+	url = https://github.com/AvenalJ/AntigravityMobile
+[submodule "antigravity-jules-orchestration"]
+	path = antigravity-jules-orchestration
+	url = https://github.com/Scarmonit/antigravity-jules-orchestration

@@ -1,0 +1,5 @@
+node_modules
+dist
+tmp_submodules
+.yoke
+*.vsix
