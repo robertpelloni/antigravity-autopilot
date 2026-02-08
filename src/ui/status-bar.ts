@@ -22,7 +22,7 @@ export class StatusBarManager {
             vscode.StatusBarAlignment.Right,
             100
         );
-        this.statusMain.command = 'antigravity.toggleExtension';
+        this.statusMain.command = 'antigravity.showStatusMenu';
         context.subscriptions.push(this.statusMain);
 
         // Settings Gear

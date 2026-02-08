@@ -24,6 +24,10 @@ export interface AntigravityConfig {
     autoApproveDelay: number;   // Seconds to wait before auto-approving
     bumpMessage: string;        // Message to post to bump thread
 
+    // CDP Settings
+    cdpPort: number;
+    cdpTimeout: number;
+
     // Advanced Model & Loop Settings
     preferredModelForReasoning: string;
     preferredModelForFrontend: string;
@@ -79,6 +83,8 @@ export class ConfigManager {
             threadWaitInterval: config.get('threadWaitInterval', 5),
             autoApproveDelay: config.get('autoApproveDelay', 30),
             bumpMessage: config.get('bumpMessage', 'bump'),
+            cdpPort: config.get('cdpPort', 9000),
+            cdpTimeout: config.get('cdpTimeout', 10000),
             preferredModelForReasoning: config.get('preferredModelForReasoning', 'claude-opus-4.5-thinking'),
             preferredModelForFrontend: config.get('preferredModelForFrontend', 'gemini-3-pro-high'),
             preferredModelForQuick: config.get('preferredModelForQuick', 'gemini-3-flash'),

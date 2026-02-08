@@ -87,18 +87,22 @@ export class DashboardPanel {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Antigravity Dashboard</title>
             <style>
-                body { font-family: sans-serif; padding: 20px; color: var(--vscode-editor-foreground); background-color: var(--vscode-editor-background); }
-                h1 { color: var(--vscode-editor-foreground); }
-                .card { background: var(--vscode-editor-widget-background); border: 1px solid var(--vscode-widget-border); padding: 15px; margin-bottom: 10px; border-radius: 5px; }
-                .setting { margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-                label { font-weight: bold; }
-                select, input[type="text"] { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); padding: 4px; }
-                button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 6px 12px; cursor: pointer; }
+                body { font-family: var(--vscode-font-family, sans-serif); padding: 20px; color: var(--vscode-editor-foreground); background-color: var(--vscode-editor-background); }
+                h1 { color: var(--vscode-editor-foreground); border-bottom: 1px solid var(--vscode-widget-border); padding-bottom: 8px; }
+                h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 0; color: var(--vscode-descriptionForeground); }
+                .card { background: var(--vscode-editor-widget-background); border: 1px solid var(--vscode-widget-border); padding: 15px; margin-bottom: 12px; border-radius: 6px; }
+                .setting { margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+                label { font-weight: 600; flex-shrink: 0; }
+                select, input[type="text"], input[type="number"] { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); padding: 4px 8px; border-radius: 3px; min-width: 120px; }
+                input[type="number"] { width: 100px; }
+                input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--vscode-button-background); cursor: pointer; }
+                button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 6px 12px; cursor: pointer; border-radius: 3px; }
                 button:hover { background: var(--vscode-button-hoverBackground); }
+                .version { color: var(--vscode-descriptionForeground); font-size: 12px; margin-top: 16px; text-align: center; }
             </style>
         </head>
         <body>
-            <h1>Antigravity Autopilot</h1>
+            <h1>⚡ Antigravity Autopilot</h1>
             <div class="card">
                 <h2>Strategies</h2>
                 <div class="setting">
@@ -135,6 +139,38 @@ export class DashboardPanel {
                  <div class="setting">
                     <label>Voice Control:</label>
                     <input type="checkbox" ${settings.voiceControlEnabled ? 'checked' : ''} onchange="updateConfig('voiceControlEnabled', this.checked)">
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>CDP & Automation</h2>
+                <div class="setting">
+                    <label>CDP Timeout (ms):</label>
+                    <input type="number" value="${settings.cdpTimeout}" onchange="updateConfig('cdpTimeout', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>CDP Port:</label>
+                    <input type="number" value="${settings.cdpPort}" onchange="updateConfig('cdpPort', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Bump Message:</label>
+                    <input type="text" value="${settings.bumpMessage}" onchange="updateConfig('bumpMessage', this.value)">
+                </div>
+                <div class="setting">
+                    <label>Auto-Approve Delay (s):</label>
+                    <input type="number" value="${settings.autoApproveDelay}" onchange="updateConfig('autoApproveDelay', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                     <label>Max Loops/Session:</label>
+                     <input type="number" value="${settings.maxLoopsPerSession}" onchange="updateConfig('maxLoopsPerSession', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Thread Wait (s):</label>
+                    <input type="number" value="${settings.threadWaitInterval}" onchange="updateConfig('threadWaitInterval', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Poll Frequency (ms):</label>
+                    <input type="number" value="${settings.pollFrequency}" onchange="updateConfig('pollFrequency', parseInt(this.value))">
                 </div>
             </div>
 

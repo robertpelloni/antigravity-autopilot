@@ -3,6 +3,7 @@ import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import { EventEmitter } from 'events';
+import { config } from '../../utils/config';
 
 export class CDPHandler extends EventEmitter {
     private startPort: number;
@@ -10,6 +11,7 @@ export class CDPHandler extends EventEmitter {
     private connections: Map<string, any>;
     private messageId: number;
     private pendingMessages: Map<number, { resolve: Function, reject: Function }>;
+    private timeoutMs: number;
 
     constructor(startPort = 9000, endPort = 9030) {
         super();
@@ -18,6 +20,7 @@ export class CDPHandler extends EventEmitter {
         this.connections = new Map();
         this.messageId = 1;
         this.pendingMessages = new Map();
+        this.timeoutMs = config.get<number>('cdpTimeout') || 10000;
     }
 
     async scanForInstances(): Promise<{ port: number, pages: any[] }[]> {
@@ -80,19 +83,23 @@ export class CDPHandler extends EventEmitter {
         });
     }
 
-    async sendCommand(pageId: string, method: string, params: any = {}): Promise<any> {
+    // ... (rest of class)
+
+    async sendCommand(pageId: string, method: string, params: any = {}, timeoutMs?: number): Promise<any> {
         const conn = this.connections.get(pageId);
         if (!conn || conn.ws.readyState !== WebSocket.OPEN) return Promise.reject(new Error('dead'));
         const id = this.messageId++;
+        const timeout = timeoutMs || this.timeoutMs;
+
         return new Promise((resolve, reject) => {
             this.pendingMessages.set(id, { resolve, reject });
             conn.ws.send(JSON.stringify({ id, method, params }));
             setTimeout(() => {
                 if (this.pendingMessages.has(id)) {
                     this.pendingMessages.delete(id);
-                    reject(new Error('timeout'));
+                    reject(new Error(`timeout after ${timeout}ms`));
                 }
-            }, 5000);
+            }, timeout);
         });
     }
 
@@ -106,7 +113,7 @@ export class CDPHandler extends EventEmitter {
                     expression: scriptContent,
                     userGesture: true,
                     awaitPromise: true
-                });
+                }, 10000); // Higher timeout for injection
                 conn.injected = true;
             } catch (e) {
                 console.error(`Injection failed on ${pageId}`, e);

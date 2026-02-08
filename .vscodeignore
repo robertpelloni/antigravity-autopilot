@@ -2,8 +2,22 @@
 .vscode-test/**
 src/**
 .gitignore
+.gitmodules
 vsc-extension-quickstart.md
 **/*.map
 .git/**
 out/**
 dist/**/*.map
+node_modules/**
+# Exclude submodules/other repos
+AUTO-ALL-AntiGravity/**
+AntiBridge-Antigravity-remote/**
+AntigravityMobile/**
+antigravity-auto-accept/**
+antigravity-jules-orchestration/**
+antigravity-multi-purpose-agent/**
+auto-accept-agent/**
+free-auto-accept-antigravity/**
+yoke-antigravity/**
+# Exclude previous builds
+*.vsix

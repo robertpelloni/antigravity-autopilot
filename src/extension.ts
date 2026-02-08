@@ -10,7 +10,7 @@ import { progressTracker } from './core/progress-tracker';
 import { mcpServer } from './modules/mcp/server';
 import { voiceControl } from './modules/voice/control';
 import { CDPHandler } from './services/cdp/cdp-handler';
-import { CDPHandler } from './services/cdp/cdp-handler';
+
 import { StrategyManager } from './strategies/manager';
 import { testGenerator } from './core/test-generator';
 import { codeReviewer } from './core/code-reviewer';
@@ -127,7 +127,19 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('antigravity.runCodeReview', async () => {
             const editor = vscode.window.activeTextEditor;
             if (editor) {
-                await codeReviewer.reviewFile(editor.document.fileName);
+                const code = editor.document.getText();
+                const result = codeReviewer.review(code, editor.document.fileName);
+
+                // Show diagnostics
+                const diagnostics = codeReviewer.showDiagnostics(editor.document, result.issues);
+                const collection = vscode.languages.createDiagnosticCollection('antigravity-review');
+                collection.set(editor.document.uri, diagnostics);
+
+                if (result.passed) {
+                    vscode.window.showInformationMessage(`Code Review Passed! Score: ${result.score}`);
+                } else {
+                    vscode.window.showWarningMessage(`Code Review Failed. Score: ${result.score}. See Problems panel.`);
+                }
             } else {
                 vscode.window.showErrorMessage('No active file to review');
             }
@@ -142,6 +154,38 @@ export function activate(context: vscode.ExtensionContext) {
             const memories = memoryManager.getRecentMemories(10);
             const items = memories.map(m => ({ label: m.content, description: new Date(m.timestamp).toLocaleString() }));
             await vscode.window.showQuickPick(items, { placeHolder: 'Recent Memories' });
+        }),
+        vscode.commands.registerCommand('antigravity.showStatusMenu', async () => {
+            const items = [
+                {
+                    label: '$(rocket) Start Autonomous Loop (Yoke)',
+                    description: 'Full AI Agent Mode',
+                    action: 'antigravity.toggleAutonomous'
+                },
+                {
+                    label: '$(pulse) Enable Auto-All (CDP)',
+                    description: 'Auto-edits & Terminal (Passive)',
+                    action: 'antigravity.toggleAutoAll'
+                },
+                {
+                    label: '$(check) Enable Auto-Accept (Simple)',
+                    description: 'Basic Auto-Accept only',
+                    action: 'antigravity.toggleAutoAccept'
+                },
+                {
+                    label: '$(gear) Open Dashboard',
+                    description: 'Configure settings',
+                    action: 'antigravity.openSettings'
+                }
+            ];
+
+            const selection = await vscode.window.showQuickPick(items, {
+                placeHolder: 'Antigravity Status: Select Mode'
+            });
+
+            if (selection && selection.action) {
+                vscode.commands.executeCommand(selection.action);
+            }
         }),
         vscode.commands.registerCommand('antigravity.syncProjectTasks', async () => {
             await projectManager.syncFromFixPlan();

@@ -240,6 +240,14 @@ export class AutonomousLoop {
             }
 
             exitDetector.reportSuccess();
+
+            // Auto-Bump: Send a message to reveal the feedback buttons for the next loop
+            const bumpMessage = config.get<string>('bumpMessage') || 'bump';
+            if (bumpMessage) {
+                log.info(`Auto-Bump: Sending "${bumpMessage}" to reveal feedback buttons...`);
+                await cdpClient.sendMessage(bumpMessage);
+            }
+
             return true;
         } catch (err: any) {
             log.error(`Execution error: ${err.message}`);

@@ -610,7 +610,13 @@
 
         // Use configured patterns from state if available, otherwise use defaults
         const state = window.__autoAllState || {};
-        const defaultPatterns = ['accept', 'accept all', 'run', 'run command', 'retry', 'apply', 'execute', 'confirm', 'allow once', 'allow', 'proceed', 'continue', 'yes', 'ok', 'save', 'approve', 'enable', 'install', 'update', 'overwrite'];
+        const defaultPatterns = ['accept', 'accept all', 'run', 'run command', 'retry', 'apply', 'execute', 'confirm', 'allow once', 'allow', 'proceed', 'continue', 'yes', 'ok', 'save', 'approve', 'overwrite'];
+
+        // Safety: Do not click buttons in the Extensions view or Source Control (unless specific)
+        if (el.closest && (el.closest('.extensions-viewlet') || el.closest('[id="workbench.view.extensions"]'))) {
+            log(`[SAFETY] Skipping button in Extensions view: "${text}"`);
+            return false;
+        }
         const patterns = state.acceptPatterns || defaultPatterns;
 
         const defaultRejects = ['skip', 'reject', 'cancel', 'close', 'refine', 'deny', 'no', 'dismiss', 'abort', 'ask every time', 'always run', 'always allow', 'stop', 'pause', 'disconnect'];
@@ -715,43 +721,74 @@
 
 
     async function expandCollapsedSections() {
-        // User reported "Step Requires Input - Expand <"
-        const expandButtons = [];
+        // Expand collapsed sections ONLY within the chat/response area
+        // IMPORTANT: Do NOT query globally — that would click file explorer, sidebar, etc.
+        const expandTargets = [];
+        let clicked = 0;
 
-        // 1. Look for specific text match
-        const allDivs = queryAll('div, span, a, .monaco-button');
-        for (const el of allDivs) {
-            if (el.textContent && el.textContent.includes('Expand <')) {
-                if (isElementVisible(el)) expandButtons.push(el);
+        // Scope: only look inside chat/response containers
+        const chatContainers = queryAll('.chat-response, .interactive-session, .monaco-list-row, .interactive-result-editor-wrapper, [class*="chat-widget"], [class*="aideagent"]');
+
+        for (const container of chatContainers) {
+            // 1. Explicit expand/show buttons
+            const buttons = container.querySelectorAll('[role="button"], .monaco-button, .clickable');
+            for (const el of buttons) {
+                const text = (el.textContent || '').trim().toLowerCase();
+                const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+                const title = (el.getAttribute('title') || '').toLowerCase();
+
+                const isExpand = text.includes('expand') || text.includes('show') ||
+                    aria.includes('expand') || aria.includes('show') ||
+                    title.includes('expand') || title.includes('show');
+
+                if (isExpand && isElementVisible(el)) {
+                    expandTargets.push(el);
+                }
+            }
+
+            // 2. Collapsed chevrons (right-pointing = collapsed)
+            const chevrons = container.querySelectorAll('.codicon-chevron-right, [aria-expanded="false"]');
+            for (const chev of chevrons) {
+                if (isElementVisible(chev)) {
+                    const nearbyText = (chev.closest('.monaco-list-row') || container).textContent.toLowerCase();
+                    if (nearbyText.includes('run') || nearbyText.includes('step') ||
+                        nearbyText.includes('command') || nearbyText.includes('terminal') ||
+                        nearbyText.includes('output') || nearbyText.includes('diff')) {
+                        expandTargets.push(chev);
+                    }
+                }
             }
         }
 
-        // 2. Look for generic VS Code chevrons usually indicating collapsed rows
-        // common in chat interfaces for "referenced code" or "steps"
-        const chevrons = queryAll('.codicon-chevron-right, .codicon-chevron-down');
-        // We generally want to click RIGHT (collapsed) to make it DOWN (expanded)
-        // But be careful not to expand everything in the IDE
-
-        // Strategy: Only expand if we see "Step Requires Input" nearby
-        const stepHeaders = queryAll('.monaco-list-row').filter(row => row.textContent.includes('Step Requires Input'));
-
-        for (const header of stepHeaders) {
-            const button = header.querySelector('.codicon-chevron-right'); // Collapsed
-            if (button && isElementVisible(button)) {
-                expandButtons.push(button);
+        // 3. Hunt for hidden "Run" buttons — traverse up parents to find collapse toggle
+        //    Scoped: only Run buttons that are already inside a chat response
+        const runBtns = queryAll('.chat-response div[title*="Run"], .interactive-session div[title*="Run"], .chat-response [aria-label*="Run"], .interactive-session [aria-label*="Run"]');
+        for (const btn of runBtns) {
+            if (!isElementVisible(btn)) {
+                let parent = btn.parentElement;
+                for (let d = 0; parent && d < 5; d++, parent = parent.parentElement) {
+                    const toggles = parent.querySelectorAll('.codicon-chevron-right, [aria-expanded="false"]');
+                    toggles.forEach(t => { if (isElementVisible(t)) expandTargets.push(t); });
+                }
             }
         }
 
-        if (expandButtons.length > 0) {
-            log(`[Expand] Found ${expandButtons.length} items to expand.`);
-            for (const btn of expandButtons) {
-                btn.click();
-                await workerDelay(500); // Wait for animation
+        // 4. Click unique targets
+        const unique = [...new Set(expandTargets)];
+        if (unique.length > 0) {
+            log('[Expand] Found ' + unique.length + ' collapse toggles in chat area. Expanding...');
+            for (const btn of unique) {
+                try { btn.click(); clicked++; } catch (e) { }
+                await new Promise(r => setTimeout(r, 50));
             }
-            return true;
+            if (clicked > 0) {
+                await workerDelay(300);
+                return true;
+            }
         }
         return false;
     }
+
 
     async function sendMessage(text) {
         if (!text) return false;
@@ -809,9 +846,36 @@
                 }
             }
 
-            // Fallback: Press Enter
-            log('[Chat] Pressing Enter');
-            chatInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+            // Fallback: Try multiple Enter strategies (plain, Alt, Ctrl)
+            log('[Chat] Submitting via Enter strategies...');
+
+            // Strategy 1: Plain Enter (works in some chat UIs)
+            chatInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+            chatInput.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+            chatInput.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+            await workerDelay(300);
+
+            // Strategy 2: Alt+Enter (VS Code chat default submit)
+            chatInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true, cancelable: true }));
+            chatInput.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
+            await workerDelay(300);
+
+            // Strategy 3: Ctrl+Enter (alternative submit shortcut)
+            chatInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, ctrlKey: true, bubbles: true, cancelable: true }));
+            chatInput.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, ctrlKey: true, bubbles: true }));
+            await workerDelay(300);
+
+            // Strategy 4: Find send/submit button anywhere near the input
+            const inputForm = chatInput.closest('form, div, section');
+            const allBtns = inputForm ? Array.from(inputForm.querySelectorAll('button, [role="button"], a')) : Array.from(document.querySelectorAll('button, [role="button"]'));
+            const sendCandidate = allBtns.find(b => {
+                const lbl = ((b.getAttribute('aria-label') || '') + ' ' + (b.getAttribute('title') || '') + ' ' + (b.textContent || '') + ' ' + (b.className || '')).toLowerCase();
+                return lbl.includes('send') || lbl.includes('submit') || lbl.includes('run') || lbl.includes('arrow') || lbl.includes('codicon-send');
+            });
+            if (sendCandidate && isElementVisible(sendCandidate)) {
+                log('[Chat] Found send/run button, clicking: ' + (sendCandidate.getAttribute('aria-label') || sendCandidate.textContent || '').trim());
+                sendCandidate.click();
+            }
             return true;
         }
 
@@ -819,12 +883,69 @@
         return false;
     }
 
+    // Detect if the AI conversation is idle (Good/Bad feedback badges visible)
+    function isConversationIdle() {
+        const badges = queryAll('span, [class*="badge"], [class*="feedback"]');
+        for (const b of badges) {
+            const text = (b.textContent || '').trim();
+            if (text === 'Good' || text === 'Bad') {
+                if (isElementVisible(b)) return true;
+            }
+        }
+        // Also check for thumbs up/down icons
+        const thumbIcons = queryAll('.codicon-thumbsup, .codicon-thumbsdown, [aria-label*="thumbs"], [aria-label*="feedback"]');
+        for (const icon of thumbIcons) {
+            if (isElementVisible(icon)) return true;
+        }
+        return false;
+    }
+
+    // Auto-bump: send a message when the conversation is idle
+    let lastBumpTime = 0;
+    async function autoBump() {
+        const state = window.__autoAllState;
+        const bumpMsg = state.bumpMessage;
+        if (!bumpMsg || !state.bumpEnabled) return false;
+
+        const now = Date.now();
+        const cooldown = state.autoApproveDelay || 30000;
+
+        // Don't bump more often than the cooldown
+        if (now - lastBumpTime < cooldown) {
+            const remaining = Math.round((cooldown - (now - lastBumpTime)) / 1000);
+            log(`[Bump] Cooldown: ${remaining}s remaining`);
+            return false;
+        }
+
+        if (isConversationIdle()) {
+            log(`[Bump] AI is idle (Good/Bad visible). Sending: "${bumpMsg}"`);
+            const sent = await sendMessage(bumpMsg);
+            if (sent) {
+                lastBumpTime = now;
+                log('[Bump] Bump sent successfully!');
+                return true;
+            } else {
+                log('[Bump] Failed to send bump');
+            }
+        }
+        return false;
+    }
+
     async function performClick(selectors) {
         // PRE-CHECK: Expand any collapsed sections that might be hiding buttons
         await expandCollapsedSections();
 
-        const found = [];
+        let found = [];
         selectors.forEach(s => queryAll(s).forEach(el => found.push(el)));
+
+        // If nothing found, try expanding ONE MORE TIME aggressively, then search again
+        if (found.length === 0) {
+            const expanded = await expandCollapsedSections();
+            if (expanded) {
+                selectors.forEach(s => queryAll(s).forEach(el => found.push(el)));
+            }
+        }
+
         let clicked = 0;
         let verified = 0;
         const uniqueFound = [...new Set(found)];
@@ -852,12 +973,6 @@
                     verified++;
                     log(`[Stats] Click verified (button disappeared)`);
 
-                    // NEW: Bump thread after successful action if configured
-                    if (bumpMessage) {
-                        log(`[Bump] Sending bump message: "${bumpMessage}"`);
-                        await workerDelay(1000); // Wait a bit after click
-                        await sendMessage(bumpMessage);
-                    }
 
                 } else {
                     log(`[Stats] Click not verified (button still visible after 500ms)`);
@@ -880,7 +995,15 @@
             log(`[Loop] Cycle ${cycle}: Starting...`);
 
             const clicked = await performClick(['button', '[class*="button"]', '[class*="anysphere"]']);
-            log(`[Loop] Cycle ${cycle}: Clicked ${clicked} buttons`);
+            if (clicked > 0) {
+                log(`[Loop] Cycle ${cycle}: Clicked ${clicked} buttons`);
+            } else {
+                const bumped = await autoBump();
+                if (bumped) {
+                    log(`[Loop] Cycle ${cycle}: Auto-bumped conversation`);
+                    await workerDelay(3000);
+                }
+            }
 
             await workerDelay(800);
 
@@ -935,10 +1058,20 @@
             cycle++;
             log(`[Loop] Cycle ${cycle}: Starting...`);
 
+            // Expand any collapsed sections (e.g. "Step Requires Input")
+            await expandCollapsedSections();
+
             // Just click accept buttons directly - no dropdown interaction needed
             const clicked = await performClick(['.bg-ide-button-background', 'button', '[role="button"]', '[class*="button"]']);
             if (clicked > 0) {
                 log(`[Loop] Cycle ${cycle}: Clicked ${clicked} accept buttons`);
+            } else {
+                // No buttons found — check if AI is idle and auto-bump
+                const bumped = await autoBump();
+                if (bumped) {
+                    log(`[Loop] Cycle ${cycle}: Auto-bumped conversation`);
+                    await workerDelay(3000);
+                }
             }
 
             await workerDelay(1500);
@@ -1068,6 +1201,13 @@
             state.sessionID++;
             const sid = state.sessionID;
 
+            // Store user config in state for bump/loops to use
+            state.bumpMessage = config.bumpMessage || '';
+            state.autoApproveDelay = (config.autoApproveDelay || 30) * 1000;
+            state.bumpEnabled = !!config.bumpMessage;
+            state.threadWaitInterval = (config.threadWaitInterval || 5) * 1000;
+            log(`[Config] bumpMessage="${state.bumpMessage}", autoApproveDelay=${state.autoApproveDelay}ms, threadWait=${state.threadWaitInterval}ms`);
+
             if (!state.stats.sessionStartTime) {
                 state.stats.sessionStartTime = Date.now();
             }
@@ -1090,7 +1230,8 @@
                 log(`Starting static poll loop...`);
                 (async function staticLoop() {
                     while (state.isRunning && state.sessionID === sid) {
-                        performClick(['button', '[class*="button"]', '[class*="anysphere"]']);
+                        const clicks = await performClick(['button', '[class*="button"]', '[class*="anysphere"]']);
+                        if (clicks === 0) await autoBump();
                         await workerDelay(config.pollInterval || 1000);
                     }
                 })();

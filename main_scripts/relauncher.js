@@ -114,7 +114,8 @@ try {
 
             const result = execSync(`powershell -ExecutionPolicy Bypass -File "${scriptPath}"`, {
                 encoding: 'utf8',
-                timeout: 10000
+                timeout: 10000,
+                windowsHide: true
             });
 
             const lines = result.split('\n').map(l => l.trim()).filter(l => l);
@@ -253,7 +254,8 @@ try {
 
             const rawResult = execSync(`powershell -ExecutionPolicy Bypass -File "${scriptPath}"`, {
                 encoding: 'utf8',
-                timeout: 10000
+                timeout: 10000,
+                windowsHide: true
             });
 
             this.log(`DEBUG: Raw PowerShell output: ${JSON.stringify(rawResult)}`);
@@ -456,13 +458,18 @@ del "%~f0" & exit
             this.log(`Created relaunch batch: ${batchPath}`);
             this.log(`Command: ${commandLine}`);
 
-            const child = spawn('explorer.exe', [batchPath], {
+            this.log(`Command: ${commandLine}`);
+
+            // Use PowerShell to start the batch file hidden
+            const psCommand = `Start-Process -FilePath "${batchPath}" -WindowStyle Hidden`;
+            const child = spawn('powershell', ['-Command', psCommand], {
                 detached: true,
                 stdio: 'ignore',
                 windowsHide: true
             });
+
             child.unref();
-            this.log('Explorer asked to run batch. Waiting for quit...');
+            this.log('PowerShell started batch hidden. Waiting for quit...');
 
             setTimeout(() => {
                 this.log('Closing current window...');

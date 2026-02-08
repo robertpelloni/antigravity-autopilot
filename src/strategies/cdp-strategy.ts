@@ -12,12 +12,12 @@ export class CDPStrategy implements IStrategy {
     isActive = false;
     private cdpHandler: CDPHandler;
     private relauncher: any; // Relauncher is JS class
-    private statusBarItem: vscode.StatusBarItem;
     private pollTimer: NodeJS.Timeout | null = null;
     private logger: (msg: string) => void;
 
     constructor(private context: vscode.ExtensionContext) {
-        this.cdpHandler = new CDPHandler();
+        const cdpPort = config.get<number>('cdpPort') || 9000;
+        this.cdpHandler = new CDPHandler(cdpPort, cdpPort + 30);
 
         // Use absolute path for require
         try {
@@ -29,9 +29,6 @@ export class CDPStrategy implements IStrategy {
         }
 
         this.logger = (msg: string) => console.log(`[CDPStrategy] ${msg}`);
-
-        this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 10000);
-        this.statusBarItem.command = 'antigravity.toggleAutoAccept';
     }
 
     async start(): Promise<void> {
@@ -39,6 +36,7 @@ export class CDPStrategy implements IStrategy {
 
         if (!this.relauncher) {
             vscode.window.showErrorMessage('Antigravity: Relauncher module not loaded. Check logs.');
+            await config.update('autoAllEnabled', false); // Sync config
             return;
         }
 
@@ -48,6 +46,7 @@ export class CDPStrategy implements IStrategy {
             const result = await this.relauncher.showRelaunchPrompt();
             if (result !== 'relaunched') {
                 vscode.window.showWarningMessage('Antigravity: CDP Mode requires a relaunch to function.');
+                await config.update('autoAllEnabled', false); // Sync config
                 return;
             }
             return;
@@ -55,7 +54,7 @@ export class CDPStrategy implements IStrategy {
 
         // 2. Start CDP Handler
         this.isActive = true;
-        this.updateStatusBar();
+        // Status bar is handled by extension.ts listener on config change
 
         try {
             const ide = vscode.env.appName.toLowerCase().includes('cursor') ? 'cursor' : 'antigravity';
@@ -64,21 +63,6 @@ export class CDPStrategy implements IStrategy {
             const extPath = this.context.extensionPath;
             console.log(`[DEBUG] Extension Path: ${extPath}`);
             const scriptPath = path.join(extPath, 'main_scripts', 'full_cdp_script.js');
-            console.log(`[DEBUG] Calculated Script Path: ${scriptPath}`);
-
-            // List dir to verify
-            try {
-                const mainScriptsDir = path.join(extPath, 'main_scripts');
-                const files = fs.readdirSync(mainScriptsDir);
-                console.log(`[DEBUG] Files in main_scripts: ${files.join(', ')}`);
-            } catch (err: any) {
-                console.error(`[DEBUG] Failed to list main_scripts: ${err.message}`);
-                // Fallback attempt: list root
-                try {
-                    const rootFiles = fs.readdirSync(extPath);
-                    console.log(`[DEBUG] Files in root: ${rootFiles.join(', ')}`);
-                } catch (e) { }
-            }
 
             if (!fs.existsSync(scriptPath)) {
                 throw new Error(`CDP Script not found at: ${scriptPath}`);
@@ -98,7 +82,7 @@ export class CDPStrategy implements IStrategy {
 
         } catch (e: any) {
             this.isActive = false;
-            this.updateStatusBar();
+            await config.update('autoAllEnabled', false); // Sync config
             const msg = `Antigravity CDP Error: ${e.message}. \nTry restarting VS Code manually with --remote-debugging-port=9222 if this persists.`;
             vscode.window.showErrorMessage(msg);
             console.error(msg);
@@ -159,25 +143,10 @@ export class CDPStrategy implements IStrategy {
         }
 
         this.cdpHandler.disconnectAll();
-        this.updateStatusBar();
         vscode.window.showInformationMessage('Antigravity: Auto-All OFF');
-    }
-
-    private updateStatusBar() {
-        if (this.isActive) {
-            this.statusBarItem.text = "$(rocket) Auto-All: ON";
-            this.statusBarItem.tooltip = "CDP Backed Auto-Accept Running";
-            this.statusBarItem.backgroundColor = undefined;
-        } else {
-            this.statusBarItem.text = "$(circle-slash) Auto-All: OFF";
-            this.statusBarItem.tooltip = "Click to Enable Auto-All";
-            this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-        }
-        this.statusBarItem.show();
     }
 
     dispose() {
         this.stop();
-        this.statusBarItem.dispose();
     }
 }

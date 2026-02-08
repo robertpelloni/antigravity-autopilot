@@ -14,84 +14,130 @@ export class CDPClient {
     }
 
     async connect(): Promise<boolean> {
-        return await this.handler.connect(); // Assuming handler has a connect method or similar
+        return await this.handler.connect();
     }
 
     isConnected(): boolean {
         return this.handler.isConnected();
     }
 
-    async injectPrompt(prompt: string): Promise<boolean> {
-        // Find active tab and inject prompt
+    async sendMessage(text: string): Promise<boolean> {
+        // Find active tab and send message
         const instances = await this.handler.scanForInstances();
         for (const instance of instances) {
             for (const page of instance.pages) {
-                // Simplified check - in reality we might check title or url more robustly
                 if (page.url.includes('editor') || page.title.includes('Cursor') || page.title.includes('Visual Studio Code')) {
-                    const script = `
-                        (function() {
-                            // Helper to find chat input
-                            function findChatInput() {
-                                const inputs = Array.from(document.querySelectorAll('textarea, div[contenteditable="true"]'));
-                                for (const input of inputs) {
-                                    const placeholder = (input.getAttribute('placeholder') || '').toLowerCase();
-                                    const aria = (input.getAttribute('aria-label') || '').toLowerCase();
-                                    if (placeholder.includes('chat') || placeholder.includes('ask') || placeholder.includes('follow up') ||
-                                        aria.includes('chat') || aria.includes('input')) {
-                                        return input;
-                                    }
+                    const script = `(function() {
+                        function findChatInput() {
+                            // 1. Try common selectors
+                            const selectors = [
+                                'textarea', 
+                                'div[contenteditable="true"]', 
+                                '[role="textbox"]',
+                                '.monaco-editor textarea',
+                                '.input-area textarea'
+                            ];
+                            
+                            const inputs = Array.from(document.querySelectorAll(selectors.join(',')));
+                            
+                            // 2. Filter for potential chat inputs
+                            for (const input of inputs) {
+                                const placeholder = (input.getAttribute('placeholder') || '').toLowerCase();
+                                const aria = (input.getAttribute('aria-label') || '').toLowerCase();
+                                const className = (input.className || '').toLowerCase();
+                                
+                                // High confidence matches
+                                if (placeholder.includes('chat') || placeholder.includes('ask') || placeholder.includes('follow up') || placeholder.includes('type') ||
+                                    aria.includes('chat') || aria.includes('input') || aria.includes('message') ||
+                                    className.includes('chat') || className.includes('composer')) {
+                                    
+                                    // Ensure it's visible
+                                    if (input.offsetParent !== null) return input;
                                 }
-                                return inputs.find(i => i.offsetParent !== null); // Fallback to visible
                             }
+                            
+                            // 3. Fallback: Any visible textarea/textbox that is likely the main input
+                            return inputs.find(i => i.offsetParent !== null && i.clientHeight > 10);
+                        }
 
-                            const input = findChatInput();
-                            if (input) {
-                                input.focus();
-                                // React/Monaco often needs native value setter
-                                const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
-                                if (nativeTextAreaValueSetter && input.tagName === 'TEXTAREA') {
-                                    nativeTextAreaValueSetter.call(input, ${JSON.stringify(prompt)});
-                                } else {
-                                    input.value = ${JSON.stringify(prompt)};
-                                    input.innerText = ${JSON.stringify(prompt)}; // For contenteditable
-                                }
-                                
-                                input.dispatchEvent(new Event('input', { bubbles: true }));
-                                
-                                // Find send button
-                                // Look for button near input with "send" icon or label
-                                const container = input.closest('div, form');
-                                if (container) {
-                                    const buttons = Array.from(container.querySelectorAll('button'));
-                                    const sendBtn = buttons.find(b => {
-                                        const label = (b.getAttribute('aria-label') || b.textContent || '').toLowerCase();
-                                        return label.includes('send') || label.includes('submit') || b.querySelector('.codicon-send');
-                                    });
-                                    if (sendBtn) {
-                                        setTimeout(() => sendBtn.click(), 100);
-                                        return true;
-                                    }
-                                }
-                                // Fallback: try Enter key
-                                input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
-                                return true;
+                        let input = findChatInput();
+                        if (!input) {
+                            // Ultimate Fallback: Active active element if it looks editable
+                            const active = document.activeElement;
+                            if (active && (active.tagName === 'TEXTAREA' || active.getAttribute('contenteditable') === 'true' || active.tagName === 'INPUT')) {
+                                input = active;
                             }
-                            return false;
-                        })()
-                    `;
+                        }
+
+                        if (input) {
+                            input.focus();
+                            
+                            // 0. Clearing any existing popups/autocompletes
+                            input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, cancelable: true }));
+                            
+                            // Method 1: execCommand (Best for contenteditable/monaco)
+                            const success = document.execCommand('insertText', false, text);
+                            
+                            // Method 2: Native Setter (Fallback for React inputs)
+                            if (!success) {
+                                const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+                                if (input.tagName === 'TEXTAREA' && nativeTextAreaValueSetter) {
+                                    nativeTextAreaValueSetter.call(input, ${JSON.stringify(text)});
+                                } else {
+                                    input.value = ${JSON.stringify(text)};
+                                    input.innerText = ${JSON.stringify(text)};
+                                }
+                                input.dispatchEvent(new Event('input', { bubbles: true }));
+                                input.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                            
+                            // Wait a split second for UI to update, then click send
+                            setTimeout(() => {
+                                // Look for button near input with "send" icon or label
+                                const container = input.closest('div, form, .input-box, .chat-input-container, .input-row');
+                                let sendBtn = null;
+                                
+                                if (container) {
+                                    const buttons = Array.from(container.querySelectorAll('button, [role="button"], .codicon-send, .monaco-button'));
+                                    sendBtn = buttons.find(b => {
+                                        const label = (b.getAttribute('aria-label') || b.textContent || '').toLowerCase();
+                                        const cls = (b.className || '').toLowerCase();
+                                        const title = (b.getAttribute('title') || '').toLowerCase();
+                                        return label.includes('send') || label.includes('submit') || cls.includes('send') || title.includes('send');
+                                    });
+                                }
+                                
+                                if (sendBtn) {
+                                    sendBtn.click();
+                                } else {
+                                    // Fallback: Enter key (and Shift+Enter just in case, but usually Enter sends)
+                                    const enter = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true });
+                                    input.dispatchEvent(enter);
+                                }
+                            }, 200);
+
+                            return true;
+                        }
+                        return false;
+                    })()`;
+
                     try {
                         const result = await this.handler.sendCommand(page.id, 'Runtime.evaluate', { expression: script, returnByValue: true });
                         if (result && result.result && result.result.value) {
-                            log.info('Prompt injected successfully');
+                            log.info('Sent message: ' + text);
                             return true;
                         }
-                    } catch (e) {
-                        log.error(`Failed to inject prompt: ${e.message}`);
+                    } catch (e: any) {
+                        log.error('Failed to send message: ' + e.message);
                     }
                 }
             }
         }
         return false;
+    }
+
+    async injectPrompt(prompt: string): Promise<boolean> {
+        return this.sendMessage(prompt);
     }
 
     async waitForResponse(timeoutMs: number): Promise<string> {
@@ -102,22 +148,20 @@ export class CDPClient {
             for (const instance of instances) {
                 for (const page of instance.pages) {
                     if (page.url.includes('editor') || page.title.includes('Cursor')) {
-                        const script = `
-                            (function() {
-                                // Logic to detect if AI is thinking or if last message is from AI and done
-                                const messages = Array.from(document.querySelectorAll('.markdown-body, .chat-response')); // Hypothetical selectors
-                                if (messages.length === 0) return null;
-                                
-                                const lastMsg = messages[messages.length - 1];
-                                // Check if "thinking" or "generating" indicator exists
-                                const isThinking = document.querySelector('.codicon-loading, .typing-indicator');
-                                
-                                if (!isThinking && lastMsg.innerText.length > 0) {
-                                    return lastMsg.innerText;
-                                }
-                                return null;
-                            })()
-                        `;
+                        const script = `(function() {
+                            // Logic to detect if AI is thinking or if last message is from AI and done
+                            const messages = Array.from(document.querySelectorAll('.markdown-body, .chat-response'));
+                            if (messages.length === 0) return null;
+                            
+                            const lastMsg = messages[messages.length - 1];
+                            // Check if "thinking" or "generating" indicator exists
+                            const isThinking = document.querySelector('.codicon-loading, .typing-indicator');
+                            
+                            if (!isThinking && lastMsg.innerText.length > 0) {
+                                return lastMsg.innerText;
+                            }
+                            return null;
+                        })()`;
                         try {
                             const result = await this.handler.sendCommand(page.id, 'Runtime.evaluate', { expression: script, returnByValue: true });
                             if (result && result.result && result.result.value) {
@@ -156,32 +200,27 @@ export class CDPClient {
     }
 
     async switchModel(modelId: string): Promise<boolean> {
-        log.info(`Switching to model ${modelId}`);
-        const script = `
-            (function() {
-                // 1. Find model dropdown (often near top of chat)
-                const dropdowns = Array.from(document.querySelectorAll('[aria-label="Model"], .model-selector, .dropdown'));
-                const modelDropdown = dropdowns.find(d => d.textContent.includes('Claude') || d.textContent.includes('GPT') || d.textContent.includes('Gemini'));
+        log.info('Switching to model ' + modelId);
+        const script = `(function() {
+            // 1. Find model dropdown (often near top of chat)
+            const dropdowns = Array.from(document.querySelectorAll('[aria-label="Model"], .model-selector, .dropdown'));
+            const modelDropdown = dropdowns.find(d => d.textContent.includes('Claude') || d.textContent.includes('GPT') || d.textContent.includes('Gemini'));
+            
+            if (modelDropdown) {
+                modelDropdown.click();
                 
-                if (modelDropdown) {
-                    modelDropdown.click();
-                    // Wait for options to appear (simplified sync wait)
-                    // In reality, we might need a separate step, but let's try to find option immediately assuming synchronous DOM update or existing list
-                    
-                    const options = Array.from(document.querySelectorAll('[role="option"], .dropdown-item'));
-                    const targetOption = options.find(o => o.textContent.toLowerCase().includes(${JSON.stringify(modelId.toLowerCase())}));
-                    
-                    if (targetOption) {
-                        targetOption.click();
-                        return true;
-                    }
+                const options = Array.from(document.querySelectorAll('[role="option"], .dropdown-item'));
+                const targetOption = options.find(o => o.textContent.toLowerCase().includes(${JSON.stringify(modelId.toLowerCase())}));
+                
+                if (targetOption) {
+                    targetOption.click();
+                    return true;
                 }
-                return false;
-            })()
-        `;
+            }
+            return false;
+        })()`;
 
         try {
-            // We need to run this on the correct page
             const instances = await this.handler.scanForInstances();
             for (const instance of instances) {
                 for (const page of instance.pages) {
@@ -193,8 +232,8 @@ export class CDPClient {
                     }
                 }
             }
-        } catch (e) {
-            log.error(`Failed to switch model: ${e.message}`);
+        } catch (e: any) {
+            log.error('Failed to switch model: ' + e.message);
         }
 
         return false;
