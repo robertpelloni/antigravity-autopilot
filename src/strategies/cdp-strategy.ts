@@ -69,6 +69,9 @@ export class CDPStrategy implements IStrategy {
             }
             const scriptContent = fs.readFileSync(scriptPath, 'utf8');
 
+            // Reset injection state to force fresh script injection
+            this.cdpHandler.resetInjectionState();
+
             // Initial connection
             await this.connectAndInject(scriptContent, ide);
 
@@ -100,10 +103,10 @@ export class CDPStrategy implements IStrategy {
 
                     // Send Start Command
                     await this.cdpHandler.sendCommand(page.id, 'Runtime.evaluate', {
-                        expression: `(function(){
+                        expression: `(async function(){
                             const g = (typeof window !== 'undefined') ? window : self;
                             if(g && g.__autoAllStart){
-                                g.__autoAllStart({
+                                await g.__autoAllStart({
                                     ide: '${ide}',
                                     isPro: true,
                                     isBackgroundMode: ${config.get('multiTabEnabled')},
@@ -116,7 +119,8 @@ export class CDPStrategy implements IStrategy {
                                     rejectPatterns: ${JSON.stringify(config.get('rejectPatterns') || [])}
                                 });
                             }
-                        })()`
+                        })()`,
+                        awaitPromise: true
                     });
                 }
             }

@@ -991,60 +991,65 @@
         let index = 0;
         let cycle = 0;
         while (window.__autoAllState.isRunning && window.__autoAllState.sessionID === sid) {
-            cycle++;
-            log(`[Loop] Cycle ${cycle}: Starting...`);
+            try {
+                cycle++;
+                log(`[Loop] Cycle ${cycle}: Starting...`);
 
-            const clicked = await performClick(['button', '[class*="button"]', '[class*="anysphere"]']);
-            if (clicked > 0) {
-                log(`[Loop] Cycle ${cycle}: Clicked ${clicked} buttons`);
-            } else {
-                const bumped = await autoBump();
-                if (bumped) {
-                    log(`[Loop] Cycle ${cycle}: Auto-bumped conversation`);
-                    await workerDelay(3000);
+                const clicked = await performClick(['button', '[class*="button"]', '[class*="anysphere"]']);
+                if (clicked > 0) {
+                    log(`[Loop] Cycle ${cycle}: Clicked ${clicked} buttons`);
+                } else {
+                    const bumped = await autoBump();
+                    if (bumped) {
+                        log(`[Loop] Cycle ${cycle}: Auto-bumped conversation`);
+                        await workerDelay(3000);
+                    }
                 }
-            }
 
-            await workerDelay(800);
+                await workerDelay(800);
 
-            const tabSelectors = [
-                '#workbench\\.parts\\.auxiliarybar ul[role="tablist"] li[role="tab"]',
-                '.monaco-pane-view .monaco-list-row[role="listitem"]',
-                'div[role="tablist"] div[role="tab"]',
-                '.chat-session-item'
-            ];
+                const tabSelectors = [
+                    '#workbench\\.parts\\.auxiliarybar ul[role="tablist"] li[role="tab"]',
+                    '.monaco-pane-view .monaco-list-row[role="listitem"]',
+                    'div[role="tablist"] div[role="tab"]',
+                    '.chat-session-item'
+                ];
 
-            let tabs = [];
-            for (const selector of tabSelectors) {
-                tabs = queryAll(selector);
+                let tabs = [];
+                for (const selector of tabSelectors) {
+                    tabs = queryAll(selector);
+                    if (tabs.length > 0) {
+                        log(`[Loop] Cycle ${cycle}: Found ${tabs.length} tabs using selector: ${selector}`);
+                        break;
+                    }
+                }
+
+                if (tabs.length === 0) {
+                    log(`[Loop] Cycle ${cycle}: No tabs found in any known locations.`);
+                }
+
+                updateTabNames(tabs);
+
                 if (tabs.length > 0) {
-                    log(`[Loop] Cycle ${cycle}: Found ${tabs.length} tabs using selector: ${selector}`);
-                    break;
+                    const targetTab = tabs[index % tabs.length];
+                    const tabLabel = targetTab.getAttribute('aria-label') || targetTab.textContent?.trim() || 'unnamed tab';
+                    log(`[Loop] Cycle ${cycle}: Clicking tab "${tabLabel}"`);
+                    targetTab.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
+                    index++;
                 }
+
+                const state = window.__autoAllState;
+                log(`[Loop] Cycle ${cycle}: State = { tabs: ${state.tabNames?.length || 0}, isRunning: ${state.isRunning}, sid: ${state.sessionID} }`);
+
+                updateOverlay();
+
+                const waitTime = window.__autoAllState.threadWaitInterval || 5000;
+                log(`[Loop] Cycle ${cycle}: Overlay updated, waiting ${waitTime}ms...`);
+                await workerDelay(waitTime);
+            } catch (loopErr) {
+                log(`[Loop] Cycle ${cycle}: ERROR - ${loopErr.message}`);
+                await workerDelay(2000);
             }
-
-            if (tabs.length === 0) {
-                log(`[Loop] Cycle ${cycle}: No tabs found in any known locations.`);
-            }
-
-            updateTabNames(tabs);
-
-            if (tabs.length > 0) {
-                const targetTab = tabs[index % tabs.length];
-                const tabLabel = targetTab.getAttribute('aria-label') || targetTab.textContent?.trim() || 'unnamed tab';
-                log(`[Loop] Cycle ${cycle}: Clicking tab "${tabLabel}"`);
-                targetTab.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
-                index++;
-            }
-
-            const state = window.__autoAllState;
-            log(`[Loop] Cycle ${cycle}: State = { tabs: ${state.tabNames?.length || 0}, isRunning: ${state.isRunning}, sid: ${state.sessionID} }`);
-
-            updateOverlay();
-
-            const waitTime = window.__autoAllState.threadWaitInterval || 5000;
-            log(`[Loop] Cycle ${cycle}: Overlay updated, waiting ${waitTime}ms...`);
-            await workerDelay(waitTime);
         }
         log('[Loop] cursorLoop STOPPED');
     }
@@ -1055,63 +1060,68 @@
         let cycle = 0;
 
         while (window.__autoAllState.isRunning && window.__autoAllState.sessionID === sid) {
-            cycle++;
-            log(`[Loop] Cycle ${cycle}: Starting...`);
+            try {
+                cycle++;
+                log(`[Loop] Cycle ${cycle}: Starting...`);
 
-            // Expand any collapsed sections (e.g. "Step Requires Input")
-            await expandCollapsedSections();
+                // Expand any collapsed sections (e.g. "Step Requires Input")
+                await expandCollapsedSections();
 
-            // Just click accept buttons directly - no dropdown interaction needed
-            const clicked = await performClick(['.bg-ide-button-background', 'button', '[role="button"]', '[class*="button"]']);
-            if (clicked > 0) {
-                log(`[Loop] Cycle ${cycle}: Clicked ${clicked} accept buttons`);
-            } else {
-                // No buttons found — check if AI is idle and auto-bump
-                const bumped = await autoBump();
-                if (bumped) {
-                    log(`[Loop] Cycle ${cycle}: Auto-bumped conversation`);
-                    await workerDelay(3000);
-                }
-            }
-
-            await workerDelay(1500);
-
-            const tabs = queryAll('button.grow');
-            log(`[Loop] Cycle ${cycle}: Found ${tabs.length} tabs`);
-            updateTabNames(tabs);
-
-            if (tabs.length > 1) {
-                const targetTab = tabs[index % tabs.length];
-                const tabName = stripTimeSuffix(targetTab.textContent);
-
-                const state = window.__autoAllState;
-                if (state.completionStatus[tabName] !== 'done') {
-                    log(`[Loop] Cycle ${cycle}: Switching to tab "${tabName}"`);
-                    targetTab.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
-                    index++;
-
-                    await workerDelay(2000);
-
-                    const badges = queryAll('span').filter(s => {
-                        const t = s.textContent.trim();
-                        return t === 'Good' || t === 'Bad';
-                    });
-
-                    if (badges.length > 0) {
-                        updateConversationCompletionState(tabName, 'done');
-                        log(`[Loop] Cycle ${cycle}: Tab "${tabName}" marked as DONE`);
-                    }
+                // Just click accept buttons directly - no dropdown interaction needed
+                const clicked = await performClick(['.bg-ide-button-background', 'button', '[role="button"]', '[class*="button"]']);
+                if (clicked > 0) {
+                    log(`[Loop] Cycle ${cycle}: Clicked ${clicked} accept buttons`);
                 } else {
-
-                    index++;
-                    log(`[Loop] Cycle ${cycle}: Skipping completed tab "${tabName}"`);
+                    // No buttons found — check if AI is idle and auto-bump
+                    const bumped = await autoBump();
+                    if (bumped) {
+                        log(`[Loop] Cycle ${cycle}: Auto-bumped conversation`);
+                        await workerDelay(3000);
+                    }
                 }
+
+                await workerDelay(1500);
+
+                const tabs = queryAll('button.grow');
+                log(`[Loop] Cycle ${cycle}: Found ${tabs.length} tabs`);
+                updateTabNames(tabs);
+
+                if (tabs.length > 1) {
+                    const targetTab = tabs[index % tabs.length];
+                    const tabName = stripTimeSuffix(targetTab.textContent);
+
+                    const state = window.__autoAllState;
+                    if (state.completionStatus[tabName] !== 'done') {
+                        log(`[Loop] Cycle ${cycle}: Switching to tab "${tabName}"`);
+                        targetTab.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
+                        index++;
+
+                        await workerDelay(2000);
+
+                        const badges = queryAll('span').filter(s => {
+                            const t = s.textContent.trim();
+                            return t === 'Good' || t === 'Bad';
+                        });
+
+                        if (badges.length > 0) {
+                            updateConversationCompletionState(tabName, 'done');
+                            log(`[Loop] Cycle ${cycle}: Tab "${tabName}" marked as DONE`);
+                        }
+                    } else {
+
+                        index++;
+                        log(`[Loop] Cycle ${cycle}: Skipping completed tab "${tabName}"`);
+                    }
+                }
+
+                updateOverlay();
+
+                const waitTime = window.__autoAllState.threadWaitInterval || 5000;
+                await workerDelay(waitTime);
+            } catch (loopErr) {
+                log(`[Loop] antigravityLoop Cycle ${cycle}: ERROR - ${loopErr.message}`);
+                await workerDelay(2000);
             }
-
-            updateOverlay();
-
-            const waitTime = window.__autoAllState.threadWaitInterval || 5000;
-            await workerDelay(waitTime);
         }
         log('[Loop] antigravityLoop STOPPED');
     }
@@ -1165,7 +1175,7 @@
         Analytics.setFocusState(isFocused, log);
     };
 
-    window.__autoAllStart = function (config) {
+    window.__autoAllStart = async function (config) {
         try {
             const ide = (config.ide || 'cursor').toLowerCase();
             const isPro = config.isPro !== false;
@@ -1185,14 +1195,11 @@
 
             const state = window.__autoAllState;
 
-            if (state.isRunning && state.currentMode === ide && state.isBackgroundMode === isBG) {
-                log(`Already running with same config, skipping`);
-                return;
-            }
-
+            // Always stop previous session and restart fresh
             if (state.isRunning) {
-                log(`Stopping previous session...`);
+                log(`Stopping previous session to restart with fresh config...`);
                 state.isRunning = false;
+                await new Promise(r => setTimeout(r, 500)); // Let old loops exit
             }
 
             state.isRunning = true;
@@ -1230,9 +1237,14 @@
                 log(`Starting static poll loop...`);
                 (async function staticLoop() {
                     while (state.isRunning && state.sessionID === sid) {
-                        const clicks = await performClick(['button', '[class*="button"]', '[class*="anysphere"]']);
-                        if (clicks === 0) await autoBump();
-                        await workerDelay(config.pollInterval || 1000);
+                        try {
+                            const clicks = await performClick(['button', '[class*="button"]', '[class*="anysphere"]']);
+                            if (clicks === 0) await autoBump();
+                            await workerDelay(config.pollInterval || 1000);
+                        } catch (loopErr) {
+                            log(`[Loop] staticLoop ERROR: ${loopErr.message}`);
+                            await workerDelay(2000);
+                        }
                     }
                 })();
             }

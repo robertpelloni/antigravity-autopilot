@@ -103,9 +103,11 @@ export class CDPHandler extends EventEmitter {
         });
     }
 
-    async injectScript(pageId: string, scriptContent: string): Promise<void> {
+    async injectScript(pageId: string, scriptContent: string, force: boolean = false): Promise<void> {
         const conn = this.connections.get(pageId);
         if (!conn) return;
+
+        if (force) conn.injected = false;
 
         if (!conn.injected) {
             try {
@@ -118,6 +120,12 @@ export class CDPHandler extends EventEmitter {
             } catch (e) {
                 console.error(`Injection failed on ${pageId}`, e);
             }
+        }
+    }
+
+    resetInjectionState() {
+        for (const [, conn] of this.connections) {
+            conn.injected = false;
         }
     }
 
