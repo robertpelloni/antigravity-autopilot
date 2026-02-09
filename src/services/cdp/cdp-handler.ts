@@ -42,7 +42,13 @@ export class CDPHandler extends EventEmitter {
                 res.on('end', () => {
                     try {
                         const pages = JSON.parse(data);
-                        resolve(pages.filter((p: any) => p.webSocketDebuggerUrl));
+                        // Phase 27: Intelligent Filter (Regression Fix)
+                        // v4.3.3 worked with "page". v4.6.x failed with "all".
+                        // We must exclude "node" and "service_worker" to prevent crashes.
+                        const allowedTypes = ['page', 'webview', 'iframe', 'background_page'];
+                        resolve(pages.filter((p: any) =>
+                            p.webSocketDebuggerUrl && allowedTypes.includes(p.type)
+                        ));
                     }
                     catch (e) { reject(e); }
                 });
@@ -62,17 +68,9 @@ export class CDPHandler extends EventEmitter {
                 await this.sendCommand(page.id, 'Runtime.enable');
                 await this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' });
 
-                // Phase 19: Deep Targeting
-                // Auto-Attach to flat sessions (iframes, webviews)
-                try {
-                    await this.sendCommand(page.id, 'Target.setAutoAttach', {
-                        autoAttach: true,
-                        waitForDebuggerOnStart: false,
-                        flatten: true
-                    });
-                } catch (e) {
-                    console.error('[CDP] AutoAttach failed (might not be supported on this target type)', e);
-                }
+                // Phase 28: Revert to v4.3.3 Architecture
+                // Removed setAutoAttach and Frame Injection
+                // We rely on standard Runtime.evaluate in the top-level page.
 
                 resolve(true);
             });
@@ -80,25 +78,8 @@ export class CDPHandler extends EventEmitter {
                 try {
                     const msg = JSON.parse(data.toString());
 
-                    // Handle Child Target Attachment
-                    if (msg.method === 'Target.attachedToTarget') {
-                        const sessionId = msg.params.sessionId;
-                        const type = msg.params.targetInfo.type;
-                        const url = msg.params.targetInfo.url;
-
-                        console.log(`[CDP] Attached to child session: ${sessionId} (${type}) ${url}`);
-
-                        // Store session mapping
-                        const conn = this.connections.get(page.id);
-                        if (conn) conn.sessions.add(sessionId);
-
-                        // Emit event so Strategy can inject script
-                        this.emit('sessionAttached', { pageId: page.id, sessionId, type, url });
-
-                        // Also enable Runtime on the child session!
-                        this.sendCommand(page.id, 'Runtime.enable', {}, undefined, sessionId).catch(() => { });
-                        this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' }, undefined, sessionId).catch(() => { });
-                    }
+                    // Removed Runtime.executionContextCreated handler
+                    // Removed Target.attachedToTarget handler
 
                     if (msg.id && this.pendingMessages.has(msg.id)) {
                         const { resolve: res, reject: rej } = this.pendingMessages.get(msg.id)!;
