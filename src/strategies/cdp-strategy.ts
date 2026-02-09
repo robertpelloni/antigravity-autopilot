@@ -31,11 +31,7 @@ export class CDPStrategy implements IStrategy {
             }
         });
 
-        // Phase 31: Restore Session Attachment Listener
-        this.cdpHandler.on('sessionAttached', async (event) => {
-            console.log(`[Strategy] Session Attached: ${event.sessionId} (${event.type})`);
-            await this.injectIntoSession(event.pageId, event.sessionId);
-        });
+        // Phase 32: Remove Session Listener (Revert)
 
         // Use absolute path for require
         try {
@@ -139,6 +135,31 @@ export class CDPStrategy implements IStrategy {
 
                 // 1. Focus Chat
                 await vscode.commands.executeCommand('workbench.action.chat.open');
+                await new Promise(r => setTimeout(r, 500));
+
+                // 2. Hybrid Bump: Command + CDP Key
+                // Try Standard Command
+                await vscode.commands.executeCommand('workbench.action.chat.submit');
+
+                // Try Cursor Command (Just in case)
+                await vscode.commands.executeCommand('aipopup.action.submit').then(undefined, () => { });
+
+                // Try Raw Enter Key (CDP)
+                // We iterate all connections and send Enter to 'page' types (Main Window)
+                if (this.cdpHandler) {
+                    const pageId = Array.from(this.cdpHandler['connections'].keys())[0]; // Hacky access but works
+                    if (pageId) {
+                        // KeyDown
+                        await this.cdpHandler.sendCommand(pageId, 'Input.dispatchKeyEvent', {
+                            type: 'keyDown', text: '\r', unmodifiedText: '\r', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, autoRepeat: false, isKeypad: false, isSystemKey: false
+                        });
+                        // KeyUp
+                        await this.cdpHandler.sendCommand(pageId, 'Input.dispatchKeyEvent', {
+                            type: 'keyUp', text: '\r', unmodifiedText: '\r', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, autoRepeat: false, isKeypad: false, isSystemKey: false
+                        });
+                        console.log('[Strategy] Sent Raw Enter Key');
+                    }
+                }
 
                 // 2. Focus Input
                 // Wait a bit?

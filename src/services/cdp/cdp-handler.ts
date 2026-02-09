@@ -64,20 +64,12 @@ export class CDPHandler extends EventEmitter {
             ws.on('open', async () => {
                 this.connections.set(page.id, { ws, injected: false, sessions: new Set() });
 
-                // Enable Runtime to receive console messages & binding calls
+                // Enable Runtime to receive console messages                // Enable Runtime
                 await this.sendCommand(page.id, 'Runtime.enable');
                 await this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' });
 
-                // Phase 31: Restore AutoAttach (Needed for OOP Iframes)
-                try {
-                    await this.sendCommand(page.id, 'Target.setAutoAttach', {
-                        autoAttach: true,
-                        waitForDebuggerOnStart: false,
-                        flatten: true
-                    });
-                } catch (e) {
-                    console.log('[CDP] AutoAttach failed (harmless if target mismatch)', e);
-                }
+                // Phase 32: Revert AutoAttach (Caused Crash)
+                // We rely on standard connection to 'page' and 'webview' targets found in getPages().
 
                 resolve(true);
             });
@@ -85,21 +77,8 @@ export class CDPHandler extends EventEmitter {
                 try {
                     const msg = JSON.parse(data.toString());
 
-                    // Phase 31: Handle Child Targets (Strictly)
-                    if (msg.method === 'Target.attachedToTarget') {
-                        const sessionId = msg.params.sessionId;
-                        const type = msg.params.targetInfo.type;
-                        // Filter: Only care about iframes/webviews
-                        if (type === 'iframe' || type === 'webview' || type === 'page') {
-                            // Enable Runtime on child session
-                            this.sendCommand(page.id, 'Runtime.enable', {}, undefined, sessionId).catch(() => { });
-                            this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' }, undefined, sessionId).catch(() => { });
-
-                            this.emit('sessionAttached', { pageId: page.id, sessionId, type, url: msg.params.targetInfo.url });
-                        }
-                    }
-
-                    // Phase 30: Capture Context Creation
+                    // Phase 32: No Child Target Handling (Revert)
+                    // ...ion
                     if (msg.method === 'Runtime.executionContextCreated') {
                         const ctx = msg.params.context;
                         // Emit so Strategy can inject
