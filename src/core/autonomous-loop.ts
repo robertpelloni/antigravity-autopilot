@@ -44,12 +44,28 @@ export class AutonomousLoop {
     private goal: string = '';
     private onStatusChange: ((status: LoopStatus) => void) | null = null;
     private previousModel: string | null = null;
+    private consecutiveFailures = 0;
+    private readonly MAX_BACKOFF_MINUTES = 5;
 
     constructor() {
         const folders = vscode.workspace.workspaceFolders;
         if (folders && folders.length > 0) {
             this.workspaceRoot = folders[0].uri.fsPath;
         }
+    }
+
+    // Public for testing
+    static calculateBackoff(baseInterval: number, failures: number, maxMinutes: number): number {
+        if (failures === 0) return baseInterval;
+
+        const backoffMultiplier = Math.pow(2, Math.min(failures, 6));
+        let newInterval = baseInterval * backoffMultiplier;
+
+        const maxSeconds = maxMinutes * 60;
+        if (newInterval > maxSeconds) {
+            newInterval = maxSeconds;
+        }
+        return newInterval;
     }
 
     setStatusCallback(callback: (status: LoopStatus) => void): void {
@@ -153,7 +169,17 @@ export class AutonomousLoop {
                 await this.gitCommit();
             }
 
-            const waitTime = (intervalSeconds || 30) * 1000;
+            // Adaptive Backoff Calculation
+            let intervalSeconds = loopConfig.loopIntervalSeconds || config.get<number>('loopInterval') || 30;
+            if (success) {
+                this.consecutiveFailures = 0;
+            } else {
+                this.consecutiveFailures++;
+                intervalSeconds = AutonomousLoop.calculateBackoff(intervalSeconds, this.consecutiveFailures, this.MAX_BACKOFF_MINUTES);
+                log.warn(`Loop failed. Backing off for ${intervalSeconds}s (Failures: ${this.consecutiveFailures})`);
+            }
+
+            const waitTime = intervalSeconds * 1000;
             await this.wait(waitTime);
         }
     }

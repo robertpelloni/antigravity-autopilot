@@ -19,6 +19,7 @@ export interface AntigravityConfig {
     executionTimeout: number; // in minutes
     maxCallsPerHour: number;
     voiceMode: 'push-to-talk' | 'always-listening';
+    enableMemory: boolean;
     // User Requested Settings
     threadWaitInterval: number; // Seconds to wait between steps/threads
     autoApproveDelay: number;   // Seconds to wait before auto-approving
@@ -80,6 +81,7 @@ export class ConfigManager {
             executionTimeout: config.get('executionTimeout', 15),
             maxCallsPerHour: config.get('maxCallsPerHour', 100),
             voiceMode: config.get('voiceMode', 'push-to-talk'),
+            enableMemory: config.get('enableMemory', true),
             threadWaitInterval: config.get('threadWaitInterval', 5),
             autoApproveDelay: config.get('autoApproveDelay', 30),
             bumpMessage: config.get('bumpMessage', 'bump'),
