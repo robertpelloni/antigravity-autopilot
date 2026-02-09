@@ -68,9 +68,16 @@ export class CDPHandler extends EventEmitter {
                 await this.sendCommand(page.id, 'Runtime.enable');
                 await this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' });
 
-                // Phase 28: Revert to v4.3.3 Architecture
-                // Removed setAutoAttach and Frame Injection
-                // We rely on standard Runtime.evaluate in the top-level page.
+                // Phase 31: Restore AutoAttach (Needed for OOP Iframes)
+                try {
+                    await this.sendCommand(page.id, 'Target.setAutoAttach', {
+                        autoAttach: true,
+                        waitForDebuggerOnStart: false,
+                        flatten: true
+                    });
+                } catch (e) {
+                    console.log('[CDP] AutoAttach failed (harmless if target mismatch)', e);
+                }
 
                 resolve(true);
             });
@@ -78,8 +85,26 @@ export class CDPHandler extends EventEmitter {
                 try {
                     const msg = JSON.parse(data.toString());
 
-                    // Removed Runtime.executionContextCreated handler
-                    // Removed Target.attachedToTarget handler
+                    // Phase 31: Handle Child Targets (Strictly)
+                    if (msg.method === 'Target.attachedToTarget') {
+                        const sessionId = msg.params.sessionId;
+                        const type = msg.params.targetInfo.type;
+                        // Filter: Only care about iframes/webviews
+                        if (type === 'iframe' || type === 'webview' || type === 'page') {
+                            // Enable Runtime on child session
+                            this.sendCommand(page.id, 'Runtime.enable', {}, undefined, sessionId).catch(() => { });
+                            this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' }, undefined, sessionId).catch(() => { });
+
+                            this.emit('sessionAttached', { pageId: page.id, sessionId, type, url: msg.params.targetInfo.url });
+                        }
+                    }
+
+                    // Phase 30: Capture Context Creation
+                    if (msg.method === 'Runtime.executionContextCreated') {
+                        const ctx = msg.params.context;
+                        // Emit so Strategy can inject
+                        this.emit('contextCreated', { pageId: page.id, contextId: ctx.id, origin: ctx.origin, sessionId: msg.sessionId });
+                    }
 
                     if (msg.id && this.pendingMessages.has(msg.id)) {
                         const { resolve: res, reject: rej } = this.pendingMessages.get(msg.id)!;

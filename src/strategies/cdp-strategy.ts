@@ -19,8 +19,23 @@ export class CDPStrategy implements IStrategy {
         const cdpPort = config.get<number>('cdpPort') || 9000;
         this.cdpHandler = new CDPHandler(cdpPort, cdpPort + 30);
 
-        // Phase 28: Revert - No experimental listeners
-        // We only start the Host-Side Blind Bump loop in start()
+        // Phase 30: Robust Frame Injection Listener
+        this.cdpHandler.on('contextCreated', async (event) => {
+            // Inject into EVERYTHING. Shotgun approach.
+            // But log heavily.
+            console.log(`[Strategy] Context Created: ${event.contextId} (${event.origin})`);
+
+            // Only inject if looks like webview or blank (frames often have empty origin initially)
+            if (!event.origin || event.origin.startsWith('vscode-webview://') || event.origin === '://') {
+                await this.injectIntoContext(event.pageId, event.contextId, event.sessionId);
+            }
+        });
+
+        // Phase 31: Restore Session Attachment Listener
+        this.cdpHandler.on('sessionAttached', async (event) => {
+            console.log(`[Strategy] Session Attached: ${event.sessionId} (${event.type})`);
+            await this.injectIntoSession(event.pageId, event.sessionId);
+        });
 
         // Use absolute path for require
         try {
@@ -36,10 +51,14 @@ export class CDPStrategy implements IStrategy {
 
     async start(): Promise<void> {
         if (this.isActive) return;
+        this.isActive = true;
+
+        // Phase 31: Non-Blocking Startup
+        // Start Blind Bump IMMEDIATELY before any complex CDP logic.
+        this.startBlindBumpLoop();
 
         if (!this.relauncher) {
             vscode.window.showErrorMessage('Antigravity: Relauncher module not loaded. Check logs.');
-            await config.update('autoAllEnabled', false); // Sync config
             return;
         }
 
@@ -49,15 +68,12 @@ export class CDPStrategy implements IStrategy {
             const result = await this.relauncher.showRelaunchPrompt();
             if (result !== 'relaunched') {
                 vscode.window.showWarningMessage('Antigravity: CDP Mode requires a relaunch to function.');
-                await config.update('autoAllEnabled', false); // Sync config
                 return;
             }
             return;
         }
 
         // 2. Start CDP Handler
-        this.isActive = true;
-        // Status bar is handled by extension.ts listener on config change
 
         try {
             const ide = vscode.env.appName.toLowerCase().includes('cursor') ? 'cursor' : 'antigravity';
@@ -119,6 +135,7 @@ export class CDPStrategy implements IStrategy {
                 if (!bumpMsg) return;
 
                 console.log('[Strategy] Blind Bump Triggered');
+                vscode.window.setStatusBarMessage('$(pulse) Antigravity: Auto-Bump Triggered', 3000);
 
                 // 1. Focus Chat
                 await vscode.commands.executeCommand('workbench.action.chat.open');
@@ -181,7 +198,67 @@ export class CDPStrategy implements IStrategy {
         }, undefined, sessionId);
     }
 
-    // Phase 28: Revert - Removed injectIntoSession, injectIntoContext, sendStartPayloadContext
+    // Phase 31: Restore injectIntoSession
+    private async injectIntoSession(pageId: string, sessionId: string) {
+        try {
+            const ide = vscode.env.appName.toLowerCase().includes('cursor') ? 'cursor' : 'antigravity';
+            const scriptPath = path.join(this.context.extensionPath, 'main_scripts', 'full_cdp_script.js');
+            if (fs.existsSync(scriptPath)) {
+                const scriptContent = fs.readFileSync(scriptPath, 'utf8');
+                await this.cdpHandler.injectScript(pageId, scriptContent, false, sessionId);
+                await this.sendStartPayload(pageId, ide, sessionId);
+                console.log(`[Strategy] Injected into session ${sessionId}`);
+            }
+        } catch (e) { console.error('[Strategy] Failed to inject session', e); }
+    }
+
+    // Phase 30: Restore Helper Methods
+    private async injectIntoContext(pageId: string, contextId: number, sessionId?: string) {
+        try {
+            const ide = vscode.env.appName.toLowerCase().includes('cursor') ? 'cursor' : 'antigravity';
+            const extPath = this.context.extensionPath;
+            const scriptPath = path.join(extPath, 'main_scripts', 'full_cdp_script.js');
+            if (fs.existsSync(scriptPath)) {
+                const scriptContent = fs.readFileSync(scriptPath, 'utf8');
+
+                // Use Runtime.evaluate with contextId
+                await this.cdpHandler.sendCommand(pageId, 'Runtime.evaluate', {
+                    expression: scriptContent,
+                    contextId: contextId,
+                    awaitPromise: false,
+                    userGesture: true
+                }, undefined, sessionId);
+
+                // Send Start Payload
+                await this.sendStartPayloadContext(pageId, ide, contextId, sessionId);
+                console.log(`[Strategy] Injected into context ${contextId}`);
+            }
+        } catch (e) { console.error('[Strategy] Failed to inject context', e); }
+    }
+
+    private async sendStartPayloadContext(pageId: string, ide: string, contextId: number, sessionId?: string) {
+        await this.cdpHandler.sendCommand(pageId, 'Runtime.evaluate', {
+            expression: `(async function(){
+                const g = (typeof window !== 'undefined') ? window : self;
+                if(g && g.__autoAllStart){
+                    await g.__autoAllStart({
+                        ide: '${ide}',
+                        isPro: true,
+                        isBackgroundMode: ${config.get('multiTabEnabled')},
+                        pollInterval: ${config.get('pollFrequency')},
+                        bannedCommands: ${JSON.stringify(config.get('bannedCommands'))},
+                        threadWaitInterval: ${config.get('threadWaitInterval')},
+                        autoApproveDelay: ${config.get('autoApproveDelay')},
+                        bumpMessage: ${JSON.stringify(config.get('bumpMessage') || 'bump')},
+                        acceptPatterns: ${JSON.stringify(config.get('acceptPatterns') || [])},
+                        rejectPatterns: ${JSON.stringify(config.get('rejectPatterns') || [])}
+                    });
+                }
+            })()`,
+            contextId: contextId,
+            awaitPromise: true
+        }, undefined, sessionId);
+    }
 
     async stop(): Promise<void> {
         if (!this.isActive) return;
