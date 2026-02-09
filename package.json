@@ -2,7 +2,7 @@
     "name": "antigravity-autopilot",
     "displayName": "Antigravity Autopilot (Unified)",
     "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-    "version": "4.7.3",
+    "version": "4.9.0",
     "repository": {
         "type": "git",
         "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -16,11 +16,32 @@
         "Other"
     ],
     "activationEvents": [
-        "onStartupFinished"
+        "onStartupFinished",
+        "onCommand:antigravity.resetConnection"
     ],
     "main": "./dist/extension.js",
     "contributes": {
         "commands": [
+            {
+                "command": "antigravity.clickRun",
+                "title": "AG: Click Run",
+                "category": "Antigravity"
+            },
+            {
+                "command": "antigravity.clickExpand",
+                "title": "AG: Click Expand",
+                "category": "Antigravity"
+            },
+            {
+                "command": "antigravity.clickAccept",
+                "title": "AG: Click Accept",
+                "category": "Antigravity"
+            },
+            {
+                "command": "antigravity.resetConnection",
+                "title": "AG: Reset Connection",
+                "category": "Antigravity"
+            },
             {
                 "command": "antigravity.toggleExtension",
                 "title": "Antigravity: Toggle ON/OFF"
@@ -257,7 +278,7 @@
     "scripts": {
         "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --platform=node --format=cjs --sourcemap",
         "watch": "npm run compile -- --watch",
-        "test": "vitest run",
+        "test": "node --test antigravity-jules-orchestration/tests/**/*.test.js",
         "package": "vsce package",
         "lint": "eslint src --ext ts"
     },

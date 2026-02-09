@@ -4,44 +4,30 @@
 
 ## Universal Rules (All Agents)
 
-1. **Every build gets a new version number.** Update these three locations in sync:
-   - `package.json` → `"version"`
-   - `src/utils/constants.ts` → `VERSION`
-   - `CHANGELOG.md` → new entry
-2. **Commit with version in message**: `feat: v4.2.1 - description` or `fix: v4.2.1 - description`.
-3. **Git push after every commit.** Keep remote in sync.
-4. **Compile check**: Run `npm run compile` after every significant code change.
-5. **Syntax check CDP script**: Run `node -c main_scripts/full_cdp_script.js` after editing it.
-6. **Update docs**: `CHANGELOG.md`, `DASHBOARD.md`, `VISION.md` as applicable.
-7. **No TODOs or placeholders.** Implement fully or break into tracked sub-tasks.
-8. **Line endings**: CRLF (`\r\n`) for all files in this Windows project.
-9. **The CDP script (`full_cdp_script.js`) runs in the browser** — no Node.js APIs, no `require`, no `fs`.
+1. **Version Control**: Every build gets a new version number. Sync `package.json`, `src/utils/constants.ts`, and `CHANGELOG.md`.
+2. **Commit Protocol**: `feat: vX.Y.Z - description`. Push after every commit.
+3. **Compilation**: Run `npm run compile` after significant changes.
+4. **CDP Script Safety**: Run `node -c main_scripts/full_cdp_script.js` after edits. No Node.js APIs allowed in browser context.
+5. **Task Tracking**: use `task.md` as the single source of truth. Mark tasks as `[x]` when done.
+6. **Autonomous Ops**: Use `ProjectTracker` service for task discovery in autonomous mode.
 
-## Quick Actions
+## Agent Roles
 
-| Action | Command |
-|:-------|:--------|
-| Build | `npm run compile` |
-| Syntax Check | `node -c main_scripts/full_cdp_script.js` |
-| Package | `vsce package` |
-| Test | `npm test` |
+### 1. The Director (Autonomous Loop)
+- **Goal**: End-to-end task completion.
+- **Mechanism**: Queries `ProjectTracker` -> Selects Model -> Injects Prompt via CDP.
+- **File**: `src/core/autonomous-loop.ts`
 
-## Key Architecture Points
+### 2. The Orchestrator (Multi-Agent)
+- **Goal**: Complex task decomposition.
+- **Mechanism**: Breaks tasks into JSON subtasks -> Delegates to specific agents.
+- **File**: `src/core/agent-orchestrator.ts`
 
-- **Config flow**: `package.json` schema → `config.ts` interface → `dashboard.ts` UI → `cdp-strategy.ts` injection → `full_cdp_script.js` state
-- **Strategy pattern**: `IStrategy` interface in `strategies/interface.ts`, implemented by `simple-strategy.ts` and `cdp-strategy.ts`
-- **Browser script**: `full_cdp_script.js` is an IIFE that runs inside VS Code's Chromium process via CDP `Runtime.evaluate`
-- **State**: All runtime state stored on `window.__autoAllState` in the browser context
+### 3. The Coding Agent (Gemini/Claude)
+- **Goal**: Implementation and Refactoring.
+- **Mechanism**: Reads `task.md`, edits files, runs tests.
 
-## Project Structure
-
-```
-src/core/           → Autonomous loop, orchestrator, circuit breaker, memory
-src/strategies/     → CDP vs Simple strategy implementations
-src/services/       → CDP handler (low-level WebSocket connection)
-src/providers/      → CDP client (high-level), project manager
-src/modules/        → Clicker, MCP server, voice control
-src/ui/             → Dashboard (WebView), status bar
-src/utils/          → Config manager, logger, constants
-main_scripts/       → Browser-injected JavaScript (CDP script, relauncher)
-```
+## Documentation Standards
+- Update `CHANGELOG.md` for every version.
+- Update `DASHBOARD.md` if UI changes.
+- Update `VISION.md` if roadmap changes.

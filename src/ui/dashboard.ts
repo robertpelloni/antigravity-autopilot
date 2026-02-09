@@ -92,10 +92,12 @@ export class DashboardPanel {
                 h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 0; color: var(--vscode-descriptionForeground); }
                 .card { background: var(--vscode-editor-widget-background); border: 1px solid var(--vscode-widget-border); padding: 15px; margin-bottom: 12px; border-radius: 6px; }
                 .setting { margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+                .setting.vertical { flex-direction: column; align-items: flex-start; }
                 label { font-weight: 600; flex-shrink: 0; }
                 select, input[type="text"], input[type="number"] { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); padding: 4px 8px; border-radius: 3px; min-width: 120px; }
-                input[type="number"] { width: 100px; }
+                input[type="number"] { width: 80px; }
                 input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--vscode-button-background); cursor: pointer; }
+                textarea { width: 100%; height: 60px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 3px; resize: vertical; margin-top: 5px; font-family: monospace; }
                 button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 6px 12px; cursor: pointer; border-radius: 3px; }
                 button:hover { background: var(--vscode-button-hoverBackground); }
                 .version { color: var(--vscode-descriptionForeground); font-size: 12px; margin-top: 16px; text-align: center; }
@@ -103,6 +105,8 @@ export class DashboardPanel {
         </head>
         <body>
             <h1>⚡ Antigravity Autopilot</h1>
+            
+            <!-- STRATEGIES -->
             <div class="card">
                 <h2>Strategies</h2>
                 <div class="setting">
@@ -126,6 +130,7 @@ export class DashboardPanel {
                 </div>
             </div>
 
+            <!-- MODULES -->
              <div class="card">
                 <h2>Modules</h2>
                 <div class="setting">
@@ -136,12 +141,24 @@ export class DashboardPanel {
                     <label>MCP Server:</label>
                     <input type="checkbox" ${settings.mcpEnabled ? 'checked' : ''} onchange="updateConfig('mcpEnabled', this.checked)">
                 </div>
-                 <div class="setting">
+                <div class="setting">
                     <label>Voice Control:</label>
                     <input type="checkbox" ${settings.voiceControlEnabled ? 'checked' : ''} onchange="updateConfig('voiceControlEnabled', this.checked)">
                 </div>
+                <div class="setting">
+                    <label>Voice Mode:</label>
+                    <select onchange="updateConfig('voiceMode', this.value)">
+                        <option value="push-to-talk" ${settings.voiceMode === 'push-to-talk' ? 'selected' : ''}>Push to Talk</option>
+                        <option value="always-listening" ${settings.voiceMode === 'always-listening' ? 'selected' : ''}>Always Listening</option>
+                    </select>
+                </div>
+                 <div class="setting">
+                    <label>Auto Git Commit:</label>
+                    <input type="checkbox" ${settings.autoGitCommit ? 'checked' : ''} onchange="updateConfig('autoGitCommit', this.checked)">
+                </div>
             </div>
 
+            <!-- CDP & TIMING -->
             <div class="card">
                 <h2>CDP & Automation</h2>
                 <div class="setting">
@@ -161,16 +178,24 @@ export class DashboardPanel {
                     <input type="number" value="${settings.autoApproveDelay}" onchange="updateConfig('autoApproveDelay', parseInt(this.value))">
                 </div>
                 <div class="setting">
-                     <label>Max Loops/Session:</label>
-                     <input type="number" value="${settings.maxLoopsPerSession}" onchange="updateConfig('maxLoopsPerSession', parseInt(this.value))">
+                    <label>Poll Frequency (ms):</label>
+                    <input type="number" value="${settings.pollFrequency}" onchange="updateConfig('pollFrequency', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Loop Interval (s):</label>
+                    <input type="number" value="${settings.loopInterval}" onchange="updateConfig('loopInterval', parseInt(this.value))">
                 </div>
                 <div class="setting">
                     <label>Thread Wait (s):</label>
                     <input type="number" value="${settings.threadWaitInterval}" onchange="updateConfig('threadWaitInterval', parseInt(this.value))">
                 </div>
-                <div class="setting">
-                    <label>Poll Frequency (ms):</label>
-                    <input type="number" value="${settings.pollFrequency}" onchange="updateConfig('pollFrequency', parseInt(this.value))">
+                 <div class="setting">
+                     <label>Max Loops/Session:</label>
+                     <input type="number" value="${settings.maxLoopsPerSession}" onchange="updateConfig('maxLoopsPerSession', parseInt(this.value))">
+                </div>
+                 <div class="setting">
+                     <label>Execution Timeout (min):</label>
+                     <input type="number" value="${settings.executionTimeout}" onchange="updateConfig('executionTimeout', parseInt(this.value))">
                 </div>
             </div>
 
@@ -187,6 +212,39 @@ export class DashboardPanel {
                          <option value="claude-sonnet-4.5-thinking" ${settings.preferredModelForReasoning === 'claude-sonnet-4.5-thinking' ? 'selected' : ''}>Claude Sonnet 4.5 (Thinking)</option>
                          <option value="claude-sonnet-3.5" ${settings.preferredModelForReasoning === 'claude-sonnet-3.5' ? 'selected' : ''}>Claude Sonnet 3.5</option>
                     </select>
+                </div>
+                <div class="setting">
+                    <label>Frontend Model:</label>
+                    <select onchange="updateConfig('preferredModelForFrontend', this.value)">
+                         <option value="gemini-3-pro-high" ${settings.preferredModelForFrontend === 'gemini-3-pro-high' ? 'selected' : ''}>Gemini 3 Pro (High)</option>
+                         <option value="gemini-3-pro-low" ${settings.preferredModelForFrontend === 'gemini-3-pro-low' ? 'selected' : ''}>Gemini 3 Pro (Low)</option>
+                         <option value="gpt-4o" ${settings.preferredModelForFrontend === 'gpt-4o' ? 'selected' : ''}>GPT-4o</option>
+                    </select>
+                </div>
+                <div class="setting">
+                    <label>Quick Model:</label>
+                    <select onchange="updateConfig('preferredModelForQuick', this.value)">
+                         <option value="gemini-3-flash" ${settings.preferredModelForQuick === 'gemini-3-flash' ? 'selected' : ''}>Gemini 3 Flash</option>
+                         <option value="gemini-3-pro-low" ${settings.preferredModelForQuick === 'gemini-3-pro-low' ? 'selected' : ''}>Gemini 3 Pro (Low)</option>
+                         <option value="gpt-4o-mini" ${settings.preferredModelForQuick === 'gpt-4o-mini' ? 'selected' : ''}>GPT-4o Mini</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- SAFETY & PATTERNS -->
+             <div class="card">
+                <h2>Safety & Patterns</h2>
+                <div class="setting vertical">
+                    <label>Banned Commands (one per line):</label>
+                    <textarea onchange="updateConfig('bannedCommands', this.value.split('\n'))">${settings.bannedCommands.join('\n')}</textarea>
+                </div>
+                <div class="setting vertical">
+                    <label>Accept Patterns (one per line):</label>
+                    <textarea onchange="updateConfig('acceptPatterns', this.value.split('\n'))">${settings.acceptPatterns.join('\n')}</textarea>
+                </div>
+                 <div class="setting vertical">
+                    <label>Reject Patterns (one per line):</label>
+                    <textarea onchange="updateConfig('rejectPatterns', this.value.split('\n'))">${settings.rejectPatterns.join('\n')}</textarea>
                 </div>
             </div>
 

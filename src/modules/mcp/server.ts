@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 import { createLogger } from '../../utils/logger';
 import { config } from '../../utils/config';
+import { projectTracker } from '../../core/project-tracker';
 
 const log = createLogger('MCPServer');
 
@@ -33,9 +34,37 @@ export class MCPServer {
     }
 
     // Placeholder for request handling
-    handleRequest(request: any) {
+    async handleRequest(request: any) {
         log.info(`Received request: ${request.method}`);
-        return { jsonrpc: '2.0', result: 'ok', id: request.id };
+
+        try {
+            if (request.method === 'tools/call') {
+                const { name, arguments: args } = request.params;
+
+                if (name === 'get_next_task') {
+                    const task = projectTracker.getNextTask();
+                    return {
+                        jsonrpc: '2.0',
+                        result: { content: [{ type: 'text', text: task || 'No tasks pending' }] },
+                        id: request.id
+                    };
+                }
+
+                if (name === 'complete_task') {
+                    const success = projectTracker.completeTask(args.task_description);
+                    return {
+                        jsonrpc: '2.0',
+                        result: { content: [{ type: 'text', text: success ? 'Task marked as complete' : 'Task not found' }] },
+                        id: request.id
+                    };
+                }
+            }
+
+            return { jsonrpc: '2.0', result: 'ok', id: request.id };
+        } catch (error) {
+            log.error(`MCP Request Error: ${(error as Error).message}`);
+            return { jsonrpc: '2.0', error: { code: -32603, message: 'Internal error' }, id: request.id };
+        }
     }
 }
 

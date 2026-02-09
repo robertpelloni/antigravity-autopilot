@@ -46,4 +46,10 @@ export class StrategyManager {
             await this.start();
         }
     }
+
+    getStrategy(type: string): IStrategy | null {
+        // Return current if matches constraint or generic
+        // For now, Antigravity only has one active strategy at a time
+        return this.currentStrategy;
+    }
 }

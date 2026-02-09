@@ -150,8 +150,39 @@ export class ProjectManager {
         if (!this.config?.github) {
             return [];
         }
-        // Simplified fetch for brevity in port
-        return [];
+
+        const { owner, repo, token } = this.config.github;
+        try {
+            // Use native fetch (available in VS Code node env)
+            const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`, {
+                headers: {
+                    'Authorization': `token ${token}`,
+                    'Accept': 'application/vnd.github.v3+json`,
+                    'User-Agent': 'Antigravity-Autopilot'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`GitHub API error: ${response.statusText}`);
+            }
+
+            const issues = await response.json() as any[];
+            return issues.map(issue => ({
+                id: issue.id.toString(),
+                key: `#${issue.number}`,
+                title: issue.title,
+                description: issue.body,
+                status: issue.state === 'closed' ? 'done' : 'todo',
+                source: 'github',
+                url: issue.html_url,
+                createdAt: new Date(issue.created_at).getTime(),
+                updatedAt: new Date(issue.updated_at).getTime(),
+                assignee: issue.assignee?.login
+            }));
+        } catch (error) {
+            log.error(`Failed to fetch GitHub issues: ${(error as Error).message}`);
+            return [];
+        }
     }
 
     // ============ Utilities ============

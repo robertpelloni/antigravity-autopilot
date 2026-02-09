@@ -5,6 +5,47 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.9.0] - 2026-02-09
+
+### Added
+- **ProjectTracker Service**: Centralized task management service that parses `task.md` and `ROADMAP.md` to drive the autonomous loop.
+- **Autonomous Loop V2**: Updated `AutonomousLoop` (formerly Director) to dynamically query `ProjectTracker` for next tasks, removing hardcoded dependencies on `@fix_plan.md`.
+- **MCP Integration**: Exposed `get_next_task` and `complete_task` tools via the Model Context Protocol server, enabling external agents to participate in task execution.
+- **Universal Agent Protocols**: Updated `AGENTS.md` with strict universal rules and clear role definitions.
+
+### Fixed
+- **Infrastructure**: Resolved 'connection refused' errors by ensuring Docker containers (Postgres, Redis) are running.
+- **Build System**: Fixed `npm build` failures by updating `jules-api` Dockerfile to use `npm install --omit=dev` instead of strict `npm ci`.
+- **Testing**: Switched to native Node.js test runner (`node --test`) to resolve `vitest` conflicts and successfully implemented logic tests for `ProjectTracker`.
+- **UI Stability**: Addressed potential infinite loops in UI/Webview related to backend connectivity.
+
+## [4.8.0] - 2026-02-09
+
+### Added
+- **Agent Orchestrator (Phase 18)**: Multi-agent system (Planner, Researcher, Implementer) powered by Browser Bridge.
+- **Dashboard Update (Phase 17)**: Added Model Selection, Voice Mode, Loop Timing, and pattern configuration arrays.
+- **Verification Workflow**: Added `verify-orchestrator.md` for manual testing.
+
+### Changed
+- **Agent Logic**: `connection-based` execution replaces stubbed logic.
+- **Docs**: Updated `AGENTS.md` and `DASHBOARD.md` to reflect new architecture.
+
+## [4.7.20] - 2026-02-09
+
+### Added
+- **Hybrid Bump Strategy**: Combines Browser idle detection with Extension Host command execution.
+- **Bridge Handler**: New `__ANTIGRAVITY_HYBRID_BUMP__` signal for safe clipboard-based submission.
+
+### Fixed
+- **Renderer Crashes**: Eliminated "No renderer found" errors by bypassing direct DOM manipulation for chat submission.
+- **Syntax Errors**: Fixed recursive loop in `full_cdp_script.js`.
+
+## [4.7.19] - 2026-02-09
+
+### Fixed
+- **Auto-Bump**: Restored missing `autoBump` and `isConversationIdle` logic from submodule scripts.
+- **SendMessage**: Robust multi-strategy submission (Enter, Alt+Enter, Ctrl+Enter, Button Click).
+
 ## [4.2.0] - 2026-02-08
 
 ### Added

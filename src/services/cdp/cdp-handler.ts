@@ -64,12 +64,29 @@ export class CDPHandler extends EventEmitter {
             ws.on('open', async () => {
                 this.connections.set(page.id, { ws, injected: false, sessions: new Set() });
 
-                // Enable Runtime to receive console messages                // Enable Runtime
-                await this.sendCommand(page.id, 'Runtime.enable');
-                await this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' });
+                try {
+                    // 1. Enable Runtime on Main Page
+                    await this.sendCommand(page.id, 'Runtime.enable');
+                    await this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' });
 
-                // Phase 32: Revert AutoAttach (Caused Crash)
-                // We rely on standard connection to 'page' and 'webview' targets found in getPages().
+                    // 3. Explicit Target Discovery (Belt & Suspenders)
+                    const { targetInfos } = await this.sendCommand(page.id, 'Target.getTargets');
+                    if (targetInfos) {
+                        for (const info of targetInfos) {
+                            if (['webview', 'iframe', 'other'].includes(info.type)) {
+                                console.log(`[CDP] Explicitly attaching to existing target: ${info.type} ${info.url}`);
+                                this.sendCommand(page.id, 'Target.attachToTarget', { targetId: info.targetId, flatten: true })
+                                    .catch(e => console.error(`[CDP] Failed to attach to ${info.targetId}:`, e));
+                            }
+                        }
+                    }
+
+                    // 2. Enable Discovery (Phase 38: Aggressive)
+                    // We need this to find the OOP Chat Iframe
+                    await this.sendCommand(page.id, 'Target.setDiscoverTargets', { discover: true });
+                } catch (e) {
+                    console.log('[CDP] Setup failed', e);
+                }
 
                 resolve(true);
             });
@@ -77,11 +94,30 @@ export class CDPHandler extends EventEmitter {
                 try {
                     const msg = JSON.parse(data.toString());
 
-                    // Phase 32: No Child Target Handling (Revert)
-                    // ...ion
+                    // Phase 38: Aggressive Attachment
+                    if (msg.method === 'Target.targetCreated') {
+                        const info = msg.params.targetInfo;
+                        // Log for diagnosis
+                        // console.log(`[CDP] Target: ${info.type} - ${info.url}`);
+
+                        if (info.type === 'webview' || info.type === 'iframe' || info.type === 'other') {
+                            // Attach to everything that looks nested
+                            this.sendCommand(page.id, 'Target.attachToTarget', { targetId: info.targetId, flatten: true })
+                                .catch(e => console.error(`[CDP] Failed to attach to new target ${info.targetId}:`, e));
+                        }
+                    }
+
+                    // Handle Attachment Success
+                    if (msg.method === 'Target.attachedToTarget') {
+                        const sessionId = msg.params.sessionId;
+                        this.sendCommand(page.id, 'Runtime.enable', {}, undefined, sessionId).catch(() => { });
+                        this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' }, undefined, sessionId).catch(() => { });
+                        this.emit('sessionAttached', { pageId: page.id, sessionId, type: msg.params.targetInfo.type, url: msg.params.targetInfo.url });
+                    }
+
+                    // Inject on Context Creation (Main Page + Nested)
                     if (msg.method === 'Runtime.executionContextCreated') {
                         const ctx = msg.params.context;
-                        // Emit so Strategy can inject
                         this.emit('contextCreated', { pageId: page.id, contextId: ctx.id, origin: ctx.origin, sessionId: msg.sessionId });
                     }
 
@@ -90,9 +126,8 @@ export class CDPHandler extends EventEmitter {
                         this.pendingMessages.delete(msg.id);
                         msg.error ? rej(new Error(msg.error.message)) : res(msg.result);
                     } else if (msg.method === 'Runtime.bindingCalled' && msg.params.name === '__ANTIGRAVITY_BRIDGE__') {
-                        // ROBUST Binding Bridge (Check sessionId!)
                         const payload = msg.params.payload;
-                        const originSessionId = msg.sessionId; // If flat, this is set
+                        const originSessionId = msg.sessionId;
                         this.handleBridgeMessage(page.id, payload, originSessionId);
                     } else if (msg.method === 'Runtime.consoleAPICalled') {
                         // Fallback Console Bridge
@@ -224,9 +259,6 @@ export class CDPHandler extends EventEmitter {
                 }
             } else if (text.startsWith('__ANTIGRAVITY_COMMAND__:')) {
                 const raw = text.substring('__ANTIGRAVITY_COMMAND__:'.length).trim();
-                // ... (existing command logic doesn't need sessionId as it runs in Extension Host)
-                // BUT: We might want to know WHICH target sent it contextually?
-                // Probably not for global commands.
                 if (raw) {
                     // Format: "commandId|jsonArgs"
                     const pipeIndex = raw.indexOf('|');
@@ -253,10 +285,55 @@ export class CDPHandler extends EventEmitter {
                         }
                     }
                 }
+            } else if (text.startsWith('__ANTIGRAVITY_HYBRID_BUMP__:')) {
+                // Phase 52: Hybrid Bump Strategy
+                const bumpText = text.substring('__ANTIGRAVITY_HYBRID_BUMP__:'.length);
+                console.log(`[Bridge] Hybrid Bump Triggered: "${bumpText}"`);
+                const vscode = require('vscode');
+
+                if (bumpText) {
+                    await vscode.env.clipboard.writeText(bumpText);
+                    await vscode.commands.executeCommand('workbench.action.chat.open');
+                    await new Promise((r: any) => setTimeout(r, 300));
+                    await vscode.commands.executeCommand('workbench.action.chat.focusInput');
+                    await new Promise((r: any) => setTimeout(r, 200));
+                    await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
+                }
+
+                // 2. Submit (Multi-Strategy)
+                await new Promise((r: any) => setTimeout(r, 800));
+                const commands = [
+                    'workbench.action.chat.submit',
+                    'workbench.action.chat.send',
+                    'interactive.acceptChanges',
+                    'workbench.action.terminal.chat.accept',
+                    'inlineChat.accept'
+                ];
+                for (const cmd of commands) {
+                    try { await vscode.commands.executeCommand(cmd); } catch (e) { }
+                }
             }
         } catch (e) {
             console.error('Bridge Message Handler Error', e);
         }
     }
 
+    async executeScriptInAllSessions(script: string) {
+    for (const [pageId, conn] of this.connections) {
+        this.injectScript(pageId, script).catch(() => { });
+        for (const sessionId of conn.sessions) {
+            this.injectScript(pageId, script, false, sessionId).catch(() => { });
+        }
+    }
 }
+
+    async dispatchKeyEventToAll(event: any) {
+    for (const [pageId, conn] of this.connections) {
+        this.sendCommand(pageId, 'Input.dispatchKeyEvent', event).catch(() => { });
+        for (const sessionId of conn.sessions) {
+            this.sendCommand(pageId, 'Input.dispatchKeyEvent', event, undefined, sessionId).catch(() => { });
+        }
+    }
+}
+}
+

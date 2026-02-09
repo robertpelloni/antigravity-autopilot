@@ -4,4 +4,5 @@ export interface IStrategy {
     start(): Promise<void>;
     stop(): Promise<void>;
     dispose(): void;
+    executeAction?(action: string): Promise<void>;
 }

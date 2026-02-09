@@ -32,7 +32,11 @@ export class CDPStrategy implements IStrategy {
             }
         });
 
-        // Phase 32: Remove Session Listener (Revert)
+        // Phase 34: Restore Session Listener
+        this.cdpHandler.on('sessionAttached', async (event) => {
+            console.log(`[Strategy] Session Attached: ${event.sessionId} (${event.type})`);
+            await this.injectIntoSession(event.pageId, event.sessionId);
+        });
 
         // Use absolute path for require
         try {
@@ -126,57 +130,96 @@ export class CDPStrategy implements IStrategy {
         this.statusItem.show();
 
         this.blindBumpTimer = setInterval(async () => {
-            // Always update heartbeat so user knows we are alive
             const now = new Date();
             this.statusItem!.text = `$(pulse) AG: Active ${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
 
-            if (!this.isActive) {
-                this.statusItem!.text = '$(circle-slash) AG: Inactive';
-                return;
-            }
+            if (!this.isActive) return;
 
             try {
+                const safeExec = async (cmd: string) => { try { await vscode.commands.executeCommand(cmd); } catch (e) { } };
+
                 const bumpMsg = config.get<string>('bumpMessage') || 'bump';
                 if (!bumpMsg) return;
 
                 console.log('[Strategy] Blind Bump Cycle');
-
-                // 1. Focus Chat & Input (Crucial for success)
-                await vscode.commands.executeCommand('workbench.action.chat.open');
-                await new Promise(r => setTimeout(r, 500));
-                await vscode.commands.executeCommand('workbench.action.chat.focusInput'); // NEW
-                await new Promise(r => setTimeout(r, 200));
-
-                // 2. Hybrid Bump: Command + CDP Key
                 this.statusItem!.text = '$(zap) AG: Bumping...';
 
-                // Try Standard Command
-                await vscode.commands.executeCommand('workbench.action.chat.submit');
+                // 1. Focus Chat & Input
+                await safeExec('workbench.action.chat.open');
+                await safeExec('aipopup.action.open');
+                await new Promise(r => setTimeout(r, 500));
+                await safeExec('workbench.action.chat.focusInput');
+                await new Promise(r => setTimeout(r, 200));
 
-                // Try Cursor Command
-                await vscode.commands.executeCommand('aipopup.action.submit').then(undefined, () => { });
-
-                // Try Raw Enter Key (CDP)
+                // 2. Type Bump Message (Event-Driven)
                 if (this.cdpHandler) {
-                    const pageId = Array.from(this.cdpHandler['connections'].keys())[0];
-                    if (pageId) {
-                        await this.cdpHandler.sendCommand(pageId, 'Input.dispatchKeyEvent', {
-                            type: 'keyDown', text: '\\r', unmodifiedText: '\\r', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, autoRepeat: false, isKeypad: false, isSystemKey: false
+                    for (const char of bumpMsg) {
+                        await this.cdpHandler.dispatchKeyEventToAll({
+                            type: 'keyDown', text: char, unmodifiedText: char,
+                            keyIdentifier: char, code: 'Key' + char.toUpperCase(),
+                            windowsVirtualKeyCode: char.charCodeAt(0), nativeVirtualKeyCode: char.charCodeAt(0)
                         });
-                        await this.cdpHandler.sendCommand(pageId, 'Input.dispatchKeyEvent', {
-                            type: 'keyUp', text: '\\r', unmodifiedText: '\\r', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, autoRepeat: false, isKeypad: false, isSystemKey: false
+                        await new Promise(r => setTimeout(r, 10));
+                        await this.cdpHandler.dispatchKeyEventToAll({
+                            type: 'keyUp', text: char, unmodifiedText: char,
+                            keyIdentifier: char, code: 'Key' + char.toUpperCase(),
+                            windowsVirtualKeyCode: char.charCodeAt(0), nativeVirtualKeyCode: char.charCodeAt(0)
                         });
-                        console.log('[Strategy] Sent Raw Enter Key');
+                        await new Promise(r => setTimeout(r, 10));
                     }
                 }
+                await new Promise(r => setTimeout(r, 200));
 
-                // 3. Paste Bump Message
-                await vscode.env.clipboard.writeText(bumpMsg);
-                await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
+                // 3. Submit (Try ALL variants from User Feedback)
+                const submitCommands = [
+                    'workbench.action.chat.submit',
+                    'workbench.action.chat.send',
+                    'interactive.acceptChanges',
+                    'workbench.action.terminal.chat.accept',
+                    'inlineChat.accept',
+                    'aipopup.action.submit'
+                ];
+                for (const cmd of submitCommands) {
+                    await safeExec(cmd);
+                }
 
-                // 4. Submit
-                await new Promise(r => setTimeout(r, 300));
-                await vscode.commands.executeCommand('workbench.action.chat.submit');
+                // 4. Robust Submit Strategy (Double Tap)
+                if (this.cdpHandler) {
+                    // A. Script Click (Force Submit)
+                    const script = `if (window.__autoAllState && window.__autoAllState.forceSubmit) window.__autoAllState.forceSubmit();`;
+                    await this.cdpHandler.executeScriptInAllSessions(script);
+
+                    await new Promise(r => setTimeout(r, 100));
+
+                    // B. Raw CDP Enter Key (Broadcast)
+                    await this.cdpHandler.dispatchKeyEventToAll({
+                        type: 'keyDown',
+                        keyIdentifier: 'Enter',
+                        code: 'Enter',
+                        key: 'Enter',
+                        windowsVirtualKeyCode: 13,
+                        nativeVirtualKeyCode: 13,
+                        autoRepeat: false,
+                        isKeypad: false,
+                        isSystemKey: false,
+                        text: '\r',
+                        unmodifiedText: '\r'
+                    });
+                    await new Promise(r => setTimeout(r, 50));
+                    await this.cdpHandler.dispatchKeyEventToAll({
+                        type: 'keyUp',
+                        keyIdentifier: 'Enter',
+                        code: 'Enter',
+                        key: 'Enter',
+                        windowsVirtualKeyCode: 13,
+                        nativeVirtualKeyCode: 13,
+                        autoRepeat: false,
+                        isKeypad: false,
+                        isSystemKey: false,
+                        text: '\r',
+                        unmodifiedText: '\r'
+                    });
+                }
 
             } catch (e) {
                 console.error('[Strategy] Blind Bump Failed:', e);
@@ -317,4 +360,11 @@ export class CDPStrategy implements IStrategy {
     dispose() {
         this.stop();
     }
+    async executeAction(action: string) {
+        if (!this.isActive || !this.cdpHandler) return;
+        console.log(`[Strategy] Executing manual action: ${action}`);
+        const script = `if (window.__autoAllState && window.__autoAllState.forceAction) window.__autoAllState.forceAction('${action}');`;
+        await this.cdpHandler.executeScriptInAllSessions(script);
+    }
 }
+

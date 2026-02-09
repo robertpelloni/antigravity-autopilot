@@ -6,6 +6,7 @@ import * as path from 'path';
 import { progressTracker } from './progress-tracker';
 import { rateLimiter } from './rate-limiter';
 import { taskAnalyzer } from './task-analyzer';
+import { projectTracker } from './project-tracker';
 import { modelSelector } from './model-selector';
 import { exitDetector } from './exit-detector';
 import { circuitBreaker, CircuitState } from '../core/circuit-breaker';
@@ -179,26 +180,21 @@ export class AutonomousLoop {
     }
 
     private async getCurrentTask(): Promise<string | null> {
+        // Prioritize goal if set for the first loop
         if (this.goal && this.loopCount === 1) {
             return this.goal;
         }
 
-        if (this.workspaceRoot) {
-            const fixPlanPath = path.join(this.workspaceRoot, '@fix_plan.md');
-            if (fs.existsSync(fixPlanPath)) {
-                try {
-                    const content = fs.readFileSync(fixPlanPath, 'utf-8');
-                    const task = taskAnalyzer.extractCurrentTask(content);
-                    if (task) return task;
-                    log.info('All tasks in @fix_plan.md are complete');
-                    return null;
-                } catch (err) {
-                    log.warn('Could not read @fix_plan.md');
-                }
-            }
+        // Use Project Tracker to find next task from task.md / ROADMAP.md
+        const nextTask = projectTracker.getNextTask();
+        if (nextTask) {
+            return nextTask;
         }
 
+        // Fallback to goal if persistent
         if (this.goal) return this.goal;
+
+        log.info('No pending tasks found via ProjectTracker');
         return null;
     }
 
@@ -230,6 +226,14 @@ export class AutonomousLoop {
 
             const exitCheck = exitDetector.checkResponse(response);
             if (exitCheck.shouldExit) {
+                // Mark task as complete if successful exit
+                if (this.currentTask && !exitCheck.reason?.includes('fail')) {
+                    const completed = projectTracker.completeTask(this.currentTask);
+                    if (completed) {
+                        log.info(`Task completed and marked in project file: ${this.currentTask}`);
+                    }
+                }
+
                 this.stop(exitCheck.reason || 'Task completed');
                 return true;
             }

@@ -9,6 +9,7 @@ import { createLogger } from '../utils/logger';
 import { taskAnalyzer } from './task-analyzer';
 // Constants
 import { TaskType, TaskTypeValue } from '../utils/constants';
+import { cdpClient } from '../providers/cdp-client';
 
 const log = createLogger('AgentOrchestrator');
 
@@ -101,10 +102,9 @@ Ensure tests are maintainable and well-documented.`,
         role: 'planner',
         capabilities: ['task-decomposition', 'priority-assignment', 'dependency-ordering', 'resource-allocation'],
         preferredModel: 'claude-opus-4.5-thinking',
-        systemPrompt: `You are a planning agent that decomposes complex tasks into manageable subtasks.
-Consider dependencies between tasks and order them appropriately.
-Assign priorities based on impact and complexity.
-Create clear, actionable task descriptions.`,
+        systemPrompt: `You are a planning agent. Decompose the following task into a JSON array of subtasks.
+Example format: ["Analyze database schema", "Create API endpoint", "Update frontend service"]
+Return ONLY the JSON array.`,
         maxConcurrentTasks: 1
     }
 ];
@@ -171,8 +171,52 @@ export class AgentOrchestrator {
         if (!planner) return [];
 
         log.info(`Decomposing task: ${task.id}`);
-        // Stub for decomposition logic
-        return [];
+
+        const scanTask: AgentTask = {
+            ...task,
+            agentId: 'planner',
+            type: TaskType.REASONING // Force reasoning for planning
+        };
+
+        const response = await this.executeTask(scanTask, planner);
+
+        // Default fallback if parsing fails
+        const subtasks: AgentTask[] = [];
+
+        try {
+            // Attempt to parse JSON array from response
+            // Look for [...] pattern
+            const jsonMatch = response.match(/\[.*\]/s);
+            if (jsonMatch) {
+                const rawList = JSON.parse(jsonMatch[0]);
+                if (Array.isArray(rawList)) {
+                    rawList.forEach((item: any, index: number) => {
+                        if (typeof item === 'string' || (item.title && item.description)) {
+                            subtasks.push({
+                                id: `${task.id}_sub_${index}`,
+                                agentId: this.selectAgentForTask(TaskType.GENERAL),
+                                type: TaskType.GENERAL,
+                                description: typeof item === 'string' ? item : `${item.title}: ${item.description}`,
+                                context: `Subtask of ${task.description}`,
+                                status: 'pending',
+                                createdAt: Date.now(),
+                                parentTaskId: task.id
+                            });
+                        }
+                    });
+                }
+            }
+        } catch (e) {
+            log.error('Failed to parse planner response: ' + e);
+        }
+
+        // Fallback: If no subtasks found, just return request as single task if it was huge, 
+        // but here we just return empty to signal manual handling or simple execution.
+        if (subtasks.length > 0) {
+            log.info(`Decomposed into ${subtasks.length} subtasks`);
+        }
+
+        return subtasks;
     }
 
     private isComplexTask(description: string): boolean {
@@ -259,8 +303,22 @@ export class AgentOrchestrator {
 
     private async executeTask(task: AgentTask, agent: AgentDefinition): Promise<string> {
         const prompt = this.buildAgentPrompt(task, agent);
-        // This is where actual AI execution would occur
-        return `Task executed by ${agent.name}`;
+
+        if (!cdpClient.isConnected()) {
+            // Try to connect if not already
+            await cdpClient.connect();
+        }
+
+        if (!cdpClient.isConnected()) {
+            throw new Error('Browser not connected. Cannot execute agent task.');
+        }
+
+        log.info(`Agent ${agent.name} executing...`);
+        await cdpClient.injectPrompt(prompt);
+
+        // Wait for response with a generous timeout (e.g. 2 mins for thinking)
+        const response = await cdpClient.waitForResponse(120000);
+        return response;
     }
 
     private buildAgentPrompt(task: AgentTask, agent: AgentDefinition): string {

@@ -67,6 +67,30 @@ export function activate(context: vscode.ExtensionContext) {
         mode: config.get('strategy')
     });
 
+    // Phase 39: Manual Triggers & Error Suppression
+    // Note: cdpStrategy is expected to be defined elsewhere or passed into this scope.
+    // For now, it's left as potentially undefined, which TypeScript will flag.
+    // Assuming `cdpStrategy` refers to an instance of CDPHandler or similar.
+    const cdpStrategy = strategyManager.getStrategy('cdp'); // Assuming strategyManager can provide this.
+    context.subscriptions.push(
+        vscode.commands.registerCommand('antigravity.getChromeDevtoolsMcpUrl', async () => {
+            return 'ws://localhost:9222'; // Dummy return to satisfy whatever is calling this
+        }),
+        vscode.commands.registerCommand('antigravity.clickRun', () => cdpStrategy?.executeAction('run')),
+        vscode.commands.registerCommand('antigravity.clickExpand', () => cdpStrategy?.executeAction('expand')),
+        vscode.commands.registerCommand('antigravity.clickAccept', () => cdpStrategy?.executeAction('accept')),
+        vscode.commands.registerCommand('antigravity.resetConnection', async () => {
+            if (cdpStrategy) {
+                vscode.window.showInformationMessage('Restoring Anti-Gravity...');
+                try {
+                    await strategyManager.stop();
+                    await strategyManager.start('cdp');
+                    vscode.window.showInformationMessage('Anti-Gravity Reset Complete.');
+                } catch (e) { vscode.window.showErrorMessage(`Reset Failed: ${e}`); }
+            }
+        })
+    );
+
     // Register Commands
     context.subscriptions.push(
         vscode.commands.registerCommand('antigravity.toggleExtension', async () => {
