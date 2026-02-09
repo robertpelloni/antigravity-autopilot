@@ -14,6 +14,7 @@ export class CDPStrategy implements IStrategy {
     private relauncher: any; // Relauncher is JS class
     private pollTimer: NodeJS.Timeout | null = null;
     private logger: (msg: string) => void;
+    private statusItem: vscode.StatusBarItem | undefined;
 
     constructor(private context: vscode.ExtensionContext) {
         const cdpPort = config.get<number>('cdpPort') || 9000;
@@ -119,52 +120,55 @@ export class CDPStrategy implements IStrategy {
         const interval = (config.get<number>('autoApproveDelay') || 10) * 1000;
         console.log(`[Strategy] Starting Blind Bump Loop (Interval: ${interval}ms)`);
 
-        this.blindBumpTimer = setInterval(async () => {
-            if (!this.isActive) return;
+        // Phase 33: Visible Heartbeat
+        this.statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+        this.statusItem.text = '$(pulse) AG: Init';
+        this.statusItem.show();
 
-            // We blindly assume "Idle" if we haven't heard from the script?
-            // Actually, we blindly bump periodically.
-            // But we check if window is focused? No, we want it to run in background.
+        this.blindBumpTimer = setInterval(async () => {
+            // Always update heartbeat so user knows we are alive
+            const now = new Date();
+            this.statusItem!.text = `$(pulse) AG: Active ${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
+
+            if (!this.isActive) {
+                this.statusItem!.text = '$(circle-slash) AG: Inactive';
+                return;
+            }
 
             try {
                 const bumpMsg = config.get<string>('bumpMessage') || 'bump';
                 if (!bumpMsg) return;
 
-                console.log('[Strategy] Blind Bump Triggered');
-                vscode.window.setStatusBarMessage('$(pulse) Antigravity: Auto-Bump Triggered', 3000);
+                console.log('[Strategy] Blind Bump Cycle');
 
-                // 1. Focus Chat
+                // 1. Focus Chat & Input (Crucial for success)
                 await vscode.commands.executeCommand('workbench.action.chat.open');
                 await new Promise(r => setTimeout(r, 500));
+                await vscode.commands.executeCommand('workbench.action.chat.focusInput'); // NEW
+                await new Promise(r => setTimeout(r, 200));
 
                 // 2. Hybrid Bump: Command + CDP Key
+                this.statusItem!.text = '$(zap) AG: Bumping...';
+
                 // Try Standard Command
                 await vscode.commands.executeCommand('workbench.action.chat.submit');
 
-                // Try Cursor Command (Just in case)
+                // Try Cursor Command
                 await vscode.commands.executeCommand('aipopup.action.submit').then(undefined, () => { });
 
                 // Try Raw Enter Key (CDP)
-                // We iterate all connections and send Enter to 'page' types (Main Window)
                 if (this.cdpHandler) {
-                    const pageId = Array.from(this.cdpHandler['connections'].keys())[0]; // Hacky access but works
+                    const pageId = Array.from(this.cdpHandler['connections'].keys())[0];
                     if (pageId) {
-                        // KeyDown
                         await this.cdpHandler.sendCommand(pageId, 'Input.dispatchKeyEvent', {
-                            type: 'keyDown', text: '\r', unmodifiedText: '\r', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, autoRepeat: false, isKeypad: false, isSystemKey: false
+                            type: 'keyDown', text: '\\r', unmodifiedText: '\\r', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, autoRepeat: false, isKeypad: false, isSystemKey: false
                         });
-                        // KeyUp
                         await this.cdpHandler.sendCommand(pageId, 'Input.dispatchKeyEvent', {
-                            type: 'keyUp', text: '\r', unmodifiedText: '\r', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, autoRepeat: false, isKeypad: false, isSystemKey: false
+                            type: 'keyUp', text: '\\r', unmodifiedText: '\\r', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, autoRepeat: false, isKeypad: false, isSystemKey: false
                         });
                         console.log('[Strategy] Sent Raw Enter Key');
                     }
                 }
-
-                // 2. Focus Input
-                // Wait a bit?
-                await new Promise(r => setTimeout(r, 500));
-                await vscode.commands.executeCommand('workbench.action.chat.focusInput');
 
                 // 3. Paste Bump Message
                 await vscode.env.clipboard.writeText(bumpMsg);
@@ -294,6 +298,7 @@ export class CDPStrategy implements IStrategy {
             clearInterval(this.blindBumpTimer);
             this.blindBumpTimer = null;
         }
+        if (this.statusItem) this.statusItem.dispose(); // Cleanup
 
         // Send Stop Command to all pages
         const instances = await this.cdpHandler.scanForInstances(); // Get current pages
