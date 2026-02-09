@@ -52,43 +52,13 @@ Antigravity Autopilot consolidates **9 separate projects** into one coherent ext
 
 ## Roadmap
 
-### Phase 1: Foundation ✅ *(v4.0.0)*
-- Unified extension architecture
-- CDP + Simple strategy pattern
-- Basic auto-click loop with configurable patterns
-- Interactive Dashboard (WebView)
-- Relauncher for CDP port activation
+For a detailed breakdown of future phases and granular tasks, please refer to [ROADMAP.md](./ROADMAP.md).
 
-### Phase 2: Reliability ✅ *(v4.0.1 → v4.1.8)*
-- Full codebase audit (29 files, 24 settings verified)
-- 5 missing commands registered
-- Circuit breaker singleton fix
-- CDP client hardening (real DOM polling, model switching)
-- Banned commands + accept/reject pattern system
-- Extensions viewlet safety (no clicking in Extensions sidebar)
-- Collapsed section expansion (find hidden Run buttons)
-
-### Phase 3: Autonomy ✅ *(v4.1.9 → v4.2.0)*
-- **Auto-bump system**: `isConversationIdle()` + `autoBump()` with configurable cooldown
-- **Multi-strategy submission**: Enter → Alt+Enter → Ctrl+Enter → send button fallback
-- **Config pipeline**: All bump/timing settings flow from Dashboard → config → CDP → browser state
-- **Dashboard controls**: Bump message, cooldown, thread wait, poll frequency all configurable
-
-### Phase 4: Intelligence *(Next)*
-- **Memory Manager**: Long-term semantic memory of actions (successes/failures)
-- **Context injection**: Relevant memories appended to prompts
-- **Learning**: Agent improves strategies based on user corrections
-
-### Phase 5: Multi-Agent *(Future)*
-- **Swarm Mode**: Multiple specialized agents (Architect, Coder, Tester) working in parallel
-- **Voice interface**: Natural language conversation for architectural discussions
-- **Remote collaboration**: Multi-machine coordination via AntiBridge
-- **Mobile companion**: Monitor and control from AntigravityMobile
-
-### Phase 6: Ecosystem *(Vision)*
-- **Jules orchestration**: Full integration with Google Jules for PR-level autonomy
-- **MCP federation**: Connect to external MCP servers for expanded tool access
-- **Marketplace**: Shareable agent configurations and automation profiles
+### Key Milestones
+- **Phase 1-3**: Foundation, Reliability, Autonomy ✅ (Completed)
+- **Phase 4**: Intelligence (Memory, Context) ✅ (Partial/Ongoing)
+- **Phase 5**: Multi-Agent Collaboration (Swarm, Voice)
+- **Phase 6**: Ecosystem Expansion (Jules, Federation)
 
 ---
 

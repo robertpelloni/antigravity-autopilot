@@ -74,9 +74,9 @@ Provided cross-reference for CDP implementation patterns and alternative button 
 - **Purpose** | Full autonomous agent with MCP, Voice, Project Manager |
 
 ### Key Features Extracted
-- `AutonomousLoop`: Goal-driven agent loop with task decomposition
+- `AutonomousLoop`: Goal-driven agent loop with task decomposition (Active in `src/core/autonomous-loop.ts`)
 - `MemoryManager`: Semantic memory for action persistence
-- `MCPServer`: Model Context Protocol tool and resource exposure
+- `MCPServer`: Model Context Protocol tool and resource exposure (Active in `src/modules/mcp/server.ts`)
 - `VoiceControl`: Push-to-talk and always-listening modes
 - `ProjectManager`: Jira/GitHub task sync
 - `AgentOrchestrator`: Multi-agent coordination
@@ -152,6 +152,10 @@ Reference for community patterns and user-facing simplicity.
 - **Jules API**: Express service for code execution
 - **Dashboard**: React web interface ("Mission Control")
 - **Infrastructure**: Docker Compose + PostgreSQL + Redis
+
+### Integration Status
+- **Agent Orchestrator**: Partially integrated into `src/core/agent-orchestrator.ts` (Phase 18).
+- **Jules API**: Remains external for now (Dockerized service).
 
 ### Future Integration (Phase 6)
 - Jules PR-level autonomy
