@@ -1,10 +1,10 @@
 # Antigravity Autopilot Roadmap
 
-## Phase 4: Intelligence (Current)
+## Phase 4: Intelligence ✅
 - [x] **Memory Manager**: Long-term semantic memory of actions (successes/failures).
 - [x] **Context Injection**: Relevant memories appended to prompts.
-- [ ] **Learning Loop**: Agent improves strategies based on user corrections.
-- [ ] **Adaptive Backoff**: Dynamic timing adjustment based on failure rates.
+- [x] **Learning Loop**: Agent improves strategies based on user corrections. *(Phase 14)*
+- [x] **Adaptive Backoff**: Dynamic timing adjustment based on failure rates. *(v4.9.1)*
 
 ## Phase 5: Multi-Agent Collaboration
 - [x] **Agent Orchestrator (Phase 18)**: Basic Planner/Researcher/Implementer loop.

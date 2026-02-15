@@ -157,7 +157,7 @@ export class ProjectManager {
             const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`, {
                 headers: {
                     'Authorization': `token ${token}`,
-                    'Accept': 'application/vnd.github.v3+json`,
+                    'Accept': 'application/vnd.github.v3+json',
                     'User-Agent': 'Antigravity-Autopilot'
                 }
             });

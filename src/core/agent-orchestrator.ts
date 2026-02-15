@@ -46,6 +46,14 @@ export interface OrchestratorConfig {
     autoDecomposeTasks: boolean;
 }
 
+export interface SwarmResult {
+    totalTasks: number;
+    completed: number;
+    failed: number;
+    results: Array<{ taskId: string; agentId: string; status: string; result?: string; durationMs: number }>;
+    durationMs: number;
+}
+
 // ============ Agent Definitions ============
 const DEFAULT_AGENTS: AgentDefinition[] = [
     {
@@ -390,6 +398,53 @@ Provide a clear, actionable response.
                 }
             }, 1000);
         });
+    }
+
+    // ============ Swarm Mode ============
+    async swarmExecute(taskDescriptions: string[], context: string = ''): Promise<SwarmResult> {
+        const swarmStart = Date.now();
+        log.info(`[Swarm] Launching ${taskDescriptions.length} tasks (max concurrency: ${this.config.maxConcurrentAgents})`);
+
+        const taskIds: string[] = [];
+        for (const desc of taskDescriptions) {
+            const id = await this.submitTask(desc, context);
+            taskIds.push(id);
+        }
+
+        // Wait for all tasks to settle
+        const settled = await Promise.allSettled(
+            taskIds.map(id => this.waitForTask(id))
+        );
+
+        const results = settled.map((outcome, idx) => {
+            const task = outcome.status === 'fulfilled' ? outcome.value : null;
+            return {
+                taskId: taskIds[idx],
+                agentId: task?.agentId || 'unknown',
+                status: task?.status || 'failed',
+                result: task?.result,
+                durationMs: task ? (task.completedAt || Date.now()) - (task.startedAt || swarmStart) : 0
+            };
+        });
+
+        const swarmResult: SwarmResult = {
+            totalTasks: taskDescriptions.length,
+            completed: results.filter(r => r.status === 'completed').length,
+            failed: results.filter(r => r.status === 'failed').length,
+            results,
+            durationMs: Date.now() - swarmStart
+        };
+
+        log.info(`[Swarm] Finished: ${swarmResult.completed}/${swarmResult.totalTasks} succeeded in ${swarmResult.durationMs}ms`);
+        return swarmResult;
+    }
+
+    getSwarmStatus(): { queueLength: number; running: number; maxConcurrent: number } {
+        return {
+            queueLength: this.taskQueue.length,
+            running: this.runningTasks.size,
+            maxConcurrent: this.config.maxConcurrentAgents
+        };
     }
 
     // ============ Utilities ============
