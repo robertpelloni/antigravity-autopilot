@@ -10,8 +10,8 @@
 - [x] **Agent Orchestrator (Phase 18)**: Basic Planner/Researcher/Implementer loop.
 - [x] **Swarm Mode**: Concurrent execution of specialized agents via `swarmExecute`. *(v4.9.2)*
 - [x] **Configurable Interaction Strategies**: 13 methods across 3 categories with InteractionMethodRegistry. *(v4.9.3)*
-- [ ] **Voice Interface**: Natural language architectural discussions with "Commander" agent.
-- [ ] **Remote Bridge**: Multi-machine coordination via `AntiBridge`.
+- [x] **Voice Interface**: 10 voice commands with wake-word mode, command parser, confidence scoring. *(v4.9.4)*
+- [x] **Remote Bridge**: Multi-machine coordination via `AntiBridge` WebSocket peers. *(v4.9.4)*
 - [ ] **Mobile Companion**: Monitor status via `AntigravityMobile` app.
 
 ## Phase 6: Ecosystem Expansion
