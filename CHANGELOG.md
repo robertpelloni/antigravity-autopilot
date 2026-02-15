@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.9.2] - 2026-02-15
+
+### Added
+- **Swarm Mode (Phase 5)**: Concurrent agent execution via `swarmExecute` with `Promise.allSettled`. Includes `SwarmResult` type and `getSwarmStatus` for monitoring.
+- **Test Coverage**: Added `exit-detector.test.js` (5 tests), `mcp-server.test.js` (5 tests), `swarm-mode.test.js` (5 tests). Total: 25 passing tests across 5 suites.
+- **ROADMAP Update**: Marked Phase 4 (Intelligence) as complete.
+
+### Fixed
+- **project-manager.ts**: Fixed mismatched quote (backtick vs single-quote) causing TS compilation error.
+
 ## [4.9.0] - 2026-02-09
 
 ### Added
