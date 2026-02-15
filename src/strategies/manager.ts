@@ -47,9 +47,34 @@ export class StrategyManager {
         }
     }
 
+    /**
+     * Execute a specific action through the active strategy.
+     */
+    async executeAction(action: string) {
+        if (this.currentStrategy?.executeAction) {
+            await this.currentStrategy.executeAction(action);
+        }
+    }
+
+    /**
+     * Returns the current strategy's interaction method summary (if CDP).
+     */
+    getMethodSummary(): any[] {
+        const strategy = this.currentStrategy as any;
+        if (strategy && typeof strategy.getMethodSummary === 'function') {
+            return strategy.getMethodSummary();
+        }
+        return [];
+    }
+
     getStrategy(type: string): IStrategy | null {
-        // Return current if matches constraint or generic
-        // For now, Antigravity only has one active strategy at a time
         return this.currentStrategy;
+    }
+
+    dispose() {
+        if (this.currentStrategy) {
+            this.currentStrategy.dispose();
+            this.currentStrategy = null;
+        }
     }
 }
