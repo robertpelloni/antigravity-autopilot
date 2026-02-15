@@ -16,8 +16,9 @@
 
 ## Phase 6: Ecosystem Expansion
 - [x] **MCP Server**: Foundation for external tool access.
+- [x] **Remote Bridge (AntiBridge)**: Multi-machine coordination via WebSocket peer network. *(v4.9.3)*
+- [x] **MCP Federation**: Connect to third-party MCP servers with auto-routing tool invocation. *(v4.9.3)*
 - [ ] **Jules Integration**: Full PR-level autonomy via Google Jules.
-- [ ] **MCP Federation**: Connect to third-party MCP servers (e.g., Database, Cloud).
 - [ ] **Marketplace**: Shareable agent configurations and prompt strategies.
 
 ## Phase 7: Commercialization (Vision)
