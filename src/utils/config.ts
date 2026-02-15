@@ -38,6 +38,14 @@ export interface AntigravityConfig {
     // Pattern Matching
     acceptPatterns: string[];
     rejectPatterns: string[];
+
+    // Interaction Methods (user-selectable)
+    interactionTextMethods: string[];   // Enabled text input method IDs
+    interactionClickMethods: string[];  // Enabled click method IDs
+    interactionSubmitMethods: string[]; // Enabled submit method IDs
+    interactionTimings: Record<string, number>; // Per-method timing overrides (ms)
+    interactionRetryCount: number;      // How many methods to try before giving up
+    interactionParallel: boolean;       // Try methods simultaneously vs sequentially
 }
 
 export class ConfigManager {
@@ -92,7 +100,13 @@ export class ConfigManager {
             preferredModelForQuick: config.get('preferredModelForQuick', 'gemini-3-flash'),
             maxConsecutiveTestLoops: config.get('maxConsecutiveTestLoops', 3),
             acceptPatterns: config.get('acceptPatterns', []),
-            rejectPatterns: config.get('rejectPatterns', [])
+            rejectPatterns: config.get('rejectPatterns', []),
+            interactionTextMethods: config.get('interactionTextMethods', ['cdp-keys', 'clipboard-paste', 'dom-inject']),
+            interactionClickMethods: config.get('interactionClickMethods', ['dom-click', 'cdp-mouse', 'vscode-cmd', 'script-force']),
+            interactionSubmitMethods: config.get('interactionSubmitMethods', ['vscode-submit', 'cdp-enter', 'script-submit']),
+            interactionTimings: config.get('interactionTimings', {}),
+            interactionRetryCount: config.get('interactionRetryCount', 3),
+            interactionParallel: config.get('interactionParallel', false)
         };
     }
 }

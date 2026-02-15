@@ -271,6 +271,49 @@
                     "type": "array",
                     "default": [],
                     "description": "Custom button text patterns to Avoid (appended to defaults)."
+                },
+                "antigravity.interactionTextMethods": {
+                    "type": "array",
+                    "default": [
+                        "cdp-keys",
+                        "clipboard-paste",
+                        "dom-inject"
+                    ],
+                    "description": "Enabled text input methods (IDs). Options: cdp-keys, clipboard-paste, dom-inject, vscode-type"
+                },
+                "antigravity.interactionClickMethods": {
+                    "type": "array",
+                    "default": [
+                        "dom-click",
+                        "cdp-mouse",
+                        "vscode-cmd",
+                        "script-force"
+                    ],
+                    "description": "Enabled click methods (IDs). Options: dom-click, cdp-mouse, vscode-cmd, script-force, coord-click"
+                },
+                "antigravity.interactionSubmitMethods": {
+                    "type": "array",
+                    "default": [
+                        "vscode-submit",
+                        "cdp-enter",
+                        "script-submit"
+                    ],
+                    "description": "Enabled submit methods (IDs). Options: vscode-submit, cdp-enter, script-submit, alt-enter"
+                },
+                "antigravity.interactionTimings": {
+                    "type": "object",
+                    "default": {},
+                    "description": "Per-method timing overrides in ms. Example: {\"cdp-keys\": 20, \"cdp-enter\": 100}"
+                },
+                "antigravity.interactionRetryCount": {
+                    "type": "number",
+                    "default": 3,
+                    "description": "How many methods to try (sequentially) before giving up."
+                },
+                "antigravity.interactionParallel": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Try all enabled methods simultaneously instead of sequentially."
                 }
             }
         }
