@@ -5,6 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.9.4] - 2026-02-15
+
+### Added
+- **AntiBridge Remote Coordination (Phase 5)**: WebSocket-based multi-machine coordination with peer management, task/memory/interaction relay, heartbeat monitoring, and peer pruning.
+- **MCP Federation (Phase 6)**: Connect to third-party MCP servers with server registration, tool discovery, auto-routing tool invocation, and stats tracking.
+- **Voice Control**: Full implementation with 10 command patterns (approve, reject, bump, switch_model, status, pause, resume, dashboard, tests, deploy), wake-word mode, command parser with confidence scoring.
+- **Test Coverage**: 91 tests across 12 suites — CircuitBreaker (7), RateLimiter (7), VoiceControl (10), CodeReviewer (12), AntiBridge (10), MCP Federation (10).
+
+### Changed
+- **ROADMAP**: Swarm Mode, Configurable Strategies, Remote Bridge, MCP Federation all marked complete.
+
 ## [4.9.3] - 2026-02-15
 
 ### Added
