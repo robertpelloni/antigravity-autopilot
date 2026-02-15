@@ -21,6 +21,18 @@ export class DashboardPanel {
                         await config.update(message.key, message.value);
                         vscode.window.showInformationMessage(`Updated ${message.key} to ${message.value}`);
                         return;
+                    case 'toggleMethod': {
+                        const current: string[] = config.get(message.configKey) || [];
+                        let updated: string[];
+                        if (message.enabled) {
+                            updated = current.includes(message.methodId) ? current : [...current, message.methodId];
+                        } else {
+                            updated = current.filter((m: string) => m !== message.methodId);
+                        }
+                        await config.update(message.configKey, updated);
+                        vscode.window.showInformationMessage(`${message.enabled ? 'Enabled' : 'Disabled'} ${message.methodId}`);
+                        return;
+                    }
                 }
             },
             null,
@@ -199,6 +211,86 @@ export class DashboardPanel {
                 </div>
             </div>
 
+            <!-- INTERACTION METHODS -->
+            <div class="card">
+                <h2>🔧 Interaction Methods</h2>
+                <p style="font-size:12px;color:var(--vscode-descriptionForeground);margin:0 0 10px;">Select which methods to use for text input, clicking, and submission. Higher priority methods are tried first.</p>
+
+                <details open>
+                    <summary style="cursor:pointer;font-weight:600;margin-bottom:8px;">📝 Text Input Methods</summary>
+                    <div class="setting">
+                        <label>CDP Key Dispatch (cdp-keys):</label>
+                        <input type="checkbox" ${settings.interactionTextMethods.includes('cdp-keys') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'cdp-keys', this.checked)">
+                    </div>
+                    <div class="setting">
+                        <label>Clipboard Paste (clipboard-paste):</label>
+                        <input type="checkbox" ${settings.interactionTextMethods.includes('clipboard-paste') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'clipboard-paste', this.checked)">
+                    </div>
+                    <div class="setting">
+                        <label>DOM Value Injection (dom-inject):</label>
+                        <input type="checkbox" ${settings.interactionTextMethods.includes('dom-inject') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'dom-inject', this.checked)">
+                    </div>
+                    <div class="setting">
+                        <label>VS Code Type Command (vscode-type):</label>
+                        <input type="checkbox" ${settings.interactionTextMethods.includes('vscode-type') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'vscode-type', this.checked)">
+                    </div>
+                </details>
+
+                <details open>
+                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">🖱️ Click Methods</summary>
+                    <div class="setting">
+                        <label>DOM Selector Click (dom-click):</label>
+                        <input type="checkbox" ${settings.interactionClickMethods.includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'dom-click', this.checked)">
+                    </div>
+                    <div class="setting">
+                        <label>CDP Mouse Event (cdp-mouse):</label>
+                        <input type="checkbox" ${settings.interactionClickMethods.includes('cdp-mouse') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'cdp-mouse', this.checked)">
+                    </div>
+                    <div class="setting">
+                        <label>VS Code Command (vscode-cmd):</label>
+                        <input type="checkbox" ${settings.interactionClickMethods.includes('vscode-cmd') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'vscode-cmd', this.checked)">
+                    </div>
+                    <div class="setting">
+                        <label>Script Force Click (script-force):</label>
+                        <input type="checkbox" ${settings.interactionClickMethods.includes('script-force') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'script-force', this.checked)">
+                    </div>
+                    <div class="setting">
+                        <label>Coordinate Click (coord-click):</label>
+                        <input type="checkbox" ${settings.interactionClickMethods.includes('coord-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'coord-click', this.checked)">
+                    </div>
+                </details>
+
+                <details open>
+                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">🚀 Submit Methods</summary>
+                    <div class="setting">
+                        <label>VS Code Submit Commands (vscode-submit):</label>
+                        <input type="checkbox" ${settings.interactionSubmitMethods.includes('vscode-submit') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'vscode-submit', this.checked)">
+                    </div>
+                    <div class="setting">
+                        <label>CDP Enter Key (cdp-enter):</label>
+                        <input type="checkbox" ${settings.interactionSubmitMethods.includes('cdp-enter') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'cdp-enter', this.checked)">
+                    </div>
+                    <div class="setting">
+                        <label>Script Force Submit (script-submit):</label>
+                        <input type="checkbox" ${settings.interactionSubmitMethods.includes('script-submit') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'script-submit', this.checked)">
+                    </div>
+                    <div class="setting">
+                        <label>Alt+Enter Shortcut (alt-enter):</label>
+                        <input type="checkbox" ${settings.interactionSubmitMethods.includes('alt-enter') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'alt-enter', this.checked)">
+                    </div>
+                </details>
+
+                <hr style="border-color:var(--vscode-widget-border);margin:12px 0;">
+                <div class="setting">
+                    <label>Parallel Execution:</label>
+                    <input type="checkbox" ${settings.interactionParallel ? 'checked' : ''} onchange="updateConfig('interactionParallel', this.checked)">
+                </div>
+                <div class="setting">
+                    <label>Retry Count:</label>
+                    <input type="number" value="${settings.interactionRetryCount}" min="1" max="13" onchange="updateConfig('interactionRetryCount', parseInt(this.value))">
+                </div>
+            </div>
+
             <div class="card">
                 <h2>Models</h2>
                 <div class="setting">
@@ -255,6 +347,14 @@ export class DashboardPanel {
                         command: 'updateConfig',
                         key: key,
                         value: value
+                    });
+                }
+                function toggleMethod(configKey, methodId, enabled) {
+                    vscode.postMessage({
+                        command: 'toggleMethod',
+                        configKey: configKey,
+                        methodId: methodId,
+                        enabled: enabled
                     });
                 }
             </script>
