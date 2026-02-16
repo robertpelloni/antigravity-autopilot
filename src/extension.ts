@@ -44,6 +44,13 @@ export function activate(context: vscode.ExtensionContext) {
     let lastAutoResumeMessageKind: 'none' | 'full' | 'minimal' = 'none';
     let lastAutoResumeMessageProfile: 'unknown' | 'vscode' | 'antigravity' | 'cursor' = 'unknown';
     let lastAutoResumeMessagePreview = '';
+    let autoFixWatchdogInProgress = false;
+    let lastAutoFixWatchdogAt = 0;
+    let lastAutoFixWatchdogOutcome = 'never-run';
+    let watchdogEscalationConsecutiveFailures = 0;
+    let watchdogEscalationForceFullNext = false;
+    let lastWatchdogEscalationAt = 0;
+    let lastWatchdogEscalationReason = 'none';
 
     const resolveCDPStrategy = (): CDPStrategy | null => {
         const strategy = strategyManager.getStrategy('cdp') as any;
@@ -74,6 +81,11 @@ export function activate(context: vscode.ExtensionContext) {
             const autoResumeEnabled = config.get<boolean>('runtimeAutoResumeEnabled');
             const autoResumeCooldownMs = Math.max(5, config.get<number>('runtimeAutoResumeCooldownSec') || 300) * 1000;
             const stablePollsRequired = Math.max(1, Math.min(10, config.get<number>('runtimeAutoResumeStabilityPolls') || 2));
+            const autoFixWaitingEnabled = config.get<boolean>('runtimeAutoFixWaitingEnabled');
+            const autoFixWaitingDelayMs = Math.max(5, config.get<number>('runtimeAutoFixWaitingDelaySec') || 180) * 1000;
+            const autoFixWaitingCooldownMs = Math.max(5, config.get<number>('runtimeAutoFixWaitingCooldownSec') || 300) * 1000;
+            const escalationEnabled = config.get<boolean>('runtimeAutoFixWaitingEscalationEnabled');
+            const escalationThreshold = Math.max(1, Math.min(10, config.get<number>('runtimeAutoFixWaitingEscalationThreshold') || 2));
             const now = Date.now();
             const isWaiting = runtimeState?.completionWaiting?.readyToResume === true
                 || runtimeState?.status === 'waiting_for_chat_message'
@@ -87,6 +99,9 @@ export function activate(context: vscode.ExtensionContext) {
 
             if (!isWaiting) {
                 waitingStateSince = null;
+                watchdogEscalationConsecutiveFailures = 0;
+                watchdogEscalationForceFullNext = false;
+                lastWatchdogEscalationReason = 'reset: not waiting';
                 return;
             }
 
@@ -96,6 +111,52 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             const waitingElapsed = now - waitingStateSince;
+
+            if (autoFixWaitingEnabled
+                && waitingElapsed >= autoFixWaitingDelayMs
+                && (now - lastAutoFixWatchdogAt) >= autoFixWaitingCooldownMs
+                && !autoFixWatchdogInProgress) {
+                autoFixWatchdogInProgress = true;
+                try {
+                    const report = await runAutoResumeReadinessFix({ skipRefresh: true });
+                    lastAutoFixWatchdogAt = Date.now();
+                    const outcome = report.improved
+                        ? 'improved'
+                        : report.immediateRetry?.sent
+                            ? 'retry-sent'
+                            : report.immediateRetry?.attempted
+                                ? 'retry-failed'
+                                : 'no-change';
+                    lastAutoFixWatchdogOutcome = outcome;
+
+                    if (outcome === 'improved' || outcome === 'retry-sent') {
+                        watchdogEscalationConsecutiveFailures = 0;
+                        watchdogEscalationForceFullNext = false;
+                        lastWatchdogEscalationReason = `reset: ${outcome}`;
+                    } else {
+                        watchdogEscalationConsecutiveFailures += 1;
+                        if (escalationEnabled && watchdogEscalationConsecutiveFailures >= escalationThreshold) {
+                            watchdogEscalationForceFullNext = true;
+                            lastWatchdogEscalationAt = Date.now();
+                            lastWatchdogEscalationReason = `threshold reached (${watchdogEscalationConsecutiveFailures}/${escalationThreshold}) after ${outcome}`;
+                            log.info(`[AutoResume Watchdog] Escalation armed: forcing full resume prompt on next auto-resume attempt (${watchdogEscalationConsecutiveFailures}/${escalationThreshold}).`);
+                        }
+                    }
+                } catch (e: any) {
+                    lastAutoFixWatchdogAt = Date.now();
+                    lastAutoFixWatchdogOutcome = `error: ${String(e?.message || e || 'unknown')}`;
+                    watchdogEscalationConsecutiveFailures += 1;
+                    if (escalationEnabled && watchdogEscalationConsecutiveFailures >= escalationThreshold) {
+                        watchdogEscalationForceFullNext = true;
+                        lastWatchdogEscalationAt = Date.now();
+                        lastWatchdogEscalationReason = `threshold reached (${watchdogEscalationConsecutiveFailures}/${escalationThreshold}) after watchdog error`;
+                        log.info(`[AutoResume Watchdog] Escalation armed after watchdog error (${watchdogEscalationConsecutiveFailures}/${escalationThreshold}).`);
+                    }
+                } finally {
+                    autoFixWatchdogInProgress = false;
+                }
+            }
+
             if (waitingEnabled) {
                 const cooldownElapsed = now - lastWaitingReminderAt;
                 if (waitingElapsed >= waitingDelayMs && cooldownElapsed >= waitingCooldownMs) {
@@ -121,11 +182,19 @@ export function activate(context: vscode.ExtensionContext) {
                 const guard = getAutoResumeGuardReport(runtimeState);
 
                 if (guard.allowed) {
-                    const sent = await sendAutoResumeMessage('automatic', runtimeState);
+                    const sent = await sendAutoResumeMessage('automatic', runtimeState, {
+                        forceFull: watchdogEscalationForceFullNext,
+                        escalationReason: watchdogEscalationForceFullNext ? lastWatchdogEscalationReason : undefined
+                    });
                     if (sent) {
                         lastAutoResumeAt = now;
                         lastAutoResumeOutcome = 'sent';
                         lastAutoResumeBlockedReason = 'none';
+                        if (watchdogEscalationForceFullNext) {
+                            watchdogEscalationForceFullNext = false;
+                            watchdogEscalationConsecutiveFailures = 0;
+                            lastWatchdogEscalationReason = 'consumed: full prompt sent';
+                        }
                     } else {
                         lastAutoResumeOutcome = 'send-failed';
                         lastAutoResumeBlockedReason = 'message dispatch failed';
@@ -311,7 +380,11 @@ export function activate(context: vscode.ExtensionContext) {
         };
     };
 
-    const sendAutoResumeMessage = async (reason: 'automatic' | 'manual', runtimeState?: any) => {
+    const sendAutoResumeMessage = async (
+        reason: 'automatic' | 'manual',
+        runtimeState?: any,
+        options?: { forceFull?: boolean; escalationReason?: string }
+    ) => {
         const fullMessage = (config.get<string>('runtimeAutoResumeMessage') || '').trim();
         const minimalMessage = (config.get<string>('runtimeAutoResumeMinimalMessage') || '').trim();
         const minimalVSCode = (config.get<string>('runtimeAutoResumeMinimalMessageVSCode') || '').trim();
@@ -325,7 +398,8 @@ export function activate(context: vscode.ExtensionContext) {
                 : activeMode === 'cursor'
                     ? minimalCursor
                     : '';
-        const useMinimal = !!config.get<boolean>('runtimeAutoResumeUseMinimalContinue')
+        const useMinimal = !options?.forceFull
+            && !!config.get<boolean>('runtimeAutoResumeUseMinimalContinue')
             && !!runtimeState?.completionWaiting?.readyToResume;
         const message = (useMinimal ? (profileMinimalMessage || minimalMessage || fullMessage) : fullMessage).trim();
         const messageKind: 'full' | 'minimal' = useMinimal ? 'minimal' : 'full';
@@ -376,6 +450,9 @@ export function activate(context: vscode.ExtensionContext) {
                     lastAutoResumeMessageProfile = messageProfile;
                     lastAutoResumeMessagePreview = toSafePreview(message);
                     log.info(`[AutoResume] Sent ${reason} ${useMinimal ? 'minimal-continue' : 'resume'} message via CDP bridge.`);
+                    if (options?.forceFull) {
+                        log.info(`[AutoResume] Full-prompt escalation applied${options.escalationReason ? `: ${options.escalationReason}` : ''}.`);
+                    }
                     if (reason === 'manual') {
                         vscode.window.showInformationMessage('Antigravity: resume message sent.');
                     }
@@ -390,6 +467,9 @@ export function activate(context: vscode.ExtensionContext) {
             lastAutoResumeMessageProfile = messageProfile;
             lastAutoResumeMessagePreview = toSafePreview(message);
             log.info(`[AutoResume] Sent ${reason} ${useMinimal ? 'minimal-continue' : 'resume'} message via VS Code fallback commands.`);
+            if (options?.forceFull) {
+                log.info(`[AutoResume] Full-prompt escalation applied via fallback${options.escalationReason ? `: ${options.escalationReason}` : ''}.`);
+            }
             if (reason === 'manual') {
                 vscode.window.showInformationMessage('Antigravity: resume message sent via fallback commands.');
             }
@@ -402,7 +482,7 @@ export function activate(context: vscode.ExtensionContext) {
         return false;
     };
 
-    const runAutoResumeReadinessFix = async () => {
+    const runAutoResumeReadinessFix = async (options?: { skipRefresh?: boolean }) => {
         const attemptedCommands = [
             'workbench.action.chat.open',
             'workbench.action.chat.focusInput',
@@ -426,7 +506,9 @@ export function activate(context: vscode.ExtensionContext) {
         const beforeState = latestRuntimeState;
         const beforeGuard = beforeState ? getAutoResumeGuardReport(beforeState) : null;
 
-        await refreshRuntimeState();
+        if (!options?.skipRefresh) {
+            await refreshRuntimeState();
+        }
 
         const afterState = cdp && cdp.isConnected() ? await cdp.getRuntimeState() : latestRuntimeState;
         if (afterState) {
@@ -563,6 +645,13 @@ export function activate(context: vscode.ExtensionContext) {
                 lastAutoResumeMessageKind,
                 lastAutoResumeMessageProfile,
                 lastAutoResumeMessagePreview,
+                autoFixWatchdogInProgress,
+                lastAutoFixWatchdogAt,
+                lastAutoFixWatchdogOutcome,
+                watchdogEscalationConsecutiveFailures,
+                watchdogEscalationForceFullNext,
+                lastWatchdogEscalationAt,
+                lastWatchdogEscalationReason,
                 readyToResumeStreak,
                 stablePollsRequired,
                 timing,

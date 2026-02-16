@@ -2,7 +2,7 @@
     "name": "antigravity-autopilot",
     "displayName": "Antigravity Autopilot (Unified)",
     "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-    "version": "4.10.29",
+    "version": "4.10.31",
     "repository": {
         "type": "git",
         "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -375,6 +375,37 @@
                     "minimum": 1,
                     "maximum": 10,
                     "description": "How many consecutive runtime polls must report ready-to-resume before automatic resume sends a message."
+                },
+                "antigravity.runtimeAutoFixWaitingEnabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable watchdog that runs safe readiness auto-fix actions when waiting state persists."
+                },
+                "antigravity.runtimeAutoFixWaitingDelaySec": {
+                    "type": "number",
+                    "default": 180,
+                    "minimum": 5,
+                    "maximum": 7200,
+                    "description": "Seconds to remain in waiting state before watchdog triggers Auto-Fix Resume Readiness."
+                },
+                "antigravity.runtimeAutoFixWaitingCooldownSec": {
+                    "type": "number",
+                    "default": 300,
+                    "minimum": 5,
+                    "maximum": 7200,
+                    "description": "Minimum seconds between watchdog auto-fix runs while waiting persists."
+                },
+                "antigravity.runtimeAutoFixWaitingEscalationEnabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "When watchdog auto-fix repeatedly fails to recover waiting state, force one full resume prompt on the next automatic resume attempt."
+                },
+                "antigravity.runtimeAutoFixWaitingEscalationThreshold": {
+                    "type": "number",
+                    "default": 2,
+                    "minimum": 1,
+                    "maximum": 10,
+                    "description": "Number of consecutive watchdog non-recovery outcomes before escalation arms a one-time full resume prompt."
                 },
                 "antigravity.runtimeAutoResumeMinScore": {
                     "type": "number",

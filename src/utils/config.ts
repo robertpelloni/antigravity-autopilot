@@ -37,6 +37,11 @@ export interface AntigravityConfig {
     runtimeAutoResumeMinimalMessageCursor: string;
     runtimeAutoResumeCooldownSec: number;
     runtimeAutoResumeStabilityPolls: number;
+    runtimeAutoFixWaitingEnabled: boolean;
+    runtimeAutoFixWaitingDelaySec: number;
+    runtimeAutoFixWaitingCooldownSec: number;
+    runtimeAutoFixWaitingEscalationEnabled: boolean;
+    runtimeAutoFixWaitingEscalationThreshold: number;
     runtimeAutoResumeMinScore: number;
     runtimeAutoResumeRequireStrictPrimary: boolean;
 
@@ -128,6 +133,11 @@ export class ConfigManager {
             runtimeAutoResumeMinimalMessageCursor: config.get('runtimeAutoResumeMinimalMessageCursor', 'Continue with the next highest-priority Cursor coding task in this workspace.'),
             runtimeAutoResumeCooldownSec: config.get('runtimeAutoResumeCooldownSec', 300),
             runtimeAutoResumeStabilityPolls: config.get('runtimeAutoResumeStabilityPolls', 2),
+            runtimeAutoFixWaitingEnabled: config.get('runtimeAutoFixWaitingEnabled', true),
+            runtimeAutoFixWaitingDelaySec: config.get('runtimeAutoFixWaitingDelaySec', 180),
+            runtimeAutoFixWaitingCooldownSec: config.get('runtimeAutoFixWaitingCooldownSec', 300),
+            runtimeAutoFixWaitingEscalationEnabled: config.get('runtimeAutoFixWaitingEscalationEnabled', true),
+            runtimeAutoFixWaitingEscalationThreshold: config.get('runtimeAutoFixWaitingEscalationThreshold', 2),
             runtimeAutoResumeMinScore: config.get('runtimeAutoResumeMinScore', 70),
             runtimeAutoResumeRequireStrictPrimary: config.get('runtimeAutoResumeRequireStrictPrimary', true),
             cdpPort: config.get('cdpPort', 9000),

@@ -5,6 +5,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.31] - 2026-02-16
+
+### Added
+- **Watchdog Escalation Policy**: Added `runtimeAutoFixWaitingEscalationEnabled` and `runtimeAutoFixWaitingEscalationThreshold` to arm a one-time full resume prompt after repeated watchdog non-recovery cycles.
+
+### Changed
+- **Auto-Resume Send Selection**: Automatic resume now forces a full prompt when escalation is armed, then resets escalation after successful send.
+- **Escalation Telemetry**: Runtime host telemetry and dashboard runtime card now expose escalation armed state, consecutive failure streak, last escalation trigger time, and escalation reason.
+
+## [4.10.30] - 2026-02-16
+
+### Added
+- **Waiting-State Watchdog Auto-Fix**: Added autonomous watchdog (`runtimeAutoFixWaitingEnabled`) that triggers safe readiness repair when waiting state persists.
+- **Watchdog Controls**: Added `runtimeAutoFixWaitingDelaySec` and `runtimeAutoFixWaitingCooldownSec` to tune trigger timing and repeat intervals.
+
+### Changed
+- **Watchdog Telemetry Visibility**: Dashboard runtime card now shows watchdog state, last run timestamp, and last outcome.
+- **Resilience Loop Hardening**: Waiting state can now self-heal via Auto-Fix before subsequent guard-checked resume attempts, reducing stuck Good/Bad idle loops.
+
 ## [4.10.29] - 2026-02-16
 
 ### Added

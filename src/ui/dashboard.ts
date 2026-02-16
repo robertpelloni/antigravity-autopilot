@@ -285,6 +285,13 @@ export class DashboardPanel {
                     <div><strong>Last Message Kind:</strong> <span id="runtimeLastMessageKind" class="muted">-</span></div>
                     <div><strong>Last Message Profile:</strong> <span id="runtimeLastMessageProfile" class="muted">-</span></div>
                     <div><strong>Last Message Preview:</strong> <span id="runtimeLastMessagePreview" class="muted">-</span></div>
+                    <div><strong>Watchdog State:</strong> <span id="runtimeWatchdogState" class="muted">-</span></div>
+                    <div><strong>Watchdog Last Run:</strong> <span id="runtimeWatchdogLastRun" class="muted">-</span></div>
+                    <div><strong>Watchdog Outcome:</strong> <span id="runtimeWatchdogOutcome" class="muted">-</span></div>
+                    <div><strong>Escalation Armed:</strong> <span id="runtimeWatchdogEscalationArmed" class="muted">-</span></div>
+                    <div><strong>Escalation Fail Streak:</strong> <span id="runtimeWatchdogEscalationStreak" class="muted">-</span></div>
+                    <div><strong>Escalation Last Trigger:</strong> <span id="runtimeWatchdogEscalationLast" class="muted">-</span></div>
+                    <div><strong>Escalation Reason:</strong> <span id="runtimeWatchdogEscalationReason" class="muted">-</span></div>
                 </div>
                 <div style="margin-top:10px;display:flex;gap:8px;">
                     <button onclick="requestRuntimeState()">Refresh Runtime State</button>
@@ -406,6 +413,26 @@ export class DashboardPanel {
                 <div class="setting">
                     <label>Auto Resume Stability Polls:</label>
                     <input type="number" value="${settings.runtimeAutoResumeStabilityPolls}" min="1" max="10" onchange="updateConfig('runtimeAutoResumeStabilityPolls', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Waiting Watchdog:</label>
+                    <input type="checkbox" ${settings.runtimeAutoFixWaitingEnabled ? 'checked' : ''} onchange="updateConfig('runtimeAutoFixWaitingEnabled', this.checked)">
+                </div>
+                <div class="setting">
+                    <label>Watchdog Delay (s):</label>
+                    <input type="number" value="${settings.runtimeAutoFixWaitingDelaySec}" min="5" max="7200" onchange="updateConfig('runtimeAutoFixWaitingDelaySec', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Watchdog Cooldown (s):</label>
+                    <input type="number" value="${settings.runtimeAutoFixWaitingCooldownSec}" min="5" max="7200" onchange="updateConfig('runtimeAutoFixWaitingCooldownSec', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Watchdog Escalation:</label>
+                    <input type="checkbox" ${settings.runtimeAutoFixWaitingEscalationEnabled ? 'checked' : ''} onchange="updateConfig('runtimeAutoFixWaitingEscalationEnabled', this.checked)">
+                </div>
+                <div class="setting">
+                    <label>Escalation Threshold:</label>
+                    <input type="number" value="${settings.runtimeAutoFixWaitingEscalationThreshold}" min="1" max="10" onchange="updateConfig('runtimeAutoFixWaitingEscalationThreshold', parseInt(this.value))">
                 </div>
                 <div class="setting">
                     <label>Auto Resume Min Score:</label>
@@ -825,6 +852,13 @@ export class DashboardPanel {
                     const lastMessageKind = document.getElementById('runtimeLastMessageKind');
                     const lastMessageProfile = document.getElementById('runtimeLastMessageProfile');
                     const lastMessagePreview = document.getElementById('runtimeLastMessagePreview');
+                    const watchdogState = document.getElementById('runtimeWatchdogState');
+                    const watchdogLastRun = document.getElementById('runtimeWatchdogLastRun');
+                    const watchdogOutcome = document.getElementById('runtimeWatchdogOutcome');
+                    const watchdogEscalationArmed = document.getElementById('runtimeWatchdogEscalationArmed');
+                    const watchdogEscalationStreak = document.getElementById('runtimeWatchdogEscalationStreak');
+                    const watchdogEscalationLast = document.getElementById('runtimeWatchdogEscalationLast');
+                    const watchdogEscalationReason = document.getElementById('runtimeWatchdogEscalationReason');
 
                     function coverageText(cov) {
                         if (!cov) return '-';
@@ -862,6 +896,13 @@ export class DashboardPanel {
                         lastMessageKind.textContent = '-';
                         lastMessageProfile.textContent = '-';
                         lastMessagePreview.textContent = '-';
+                        watchdogState.textContent = '-';
+                        watchdogLastRun.textContent = '-';
+                        watchdogOutcome.textContent = '-';
+                        watchdogEscalationArmed.textContent = '-';
+                        watchdogEscalationStreak.textContent = '-';
+                        watchdogEscalationLast.textContent = '-';
+                        watchdogEscalationReason.textContent = '-';
                         renderRuntimeHistory();
                         return;
                     }
@@ -926,6 +967,13 @@ export class DashboardPanel {
                     lastMessageKind.textContent = host?.lastAutoResumeMessageKind || '-';
                     lastMessageProfile.textContent = host?.lastAutoResumeMessageProfile || '-';
                     lastMessagePreview.textContent = host?.lastAutoResumeMessagePreview || '-';
+                    watchdogState.textContent = host ? (host.autoFixWatchdogInProgress ? 'running' : 'idle') : '-';
+                    watchdogLastRun.textContent = host?.lastAutoFixWatchdogAt ? new Date(host.lastAutoFixWatchdogAt).toLocaleTimeString() : '-';
+                    watchdogOutcome.textContent = host?.lastAutoFixWatchdogOutcome || '-';
+                    watchdogEscalationArmed.textContent = host ? yesNo(!!host.watchdogEscalationForceFullNext) : '-';
+                    watchdogEscalationStreak.textContent = host ? String(host.watchdogEscalationConsecutiveFailures ?? 0) : '-';
+                    watchdogEscalationLast.textContent = host?.lastWatchdogEscalationAt ? new Date(host.lastWatchdogEscalationAt).toLocaleTimeString() : '-';
+                    watchdogEscalationReason.textContent = host?.lastWatchdogEscalationReason || '-';
                     renderRuntimeHistory();
                 }
 
