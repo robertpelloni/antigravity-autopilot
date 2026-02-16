@@ -5,6 +5,33 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.59] - 2026-02-16
+
+### Added
+- **Reset Refresh Counters Command**: Added `Antigravity: Reset Status Refresh Counters` (`antigravity.resetStatusRefreshCounters`) to clear session-local refresh guard drop counters.
+
+### Changed
+- **Status Menu Ops Control**: Added `Reset Refresh Counters` action next to refresh settings/counter visibility for tighter test-loop measurement.
+
+## [4.10.58] - 2026-02-16
+
+### Changed
+- **Refresh Guard Drop Counters**: Status menu now shows session-local drop counters for refresh guard skips (`total`, `in-flight`, `debounce`) to improve rapid-ops observability.
+- **Debug Log Enrichment**: Refresh-guard skip logs now include current drop counter totals when debug logs are enabled.
+
+## [4.10.57] - 2026-02-16
+
+### Changed
+- **Status Refresh Settings Visibility**: Added status menu info row showing active refresh debounce (`runtimeStatusMenuRefreshDebounceMs`) and refresh debug-logs state (`runtimeStatusMenuRefreshDebugLogs`).
+
+## [4.10.56] - 2026-02-16
+
+### Added
+- **Status Refresh Guard Debug Logs**: Added `runtimeStatusMenuRefreshDebugLogs` toggle to emit detailed skip/run reasons for `Refresh Runtime + Reopen Status Menu` (in-flight/debounce paths).
+
+### Changed
+- **Dashboard Controls**: Added `Status Refresh Debug Logs` toggle in CDP & Automation settings.
+
 ## [4.10.55] - 2026-02-16
 
 ### Added

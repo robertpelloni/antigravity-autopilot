@@ -54,6 +54,9 @@ export function activate(context: vscode.ExtensionContext) {
     let watchdogEscalationEvents: Array<{ at: number; event: string; detail: string }> = [];
     let refreshStatusMenuInFlight = false;
     let lastRefreshStatusMenuAt = 0;
+    let refreshStatusMenuDroppedTotal = 0;
+    let refreshStatusMenuDroppedInFlight = 0;
+    let refreshStatusMenuDroppedDebounce = 0;
 
     const pushWatchdogEscalationEvent = (event: string, detail: string) => {
         const maxEvents = Math.max(3, Math.min(100, config.get<number>('runtimeAutoFixWaitingEscalationMaxEvents') || 10));
@@ -962,6 +965,8 @@ export function activate(context: vscode.ExtensionContext) {
                 ? getAutoResumeTimingReport(latestRuntimeState?.status === 'waiting_for_chat_message' || latestRuntimeState?.waitingForChatMessage === true)
                 : null;
             const telemetryStaleSec = Math.max(3, config.get<number>('runtimeTelemetryStaleSec') || 12);
+            const refreshDebounceMs = Math.max(100, Math.min(5000, config.get<number>('runtimeStatusMenuRefreshDebounceMs') || 800));
+            const refreshDebugLogsEnabled = !!config.get<boolean>('runtimeStatusMenuRefreshDebugLogs');
             const runtimeTimestamp = Number((latestRuntimeState as any)?.timestamp || Date.now());
             const telemetryAgeMs = Math.max(0, Date.now() - runtimeTimestamp);
             const telemetryIsStale = telemetryAgeMs > (telemetryStaleSec * 1000);
@@ -979,6 +984,16 @@ export function activate(context: vscode.ExtensionContext) {
                     label: '$(sync) Refresh Runtime + Reopen Status Menu',
                     description: 'Force runtime refresh, then reopen this menu for rapid staleness checks',
                     action: 'antigravity.refreshRuntimeAndReopenStatusMenu'
+                },
+                {
+                    label: '$(settings-gear) Status Refresh: debounce/debug',
+                    description: `debounce=${refreshDebounceMs}ms | debugLogs=${refreshDebugLogsEnabled ? 'ON' : 'OFF'} | dropped total=${refreshStatusMenuDroppedTotal} (in-flight=${refreshStatusMenuDroppedInFlight}, debounce=${refreshStatusMenuDroppedDebounce})`,
+                    action: undefined as string | undefined
+                },
+                {
+                    label: '$(clear-all) Reset Refresh Counters',
+                    description: 'Reset session-local status refresh guard counters to zero',
+                    action: 'antigravity.resetStatusRefreshCounters'
                 },
                 {
                     label: '$(watch) Guard: ' + (statusGuard ? (statusGuard.allowed ? 'ALLOW' : 'BLOCK') : 'n/a'),
@@ -1197,22 +1212,47 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('antigravity.refreshRuntimeAndReopenStatusMenu', async () => {
             const now = Date.now();
             const debounceMs = Math.max(100, Math.min(5000, config.get<number>('runtimeStatusMenuRefreshDebounceMs') || 800));
+            const debugLogsEnabled = !!config.get<boolean>('runtimeStatusMenuRefreshDebugLogs');
 
             if (refreshStatusMenuInFlight) {
+                refreshStatusMenuDroppedTotal += 1;
+                refreshStatusMenuDroppedInFlight += 1;
+                if (debugLogsEnabled) {
+                    log.info(`[StatusRefresh] Skipped: refresh already in flight. dropped(total=${refreshStatusMenuDroppedTotal}, inFlight=${refreshStatusMenuDroppedInFlight}, debounce=${refreshStatusMenuDroppedDebounce})`);
+                }
                 return;
             }
             if ((now - lastRefreshStatusMenuAt) < debounceMs) {
+                refreshStatusMenuDroppedTotal += 1;
+                refreshStatusMenuDroppedDebounce += 1;
+                if (debugLogsEnabled) {
+                    const remainingMs = debounceMs - (now - lastRefreshStatusMenuAt);
+                    log.info(`[StatusRefresh] Skipped: debounce active (${remainingMs}ms remaining). dropped(total=${refreshStatusMenuDroppedTotal}, inFlight=${refreshStatusMenuDroppedInFlight}, debounce=${refreshStatusMenuDroppedDebounce})`);
+                }
                 return;
             }
 
             refreshStatusMenuInFlight = true;
             try {
+                if (debugLogsEnabled) {
+                    log.info(`[StatusRefresh] Running refresh + reopen (debounce=${debounceMs}ms).`);
+                }
                 await refreshRuntimeState().catch(() => { });
                 lastRefreshStatusMenuAt = Date.now();
                 await vscode.commands.executeCommand('antigravity.showStatusMenu');
+                if (debugLogsEnabled) {
+                    log.info('[StatusRefresh] Completed refresh + reopen.');
+                }
             } finally {
                 refreshStatusMenuInFlight = false;
             }
+        }),
+        vscode.commands.registerCommand('antigravity.resetStatusRefreshCounters', async () => {
+            refreshStatusMenuDroppedTotal = 0;
+            refreshStatusMenuDroppedInFlight = 0;
+            refreshStatusMenuDroppedDebounce = 0;
+            log.info('[StatusRefresh] Guard drop counters reset.');
+            vscode.window.showInformationMessage('Antigravity: status refresh counters reset.');
         }),
         vscode.commands.registerCommand('antigravity.copyLastResumePayloadReport', async () => {
             const cdp = resolveCDPStrategy();

@@ -490,6 +490,10 @@ export class DashboardPanel {
                     <label>Status Refresh Debounce (ms):</label>
                     <input type="number" value="${settings.runtimeStatusMenuRefreshDebounceMs}" min="100" max="5000" onchange="updateConfig('runtimeStatusMenuRefreshDebounceMs', parseInt(this.value))">
                 </div>
+                <div class="setting">
+                    <label>Status Refresh Debug Logs:</label>
+                    <input type="checkbox" ${settings.runtimeStatusMenuRefreshDebugLogs ? 'checked' : ''} onchange="updateConfig('runtimeStatusMenuRefreshDebugLogs', this.checked)">
+                </div>
                 <p class="muted" style="margin-top:-6px;">Stale logic: <code>telemetryAgeSec &gt; runtimeTelemetryStaleSec</code> using runtime state <code>timestamp</code>.</p>
                 <div class="setting">
                     <label>Auto Resume Min Score:</label>

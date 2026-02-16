@@ -2,7 +2,7 @@
     "name": "antigravity-autopilot",
     "displayName": "Antigravity Autopilot (Unified)",
     "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-    "version": "4.10.55",
+    "version": "4.10.59",
     "repository": {
         "type": "git",
         "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -104,6 +104,10 @@
             {
                 "command": "antigravity.refreshRuntimeAndReopenStatusMenu",
                 "title": "Antigravity: Refresh Runtime + Reopen Status Menu"
+            },
+            {
+                "command": "antigravity.resetStatusRefreshCounters",
+                "title": "Antigravity: Reset Status Refresh Counters"
             },
             {
                 "command": "antigravity.copyLastResumePayloadReport",
@@ -463,6 +467,11 @@
                     "minimum": 100,
                     "maximum": 5000,
                     "description": "Debounce window in milliseconds for the 'Refresh Runtime + Reopen Status Menu' action to prevent rapid overlap/flooding."
+                },
+                "antigravity.runtimeStatusMenuRefreshDebugLogs": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "When enabled, logs detailed skip/run reasons for status-menu refresh guard behavior (in-flight/debounce)."
                 },
                 "antigravity.runtimeAutoResumeMinScore": {
                     "type": "number",
