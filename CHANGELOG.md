@@ -5,6 +5,41 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.39] - 2026-02-16
+
+### Added
+- **Power-User No-Prompt Clear Command**: Added `Antigravity: Clear Escalation Timeline (No Prompt)` (`antigravity.clearEscalationTimelineNow`) for immediate timeline resets without confirmation dialogs.
+
+### Changed
+- **Clear Path Reuse**: Escalation timeline clearing now uses shared host logic so confirmed/no-prompt paths remain behaviorally consistent.
+
+## [4.10.38] - 2026-02-16
+
+### Added
+- **Escalation Clear Confirmation Setting**: Added `runtimeEscalationClearRequireConfirm` (default `true`) to require a confirmation dialog before clearing escalation timeline data.
+
+### Changed
+- **Clear Command Safety**: `Antigravity: Clear Escalation Timeline` now prompts for confirmation when enabled, with optional bypass for power users via settings.
+- **Dashboard Controls**: Added `Confirm Timeline Clear` toggle in CDP & Automation.
+
+## [4.10.37] - 2026-02-16
+
+### Added
+- **Clear Escalation Timeline Command**: Added `Antigravity: Clear Escalation Timeline` (`antigravity.clearEscalationTimeline`) to reset in-memory escalation events/flags for clean diagnostics runs.
+
+### Changed
+- **Status Menu Control Surface**: Added quick action to clear escalation timeline directly from the status menu.
+- **Dashboard Runtime Actions**: Added `Clear Escalation Timeline` button in runtime diagnostics controls.
+
+## [4.10.36] - 2026-02-16
+
+### Added
+- **Escalation Timeline Capacity Setting**: Added `runtimeAutoFixWaitingEscalationMaxEvents` to configure how many recent escalation events are retained in telemetry/report exports.
+
+### Changed
+- **Runtime Event Buffering**: Watchdog escalation event buffer now uses configurable bounds (3–100) instead of fixed size.
+- **Dashboard Controls**: Added `Escalation Max Events` setting in CDP & Automation.
+
 ## [4.10.35] - 2026-02-16
 
 ### Added

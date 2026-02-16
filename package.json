@@ -2,7 +2,7 @@
     "name": "antigravity-autopilot",
     "displayName": "Antigravity Autopilot (Unified)",
     "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-    "version": "4.10.35",
+    "version": "4.10.39",
     "repository": {
         "type": "git",
         "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -108,6 +108,14 @@
             {
                 "command": "antigravity.copyEscalationDiagnosticsReport",
                 "title": "Antigravity: Copy Escalation Diagnostics Report"
+            },
+            {
+                "command": "antigravity.clearEscalationTimeline",
+                "title": "Antigravity: Clear Escalation Timeline"
+            },
+            {
+                "command": "antigravity.clearEscalationTimelineNow",
+                "title": "Antigravity: Clear Escalation Timeline (No Prompt)"
             },
             {
                 "command": "antigravity.resumeFromWaitingState",
@@ -417,6 +425,18 @@
                     "minimum": 5,
                     "maximum": 14400,
                     "description": "Minimum seconds between escalation re-arms to prevent repeated full-prompt bursts during prolonged noisy waiting states."
+                },
+                "antigravity.runtimeAutoFixWaitingEscalationMaxEvents": {
+                    "type": "number",
+                    "default": 10,
+                    "minimum": 3,
+                    "maximum": 100,
+                    "description": "Maximum number of recent watchdog escalation events retained in runtime telemetry and diagnostics reports."
+                },
+                "antigravity.runtimeEscalationClearRequireConfirm": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Require a confirmation dialog before clearing escalation timeline data from commands or dashboard actions."
                 },
                 "antigravity.runtimeAutoResumeMinScore": {
                     "type": "number",

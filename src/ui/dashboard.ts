@@ -301,6 +301,7 @@ export class DashboardPanel {
                     <button onclick="runCommand('antigravity.autoFixAutoResumeReadiness')">Auto-Fix Resume Readiness</button>
                     <button onclick="runCommand('antigravity.copyLastResumePayloadReport')">Copy Last Resume Payload</button>
                     <button onclick="runCommand('antigravity.copyEscalationDiagnosticsReport')">Copy Escalation Diagnostics</button>
+                    <button onclick="runCommand('antigravity.clearEscalationTimeline')">Clear Escalation Timeline</button>
                 </div>
                 <div class="runtime-history" id="runtimeHistory"></div>
             </div>
@@ -439,6 +440,14 @@ export class DashboardPanel {
                 <div class="setting">
                     <label>Escalation Cooldown (s):</label>
                     <input type="number" value="${settings.runtimeAutoFixWaitingEscalationCooldownSec}" min="5" max="14400" onchange="updateConfig('runtimeAutoFixWaitingEscalationCooldownSec', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Escalation Max Events:</label>
+                    <input type="number" value="${settings.runtimeAutoFixWaitingEscalationMaxEvents}" min="3" max="100" onchange="updateConfig('runtimeAutoFixWaitingEscalationMaxEvents', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Confirm Timeline Clear:</label>
+                    <input type="checkbox" ${settings.runtimeEscalationClearRequireConfirm ? 'checked' : ''} onchange="updateConfig('runtimeEscalationClearRequireConfirm', this.checked)">
                 </div>
                 <div class="setting">
                     <label>Auto Resume Min Score:</label>

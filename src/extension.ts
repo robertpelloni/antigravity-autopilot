@@ -54,13 +54,14 @@ export function activate(context: vscode.ExtensionContext) {
     let watchdogEscalationEvents: Array<{ at: number; event: string; detail: string }> = [];
 
     const pushWatchdogEscalationEvent = (event: string, detail: string) => {
+        const maxEvents = Math.max(3, Math.min(100, config.get<number>('runtimeAutoFixWaitingEscalationMaxEvents') || 10));
         watchdogEscalationEvents.unshift({
             at: Date.now(),
             event,
             detail
         });
-        if (watchdogEscalationEvents.length > 10) {
-            watchdogEscalationEvents = watchdogEscalationEvents.slice(0, 10);
+        if (watchdogEscalationEvents.length > maxEvents) {
+            watchdogEscalationEvents = watchdogEscalationEvents.slice(0, maxEvents);
         }
     };
 
@@ -695,10 +696,21 @@ export function activate(context: vscode.ExtensionContext) {
                 escalationEnabled: config.get<boolean>('runtimeAutoFixWaitingEscalationEnabled'),
                 escalationThreshold: config.get<number>('runtimeAutoFixWaitingEscalationThreshold'),
                 escalationCooldownSec: config.get<number>('runtimeAutoFixWaitingEscalationCooldownSec'),
+                clearRequireConfirm: config.get<boolean>('runtimeEscalationClearRequireConfirm'),
                 watchdogDelaySec: config.get<number>('runtimeAutoFixWaitingDelaySec'),
                 watchdogCooldownSec: config.get<number>('runtimeAutoFixWaitingCooldownSec')
             }
         };
+    };
+
+    const clearEscalationTimelineState = async (source: string) => {
+        watchdogEscalationEvents = [];
+        watchdogEscalationConsecutiveFailures = 0;
+        watchdogEscalationForceFullNext = false;
+        lastWatchdogEscalationReason = 'reset: manual clear';
+        pushWatchdogEscalationEvent('reset', `manual clear (${source})`);
+
+        await refreshRuntimeState().catch(() => { });
     };
 
     DashboardPanel.setRuntimeStateProvider(async () => {
@@ -1002,6 +1014,11 @@ export function activate(context: vscode.ExtensionContext) {
                     label: '$(pulse) Copy Escalation Diagnostics',
                     description: 'Copy/open focused watchdog escalation diagnostics JSON',
                     action: 'antigravity.copyEscalationDiagnosticsReport'
+                },
+                {
+                    label: '$(trash) Clear Escalation Timeline',
+                    description: 'Reset in-memory escalation event buffer and related escalation flags',
+                    action: 'antigravity.clearEscalationTimeline'
                 }
             ];
 
@@ -1152,6 +1169,27 @@ export function activate(context: vscode.ExtensionContext) {
             await vscode.window.showTextDocument(doc, { preview: false });
 
             vscode.window.showInformationMessage('Antigravity: escalation diagnostics report copied to clipboard.');
+        }),
+        vscode.commands.registerCommand('antigravity.clearEscalationTimeline', async () => {
+            const requireConfirm = config.get<boolean>('runtimeEscalationClearRequireConfirm');
+            if (requireConfirm) {
+                const choice = await vscode.window.showWarningMessage(
+                    'Clear escalation timeline and reset escalation flags?',
+                    { modal: true },
+                    'Clear',
+                    'Cancel'
+                );
+                if (choice !== 'Clear') {
+                    return;
+                }
+            }
+
+            await clearEscalationTimelineState('confirmed-command');
+            vscode.window.showInformationMessage('Antigravity: escalation timeline cleared.');
+        }),
+        vscode.commands.registerCommand('antigravity.clearEscalationTimelineNow', async () => {
+            await clearEscalationTimelineState('no-prompt-command');
+            vscode.window.showInformationMessage('Antigravity: escalation timeline cleared (no prompt).');
         }),
         vscode.commands.registerCommand('antigravity.resumeFromWaitingState', async () => {
             await sendAutoResumeMessage('manual', latestRuntimeState);
