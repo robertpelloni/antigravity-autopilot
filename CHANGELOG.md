@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.66] - 2026-02-16
+
+### Added
+- **Model Scraper Reliability Guard Test**: Added `tests/model-scraper-reliability.test.js` to prevent non-deterministic async evaluate patterns and enforce bounded retry behavior.
+
+### Changed
+- **Deterministic Model Scraping**: Replaced asynchronous timer-injected extraction with synchronous DOM snapshot extraction and bounded retry polling in `src/core/model-scraper.ts`.
+- **Retry Telemetry**: Added informational retry-success logging when model scraping recovers on subsequent attempts.
+
 ## [4.10.65] - 2026-02-16
 
 ### Added

@@ -83,9 +83,9 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - **Definition of done:** deterministic model selection with stable fallback and validation
 
 ### P1.4 Improve model scraper reliability
-- [ ] Replace asynchronous `setTimeout`-inside-evaluate pattern with deterministic extraction
-- [ ] Add retries and UI-open/close synchronization
-- [ ] Add testable adapter seam for scraper
+- [x] Replace asynchronous `setTimeout`-inside-evaluate pattern with deterministic extraction
+- [x] Add retries and UI-open/close synchronization
+- [x] Add testable adapter seam for scraper
 - **Evidence:** `src/core/model-scraper.ts` likely returns before delayed collection completes
 - **Definition of done:** scraper reproducibly returns live model list when available
 

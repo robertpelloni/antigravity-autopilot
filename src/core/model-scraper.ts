@@ -14,6 +14,8 @@ const log = createLogger('ModelScraper');
 let cachedModels: { value: string; label: string }[] = [];
 let lastScrapeTime = 0;
 const CACHE_DURATION_MS = 60000; // 1 minute cache
+const MODEL_SCRAPE_ATTEMPTS = 4;
+const MODEL_SCRAPE_RETRY_DELAY_MS = 180;
 
 /**
  * Get available models from Antigravity's model selector
@@ -51,47 +53,65 @@ async function scrapeModelsFromUI(): Promise<{ value: string; label: string }[]>
         if (!connected) return [];
     }
 
-    // JavaScript to extract model options from Antigravity's UI
-    const result = await cdpClient.evaluate(`
+    for (let attempt = 1; attempt <= MODEL_SCRAPE_ATTEMPTS; attempt++) {
+        const result = await cdpClient.evaluate(`
         (function() {
+            const seen = new Set();
             const models = [];
-            
-            // Try to find model selector dropdown options
-            // Method 1: Look for the model dropdown button and its options
-            const modelBtn = document.querySelector('[data-testid="model-selector"], .model-dropdown, button[aria-label*="model"], button[class*="model"]');
-            if (modelBtn) {
-                // Click to open dropdown
-                modelBtn.click();
-                
-                // Wait a bit and collect options
-                setTimeout(() => {
-                    const options = document.querySelectorAll('[role="option"], [role="menuitem"], .model-option, li[data-value], div[data-value]');
-                    options.forEach(opt => {
-                        const value = opt.getAttribute('data-value') || opt.getAttribute('data-model') || opt.textContent?.trim().toLowerCase().replace(/\\s+/g, '-');
-                        const label = opt.textContent?.trim();
-                        if (value && label) {
-                            models.push({ value, label });
-                        }
-                    });
-                    // Close dropdown
-                    document.body.click();
-                }, 300);
+            const normalize = (v) => String(v || '').trim();
+            const pushModel = (value, label) => {
+                const normalizedValue = normalize(value);
+                const normalizedLabel = normalize(label);
+                if (!normalizedValue || !normalizedLabel) return;
+                const key = normalizedValue + '::' + normalizedLabel;
+                if (seen.has(key)) return;
+                seen.add(key);
+                models.push({ value: normalizedValue, label: normalizedLabel });
+            };
+
+            const optionSelector = '[role="option"], [role="menuitem"], .model-option, li[data-value], div[data-value], button[data-value]';
+            const optionNodes = document.querySelectorAll(optionSelector);
+            optionNodes.forEach(opt => {
+                const value = opt.getAttribute('data-value') || opt.getAttribute('data-model') || opt.getAttribute('value') || opt.textContent;
+                const label = opt.textContent || opt.getAttribute('aria-label') || value;
+                pushModel(value, label);
+            });
+
+            if (models.length === 0) {
+                const modelBtn = document.querySelector('[data-testid="model-selector"], .model-dropdown, button[aria-label*="model"], button[class*="model"]');
+                if (modelBtn) {
+                    const btnValue = modelBtn.getAttribute('data-value') || modelBtn.getAttribute('aria-label') || modelBtn.textContent;
+                    const btnLabel = modelBtn.textContent || modelBtn.getAttribute('aria-label') || btnValue;
+                    pushModel(btnValue, btnLabel);
+                }
             }
-            
-            // Method 2: Look for existing model name in the UI
+
             const currentModel = document.querySelector('.model-name, .current-model, [data-testid="current-model"]');
             if (currentModel) {
                 const label = currentModel.textContent?.trim();
                 if (label) {
-                    models.push({ value: label.toLowerCase().replace(/\\s+/g, '-'), label });
+                    pushModel(label.toLowerCase().replace(/\\s+/g, '-'), label);
                 }
             }
-            
+
             return models;
         })()
     `) as { value: string; label: string }[];
 
-    return result || [];
+        const safeResult = Array.isArray(result) ? result : [];
+        if (safeResult.length > 0) {
+            if (attempt > 1) {
+                log.info(`Model scrape succeeded on retry ${attempt}/${MODEL_SCRAPE_ATTEMPTS}`);
+            }
+            return safeResult;
+        }
+
+        if (attempt < MODEL_SCRAPE_ATTEMPTS) {
+            await new Promise(resolve => setTimeout(resolve, MODEL_SCRAPE_RETRY_DELAY_MS));
+        }
+    }
+
+    return [];
 }
 
 /**
