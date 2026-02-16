@@ -9,6 +9,7 @@
 
 import { createLogger } from '../../utils/logger';
 import { EventEmitter } from 'events';
+import WebSocket from 'ws';
 
 const log = createLogger('MCPFederation');
 
@@ -66,6 +67,8 @@ export class MCPFederation extends EventEmitter {
     private servers: Map<string, MCPServerConfig> = new Map();
     private serverStatus: Map<string, 'connected' | 'disconnected' | 'error'> = new Map();
     private tools: Map<string, MCPTool[]> = new Map(); // key: serverId, value: tools
+    private wsConnections: Map<string, WebSocket> = new Map();
+    private requestSeq = 1;
     private totalCalls = 0;
     private totalErrors = 0;
 
@@ -123,15 +126,34 @@ export class MCPFederation extends EventEmitter {
         }
 
         try {
-            // In a real implementation, this would establish a WebSocket/HTTP connection
-            // and send the MCP initialize handshake. For now, we simulate the connection.
             log.info(`Connecting to ${server.name} at ${server.url}...`);
 
-            // Simulate discovering tools from the server
-            // In production, this sends: { method: "tools/list", params: {} }
+            if (server.transport === 'http') {
+                const listResult = await this.sendHttpRpc(server, {
+                    jsonrpc: '2.0',
+                    id: this.nextRequestId(),
+                    method: 'tools/list',
+                    params: {}
+                });
+                const discovered = this.normalizeTools(serverId, listResult?.result?.tools);
+                this.registerTools(serverId, discovered);
+            } else if (server.transport === 'websocket') {
+                await this.connectWebSocket(server);
+                const listResult = await this.sendWebSocketRpc(serverId, {
+                    jsonrpc: '2.0',
+                    id: this.nextRequestId(),
+                    method: 'tools/list',
+                    params: {}
+                }, server.timeout);
+                const discovered = this.normalizeTools(serverId, listResult?.result?.tools);
+                this.registerTools(serverId, discovered);
+            } else {
+                throw new Error('stdio transport is not supported by this in-process federation runtime');
+            }
+
             this.serverStatus.set(serverId, 'connected');
             this.emit('serverConnected', server);
-            log.info(`Connected to ${server.name}`);
+            log.info(`Connected to ${server.name} (${this.tools.get(serverId)?.length || 0} tools)`);
             return true;
         } catch (error: any) {
             this.serverStatus.set(serverId, 'error');
@@ -147,6 +169,15 @@ export class MCPFederation extends EventEmitter {
     disconnectFromServer(serverId: string): void {
         this.serverStatus.set(serverId, 'disconnected');
         this.tools.delete(serverId);
+        const ws = this.wsConnections.get(serverId);
+        if (ws) {
+            try {
+                ws.close();
+            } catch {
+                // ignore close errors
+            }
+            this.wsConnections.delete(serverId);
+        }
         this.emit('serverDisconnected', serverId);
     }
 
@@ -235,16 +266,43 @@ export class MCPFederation extends EventEmitter {
         }
 
         try {
-            // In production, this sends: { method: "tools/call", params: { name: toolName, arguments: args } }
             log.info(`Calling ${call.toolName} on ${server.name}`);
 
             this.emit('toolCalled', call);
+
+            const rpcPayload = {
+                jsonrpc: '2.0',
+                id: this.nextRequestId(),
+                method: 'tools/call',
+                params: {
+                    name: call.toolName,
+                    arguments: call.arguments || {}
+                }
+            };
+
+            const response = server.transport === 'http'
+                ? await this.sendHttpRpc(server, rpcPayload)
+                : await this.sendWebSocketRpc(call.serverId, rpcPayload, server.timeout);
+
+            if (response?.error) {
+                this.totalErrors++;
+                return {
+                    serverId: call.serverId,
+                    toolName: call.toolName,
+                    success: false,
+                    content: [],
+                    durationMs: Date.now() - start,
+                    error: response.error.message || 'Tool call failed'
+                };
+            }
 
             return {
                 serverId: call.serverId,
                 toolName: call.toolName,
                 success: true,
-                content: [{ type: 'text', text: `Tool ${call.toolName} called successfully` }],
+                content: Array.isArray(response?.result?.content)
+                    ? response.result.content
+                    : [{ type: 'text', text: JSON.stringify(response?.result ?? null) }],
                 durationMs: Date.now() - start
             };
         } catch (error: any) {
@@ -258,6 +316,132 @@ export class MCPFederation extends EventEmitter {
                 error: error.message
             };
         }
+    }
+
+    private nextRequestId(): number {
+        const id = this.requestSeq;
+        this.requestSeq += 1;
+        return id;
+    }
+
+    private normalizeTools(serverId: string, toolList: any): MCPTool[] {
+        if (!Array.isArray(toolList)) {
+            return [];
+        }
+
+        return toolList
+            .map((tool: any) => ({
+                serverId,
+                name: String(tool?.name || ''),
+                description: String(tool?.description || ''),
+                inputSchema: tool?.inputSchema || {}
+            }))
+            .filter((tool: MCPTool) => tool.name.length > 0);
+    }
+
+    private async sendHttpRpc(server: MCPServerConfig, payload: any): Promise<any> {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), Math.max(1000, server.timeout || 10000));
+
+        try {
+            const response = await fetch(server.url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload),
+                signal: controller.signal
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status} ${response.statusText}`);
+            }
+
+            return await response.json();
+        } finally {
+            clearTimeout(timeout);
+        }
+    }
+
+    private async connectWebSocket(server: MCPServerConfig): Promise<void> {
+        if (this.wsConnections.has(server.id)) {
+            return;
+        }
+
+        await new Promise<void>((resolve, reject) => {
+            const ws = new WebSocket(server.url);
+            const timeout = setTimeout(() => {
+                try {
+                    ws.terminate();
+                } catch {
+                    // ignore
+                }
+                reject(new Error('WebSocket connection timeout'));
+            }, Math.max(1000, server.timeout || 10000));
+
+            ws.once('open', () => {
+                clearTimeout(timeout);
+                this.wsConnections.set(server.id, ws);
+
+                ws.on('close', () => {
+                    this.wsConnections.delete(server.id);
+                    this.serverStatus.set(server.id, 'disconnected');
+                });
+
+                ws.on('error', (err) => {
+                    log.warn(`WebSocket error for ${server.id}: ${String((err as Error).message || err)}`);
+                });
+
+                resolve();
+            });
+
+            ws.once('error', (error) => {
+                clearTimeout(timeout);
+                reject(error);
+            });
+        });
+    }
+
+    private async sendWebSocketRpc(serverId: string, payload: any, timeoutMs: number): Promise<any> {
+        const ws = this.wsConnections.get(serverId);
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            throw new Error(`WebSocket not connected for server ${serverId}`);
+        }
+
+        return new Promise<any>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                cleanup();
+                reject(new Error('WebSocket RPC timeout'));
+            }, Math.max(1000, timeoutMs || 10000));
+
+            const onMessage = (raw: WebSocket.RawData) => {
+                try {
+                    const text = typeof raw === 'string' ? raw : raw.toString();
+                    const message = JSON.parse(text);
+                    if (message?.id !== payload.id) {
+                        return;
+                    }
+                    cleanup();
+                    resolve(message);
+                } catch (error) {
+                    cleanup();
+                    reject(error);
+                }
+            };
+
+            const cleanup = () => {
+                clearTimeout(timeout);
+                ws.off('message', onMessage);
+            };
+
+            ws.on('message', onMessage);
+            ws.send(JSON.stringify(payload), (error) => {
+                if (error) {
+                    cleanup();
+                    reject(error);
+                }
+            });
+        });
     }
 
     /**

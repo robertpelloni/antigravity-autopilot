@@ -55,10 +55,12 @@ Antigravity Autopilot consolidates **9 separate projects** into one coherent ext
 For a detailed breakdown of future phases and granular tasks, please refer to [ROADMAP.md](./ROADMAP.md).
 
 ### Key Milestones
-- **Phase 1-3**: Foundation, Reliability, Autonomy ✅ (Completed)
-- **Phase 4**: Intelligence (Memory, Context) ✅ (Partial/Ongoing)
-- **Phase 5**: Multi-Agent Collaboration (Swarm, Voice)
-- **Phase 6**: Ecosystem Expansion (Jules, Federation)
+- **Phase 1-3**: Foundation + CDP runtime control ✅
+- **Phase 4**: Intelligence loop and memory 🟡 (operational but still heuristic in several modules)
+- **Phase 5**: Multi-Agent collaboration 🟡 (queue/swarm present; planner/researcher execution still maturing)
+- **Phase 6**: Ecosystem expansion 🔴 (MCP server/federation/Jules bridge not yet fully production-wired in root extension)
+
+For implementation-truth tracking and execution order, see [ROADMAP.md](./ROADMAP.md) and [TODO.md](./TODO.md).
 
 ---
 

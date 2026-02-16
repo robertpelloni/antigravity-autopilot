@@ -65,22 +65,23 @@ antigravity-autopilot/
 
 | Module | Status | Implementation | Notes |
 |:-------|:-------|:---------------|:------|
-| **CDP Auto-Clicker** | ✅ Active | `full_cdp_script.js` | Multi-tab, background mode, accept/reject patterns |
-| **Auto-Bump** | ✅ Active | `autoBump()` in CDP script | Idle detection + configurable cooldown |
-| **Simple Strategy** | ✅ Active | `simple-strategy.ts` | Command-based fallback |
-| **Dashboard** | ✅ Active | `dashboard.ts` | Interactive WebView with all settings |
-| **Interaction Matrix** | ✅ Active | `interaction-methods.ts` + `dashboard.ts` | Multi-method text/click/submit, visual verification threshold |
-| **Status Bar** | ✅ Active | `status-bar.ts` | Quick Pick menu, state indicators |
-| **Autonomous Loop** | ✅ Active | `autonomous-loop.ts` | Full loop with Memory & Orchestrator |
-| **Circuit Breaker** | ✅ Active | `circuit-breaker.ts` | Loop limits, error counting |
-| **Memory Manager** | ✅ Active | `memory-manager.ts` | Phase 14 — Integrated in `autonomous-loop.ts` |
-| **Project Manager** | ✅ Active | `project-tracker.ts` | Centralized task tracking | 
-| **Agent Orchestrator** | ✅ Active | `agent-orchestrator.ts` | Phase 18 — Browser-based multi-agent |
-| **MCP Server** | ✅ Active | `mcp/server.ts` | Tools: `get_next_task`, `complete_task` |
-| **Voice Control** | ✅ Wired | `voice/control.ts` | Interface scaffolded |
-| **Model Selector** | ✅ Wired | `model-selector.ts` | Routing logic present |
-| **Code Reviewer** | ✅ Wired | `code-reviewer.ts` | Review scaffolded |
-| **Test Generator** | ✅ Wired | `test-generator.ts` | Generation scaffolded |
+| **CDP Auto-Clicker** | ✅ Active | `main_scripts/full_cdp_script.js` | Multi-tab + runtime state + click pipeline are operational |
+| **Auto-Bump / Auto-Resume** | ✅ Active | `full_cdp_script.js`, `extension.ts` | Waiting-state detection, reminder, guarded auto-resume, watchdog escalation |
+| **Simple Strategy** | ✅ Active | `src/strategies/simple-strategy.ts` | Command-based fallback strategy |
+| **Dashboard Runtime UX** | ✅ Active | `src/ui/dashboard.ts` | Comprehensive runtime controls and diagnostics |
+| **Interaction Matrix** | ✅ Active | `src/strategies/interaction-methods.ts` | Multi-method text/click/submit routing with profile bundles |
+| **Status Bar + Status Menu** | ✅ Active | `src/ui/status-bar.ts`, `src/extension.ts` | Runtime labels and operator quick actions |
+| **Autonomous Loop** | 🟡 Partial | `src/core/autonomous-loop.ts` | Functional loop, but still has placeholder circuit-state reporting and simplistic completion path |
+| **Circuit Breaker** | ✅ Active | `src/core/circuit-breaker.ts` | Limits and error counting in use |
+| **Memory Manager** | 🟡 Partial | `src/core/memory-manager.ts` | Session memory works; relevance/indexing is heuristic |
+| **Project Tracking** | 🟡 Partial | `src/core/project-tracker.ts`, `src/providers/project-manager.ts` | Markdown-driven task sync works; source-of-truth is inconsistent (`task.md` vs `@fix_plan.md` vs roadmap) |
+| **Agent Orchestrator** | 🟡 Partial | `src/core/agent-orchestrator.ts` | Queue/swarm works; decomposition and role execution are heuristic and fragile |
+| **MCP Server** | 🔴 Scaffolded | `src/modules/mcp/server.ts` | Simulated startup and minimal in-process handler; no production transport/server lifecycle |
+| **MCP Federation** | 🔴 Scaffolded | `src/modules/mcp/federation.ts` | Simulated connect/call flow; no real protocol transport wiring |
+| **Voice Control** | 🟡 Partial | `src/modules/voice/control.ts` | Parser/intents implemented; no speech-capture/audio pipeline wiring |
+| **Model Selector/Scraper** | 🟡 Partial | `src/core/model-selector.ts`, `src/core/model-scraper.ts` | Routing exists; scraper reliability and model-ID consistency need hardening |
+| **Code Reviewer** | ✅ Active | `src/core/code-reviewer.ts` | Rule-based static scan and diagnostics pipeline |
+| **Test Generator** | 🔴 Scaffolded | `src/core/test-generator.ts` | Regex-based generation with placeholder assertions and weak import synthesis |
 
 ---
 

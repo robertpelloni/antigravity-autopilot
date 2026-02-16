@@ -5,6 +5,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.60] - 2026-02-16
+
+### Added
+- **Real MCP HTTP Server Runtime**: `src/modules/mcp/server.ts` now starts a real Node HTTP server with JSON-RPC routing on `/rpc` and health endpoints (`/`, `/health`).
+- **MCP Tool Introspection Endpoint**: Implemented `tools/list` support with schema metadata for built-in project-task tools.
+
+### Changed
+- **Simulation Removal (MCP Server)**: Replaced simulated startup/placeholder server lifecycle with real listen/close lifecycle and structured JSON-RPC errors.
+- **Simulation Removal (MCP Federation)**: `src/modules/mcp/federation.ts` now performs real transport calls for `http` and `websocket` servers (including `tools/list` discovery and `tools/call` execution), with timeout and connection-state handling.
+
+### Notes
+- `stdio` federation transport remains intentionally unsupported in this in-process runtime and now reports explicit errors instead of silent simulation behavior.
+
 ## [4.10.59] - 2026-02-16
 
 ### Added

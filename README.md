@@ -35,6 +35,8 @@ All settings are under `antigravity.*` in VS Code settings. Key ones:
 ## Documentation
 
 - [**Vision & Roadmap**](VISION.md) — Project goals and planned features
+- [**Implementation TODO**](TODO.md) — Prioritized gap list and execution order
+- [**Handoff Analysis**](HANDOFF.md) — Detailed audit findings and evidence
 - [**Changelog**](CHANGELOG.md) — Version history
 - [**Dashboard**](DASHBOARD.md) — Module status and project structure
 - [**Submodules**](docs/SUBMODULES.md) — Reference implementation details
@@ -50,4 +52,9 @@ vsce package
 
 ## Version
 
-**v4.2.0** — See [CHANGELOG.md](CHANGELOG.md) for details.
+**v4.10.59** — See [CHANGELOG.md](CHANGELOG.md) for details.
+
+## Implementation Status Note
+
+Core CDP runtime, runtime telemetry, and auto-resume watchdog systems are active.
+Some advanced modules (notably MCP server/federation transport, progress analytics depth, and test-generation quality paths) remain partially implemented and are tracked in [TODO.md](TODO.md).
