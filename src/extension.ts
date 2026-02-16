@@ -708,12 +708,16 @@ export function activate(context: vscode.ExtensionContext) {
         const escalationCooldownRemainingMs = lastWatchdogEscalationAt > 0
             ? Math.max(0, escalationCooldownMs - (Date.now() - lastWatchdogEscalationAt))
             : 0;
+        const escalationNextEligibleAt = lastWatchdogEscalationAt > 0
+            ? (lastWatchdogEscalationAt + escalationCooldownMs)
+            : null;
         const escalationStateLabel = watchdogEscalationForceFullNext ? 'ARMED' : 'IDLE';
         const latestEvent = watchdogEscalationEvents[0];
         const latestEventText = latestEvent
             ? `${latestEvent.event}@${new Date(latestEvent.at).toLocaleTimeString()}`
             : 'none';
-        return `Escalation ${escalationStateLabel} | streak ${watchdogEscalationConsecutiveFailures} | last watchdog ${lastAutoFixWatchdogOutcome || 'n/a'} | cooldown ${formatDurationShort(escalationCooldownRemainingMs)} | reason ${lastWatchdogEscalationReason} | latest event ${latestEventText}`;
+        const nextEligibleText = escalationNextEligibleAt ? new Date(escalationNextEligibleAt).toLocaleTimeString() : '-';
+        return `Escalation ${escalationStateLabel} | streak ${watchdogEscalationConsecutiveFailures} | last watchdog ${lastAutoFixWatchdogOutcome || 'n/a'} | cooldown ${formatDurationShort(escalationCooldownRemainingMs)} | next ${nextEligibleText} | reason ${lastWatchdogEscalationReason} | latest event ${latestEventText}`;
     };
 
     const clearEscalationTimelineState = async (source: string) => {
@@ -741,6 +745,13 @@ export function activate(context: vscode.ExtensionContext) {
             || state?.waitingForChatMessage === true;
         const guard = getAutoResumeGuardReport(state);
         const timing = getAutoResumeTimingReport(isWaiting);
+        const escalationCooldownMs = Math.max(5, config.get<number>('runtimeAutoFixWaitingEscalationCooldownSec') || 900) * 1000;
+        const escalationCooldownRemainingMs = lastWatchdogEscalationAt > 0
+            ? Math.max(0, escalationCooldownMs - (Date.now() - lastWatchdogEscalationAt))
+            : 0;
+        const escalationNextEligibleAt = lastWatchdogEscalationAt > 0
+            ? (lastWatchdogEscalationAt + escalationCooldownMs)
+            : null;
         const stablePollsRequired = Math.max(1, Math.min(10, config.get<number>('runtimeAutoResumeStabilityPolls') || 2));
 
         return {
@@ -761,6 +772,9 @@ export function activate(context: vscode.ExtensionContext) {
                 watchdogEscalationForceFullNext,
                 lastWatchdogEscalationAt,
                 lastWatchdogEscalationReason,
+                escalationCooldownMs,
+                escalationCooldownRemainingMs,
+                escalationNextEligibleAt,
                 watchdogEscalationEvents,
                 readyToResumeStreak,
                 stablePollsRequired,

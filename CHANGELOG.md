@@ -5,6 +5,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.47] - 2026-02-16
+
+### Changed
+- **Dashboard Watchdog State Chip**: Runtime card now renders watchdog run state as a visual chip (`RUNNING` blue / `IDLE` neutral) for quick operational scanning.
+
+## [4.10.46] - 2026-02-16
+
+### Changed
+- **Dashboard Escalation State Chip**: Replaced plain escalation armed text with a colored status chip (`ARMED` amber / `IDLE` neutral) for faster runtime scanning.
+
+## [4.10.45] - 2026-02-16
+
+### Changed
+- **Escalation Next-Eligible Timestamp**: Dashboard runtime card now shows `Escalation Next Eligible` alongside cooldown-left for exact unlock timing.
+- **Telemetry + Summary Alignment**: Host telemetry now emits `escalationNextEligibleAt`, and compact escalation health summaries include next eligible time.
+
+## [4.10.44] - 2026-02-16
+
+### Changed
+- **Dashboard Escalation ETA**: Runtime card now shows `Escalation Cooldown Left` using host telemetry (`escalationCooldownRemainingMs`) for clearer operator timing decisions.
+- **Host Telemetry Enrichment**: Runtime state provider now publishes escalation cooldown total/remaining milliseconds for UI and diagnostics consumers.
+
 ## [4.10.43] - 2026-02-16
 
 ### Added

@@ -241,6 +241,12 @@ export class DashboardPanel {
                 .runtime-chip.waiting { background: rgba(168,85,247,0.25); color: #d8b4fe; }
                 .runtime-chip.idle { background: rgba(107,114,128,0.25); color: #d1d5db; }
                 .runtime-chip.unknown { background: rgba(75,85,99,0.25); color: #e5e7eb; }
+                .runtime-chip.escalation-armed { background: rgba(245,158,11,0.28); color: #fde68a; }
+                .runtime-chip.escalation-idle { background: rgba(107,114,128,0.25); color: #d1d5db; }
+                .runtime-chip.watchdog-running { background: rgba(59,130,246,0.28); color: #bfdbfe; }
+                .runtime-chip.watchdog-idle { background: rgba(107,114,128,0.25); color: #d1d5db; }
+                .runtime-legend { margin-top: 8px; display:flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+                .runtime-legend .runtime-chip { font-size: 11px; }
                 .muted { color: var(--vscode-descriptionForeground); font-size: 12px; }
                 .runtime-history { margin-top: 10px; max-height: 120px; overflow-y: auto; border: 1px solid var(--vscode-widget-border); border-radius: 4px; padding: 6px; }
                 .runtime-history-item { font-size: 12px; padding: 2px 0; color: var(--vscode-descriptionForeground); border-bottom: 1px dashed var(--vscode-widget-border); }
@@ -285,11 +291,13 @@ export class DashboardPanel {
                     <div><strong>Last Message Kind:</strong> <span id="runtimeLastMessageKind" class="muted">-</span></div>
                     <div><strong>Last Message Profile:</strong> <span id="runtimeLastMessageProfile" class="muted">-</span></div>
                     <div><strong>Last Message Preview:</strong> <span id="runtimeLastMessagePreview" class="muted">-</span></div>
-                    <div><strong>Watchdog State:</strong> <span id="runtimeWatchdogState" class="muted">-</span></div>
+                    <div><strong>Watchdog State:</strong> <span id="runtimeWatchdogState" class="runtime-chip watchdog-idle">IDLE</span></div>
                     <div><strong>Watchdog Last Run:</strong> <span id="runtimeWatchdogLastRun" class="muted">-</span></div>
                     <div><strong>Watchdog Outcome:</strong> <span id="runtimeWatchdogOutcome" class="muted">-</span></div>
-                    <div><strong>Escalation Armed:</strong> <span id="runtimeWatchdogEscalationArmed" class="muted">-</span></div>
+                    <div><strong>Escalation State:</strong> <span id="runtimeWatchdogEscalationArmed" class="runtime-chip escalation-idle">IDLE</span></div>
                     <div><strong>Escalation Fail Streak:</strong> <span id="runtimeWatchdogEscalationStreak" class="muted">-</span></div>
+                    <div><strong>Escalation Cooldown Left:</strong> <span id="runtimeWatchdogEscalationCooldownLeft" class="muted">-</span></div>
+                    <div><strong>Escalation Next Eligible:</strong> <span id="runtimeWatchdogEscalationNextEligible" class="muted">-</span></div>
                     <div><strong>Escalation Last Trigger:</strong> <span id="runtimeWatchdogEscalationLast" class="muted">-</span></div>
                     <div><strong>Escalation Reason:</strong> <span id="runtimeWatchdogEscalationReason" class="muted">-</span></div>
                     <div><strong>Escalation Events:</strong> <span id="runtimeWatchdogEscalationEvents" class="muted">-</span></div>
@@ -303,6 +311,13 @@ export class DashboardPanel {
                     <button onclick="runCommand('antigravity.copyEscalationDiagnosticsReport')">Copy Escalation Diagnostics</button>
                     <button onclick="runCommand('antigravity.copyEscalationHealthSummary')">Copy Escalation Health</button>
                     <button onclick="runCommand('antigravity.clearEscalationTimeline')">Clear Escalation Timeline</button>
+                </div>
+                <div class="runtime-legend">
+                    <span class="muted">Legend:</span>
+                    <span class="runtime-chip escalation-armed">Escalation ARMED</span>
+                    <span class="runtime-chip escalation-idle">Escalation IDLE</span>
+                    <span class="runtime-chip watchdog-running">Watchdog RUNNING</span>
+                    <span class="runtime-chip watchdog-idle">Watchdog IDLE</span>
                 </div>
                 <div class="runtime-history" id="runtimeHistory"></div>
             </div>
@@ -873,6 +888,8 @@ export class DashboardPanel {
                     const watchdogOutcome = document.getElementById('runtimeWatchdogOutcome');
                     const watchdogEscalationArmed = document.getElementById('runtimeWatchdogEscalationArmed');
                     const watchdogEscalationStreak = document.getElementById('runtimeWatchdogEscalationStreak');
+                    const watchdogEscalationCooldownLeft = document.getElementById('runtimeWatchdogEscalationCooldownLeft');
+                    const watchdogEscalationNextEligible = document.getElementById('runtimeWatchdogEscalationNextEligible');
                     const watchdogEscalationLast = document.getElementById('runtimeWatchdogEscalationLast');
                     const watchdogEscalationReason = document.getElementById('runtimeWatchdogEscalationReason');
                     const watchdogEscalationEvents = document.getElementById('runtimeWatchdogEscalationEvents');
@@ -913,11 +930,15 @@ export class DashboardPanel {
                         lastMessageKind.textContent = '-';
                         lastMessageProfile.textContent = '-';
                         lastMessagePreview.textContent = '-';
-                        watchdogState.textContent = '-';
+                        watchdogState.textContent = 'IDLE';
+                        watchdogState.className = 'runtime-chip watchdog-idle';
                         watchdogLastRun.textContent = '-';
                         watchdogOutcome.textContent = '-';
                         watchdogEscalationArmed.textContent = '-';
+                        watchdogEscalationArmed.className = 'runtime-chip escalation-idle';
                         watchdogEscalationStreak.textContent = '-';
+                        watchdogEscalationCooldownLeft.textContent = '-';
+                        watchdogEscalationNextEligible.textContent = '-';
                         watchdogEscalationLast.textContent = '-';
                         watchdogEscalationReason.textContent = '-';
                         watchdogEscalationEvents.textContent = '-';
@@ -985,11 +1006,17 @@ export class DashboardPanel {
                     lastMessageKind.textContent = host?.lastAutoResumeMessageKind || '-';
                     lastMessageProfile.textContent = host?.lastAutoResumeMessageProfile || '-';
                     lastMessagePreview.textContent = host?.lastAutoResumeMessagePreview || '-';
-                    watchdogState.textContent = host ? (host.autoFixWatchdogInProgress ? 'running' : 'idle') : '-';
+                    const watchdogRunning = !!host?.autoFixWatchdogInProgress;
+                    watchdogState.textContent = watchdogRunning ? 'RUNNING' : 'IDLE';
+                    watchdogState.className = 'runtime-chip ' + (watchdogRunning ? 'watchdog-running' : 'watchdog-idle');
                     watchdogLastRun.textContent = host?.lastAutoFixWatchdogAt ? new Date(host.lastAutoFixWatchdogAt).toLocaleTimeString() : '-';
                     watchdogOutcome.textContent = host?.lastAutoFixWatchdogOutcome || '-';
-                    watchdogEscalationArmed.textContent = host ? yesNo(!!host.watchdogEscalationForceFullNext) : '-';
+                    const escalationArmed = !!host?.watchdogEscalationForceFullNext;
+                    watchdogEscalationArmed.textContent = escalationArmed ? 'ARMED' : 'IDLE';
+                    watchdogEscalationArmed.className = 'runtime-chip ' + (escalationArmed ? 'escalation-armed' : 'escalation-idle');
                     watchdogEscalationStreak.textContent = host ? String(host.watchdogEscalationConsecutiveFailures ?? 0) : '-';
+                    watchdogEscalationCooldownLeft.textContent = host ? formatDurationMs(host.escalationCooldownRemainingMs || 0) : '-';
+                    watchdogEscalationNextEligible.textContent = host?.escalationNextEligibleAt ? new Date(host.escalationNextEligibleAt).toLocaleTimeString() : '-';
                     watchdogEscalationLast.textContent = host?.lastWatchdogEscalationAt ? new Date(host.lastWatchdogEscalationAt).toLocaleTimeString() : '-';
                     watchdogEscalationReason.textContent = host?.lastWatchdogEscalationReason || '-';
                     watchdogEscalationEvents.textContent = Array.isArray(host?.watchdogEscalationEvents) && host.watchdogEscalationEvents.length > 0
@@ -1002,23 +1029,4 @@ export class DashboardPanel {
                 }
 
                 function requestRuntimeState() {
-                    vscode.postMessage({ command: 'requestRuntimeState' });
-                }
-
-                function runCommand(id) {
-                    vscode.postMessage({ command: 'runCommand', id });
-                }
-
-                window.addEventListener('message', event => {
-                    const message = event.data;
-                    if (!message || message.command !== 'runtimeStateUpdate') return;
-                    updateRuntimeUi(message.state || null);
-                });
-
-                requestRuntimeState();
-                setInterval(requestRuntimeState, 3000);
-            </script>
-        </body>
-        </html>`;
-    }
-}
+                    vscod
