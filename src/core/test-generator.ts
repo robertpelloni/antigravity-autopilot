@@ -339,7 +339,8 @@ export class TestGenerator {
             const nullParams = func.params.map(() => 'null').join(', ');
             return `    expect(() => ${func.name}(${nullParams})).not.toThrow();`;
         } else {
-            return `    // Error handling test\n    expect(true).toBe(true); // Placeholder`;
+            const invalidParams = func.params.map(() => 'undefined').join(', ');
+            return `    expect(() => ${func.name}(${invalidParams})).toThrow();`;
         }
     }
 
@@ -348,10 +349,17 @@ export class TestGenerator {
         const testFilePath = this.getTestFilePath(sourceFile);
         const absoluteTestPath = this.resolvePath(testFilePath);
         const template = TEST_TEMPLATES[this.config.framework];
+        const sourceAbsolutePath = this.resolvePath(sourceFile);
+        const sourceContent = fs.readFileSync(sourceAbsolutePath, 'utf-8');
+        const functionNames = this.extractFunctions(sourceContent).map(fn => fn.name);
+        const classNames = this.extractClasses(sourceContent).map(cls => cls.name);
+        const importNames = Array.from(new Set([...functionNames, ...classNames]));
 
         const imports = [
             template.import,
-            `import { /* imports */ } from '${this.getRelativeImportPath(testFilePath, sourceFile)}';`
+            importNames.length > 0
+                ? `import { ${importNames.join(', ')} } from '${this.getRelativeImportPath(testFilePath, sourceFile)}';`
+                : `import * as moduleUnderTest from '${this.getRelativeImportPath(testFilePath, sourceFile)}';`
         ].filter(Boolean).join('\n');
 
         const testCode = suite.tests.map(test =>
@@ -360,12 +368,30 @@ export class TestGenerator {
                 : template.it(test.name, test.code)
         ).join('\n\n');
 
-        const content = `${imports}\n\n${template.describe(suite.name, testCode)}\n`;
+        const generatedBody = `${template.describe(suite.name, testCode)}\n`;
+        const generatedStart = '// <antigravity-generated-tests:start>';
+        const generatedEnd = '// <antigravity-generated-tests:end>';
+        const generatedBlock = `${generatedStart}\n${generatedBody}${generatedEnd}`;
+        let content = `${imports}\n\n${generatedBlock}\n`;
 
         // Ensure directory exists
         const dir = path.dirname(absoluteTestPath);
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
+        }
+
+        if (fs.existsSync(absoluteTestPath)) {
+            const existing = fs.readFileSync(absoluteTestPath, 'utf-8');
+            const startIndex = existing.indexOf(generatedStart);
+            const endIndex = existing.indexOf(generatedEnd);
+
+            if (startIndex >= 0 && endIndex > startIndex) {
+                const before = existing.slice(0, startIndex).trimEnd();
+                const after = existing.slice(endIndex + generatedEnd.length).trimStart();
+                content = `${before}\n\n${generatedBlock}\n${after}`.trim() + '\n';
+            } else {
+                content = `${existing.trimEnd()}\n\n${generatedBlock}\n`;
+            }
         }
 
         fs.writeFileSync(absoluteTestPath, content);
@@ -375,9 +401,13 @@ export class TestGenerator {
     }
 
     private getTestFilePath(sourceFile: string): string {
-        const basename = path.basename(sourceFile, path.extname(sourceFile));
-        const ext = path.extname(sourceFile);
-        return path.join(this.config.testDirectory, `${basename}.test${ext}`);
+        const resolvedSource = this.resolvePath(sourceFile);
+        const relativeSource = this.workspaceRoot
+            ? path.relative(this.workspaceRoot, resolvedSource)
+            : path.basename(resolvedSource);
+        const ext = path.extname(relativeSource);
+        const withoutExt = relativeSource.slice(0, Math.max(0, relativeSource.length - ext.length));
+        return path.join(this.config.testDirectory, `${withoutExt}.test${ext}`);
     }
 
     private getRelativeImportPath(from: string, to: string): string {

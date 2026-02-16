@@ -108,9 +108,9 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 
 ### P2.2 Upgrade test generator from scaffold to production utility
 - [ ] Replace naive regex parser with AST-based extraction
-- [ ] Remove placeholder `expect(true).toBe(true)` generation
-- [ ] Generate framework-correct imports and deterministic paths
-- [ ] Add safe overwrite/merge strategy for existing tests
+- [x] Remove placeholder `expect(true).toBe(true)` generation
+- [x] Generate framework-correct imports and deterministic paths
+- [x] Add safe overwrite/merge strategy for existing tests
 - **Evidence:** `src/core/test-generator.ts`
 - **Definition of done:** generated tests compile and meaningfully assert behavior
 

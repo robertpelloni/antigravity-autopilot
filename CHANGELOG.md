@@ -5,6 +5,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.68] - 2026-02-16
+
+### Added
+- **Test Generator Quality Guard Test**: Added `tests/test-generator-quality-guards.test.js` to prevent placeholder assertions and enforce merge-safe markers + deterministic mirrored output paths.
+
+### Changed
+- **Test Generator Assertion Quality**: Replaced placeholder `expect(true).toBe(true)` fallback with executable error-path assertion generation.
+- **Generated Import Quality**: Test generation now builds concrete import lists from discovered functions/classes instead of emitting placeholder imports.
+- **Merge-Safe Test Writes**: Existing test files now preserve non-generated content and update/append bounded generated blocks using markers.
+- **Deterministic Test Paths**: Generated test files now mirror source-relative paths under the configured test directory to reduce collisions.
+
+### Notes
+- AST-based extraction remains pending in backlog item `P2.2`; current parser still uses regex-based discovery.
+
 ## [4.10.67] - 2026-02-16
 
 ### Added
