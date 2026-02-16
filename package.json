@@ -2,7 +2,7 @@
     "name": "antigravity-autopilot",
     "displayName": "Antigravity Autopilot (Unified)",
     "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-    "version": "4.10.14",
+    "version": "4.10.17",
     "repository": {
         "type": "git",
         "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -108,6 +108,10 @@
             {
                 "command": "antigravity.runCrossUiSelfTest",
                 "title": "Antigravity: Run Cross-UI Self-Test"
+            },
+            {
+                "command": "antigravity.explainAutoResumeGuard",
+                "title": "Antigravity: Explain Auto-Resume Guard"
             }
         ],
         "keybindings": [

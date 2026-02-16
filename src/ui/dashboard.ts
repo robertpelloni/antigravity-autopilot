@@ -269,6 +269,10 @@ export class DashboardPanel {
                     <div><strong>VS Code Coverage:</strong> <span id="runtimeCoverageVSCode" class="muted">-</span></div>
                     <div><strong>Antigravity Coverage:</strong> <span id="runtimeCoverageAntigravity" class="muted">-</span></div>
                     <div><strong>Cursor Coverage:</strong> <span id="runtimeCoverageCursor" class="muted">-</span></div>
+                    <div><strong>Guard Score:</strong> <span id="runtimeGuardScore" class="muted">-</span></div>
+                    <div><strong>Strict Primary:</strong> <span id="runtimeGuardStrict" class="muted">-</span></div>
+                    <div><strong>Auto-Resume Gate:</strong> <span id="runtimeGuardAllowed" class="muted">-</span></div>
+                    <div><strong>Gate Reason:</strong> <span id="runtimeGuardReason" class="muted">-</span></div>
                 </div>
                 <div style="margin-top:10px;display:flex;gap:8px;">
                     <button onclick="requestRuntimeState()">Refresh Runtime State</button>
@@ -666,6 +670,8 @@ export class DashboardPanel {
                 let currentStatus = null;
                 let currentStatusSince = null;
                 let waitingSince = null;
+                const autoResumeMinScore = Number(${settings.runtimeAutoResumeMinScore ?? 70});
+                const autoResumeRequireStrict = ${settings.runtimeAutoResumeRequireStrictPrimary ? 'true' : 'false'};
 
                 function formatDurationMs(ms) {
                     if (!ms || ms < 0) return '-';
@@ -701,6 +707,55 @@ export class DashboardPanel {
                     return value ? 'yes' : 'no';
                 }
 
+                function evaluateCrossUiHealth(state) {
+                    const coverage = state && state.profileCoverage ? state.profileCoverage : {};
+                    const evaluate = (cov) => {
+                        const hasInput = !!(cov && cov.hasVisibleInput);
+                        const hasSend = !!(cov && cov.hasVisibleSendButton);
+                        const pending = Number((cov && cov.pendingAcceptButtons) || 0);
+                        const ready = hasInput || hasSend || pending > 0;
+                        return { ready, hasInput, hasSend, pending };
+                    };
+
+                    const profiles = {
+                        vscode: evaluate(coverage.vscode),
+                        antigravity: evaluate(coverage.antigravity),
+                        cursor: evaluate(coverage.cursor)
+                    };
+
+                    const strict = {
+                        vscodeTextReady: !!profiles.vscode.hasInput,
+                        vscodeButtonReady: !!profiles.vscode.hasSend || profiles.vscode.pending > 0,
+                        antigravityTextReady: !!profiles.antigravity.hasInput,
+                        antigravityButtonReady: !!profiles.antigravity.hasSend || profiles.antigravity.pending > 0
+                    };
+
+                    const scoreParts = {
+                        vscodeCoverage: profiles.vscode.ready ? 30 : 0,
+                        antigravityCoverage: profiles.antigravity.ready ? 30 : 0,
+                        activeRuntimeSignal: (state && state.status && state.status !== 'unknown' && state.status !== 'stopped') ? 20 : 0,
+                        waitingDetection: (state && typeof state.waitingForChatMessage === 'boolean') ? 10 : 0,
+                        cursorBonus: profiles.cursor.ready ? 10 : 0
+                    };
+
+                    const score = Object.values(scoreParts).reduce((a, b) => a + b, 0);
+                    const strictPass = strict.vscodeTextReady && strict.vscodeButtonReady && strict.antigravityTextReady && strict.antigravityButtonReady;
+                    const scorePass = score >= autoResumeMinScore;
+                    const allowed = scorePass && (!autoResumeRequireStrict || strictPass);
+                    const reasons = [];
+                    if (!scorePass) reasons.push('score below min');
+                    if (autoResumeRequireStrict && !strictPass) reasons.push('strict primary not ready');
+
+                    return {
+                        score,
+                        strictPass,
+                        allowed,
+                        reason: reasons.length ? reasons.join('; ') : 'ready',
+                        minScore: autoResumeMinScore,
+                        requireStrict: autoResumeRequireStrict
+                    };
+                }
+
                 function updateRuntimeUi(state) {
                     const chip = document.getElementById('runtimeStatusChip');
                     const mode = document.getElementById('runtimeMode');
@@ -715,6 +770,10 @@ export class DashboardPanel {
                     const coverageVSCode = document.getElementById('runtimeCoverageVSCode');
                     const coverageAntigravity = document.getElementById('runtimeCoverageAntigravity');
                     const coverageCursor = document.getElementById('runtimeCoverageCursor');
+                    const guardScore = document.getElementById('runtimeGuardScore');
+                    const guardStrict = document.getElementById('runtimeGuardStrict');
+                    const guardAllowed = document.getElementById('runtimeGuardAllowed');
+                    const guardReason = document.getElementById('runtimeGuardReason');
 
                     function coverageText(cov) {
                         if (!cov) return '-';
@@ -736,6 +795,10 @@ export class DashboardPanel {
                         coverageVSCode.textContent = '-';
                         coverageAntigravity.textContent = '-';
                         coverageCursor.textContent = '-';
+                        guardScore.textContent = '-';
+                        guardStrict.textContent = '-';
+                        guardAllowed.textContent = '-';
+                        guardReason.textContent = '-';
                         renderRuntimeHistory();
                         return;
                     }
@@ -770,6 +833,11 @@ export class DashboardPanel {
                     coverageVSCode.textContent = coverageText(profileCoverage.vscode || null);
                     coverageAntigravity.textContent = coverageText(profileCoverage.antigravity || null);
                     coverageCursor.textContent = coverageText(profileCoverage.cursor || null);
+                    const guard = evaluateCrossUiHealth(state);
+                    guardScore.textContent = guard.score + ' / 100 (min ' + guard.minScore + ')';
+                    guardStrict.textContent = yesNo(guard.strictPass) + (guard.requireStrict ? ' (required)' : ' (optional)');
+                    guardAllowed.textContent = guard.allowed ? 'allow' : 'block';
+                    guardReason.textContent = guard.reason;
                     renderRuntimeHistory();
                 }
 

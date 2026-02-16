@@ -38,6 +38,8 @@ export function activate(context: vscode.ExtensionContext) {
     let waitingStateSince: number | null = null;
     let lastWaitingReminderAt = 0;
     let lastAutoResumeAt = 0;
+    let lastAutoResumeOutcome: 'none' | 'sent' | 'blocked' | 'send-failed' = 'none';
+    let lastAutoResumeBlockedReason = 'not evaluated';
 
     const resolveCDPStrategy = (): CDPStrategy | null => {
         const strategy = strategyManager.getStrategy('cdp') as any;
@@ -102,9 +104,15 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             if (autoResumeEnabled && waitingElapsed >= waitingDelayMs && (now - lastAutoResumeAt) >= autoResumeCooldownMs) {
-                const sent = await sendAutoResumeMessage('automatic');
-                if (sent) {
-                    lastAutoResumeAt = now;
+                const guard = getAutoResumeGuardReport(runtimeState);
+
+                if (guard.allowed) {
+                    const sent = await sendAutoResumeMessage('automatic');
+                    if (sent) {
+                        lastAutoResumeAt = now;
+                    }
+                } else {
+                    log.info(`[AutoResume] Guard blocked auto-resume: score=${guard.health.score}/${guard.minScore}, strictPass=${guard.health.strictPass}, requireStrict=${guard.requireStrict}, reason=${guard.reason}`);
                 }
             }
         } catch {
@@ -122,6 +130,97 @@ export function activate(context: vscode.ExtensionContext) {
         const pending = state.pendingAcceptButtons ?? 0;
         const waiting = state.waitingForChatMessage ? 'yes' : 'no';
         return `${status} | tabs ${done}/${total} | pending ${pending} | waiting chat ${waiting}`;
+    };
+
+    const evaluateCrossUiHealth = (state: any) => {
+        const coverage = state?.profileCoverage || {};
+        const evaluate = (cov: any) => {
+            const hasInput = !!cov?.hasVisibleInput;
+            const hasSend = !!cov?.hasVisibleSendButton;
+            const pending = Number(cov?.pendingAcceptButtons || 0);
+            const ready = hasInput || hasSend || pending > 0;
+            return { ready, hasInput, hasSend, pending };
+        };
+
+        const profiles = {
+            vscode: evaluate(coverage.vscode),
+            antigravity: evaluate(coverage.antigravity),
+            cursor: evaluate(coverage.cursor)
+        };
+
+        const strict = {
+            vscodeTextReady: !!profiles.vscode.hasInput,
+            vscodeButtonReady: !!profiles.vscode.hasSend || profiles.vscode.pending > 0,
+            antigravityTextReady: !!profiles.antigravity.hasInput,
+            antigravityButtonReady: !!profiles.antigravity.hasSend || profiles.antigravity.pending > 0
+        };
+
+        const scoreParts = {
+            vscodeCoverage: profiles.vscode.ready ? 30 : 0,
+            antigravityCoverage: profiles.antigravity.ready ? 30 : 0,
+            activeRuntimeSignal: (state?.status && state.status !== 'unknown' && state.status !== 'stopped') ? 20 : 0,
+            waitingDetection: (typeof state?.waitingForChatMessage === 'boolean') ? 10 : 0,
+            cursorBonus: profiles.cursor.ready ? 10 : 0
+        };
+
+        const score = Object.values(scoreParts).reduce((a, b) => a + b, 0);
+        const grade = score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 40 ? 'D' : 'F';
+        const strictPass = strict.vscodeTextReady && strict.vscodeButtonReady && strict.antigravityTextReady && strict.antigravityButtonReady;
+
+        return { profiles, strict, scoreParts, score, grade, strictPass };
+    };
+
+    const getAutoResumeGuardReport = (state: any) => {
+        const health = evaluateCrossUiHealth(state);
+        const minScore = Math.max(0, Math.min(100, config.get<number>('runtimeAutoResumeMinScore') || 70));
+        const requireStrict = config.get<boolean>('runtimeAutoResumeRequireStrictPrimary');
+        const scorePass = health.score >= minScore;
+        const strictPass = !requireStrict || health.strictPass;
+        const allowed = scorePass && strictPass;
+
+        const reasons: string[] = [];
+        const suggestions: string[] = [];
+
+        if (!scorePass) {
+            reasons.push(`score ${health.score} is below minimum ${minScore}`);
+            suggestions.push('Run Cross-UI Self-Test and improve profile coverage signals.');
+        }
+
+        if (requireStrict && !health.strictPass) {
+            reasons.push('strict primary readiness failed');
+            if (!health.strict.vscodeTextReady) {
+                suggestions.push('VS Code text input signal missing; open/focus Copilot chat input.');
+            }
+            if (!health.strict.vscodeButtonReady) {
+                suggestions.push('VS Code submit/accept signal missing; expose send/accept controls.');
+            }
+            if (!health.strict.antigravityTextReady) {
+                suggestions.push('Antigravity text input signal missing; ensure agent panel input is visible.');
+            }
+            if (!health.strict.antigravityButtonReady) {
+                suggestions.push('Antigravity submit/accept signal missing; ensure send/accept controls are visible.');
+            }
+        }
+
+        if (reasons.length === 0) {
+            reasons.push('guard conditions satisfied');
+        }
+
+        if (suggestions.length === 0) {
+            suggestions.push('No action needed; auto-resume is permitted under current settings.');
+        }
+
+        return {
+            allowed,
+            reason: reasons.join('; '),
+            reasons,
+            suggestions,
+            minScore,
+            requireStrict,
+            scorePass,
+            strictPass,
+            health
+        };
     };
 
     const sendAutoResumeMessage = async (reason: 'automatic' | 'manual') => {
@@ -401,6 +500,11 @@ export function activate(context: vscode.ExtensionContext) {
                     action: 'antigravity.runCrossUiSelfTest'
                 },
                 {
+                    label: '$(question) Explain Auto-Resume Guard',
+                    description: 'Show why auto-resume is allowed or blocked and how to fix it',
+                    action: 'antigravity.explainAutoResumeGuard'
+                },
+                {
                     label: '$(clippy) Copy Runtime State JSON',
                     description: 'Copy full runtime snapshot to clipboard',
                     action: 'antigravity.copyRuntimeStateJson'
@@ -524,23 +628,12 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             };
 
-            const strict = {
-                vscodeTextReady: !!report.profiles.vscode.hasInput,
-                vscodeButtonReady: !!report.profiles.vscode.hasSend || report.profiles.vscode.pending > 0,
-                antigravityTextReady: !!report.profiles.antigravity.hasInput,
-                antigravityButtonReady: !!report.profiles.antigravity.hasSend || report.profiles.antigravity.pending > 0
-            };
-
-            const scoreParts = {
-                vscodeCoverage: report.profiles.vscode.ready ? 30 : 0,
-                antigravityCoverage: report.profiles.antigravity.ready ? 30 : 0,
-                activeRuntimeSignal: (state.status && state.status !== 'unknown' && state.status !== 'stopped') ? 20 : 0,
-                waitingDetection: (typeof state.waitingForChatMessage === 'boolean') ? 10 : 0,
-                cursorBonus: report.profiles.cursor.ready ? 10 : 0
-            };
-            const score = Object.values(scoreParts).reduce((a, b) => a + b, 0);
-            const grade = score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 40 ? 'D' : 'F';
-            const bothPrimaryProfilesStrictReady = strict.vscodeTextReady && strict.vscodeButtonReady && strict.antigravityTextReady && strict.antigravityButtonReady;
+            const health = evaluateCrossUiHealth(state);
+            const strict = health.strict;
+            const scoreParts = health.scoreParts;
+            const score = health.score;
+            const grade = health.grade;
+            const bothPrimaryProfilesStrictReady = health.strictPass;
 
             const suggestions: string[] = [];
             if (!report.profiles.vscode.ready) {
@@ -588,6 +681,57 @@ export function activate(context: vscode.ExtensionContext) {
 
             const summary = `Cross-UI self-test complete. Score=${score}/100 (${grade}) | strict primary readiness=${bothPrimaryProfilesStrictReady ? 'PASS' : 'FAIL'} | VSCode=${report.profiles.vscode.ready ? 'ready' : 'no-signals'}, Antigravity=${report.profiles.antigravity.ready ? 'ready' : 'no-signals'}, Cursor=${report.profiles.cursor.ready ? 'ready' : 'no-signals'}.`;
             log.info(`[CrossUI SelfTest] ${summary}`);
+            vscode.window.showInformationMessage(summary + ' Report copied to clipboard.');
+        }),
+        vscode.commands.registerCommand('antigravity.explainAutoResumeGuard', async () => {
+            const cdp = resolveCDPStrategy();
+            if (!cdp) {
+                vscode.window.showWarningMessage('Antigravity: CDP strategy is not active.');
+                return;
+            }
+
+            const state = await cdp.getRuntimeState();
+            if (!state || !state.profileCoverage) {
+                vscode.window.showWarningMessage('Antigravity: runtime/profile coverage is unavailable.');
+                return;
+            }
+
+            const guard = getAutoResumeGuardReport(state);
+            const payload = {
+                timestamp: new Date().toISOString(),
+                runtimeStatus: state.status || 'unknown',
+                waitingForChatMessage: !!state.waitingForChatMessage,
+                autoResumeEnabled: config.get<boolean>('runtimeAutoResumeEnabled'),
+                guard: {
+                    allowed: guard.allowed,
+                    reason: guard.reason,
+                    reasons: guard.reasons,
+                    minScore: guard.minScore,
+                    requireStrict: guard.requireStrict,
+                    scorePass: guard.scorePass,
+                    strictPass: guard.strictPass
+                },
+                health: {
+                    score: guard.health.score,
+                    grade: guard.health.grade,
+                    strict: guard.health.strict,
+                    scoreParts: guard.health.scoreParts,
+                    profiles: guard.health.profiles
+                },
+                suggestions: guard.suggestions
+            };
+
+            const serialized = JSON.stringify(payload, null, 2);
+            await vscode.env.clipboard.writeText(serialized);
+
+            const doc = await vscode.workspace.openTextDocument({
+                content: serialized,
+                language: 'json'
+            });
+            await vscode.window.showTextDocument(doc, { preview: false });
+
+            const summary = `Auto-resume guard: ${guard.allowed ? 'ALLOW' : 'BLOCK'} | score=${guard.health.score}/${guard.minScore} (${guard.health.grade}) | strict=${guard.health.strictPass ? 'PASS' : 'FAIL'}${guard.requireStrict ? ' (required)' : ' (optional)'} | reason=${guard.reason}`;
+            log.info(`[AutoResume Guard] ${summary}`);
             vscode.window.showInformationMessage(summary + ' Report copied to clipboard.');
         })
     );

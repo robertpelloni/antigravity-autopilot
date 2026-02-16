@@ -5,6 +5,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.17] - 2026-02-16
+
+### Added
+- **Explain Auto-Resume Guard Command**: Added `Antigravity: Explain Auto-Resume Guard` (`antigravity.explainAutoResumeGuard`) to produce a JSON diagnostics report with allow/block status, reasons, and targeted suggestions.
+- **Status Menu Shortcut**: Added quick action in status menu to inspect auto-resume guard decisions directly.
+
+### Changed
+- **Guard Evaluation Reuse**: Runtime auto-resume and diagnostics now share `getAutoResumeGuardReport()` to keep decisions and operator reporting aligned.
+
+## [4.10.16] - 2026-02-16
+
+### Added
+- **Dashboard Guard Diagnostics**: Runtime card now shows Auto-Resume guard score, strict-primary pass state, gate allow/block result, and human-readable block reason.
+
+### Changed
+- **Live Gate Transparency**: Guard diagnostics are computed from runtime coverage and current settings (`runtimeAutoResumeMinScore`, `runtimeAutoResumeRequireStrictPrimary`) so operators can immediately understand resume decisions.
+
+## [4.10.15] - 2026-02-16
+
+### Added
+- **Auto-Resume Guardrail Policy**: Added configurable gate enforcement for automatic resume using `runtimeAutoResumeMinScore` and `runtimeAutoResumeRequireStrictPrimary`.
+
+### Changed
+- **Runtime Poller Safety**: Automatic resume now evaluates Cross-UI health score/strict readiness before sending continuation messages.
+- **Scoring Consistency**: `runCrossUiSelfTest` now reuses the shared Cross-UI health evaluator used by auto-resume gating to prevent drift.
+
 ## [4.10.14] - 2026-02-16
 
 ### Added
