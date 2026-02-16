@@ -2,7 +2,7 @@
     "name": "antigravity-autopilot",
     "displayName": "Antigravity Autopilot (Unified)",
     "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-    "version": "4.10.5",
+    "version": "4.10.8",
     "repository": {
         "type": "git",
         "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -92,6 +92,10 @@
             {
                 "command": "antigravity.checkRuntimeState",
                 "title": "Antigravity: Check Runtime State"
+            },
+            {
+                "command": "antigravity.copyRuntimeStateJson",
+                "title": "Antigravity: Copy Runtime State JSON"
             }
         ],
         "keybindings": [
@@ -275,6 +279,25 @@
                     "type": "string",
                     "default": "bump",
                     "description": "Message to post to bump the thread."
+                },
+                "antigravity.runtimeWaitingReminderEnabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Show reminder notifications when runtime stays in waiting_for_chat_message state."
+                },
+                "antigravity.runtimeWaitingReminderDelaySec": {
+                    "type": "number",
+                    "default": 60,
+                    "minimum": 5,
+                    "maximum": 3600,
+                    "description": "Seconds to wait in waiting_for_chat_message state before showing reminder."
+                },
+                "antigravity.runtimeWaitingReminderCooldownSec": {
+                    "type": "number",
+                    "default": 180,
+                    "minimum": 5,
+                    "maximum": 7200,
+                    "description": "Minimum seconds between repeated waiting-state reminders."
                 },
                 "antigravity.acceptPatterns": {
                     "type": "array",

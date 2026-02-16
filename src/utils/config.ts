@@ -25,6 +25,9 @@ export interface AntigravityConfig {
     threadWaitInterval: number; // Seconds to wait between steps/threads
     autoApproveDelay: number;   // Seconds to wait before auto-approving
     bumpMessage: string;        // Message to post to bump thread
+    runtimeWaitingReminderEnabled: boolean;
+    runtimeWaitingReminderDelaySec: number;
+    runtimeWaitingReminderCooldownSec: number;
 
     // CDP Settings
     cdpPort: number;
@@ -102,6 +105,9 @@ export class ConfigManager {
             threadWaitInterval: config.get('threadWaitInterval', 5),
             autoApproveDelay: config.get('autoApproveDelay', 30),
             bumpMessage: config.get('bumpMessage', 'bump'),
+            runtimeWaitingReminderEnabled: config.get('runtimeWaitingReminderEnabled', true),
+            runtimeWaitingReminderDelaySec: config.get('runtimeWaitingReminderDelaySec', 60),
+            runtimeWaitingReminderCooldownSec: config.get('runtimeWaitingReminderCooldownSec', 180),
             cdpPort: config.get('cdpPort', 9000),
             cdpTimeout: config.get('cdpTimeout', 10000),
             preferredModelForReasoning: config.get('preferredModelForReasoning', 'claude-opus-4.5-thinking'),

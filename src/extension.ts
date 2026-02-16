@@ -34,6 +34,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Initialize Managers
     const strategyManager = new StrategyManager(context);
+    let latestRuntimeState: CDPRuntimeState | null = null;
 
     const resolveCDPStrategy = (): CDPStrategy | null => {
         const strategy = strategyManager.getStrategy('cdp') as any;
@@ -47,16 +48,37 @@ export function activate(context: vscode.ExtensionContext) {
         try {
             const cdp = resolveCDPStrategy();
             if (!cdp || !cdp.isConnected()) {
+                latestRuntimeState = null;
                 statusBar.updateRuntimeState(null);
                 return;
             }
 
             const runtimeState = await cdp.getRuntimeState();
+            latestRuntimeState = runtimeState;
             statusBar.updateRuntimeState(runtimeState);
         } catch {
+            latestRuntimeState = null;
             statusBar.updateRuntimeState(null);
         }
     };
+
+    const runtimeSummary = (state: CDPRuntimeState | null): string => {
+        if (!state) return 'state unavailable';
+        const status = state.status || 'unknown';
+        const done = state.doneTabs ?? 0;
+        const total = state.totalTabs ?? 0;
+        const pending = state.pendingAcceptButtons ?? 0;
+        const waiting = state.waitingForChatMessage ? 'yes' : 'no';
+        return `${status} | tabs ${done}/${total} | pending ${pending} | waiting chat ${waiting}`;
+    };
+
+    DashboardPanel.setRuntimeStateProvider(async () => {
+        const cdp = resolveCDPStrategy();
+        if (!cdp || !cdp.isConnected()) {
+            return null;
+        }
+        return cdp.getRuntimeState();
+    });
 
     // Wire up Status Bar to Autonomous Loop
     autonomousLoop.setStatusCallback(status => {
@@ -218,7 +240,13 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
         vscode.commands.registerCommand('antigravity.showStatusMenu', async () => {
+            await refreshRuntimeState();
             const items = [
+                {
+                    label: '$(graph) Runtime: ' + runtimeSummary(latestRuntimeState),
+                    description: 'Live runtime snapshot (read-only)',
+                    action: undefined as string | undefined
+                },
                 {
                     label: '$(rocket) Start Autonomous Loop (Yoke)',
                     description: 'Full AI Agent Mode',
@@ -238,6 +266,16 @@ export function activate(context: vscode.ExtensionContext) {
                     label: '$(gear) Open Dashboard',
                     description: 'Configure settings',
                     action: 'antigravity.openSettings'
+                },
+                {
+                    label: '$(pulse) Check Runtime State',
+                    description: 'Inspect processing/waiting/completion status',
+                    action: 'antigravity.checkRuntimeState'
+                },
+                {
+                    label: '$(clippy) Copy Runtime State JSON',
+                    description: 'Copy full runtime snapshot to clipboard',
+                    action: 'antigravity.copyRuntimeStateJson'
                 }
             ];
 
@@ -273,8 +311,26 @@ export function activate(context: vscode.ExtensionContext) {
             const waiting = state.waitingForChatMessage ? 'yes' : 'no';
 
             statusBar.updateRuntimeState(state);
+            latestRuntimeState = state;
             log.info(`[RuntimeState] status=${status} tabs=${done}/${total} pending=${pending} waitingForChatMessage=${waiting}`);
             vscode.window.showInformationMessage(`Antigravity Runtime: ${status} | tabs ${done}/${total} | pending ${pending} | waiting chat: ${waiting}`);
+        }),
+        vscode.commands.registerCommand('antigravity.copyRuntimeStateJson', async () => {
+            const cdp = resolveCDPStrategy();
+            if (!cdp) {
+                vscode.window.showWarningMessage('Antigravity: CDP strategy is not active.');
+                return;
+            }
+
+            const state = await cdp.getRuntimeState();
+            if (!state) {
+                vscode.window.showWarningMessage('Antigravity: Runtime state unavailable.');
+                return;
+            }
+
+            latestRuntimeState = state;
+            await vscode.env.clipboard.writeText(JSON.stringify(state, null, 2));
+            vscode.window.showInformationMessage('Antigravity runtime state JSON copied to clipboard.');
         })
     );
 

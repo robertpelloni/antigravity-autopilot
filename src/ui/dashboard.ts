@@ -3,9 +3,14 @@ import { config } from '../utils/config';
 
 export class DashboardPanel {
     public static currentPanel: DashboardPanel | undefined;
+    private static runtimeStateProvider: (() => Promise<any | null>) | null = null;
     private readonly _panel: vscode.WebviewPanel;
     private readonly _extensionUri: vscode.Uri;
     private _disposables: vscode.Disposable[] = [];
+
+    public static setRuntimeStateProvider(provider: (() => Promise<any | null>) | null) {
+        DashboardPanel.runtimeStateProvider = provider;
+    }
 
     private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
         this._panel = panel;
@@ -38,6 +43,23 @@ export class DashboardPanel {
                         const preset = String(message.preset || 'balanced') as 'conservative' | 'balanced' | 'aggressive';
                         await this._applyInteractionPreset(profile, preset);
                         vscode.window.showInformationMessage(`Applied ${preset} preset to ${profile} profile`);
+                        return;
+                    }
+                    case 'requestRuntimeState': {
+                        const provider = DashboardPanel.runtimeStateProvider;
+                        if (!provider) {
+                            this._panel.webview.postMessage({
+                                command: 'runtimeStateUpdate',
+                                state: null
+                            });
+                            return;
+                        }
+
+                        const state = await provider();
+                        this._panel.webview.postMessage({
+                            command: 'runtimeStateUpdate',
+                            state: state || null
+                        });
                         return;
                     }
                 }
@@ -205,10 +227,44 @@ export class DashboardPanel {
                 button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 6px 12px; cursor: pointer; border-radius: 3px; }
                 button:hover { background: var(--vscode-button-hoverBackground); }
                 .version { color: var(--vscode-descriptionForeground); font-size: 12px; margin-top: 16px; text-align: center; }
+                .runtime-grid { display:grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-top: 8px; }
+                .runtime-chip { display:inline-block; padding: 2px 8px; border-radius: 999px; font-weight: 700; font-size: 12px; }
+                .runtime-chip.active { background: rgba(59,130,246,0.25); color: #93c5fd; }
+                .runtime-chip.pending { background: rgba(245,158,11,0.25); color: #fcd34d; }
+                .runtime-chip.complete { background: rgba(34,197,94,0.25); color: #86efac; }
+                .runtime-chip.waiting { background: rgba(168,85,247,0.25); color: #d8b4fe; }
+                .runtime-chip.idle { background: rgba(107,114,128,0.25); color: #d1d5db; }
+                .runtime-chip.unknown { background: rgba(75,85,99,0.25); color: #e5e7eb; }
+                .muted { color: var(--vscode-descriptionForeground); font-size: 12px; }
+                .runtime-history { margin-top: 10px; max-height: 120px; overflow-y: auto; border: 1px solid var(--vscode-widget-border); border-radius: 4px; padding: 6px; }
+                .runtime-history-item { font-size: 12px; padding: 2px 0; color: var(--vscode-descriptionForeground); border-bottom: 1px dashed var(--vscode-widget-border); }
+                .runtime-history-item:last-child { border-bottom: none; }
             </style>
         </head>
         <body>
             <h1>⚡ Antigravity Autopilot</h1>
+
+            <div class="card">
+                <h2>Runtime State</h2>
+                <div class="setting">
+                    <label>Status:</label>
+                    <span id="runtimeStatusChip" class="runtime-chip unknown">UNKNOWN</span>
+                </div>
+                <div class="runtime-grid">
+                    <div><strong>Mode:</strong> <span id="runtimeMode" class="muted">-</span></div>
+                    <div><strong>Idle:</strong> <span id="runtimeIdle" class="muted">-</span></div>
+                    <div><strong>Tabs:</strong> <span id="runtimeTabs" class="muted">-</span></div>
+                    <div><strong>Pending Accept:</strong> <span id="runtimePending" class="muted">-</span></div>
+                    <div><strong>Waiting Chat:</strong> <span id="runtimeWaiting" class="muted">-</span></div>
+                    <div><strong>Updated:</strong> <span id="runtimeUpdated" class="muted">-</span></div>
+                    <div><strong>State Duration:</strong> <span id="runtimeStateDuration" class="muted">-</span></div>
+                    <div><strong>Waiting Since:</strong> <span id="runtimeWaitingSince" class="muted">-</span></div>
+                </div>
+                <div style="margin-top:10px;display:flex;gap:8px;">
+                    <button onclick="requestRuntimeState()">Refresh Runtime State</button>
+                </div>
+                <div class="runtime-history" id="runtimeHistory"></div>
+            </div>
             
             <!-- STRATEGIES -->
             <div class="card">
@@ -552,6 +608,122 @@ export class DashboardPanel {
                         preset: preset
                     });
                 }
+
+                function runtimeClassForStatus(status) {
+                    if (status === 'processing') return 'active';
+                    if (status === 'pending_accept_actions') return 'pending';
+                    if (status === 'all_tasks_complete') return 'complete';
+                    if (status === 'waiting_for_chat_message') return 'waiting';
+                    if (status === 'idle') return 'idle';
+                    return 'unknown';
+                }
+
+                const runtimeHistory = [];
+                const MAX_RUNTIME_HISTORY = 20;
+                let currentStatus = null;
+                let currentStatusSince = null;
+                let waitingSince = null;
+
+                function formatDurationMs(ms) {
+                    if (!ms || ms < 0) return '-';
+                    const totalSec = Math.floor(ms / 1000);
+                    const mins = Math.floor(totalSec / 60);
+                    const secs = totalSec % 60;
+                    return mins > 0 ? (mins + 'm ' + secs + 's') : (secs + 's');
+                }
+
+                function pushRuntimeHistory(status, timestamp) {
+                    const at = new Date(timestamp || Date.now()).toLocaleTimeString();
+                    runtimeHistory.unshift({ status, at });
+                    if (runtimeHistory.length > MAX_RUNTIME_HISTORY) {
+                        runtimeHistory.length = MAX_RUNTIME_HISTORY;
+                    }
+                }
+
+                function renderRuntimeHistory() {
+                    const root = document.getElementById('runtimeHistory');
+                    if (!root) return;
+
+                    if (runtimeHistory.length === 0) {
+                        root.innerHTML = '<div class="runtime-history-item">No runtime transitions yet.</div>';
+                        return;
+                    }
+
+                    root.innerHTML = runtimeHistory
+                        .map(item => '<div class="runtime-history-item">' + item.at + ' → ' + item.status.toUpperCase() + '</div>')
+                        .join('');
+                }
+
+                function yesNo(value) {
+                    return value ? 'yes' : 'no';
+                }
+
+                function updateRuntimeUi(state) {
+                    const chip = document.getElementById('runtimeStatusChip');
+                    const mode = document.getElementById('runtimeMode');
+                    const idle = document.getElementById('runtimeIdle');
+                    const tabs = document.getElementById('runtimeTabs');
+                    const pending = document.getElementById('runtimePending');
+                    const waiting = document.getElementById('runtimeWaiting');
+                    const updated = document.getElementById('runtimeUpdated');
+                    const stateDuration = document.getElementById('runtimeStateDuration');
+                    const waitingSinceEl = document.getElementById('runtimeWaitingSince');
+
+                    if (!state) {
+                        chip.className = 'runtime-chip unknown';
+                        chip.textContent = 'UNAVAILABLE';
+                        mode.textContent = '-';
+                        idle.textContent = '-';
+                        tabs.textContent = '-';
+                        pending.textContent = '-';
+                        waiting.textContent = '-';
+                        updated.textContent = new Date().toLocaleTimeString();
+                        stateDuration.textContent = '-';
+                        waitingSinceEl.textContent = '-';
+                        renderRuntimeHistory();
+                        return;
+                    }
+
+                    const status = String(state.status || 'unknown');
+                    const ts = state.timestamp || Date.now();
+
+                    if (currentStatus !== status) {
+                        currentStatus = status;
+                        currentStatusSince = ts;
+                        pushRuntimeHistory(status, ts);
+                    }
+
+                    if (status === 'waiting_for_chat_message') {
+                        if (!waitingSince) waitingSince = ts;
+                    } else {
+                        waitingSince = null;
+                    }
+
+                    chip.className = 'runtime-chip ' + runtimeClassForStatus(status);
+                    chip.textContent = status.toUpperCase();
+                    mode.textContent = state.mode || '-';
+                    idle.textContent = yesNo(!!state.isIdle);
+                    tabs.textContent = (state.doneTabs ?? 0) + ' / ' + (state.totalTabs ?? 0);
+                    pending.textContent = String(state.pendingAcceptButtons ?? 0);
+                    waiting.textContent = yesNo(!!state.waitingForChatMessage);
+                    updated.textContent = new Date(ts).toLocaleTimeString();
+                    stateDuration.textContent = formatDurationMs(ts - (currentStatusSince || ts));
+                    waitingSinceEl.textContent = waitingSince ? new Date(waitingSince).toLocaleTimeString() : '-';
+                    renderRuntimeHistory();
+                }
+
+                function requestRuntimeState() {
+                    vscode.postMessage({ command: 'requestRuntimeState' });
+                }
+
+                window.addEventListener('message', event => {
+                    const message = event.data;
+                    if (!message || message.command !== 'runtimeStateUpdate') return;
+                    updateRuntimeUi(message.state || null);
+                });
+
+                requestRuntimeState();
+                setInterval(requestRuntimeState, 3000);
             </script>
         </body>
         </html>`;

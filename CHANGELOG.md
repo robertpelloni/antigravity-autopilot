@@ -5,6 +5,33 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.8] - 2026-02-16
+
+### Added
+- **Runtime JSON Export**: Added `Antigravity: Copy Runtime State JSON` command (`antigravity.copyRuntimeStateJson`) for fast debugging and external handoff.
+
+### Changed
+- **Status Menu Runtime Header**: Status quick menu now begins with a live runtime summary row (status, tabs, pending actions, waiting-for-chat signal).
+- **Runtime Cache Wiring**: Extension now caches the latest runtime snapshot for immediate status-menu rendering.
+
+## [4.10.7] - 2026-02-16
+
+### Added
+- **Runtime Transition Timeline**: Dashboard now tracks and displays recent runtime status transitions (up to 20 entries) with timestamps.
+- **State Duration Metrics**: Added dashboard fields for current-state elapsed duration and waiting-since timestamp when status is `waiting_for_chat_message`.
+
+### Changed
+- **Status Menu Shortcut**: Added `Check Runtime State` entry to the status quick menu for faster diagnostics.
+
+## [4.10.6] - 2026-02-16
+
+### Added
+- **Dashboard Runtime State Card**: Added live runtime-state section in the dashboard with status chip and fields for mode, idle state, tab completion, pending accept actions, and waiting-for-chat-message detection.
+- **Dashboard Runtime Refresh**: Added manual and automatic (3s) runtime-state polling from webview to extension host.
+
+### Changed
+- **Dashboard/Host Bridge**: Added `requestRuntimeState` ↔ `runtimeStateUpdate` message channel and provider wiring through `DashboardPanel.setRuntimeStateProvider()`.
+
 ## [4.10.5] - 2026-02-16
 
 ### Added
