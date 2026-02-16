@@ -186,283 +186,283 @@
                 return true;
             };
         }
-    }
+
 
         function setFocusState(isFocused, log) {
-        const state = window.__autoAllState;
-        if (!state || !state.stats) return;
+            const state = window.__autoAllState;
+            if (!state || !state.stats) return;
 
-        const wasAway = !state.stats.isWindowFocused;
-        state.stats.isWindowFocused = isFocused;
+            const wasAway = !state.stats.isWindowFocused;
+            state.stats.isWindowFocused = isFocused;
 
-        if (log) {
-            log(`[Focus] Extension sync: focused=${isFocused}, wasAway=${wasAway}`);
+            if (log) {
+                log(`[Focus] Extension sync: focused=${isFocused}, wasAway=${wasAway}`);
+            }
         }
-    }
 
-    return {
-        initialize,
-        trackClick,
-        trackBlocked,
-        categorizeClick,
-        ActionType,
-        collectROI,
-        getSessionSummary,
-        consumeAwayActions,
-        isUserAway,
-        getStats,
-        setFocusState
+        return {
+            initialize,
+            trackClick,
+            trackBlocked,
+            categorizeClick,
+            ActionType,
+            collectROI,
+            getSessionSummary,
+            consumeAwayActions,
+            isUserAway,
+            getStats,
+            setFocusState
+        };
+    })();
+
+    const log = (msg, isSuccess = false) => {
+
+        console.log(`[autoAll] ${msg}`);
     };
-})();
 
-const log = (msg, isSuccess = false) => {
+    Analytics.initialize(log);
 
-    console.log(`[autoAll] ${msg}`);
-};
-
-Analytics.initialize(log);
-
-const timerWorkerCode = `
+    const timerWorkerCode = `
         self.onmessage = function(e) {
             setTimeout(function() {
                 self.postMessage({ id: e.data.id });
             }, e.data.ms);
         };
     `;
-let timerWorker = null;
-let timerCallbacks = new Map();
-let timerId = 0;
+    let timerWorker = null;
+    let timerCallbacks = new Map();
+    let timerId = 0;
 
-function getTimerWorker() {
-    if (!timerWorker && typeof Worker !== 'undefined' && typeof Blob !== 'undefined') {
+    function getTimerWorker() {
+        if (!timerWorker && typeof Worker !== 'undefined' && typeof Blob !== 'undefined') {
+            try {
+                const blob = new Blob([timerWorkerCode], { type: 'application/javascript' });
+                timerWorker = new Worker(URL.createObjectURL(blob));
+                timerWorker.onmessage = function (e) {
+                    const cb = timerCallbacks.get(e.data.id);
+                    if (cb) {
+                        timerCallbacks.delete(e.data.id);
+                        cb();
+                    }
+                };
+                timerWorker.onerror = function (err) {
+                    log('[Timer] Worker error, falling back to setTimeout');
+                    timerWorker = null;
+                };
+                log('[Timer] Web Worker initialized for background operation');
+            } catch (err) {
+                log('[Timer] Web Worker not available, using setTimeout fallback');
+            }
+        }
+        return timerWorker;
+    }
+
+    function workerDelay(ms) {
+        return new Promise(function (resolve) {
+            const worker = getTimerWorker();
+            if (worker) {
+                const id = ++timerId;
+                timerCallbacks.set(id, resolve);
+                worker.postMessage({ id: id, ms: ms });
+            } else {
+
+                setTimeout(resolve, ms);
+            }
+        });
+    }
+
+    const getDocuments = (root = document) => {
+        let docs = [root];
         try {
-            const blob = new Blob([timerWorkerCode], { type: 'application/javascript' });
-            timerWorker = new Worker(URL.createObjectURL(blob));
-            timerWorker.onmessage = function (e) {
-                const cb = timerCallbacks.get(e.data.id);
-                if (cb) {
-                    timerCallbacks.delete(e.data.id);
-                    cb();
+            // Traverse Shadow DOM
+            const traverse = (node) => {
+                if (node.shadowRoot) {
+                    docs.push(node.shadowRoot);
+                    traverse(node.shadowRoot);
+                }
+                const children = node.children || node.querySelectorAll('*');
+                for (const child of children) {
+                    traverse(child);
                 }
             };
-            timerWorker.onerror = function (err) {
-                log('[Timer] Worker error, falling back to setTimeout');
-                timerWorker = null;
-            };
-            log('[Timer] Web Worker initialized for background operation');
-        } catch (err) {
-            log('[Timer] Web Worker not available, using setTimeout fallback');
-        }
-    }
-    return timerWorker;
-}
-
-function workerDelay(ms) {
-    return new Promise(function (resolve) {
-        const worker = getTimerWorker();
-        if (worker) {
-            const id = ++timerId;
-            timerCallbacks.set(id, resolve);
-            worker.postMessage({ id: id, ms: ms });
-        } else {
-
-            setTimeout(resolve, ms);
-        }
-    });
-}
-
-const getDocuments = (root = document) => {
-    let docs = [root];
-    try {
-        // Traverse Shadow DOM
-        const traverse = (node) => {
-            if (node.shadowRoot) {
-                docs.push(node.shadowRoot);
-                traverse(node.shadowRoot);
+            // traverse(root.body || root); // Can be expensive, but necessary for deep shadow roots
+            // Optimized approach: Query all elements and check for shadowRoot
+            const allElements = root.querySelectorAll('*');
+            for (const el of allElements) {
+                if (el.shadowRoot) {
+                    docs.push(el.shadowRoot);
+                    // Recursively get docs from shadow root
+                    docs.push(...getDocuments(el.shadowRoot));
+                }
             }
-            const children = node.children || node.querySelectorAll('*');
-            for (const child of children) {
-                traverse(child);
+
+            // Traverse Iframes
+            const iframes = root.querySelectorAll('iframe, frame');
+            for (const iframe of iframes) {
+                try {
+                    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+                    if (iframeDoc) docs.push(...getDocuments(iframeDoc));
+                } catch (e) { }
             }
-        };
-        // traverse(root.body || root); // Can be expensive, but necessary for deep shadow roots
-        // Optimized approach: Query all elements and check for shadowRoot
-        const allElements = root.querySelectorAll('*');
-        for (const el of allElements) {
-            if (el.shadowRoot) {
-                docs.push(el.shadowRoot);
-                // Recursively get docs from shadow root
-                docs.push(...getDocuments(el.shadowRoot));
-            }
-        }
+        } catch (e) { }
+        return docs;
+    };
 
-        // Traverse Iframes
-        const iframes = root.querySelectorAll('iframe, frame');
-        for (const iframe of iframes) {
-            try {
-                const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-                if (iframeDoc) docs.push(...getDocuments(iframeDoc));
-            } catch (e) { }
-        }
-    } catch (e) { }
-    return docs;
-};
-
-const queryAll = (selector) => {
-    const results = [];
-    getDocuments().forEach(doc => {
-        try { results.push(...Array.from(doc.querySelectorAll(selector))); } catch (e) { }
-    });
-    return results;
-};
-
-const stripTimeSuffix = (text) => {
-    return (text || '').trim().replace(/\s*\d+[smh]$/, '').trim();
-};
-
-// --- Remote Interactions (Bypassing Trusted Event Reqs) ---
-// --- Remote Interactions (Bypassing Trusted Event Reqs) ---
-async function remoteClick(el) {
-    if (!el || !isElementVisible(el)) return false;
-
-    // Calculate Global Coordinates (handling iframes)
-    let x = 0;
-    let y = 0;
-    let width = 0;
-    let height = 0;
-
-    try {
-        const rect = el.getBoundingClientRect();
-        width = rect.width;
-        height = rect.height;
-
-        // Start with local coordinates within the element's document (viewport-relative)
-        x = rect.left;
-        y = rect.top;
-
-        let currentWin = el.ownerDocument.defaultView;
-
-        // Traverse up the frame chain until we reach the script's execution context (window)
-        while (currentWin && currentWin !== window) {
-            try {
-                const frameElement = currentWin.frameElement;
-                if (!frameElement) break; // Can't go higher (cross-origin or top)
-
-                const frameRect = frameElement.getBoundingClientRect();
-                x += frameRect.left;
-                y += frameRect.top;
-
-                // Adjust if frame has borders? Usually getBoundingClientRect handles content box vs border box
-                // But here we just want the offset of the frame in the parent.
-                // The inner window's (0,0) is at (frameRect.left + borderLeft, frameRect.top + borderTop)
-                // But getting border width is hard. Assuming minimal borders for now.
-                // Actually, frameRect includes border.
-                const style = window.getComputedStyle(frameElement);
-                x += parseFloat(style.borderLeftWidth || '0') + parseFloat(style.paddingLeft || '0');
-                y += parseFloat(style.borderTopWidth || '0') + parseFloat(style.paddingTop || '0');
-
-                currentWin = currentWin.parent;
-            } catch (e) { break; }
-        }
-    } catch (e) {
-        // Fallback
-        const r = el.getBoundingClientRect();
-        x = r.left; y = r.top; width = r.width; height = r.height;
-    }
-
-    if (width === 0 || height === 0) return false;
-
-    const centerX = Math.round(x + (width / 2));
-    const centerY = Math.round(y + (height / 2));
-
-    // Send command to Extension via Console Bridge
-    // Send command to Extension via Bridge (Binding preferred)
-    const payload = `__ANTIGRAVITY_CLICK__:${centerX}:${centerY}`;
-    if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
-        window.__ANTIGRAVITY_BRIDGE__(payload);
-        log(`[Bridge] Sent Click via Binding: ${centerX},${centerY}`);
-    } else {
-        console.log(payload);
-        log(`[Bridge] Sent Click via Console: ${centerX},${centerY}`);
-    }
-
-    // Also fire standard click for immediate UI feedback (hover states etc)
-    try { el.click(); } catch (e) { }
-
-    await workerDelay(100);
-    return true;
-}
-
-async function remoteType(text) {
-    if (!text) return;
-    sendCommandToExtension(`__ANTIGRAVITY_TYPE__:${text}`);
-    await workerDelay(50);
-}
-
-function sendCommandToBridge(commandId, args) {
-    let payload = `__ANTIGRAVITY_COMMAND__:${commandId}`;
-    if (args) {
-        payload += `|${JSON.stringify(args)}`;
-    }
-    sendCommandToExtension(payload);
-}
-
-function sendCommandToExtension(payload) {
-    if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
-        window.__ANTIGRAVITY_BRIDGE__(payload);
-        log(`[Bridge] Sent: ${payload}`);
-    } else {
-        console.log(payload);
-        log(`[Bridge] Console: ${payload}`);
-    }
-}
-
-// Polyfill for RequestIdleCallback if needed
-window.requestIdleCallback = window.requestIdleCallback || function (cb) {
-    return setTimeout(() => {
-        const start = Date.now();
-        cb({
-            didTimeout: false,
-            timeRemaining: () => Math.max(0, 50 - (Date.now() - start))
+    const queryAll = (selector) => {
+        const results = [];
+        getDocuments().forEach(doc => {
+            try { results.push(...Array.from(doc.querySelectorAll(selector))); } catch (e) { }
         });
-    }, 1);
-};
+        return results;
+    };
 
-const deduplicateNames = (names) => {
-    const counts = {};
-    return names.map(name => {
-        if (counts[name] === undefined) {
-            counts[name] = 1;
-            return name;
-        } else {
-            counts[name]++;
-            return `${name} (${counts[name]})`;
+    const stripTimeSuffix = (text) => {
+        return (text || '').trim().replace(/\s*\d+[smh]$/, '').trim();
+    };
+
+    // --- Remote Interactions (Bypassing Trusted Event Reqs) ---
+    // --- Remote Interactions (Bypassing Trusted Event Reqs) ---
+    async function remoteClick(el) {
+        if (!el || !isElementVisible(el)) return false;
+
+        // Calculate Global Coordinates (handling iframes)
+        let x = 0;
+        let y = 0;
+        let width = 0;
+        let height = 0;
+
+        try {
+            const rect = el.getBoundingClientRect();
+            width = rect.width;
+            height = rect.height;
+
+            // Start with local coordinates within the element's document (viewport-relative)
+            x = rect.left;
+            y = rect.top;
+
+            let currentWin = el.ownerDocument.defaultView;
+
+            // Traverse up the frame chain until we reach the script's execution context (window)
+            while (currentWin && currentWin !== window) {
+                try {
+                    const frameElement = currentWin.frameElement;
+                    if (!frameElement) break; // Can't go higher (cross-origin or top)
+
+                    const frameRect = frameElement.getBoundingClientRect();
+                    x += frameRect.left;
+                    y += frameRect.top;
+
+                    // Adjust if frame has borders? Usually getBoundingClientRect handles content box vs border box
+                    // But here we just want the offset of the frame in the parent.
+                    // The inner window's (0,0) is at (frameRect.left + borderLeft, frameRect.top + borderTop)
+                    // But getting border width is hard. Assuming minimal borders for now.
+                    // Actually, frameRect includes border.
+                    const style = window.getComputedStyle(frameElement);
+                    x += parseFloat(style.borderLeftWidth || '0') + parseFloat(style.paddingLeft || '0');
+                    y += parseFloat(style.borderTopWidth || '0') + parseFloat(style.paddingTop || '0');
+
+                    currentWin = currentWin.parent;
+                } catch (e) { break; }
+            }
+        } catch (e) {
+            // Fallback
+            const r = el.getBoundingClientRect();
+            x = r.left; y = r.top; width = r.width; height = r.height;
         }
-    });
-};
 
-const updateTabNames = (tabs) => {
-    const rawNames = Array.from(tabs).map(tab => stripTimeSuffix(tab.textContent));
-    const tabNames = deduplicateNames(rawNames);
+        if (width === 0 || height === 0) return false;
 
-    if (JSON.stringify(window.__autoAllState.tabNames) !== JSON.stringify(tabNames)) {
-        log(`updateTabNames: Detected ${tabNames.length} tabs: ${tabNames.join(', ')}`);
-        window.__autoAllState.tabNames = tabNames;
+        const centerX = Math.round(x + (width / 2));
+        const centerY = Math.round(y + (height / 2));
+
+        // Send command to Extension via Console Bridge
+        // Send command to Extension via Bridge (Binding preferred)
+        const payload = `__ANTIGRAVITY_CLICK__:${centerX}:${centerY}`;
+        if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
+            window.__ANTIGRAVITY_BRIDGE__(payload);
+            log(`[Bridge] Sent Click via Binding: ${centerX},${centerY}`);
+        } else {
+            console.log(payload);
+            log(`[Bridge] Sent Click via Console: ${centerX},${centerY}`);
+        }
+
+        // Also fire standard click for immediate UI feedback (hover states etc)
+        try { el.click(); } catch (e) { }
+
+        await workerDelay(100);
+        return true;
     }
-};
 
-const updateConversationCompletionState = (rawTabName, status) => {
-    const tabName = stripTimeSuffix(rawTabName);
-    const current = window.__autoAllState.completionStatus[tabName];
-    if (current !== status) {
-        log(`[State] ${tabName}: ${current} → ${status}`);
-        window.__autoAllState.completionStatus[tabName] = status;
+    async function remoteType(text) {
+        if (!text) return;
+        sendCommandToExtension(`__ANTIGRAVITY_TYPE__:${text}`);
+        await workerDelay(50);
     }
-};
 
-const OVERLAY_ID = '__autoAllBgOverlay';
-const STYLE_ID = '__autoAllBgStyles';
-const STYLES = `
+    function sendCommandToBridge(commandId, args) {
+        let payload = `__ANTIGRAVITY_COMMAND__:${commandId}`;
+        if (args) {
+            payload += `|${JSON.stringify(args)}`;
+        }
+        sendCommandToExtension(payload);
+    }
+
+    function sendCommandToExtension(payload) {
+        if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
+            window.__ANTIGRAVITY_BRIDGE__(payload);
+            log(`[Bridge] Sent: ${payload}`);
+        } else {
+            console.log(payload);
+            log(`[Bridge] Console: ${payload}`);
+        }
+    }
+
+    // Polyfill for RequestIdleCallback if needed
+    window.requestIdleCallback = window.requestIdleCallback || function (cb) {
+        return setTimeout(() => {
+            const start = Date.now();
+            cb({
+                didTimeout: false,
+                timeRemaining: () => Math.max(0, 50 - (Date.now() - start))
+            });
+        }, 1);
+    };
+
+    const deduplicateNames = (names) => {
+        const counts = {};
+        return names.map(name => {
+            if (counts[name] === undefined) {
+                counts[name] = 1;
+                return name;
+            } else {
+                counts[name]++;
+                return `${name} (${counts[name]})`;
+            }
+        });
+    };
+
+    const updateTabNames = (tabs) => {
+        const rawNames = Array.from(tabs).map(tab => stripTimeSuffix(tab.textContent));
+        const tabNames = deduplicateNames(rawNames);
+
+        if (JSON.stringify(window.__autoAllState.tabNames) !== JSON.stringify(tabNames)) {
+            log(`updateTabNames: Detected ${tabNames.length} tabs: ${tabNames.join(', ')}`);
+            window.__autoAllState.tabNames = tabNames;
+        }
+    };
+
+    const updateConversationCompletionState = (rawTabName, status) => {
+        const tabName = stripTimeSuffix(rawTabName);
+        const current = window.__autoAllState.completionStatus[tabName];
+        if (current !== status) {
+            log(`[State] ${tabName}: ${current} → ${status}`);
+            window.__autoAllState.completionStatus[tabName] = status;
+        }
+    };
+
+    const OVERLAY_ID = '__autoAllBgOverlay';
+    const STYLE_ID = '__autoAllBgStyles';
+    const STYLES = `
         #__autoAllBgOverlay { position: fixed; background: rgba(0, 0, 0, 0.98); z-index: 2147483647; font-family: sans-serif; color: #fff; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
         #__autoAllBgOverlay.visible { opacity: 1; }
         .aab-slot { margin-bottom: 12px; width: 80%; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; }
@@ -476,689 +476,565 @@ const STYLES = `
         .aab-slot.done .status-text { color: #22c55e; }
     `;
 
-function showOverlay() {
-    if (document.getElementById(OVERLAY_ID)) {
-        log('[Overlay] Already exists, skipping creation');
-        return;
-    }
-
-    log('[Overlay] Creating overlay...');
-    const state = window.__autoAllState;
-
-    if (!document.getElementById(STYLE_ID)) {
-        const style = document.createElement('style');
-        style.id = STYLE_ID;
-        style.textContent = STYLES;
-        document.head.appendChild(style);
-        log('[Overlay] Styles injected');
-    }
-
-    const overlay = document.createElement('div');
-    overlay.id = OVERLAY_ID;
-
-    const container = document.createElement('div');
-    container.id = 'aab-c';
-    container.style.cssText = 'width:100%; display:flex; flex-direction:column; align-items:center;';
-    overlay.appendChild(container);
-
-    document.body.appendChild(overlay);
-    log('[Overlay] Overlay appended to body');
-
-    const ide = state.currentMode || 'cursor';
-    let panel = null;
-    if (ide === 'antigravity') {
-        panel = queryAll('#antigravity\\.agentPanel').find(p => p.offsetWidth > 50);
-    } else {
-        panel = queryAll('#workbench\\.parts\\.auxiliarybar').find(p => p.offsetWidth > 50);
-    }
-
-    if (panel) {
-        log(`[Overlay] Found panel for ${ide}, syncing position`);
-        const sync = () => {
-            const r = panel.getBoundingClientRect();
-            Object.assign(overlay.style, { top: r.top + 'px', left: r.left + 'px', width: r.width + 'px', height: r.height + 'px' });
-        };
-        sync();
-        new ResizeObserver(sync).observe(panel);
-    } else {
-        log('[Overlay] No panel found, using fullscreen');
-        Object.assign(overlay.style, { top: '0', left: '0', width: '100%', height: '100%' });
-    }
-
-    const waitingDiv = document.createElement('div');
-    waitingDiv.className = 'aab-waiting';
-    waitingDiv.style.cssText = 'color:#888; font-size:12px;';
-    waitingDiv.textContent = 'Scanning for conversations...';
-    container.appendChild(waitingDiv);
-
-    requestAnimationFrame(() => overlay.classList.add('visible'));
-}
-
-function updateOverlay() {
-    const state = window.__autoAllState;
-    const container = document.getElementById('aab-c');
-
-    if (!container) {
-        log('[Overlay] updateOverlay: No container found, skipping');
-        return;
-    }
-
-    log(`[Overlay] updateOverlay call: tabNames count=${state.tabNames?.length || 0}`);
-    const newNames = state.tabNames || [];
-
-    if (newNames.length === 0) {
-        if (!container.querySelector('.aab-waiting')) {
-            container.textContent = '';
-            const waitingDiv = document.createElement('div');
-            waitingDiv.className = 'aab-waiting';
-            waitingDiv.style.cssText = 'color:#888; font-size:12px;';
-            waitingDiv.textContent = 'Scanning for conversations...';
-            container.appendChild(waitingDiv);
+    function showOverlay() {
+        if (document.getElementById(OVERLAY_ID)) {
+            log('[Overlay] Already exists, skipping creation');
+            return;
         }
-        return;
-    }
 
-    const waiting = container.querySelector('.aab-waiting');
-    if (waiting) waiting.remove();
+        log('[Overlay] Creating overlay...');
+        const state = window.__autoAllState;
 
-    const currentSlots = Array.from(container.querySelectorAll('.aab-slot'));
+        if (!document.getElementById(STYLE_ID)) {
+            const style = document.createElement('style');
+            style.id = STYLE_ID;
+            style.textContent = STYLES;
+            document.head.appendChild(style);
+            log('[Overlay] Styles injected');
+        }
 
-    currentSlots.forEach(slot => {
-        const name = slot.getAttribute('data-name');
-        if (!newNames.includes(name)) slot.remove();
-    });
+        const overlay = document.createElement('div');
+        overlay.id = OVERLAY_ID;
 
-    newNames.forEach(name => {
-        const status = state.completionStatus[name];
-        const isDone = status === 'done';
+        const container = document.createElement('div');
+        container.id = 'aab-c';
+        container.style.cssText = 'width:100%; display:flex; flex-direction:column; align-items:center;';
+        overlay.appendChild(container);
 
-        const statusClass = isDone ? 'done' : 'working';
-        const statusText = isDone ? 'COMPLETED' : 'IN PROGRESS';
-        const progressWidth = isDone ? '100%' : '66%';
+        document.body.appendChild(overlay);
+        log('[Overlay] Overlay appended to body');
 
-        let slot = container.querySelector(`.aab-slot[data-name="${name}"]`);
-
-        if (!slot) {
-            slot = document.createElement('div');
-            slot.className = `aab-slot ${statusClass}`;
-            slot.setAttribute('data-name', name);
-
-            const header = document.createElement('div');
-            header.className = 'aab-header';
-
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = name;
-            header.appendChild(nameSpan);
-
-            const statusSpan = document.createElement('span');
-            statusSpan.className = 'status-text';
-            statusSpan.textContent = statusText;
-            header.appendChild(statusSpan);
-
-            slot.appendChild(header);
-
-            const track = document.createElement('div');
-            track.className = 'aab-progress-track';
-
-            const fill = document.createElement('div');
-            fill.className = 'aab-progress-fill';
-            fill.style.width = progressWidth;
-            track.appendChild(fill);
-
-            slot.appendChild(track);
-            container.appendChild(slot);
-            log(`[Overlay] Created slot: ${name} (${statusText})`);
+        const ide = state.currentMode || 'cursor';
+        let panel = null;
+        if (ide === 'antigravity') {
+            panel = queryAll('#antigravity\\.agentPanel').find(p => p.offsetWidth > 50);
         } else {
-
-            slot.className = `aab-slot ${statusClass}`;
-
-            const statusSpan = slot.querySelector('.status-text');
-            if (statusSpan) statusSpan.textContent = statusText;
-
-            const bar = slot.querySelector('.aab-progress-fill');
-            if (bar) bar.style.width = progressWidth;
+            panel = queryAll('#workbench\\.parts\\.auxiliarybar').find(p => p.offsetWidth > 50);
         }
-    });
 
-    // Add Bump Timer Display
-    let timerSlot = container.querySelector('.aab-timer-slot');
-    if (!timerSlot) {
-        timerSlot = document.createElement('div');
-        timerSlot.className = 'aab-timer-slot';
-        timerSlot.style.cssText = 'font-size: 10px; color: #888; margin-top: 8px; text-align: center;';
-        container.appendChild(timerSlot);
-    }
-
-    if (state.bumpEnabled) {
-        const now = Date.now();
-        const cooldown = state.autoApproveDelay || 30000;
-        // logic: max delay - (now - lastAction)
-        let referenceTime = Math.max(lastClickTime || state.stats.sessionStartTime, lastBumpTime || 0);
-        const timeSinceRef = now - referenceTime;
-        const remaining = Math.max(0, Math.ceil((cooldown - timeSinceRef) / 1000));
-
-        if (remaining > 0) {
-            timerSlot.textContent = `Auto-Bump in ${remaining}s...`;
-            timerSlot.style.color = '#aaa';
+        if (panel) {
+            log(`[Overlay] Found panel for ${ide}, syncing position`);
+            const sync = () => {
+                const r = panel.getBoundingClientRect();
+                Object.assign(overlay.style, { top: r.top + 'px', left: r.left + 'px', width: r.width + 'px', height: r.height + 'px' });
+            };
+            sync();
+            new ResizeObserver(sync).observe(panel);
         } else {
-            timerSlot.textContent = `Auto-Bump: Ready`;
-            timerSlot.style.color = '#4ade80';
+            log('[Overlay] No panel found, using fullscreen');
+            Object.assign(overlay.style, { top: '0', left: '0', width: '100%', height: '100%' });
         }
-    } else {
-        timerSlot.textContent = '';
+
+        const waitingDiv = document.createElement('div');
+        waitingDiv.className = 'aab-waiting';
+        waitingDiv.style.cssText = 'color:#888; font-size:12px;';
+        waitingDiv.textContent = 'Scanning for conversations...';
+        container.appendChild(waitingDiv);
+
+        requestAnimationFrame(() => overlay.classList.add('visible'));
     }
-}
 
-function hideOverlay() {
-    const overlay = document.getElementById(OVERLAY_ID);
-    if (overlay) {
-        log('[Overlay] Hiding overlay...');
-        overlay.classList.remove('visible');
-        setTimeout(() => overlay.remove(), 300);
-    }
-}
+    function updateOverlay() {
+        const state = window.__autoAllState;
+        const container = document.getElementById('aab-c');
 
-function findNearbyCommandText(el) {
-    const commandSelectors = ['pre', 'code', 'pre code'];
-    let commandText = '';
+        if (!container) {
+            log('[Overlay] updateOverlay: No container found, skipping');
+            return;
+        }
 
-    let container = el.parentElement;
-    let depth = 0;
-    const maxDepth = 10;
+        log(`[Overlay] updateOverlay call: tabNames count=${state.tabNames?.length || 0}`);
+        const newNames = state.tabNames || [];
 
-    while (container && depth < maxDepth) {
-
-        let sibling = container.previousElementSibling;
-        let siblingCount = 0;
-
-        while (sibling && siblingCount < 5) {
-
-            if (sibling.tagName === 'PRE' || sibling.tagName === 'CODE') {
-                const text = sibling.textContent.trim();
-                if (text.length > 0) {
-                    commandText += ' ' + text;
-                    log(`[BannedCmd] Found <${sibling.tagName}> sibling at depth ${depth}: "${text.substring(0, 100)}..."`);
-                }
+        if (newNames.length === 0) {
+            if (!container.querySelector('.aab-waiting')) {
+                container.textContent = '';
+                const waitingDiv = document.createElement('div');
+                waitingDiv.className = 'aab-waiting';
+                waitingDiv.style.cssText = 'color:#888; font-size:12px;';
+                waitingDiv.textContent = 'Scanning for conversations...';
+                container.appendChild(waitingDiv);
             }
+            return;
+        }
 
-            for (const selector of commandSelectors) {
-                const codeElements = sibling.querySelectorAll(selector);
-                for (const codeEl of codeElements) {
-                    if (codeEl && codeEl.textContent) {
-                        const text = codeEl.textContent.trim();
-                        if (text.length > 0 && text.length < 5000) {
-                            commandText += ' ' + text;
-                            log(`[BannedCmd] Found <${selector}> in sibling at depth ${depth}: "${text.substring(0, 100)}..."`);
+        const waiting = container.querySelector('.aab-waiting');
+        if (waiting) waiting.remove();
+
+        const currentSlots = Array.from(container.querySelectorAll('.aab-slot'));
+
+        currentSlots.forEach(slot => {
+            const name = slot.getAttribute('data-name');
+            if (!newNames.includes(name)) slot.remove();
+        });
+
+        newNames.forEach(name => {
+            const status = state.completionStatus[name];
+            const isDone = status === 'done';
+
+            const statusClass = isDone ? 'done' : 'working';
+            const statusText = isDone ? 'COMPLETED' : 'IN PROGRESS';
+            const progressWidth = isDone ? '100%' : '66%';
+
+            let slot = container.querySelector(`.aab-slot[data-name="${name}"]`);
+
+            if (!slot) {
+                slot = document.createElement('div');
+                slot.className = `aab-slot ${statusClass}`;
+                slot.setAttribute('data-name', name);
+
+                const header = document.createElement('div');
+                header.className = 'aab-header';
+
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = name;
+                header.appendChild(nameSpan);
+
+                const statusSpan = document.createElement('span');
+                statusSpan.className = 'status-text';
+                statusSpan.textContent = statusText;
+                header.appendChild(statusSpan);
+
+                slot.appendChild(header);
+
+                const track = document.createElement('div');
+                track.className = 'aab-progress-track';
+
+                const fill = document.createElement('div');
+                fill.className = 'aab-progress-fill';
+                fill.style.width = progressWidth;
+                track.appendChild(fill);
+
+                slot.appendChild(track);
+                container.appendChild(slot);
+                log(`[Overlay] Created slot: ${name} (${statusText})`);
+            } else {
+
+                slot.className = `aab-slot ${statusClass}`;
+
+                const statusSpan = slot.querySelector('.status-text');
+                if (statusSpan) statusSpan.textContent = statusText;
+
+                const bar = slot.querySelector('.aab-progress-fill');
+                if (bar) bar.style.width = progressWidth;
+            }
+        });
+
+        // Add Bump Timer Display
+        let timerSlot = container.querySelector('.aab-timer-slot');
+        if (!timerSlot) {
+            timerSlot = document.createElement('div');
+            timerSlot.className = 'aab-timer-slot';
+            timerSlot.style.cssText = 'font-size: 10px; color: #888; margin-top: 8px; text-align: center;';
+            container.appendChild(timerSlot);
+        }
+
+        if (state.bumpEnabled) {
+            const now = Date.now();
+            const cooldown = state.autoApproveDelay || 30000;
+            // logic: max delay - (now - lastAction)
+            let referenceTime = Math.max(lastClickTime || state.stats.sessionStartTime, lastBumpTime || 0);
+            const timeSinceRef = now - referenceTime;
+            const remaining = Math.max(0, Math.ceil((cooldown - timeSinceRef) / 1000));
+
+            if (remaining > 0) {
+                timerSlot.textContent = `Auto-Bump in ${remaining}s...`;
+                timerSlot.style.color = '#aaa';
+            } else {
+                timerSlot.textContent = `Auto-Bump: Ready`;
+                timerSlot.style.color = '#4ade80';
+            }
+        } else {
+            timerSlot.textContent = '';
+        }
+    }
+
+    function hideOverlay() {
+        const overlay = document.getElementById(OVERLAY_ID);
+        if (overlay) {
+            log('[Overlay] Hiding overlay...');
+            overlay.classList.remove('visible');
+            setTimeout(() => overlay.remove(), 300);
+        }
+    }
+
+    function findNearbyCommandText(el) {
+        const commandSelectors = ['pre', 'code', 'pre code'];
+        let commandText = '';
+
+        let container = el.parentElement;
+        let depth = 0;
+        const maxDepth = 10;
+
+        while (container && depth < maxDepth) {
+
+            let sibling = container.previousElementSibling;
+            let siblingCount = 0;
+
+            while (sibling && siblingCount < 5) {
+
+                if (sibling.tagName === 'PRE' || sibling.tagName === 'CODE') {
+                    const text = sibling.textContent.trim();
+                    if (text.length > 0) {
+                        commandText += ' ' + text;
+                        log(`[BannedCmd] Found <${sibling.tagName}> sibling at depth ${depth}: "${text.substring(0, 100)}..."`);
+                    }
+                }
+
+                for (const selector of commandSelectors) {
+                    const codeElements = sibling.querySelectorAll(selector);
+                    for (const codeEl of codeElements) {
+                        if (codeEl && codeEl.textContent) {
+                            const text = codeEl.textContent.trim();
+                            if (text.length > 0 && text.length < 5000) {
+                                commandText += ' ' + text;
+                                log(`[BannedCmd] Found <${selector}> in sibling at depth ${depth}: "${text.substring(0, 100)}..."`);
+                            }
                         }
                     }
                 }
+
+                sibling = sibling.previousElementSibling;
+                siblingCount++;
             }
 
-            sibling = sibling.previousElementSibling;
-            siblingCount++;
+            if (commandText.length > 10) {
+                break;
+            }
+
+            container = container.parentElement;
+            depth++;
         }
 
-        if (commandText.length > 10) {
-            break;
+        if (commandText.length === 0) {
+            let btnSibling = el.previousElementSibling;
+            let count = 0;
+            while (btnSibling && count < 3) {
+                for (const selector of commandSelectors) {
+                    const codeElements = btnSibling.querySelectorAll ? btnSibling.querySelectorAll(selector) : [];
+                    for (const codeEl of codeElements) {
+                        if (codeEl && codeEl.textContent) {
+                            commandText += ' ' + codeEl.textContent.trim();
+                        }
+                    }
+                }
+                btnSibling = btnSibling.previousElementSibling;
+                count++;
+            }
         }
 
-        container = container.parentElement;
-        depth++;
+        if (el.getAttribute('aria-label')) {
+            commandText += ' ' + el.getAttribute('aria-label');
+        }
+        if (el.getAttribute('title')) {
+            commandText += ' ' + el.getAttribute('title');
+        }
+
+        const result = commandText.trim().toLowerCase();
+        if (result.length > 0) {
+            log(`[BannedCmd] Extracted command text (${result.length} chars): "${result.substring(0, 150)}..."`);
+        }
+        return result;
     }
 
-    if (commandText.length === 0) {
-        let btnSibling = el.previousElementSibling;
-        let count = 0;
-        while (btnSibling && count < 3) {
-            for (const selector of commandSelectors) {
-                const codeElements = btnSibling.querySelectorAll ? btnSibling.querySelectorAll(selector) : [];
-                for (const codeEl of codeElements) {
-                    if (codeEl && codeEl.textContent) {
-                        commandText += ' ' + codeEl.textContent.trim();
+    function isCommandBanned(commandText) {
+        const state = window.__autoAllState;
+        const bannedList = state.bannedCommands || [];
+
+        if (bannedList.length === 0) return false;
+        if (!commandText || commandText.length === 0) return false;
+
+        const lowerText = commandText.toLowerCase();
+
+        for (const banned of bannedList) {
+            const pattern = banned.trim();
+            if (!pattern || pattern.length === 0) continue;
+
+            try {
+
+                if (pattern.startsWith('/') && pattern.lastIndexOf('/') > 0) {
+
+                    const lastSlash = pattern.lastIndexOf('/');
+                    const regexPattern = pattern.substring(1, lastSlash);
+                    const flags = pattern.substring(lastSlash + 1) || 'i';
+
+                    const regex = new RegExp(regexPattern, flags);
+                    if (regex.test(commandText)) {
+                        log(`[BANNED] Command blocked by regex: /${regexPattern}/${flags}`);
+                        Analytics.trackBlocked(log);
+                        return true;
+                    }
+                } else {
+
+                    const lowerPattern = pattern.toLowerCase();
+                    if (lowerText.includes(lowerPattern)) {
+                        log(`[BANNED] Command blocked by pattern: "${pattern}"`);
+                        Analytics.trackBlocked(log);
+                        return true;
+                    }
+                }
+            } catch (e) {
+
+                log(`[BANNED] Invalid regex pattern "${pattern}", using literal match: ${e.message}`);
+                if (lowerText.includes(pattern.toLowerCase())) {
+                    log(`[BANNED] Command blocked by pattern (fallback): "${pattern}"`);
+                    Analytics.trackBlocked(log);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function isAcceptButton(el) {
+        const text = (el.textContent || "").trim().toLowerCase();
+        if (text.length === 0 || text.length > 50) return false;
+
+        // Use configured patterns from state if available, otherwise use defaults
+        const state = window.__autoAllState || {};
+        const defaultPatterns = ['accept', 'accept all', 'run', 'run command', 'retry', 'apply', 'execute', 'confirm', 'allow once', 'allow', 'proceed', 'continue', 'yes', 'ok', 'save', 'approve', 'overwrite'];
+
+        // Safety: Do not click buttons in the Extensions view or Source Control (unless specific)
+        if (el.closest && (el.closest('.extensions-viewlet') || el.closest('[id="workbench.view.extensions"]'))) {
+            log(`[SAFETY] Skipping button in Extensions view: "${text}"`);
+            return false;
+        }
+        const patterns = state.acceptPatterns || defaultPatterns;
+
+        const defaultRejects = ['skip', 'reject', 'cancel', 'close', 'refine', 'deny', 'no', 'dismiss', 'abort', 'ask every time', 'always run', 'always allow', 'stop', 'pause', 'disconnect'];
+        const rejects = state.rejectPatterns ? [...defaultRejects, ...state.rejectPatterns] : defaultRejects;
+
+        if (rejects.some(r => text.includes(r))) return false;
+        if (!patterns.some(p => text.includes(p))) return false;
+
+        const isCommandButton = text.includes('run') || text.includes('execute') || text.includes('accept');
+
+        // Special Case: "Accept" in Diff Editor
+        if (text === 'accept' || text.includes('accept changes')) {
+            // Check if it's the global "Accept All" in SCM title
+            // or a specific file accept.
+            // For SCM "Accept All", we can use git.stageAll
+            // But how do we know?
+            // Heuristic: If it's in a view with "Source Control" title?
+            // Actually, keep clicking for now, BUT if it fails (stuck), we might want to use command.
+            // Let's use command if possible.
+            // "Accept All" in SCM view -> git.stageAll
+            if (el.closest('[id*="scm-view"]')) {
+                log('Detected SCM Accept All -> Using Command');
+                sendCommandToBridge('git.stageAll');
+                return true;
+            }
+            return true;
+        }
+
+        if (isCommandButton) {
+            // Only ban if explicitly banned by nearby text
+            const nearbyText = findNearbyCommandText(el);
+            if (isCommandBanned(nearbyText)) {
+                log(`[BANNED] Skipping button: "${text}" - command is banned`);
+                return false;
+            }
+        }
+
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return style.display !== 'none' && rect.width > 0 && style.pointerEvents !== 'none' && !el.disabled;
+    }
+
+    function isElementVisible(el) {
+        if (!el || !el.isConnected) return false;
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return style.display !== 'none' && rect.width > 0 && style.visibility !== 'hidden';
+    }
+
+    function waitForDisappear(el, timeout = 500) {
+        return new Promise(resolve => {
+            const startTime = Date.now();
+            const check = () => {
+                if (!isElementVisible(el)) {
+                    resolve(true);
+                } else if (Date.now() - startTime >= timeout) {
+                    resolve(false);
+                } else {
+                    requestAnimationFrame(check);
+                }
+            };
+
+            setTimeout(check, 50);
+        });
+    }
+
+    // Click "Always run" option in Antigravity's permission dropdown (new UI feature)
+    // Track if we've already clicked it to avoid re-triggering the dropdown
+    let alwaysRunClicked = false;
+
+    async function clickAlwaysRunDropdown() {
+        // If we've already clicked "Always run", don't interact with dropdown anymore
+        if (alwaysRunClicked) {
+            return false;
+        }
+
+        // Look for dropdown menu items containing "Always run" or "Always allow"
+        const dropdownSelectors = [
+            '[role="menuitem"]',
+            '[role="option"]',
+            '.dropdown-item',
+            '.menu-item',
+            'div[class*="dropdown"] div',
+            'div[class*="menu"] div',
+            'li'
+        ];
+
+        for (const selector of dropdownSelectors) {
+            const items = queryAll(selector);
+            for (const item of items) {
+                const text = (item.textContent || '').trim().toLowerCase();
+                // Match "Always run", "Always allow", etc.
+                if (text === 'always run' ||
+                    text === 'always allow' ||
+                    (text.includes('always') && (text.includes('run') || text.includes('allow')))) {
+
+                    // Make sure it's visible and clickable
+                    const style = window.getComputedStyle(item);
+                    const rect = item.getBoundingClientRect();
+                    const isVisible = style.display !== 'none' &&
+                        style.visibility !== 'hidden' &&
+                        parseFloat(style.opacity) > 0.1 &&
+                        rect.width > 0 && rect.height > 0;
+
+                    if (isVisible) {
+                        log('[Dropdown] Clicking "Always run" option - will not click again');
+                        await remoteClick(item);
+                        alwaysRunClicked = true;  // Remember we clicked it
+                        return true;
                     }
                 }
             }
-            btnSibling = btnSibling.previousElementSibling;
-            count++;
         }
+        return false;
     }
 
-    if (el.getAttribute('aria-label')) {
-        commandText += ' ' + el.getAttribute('aria-label');
-    }
-    if (el.getAttribute('title')) {
-        commandText += ' ' + el.getAttribute('title');
+    // Reset the alwaysRunClicked flag when a new session starts
+    function resetAlwaysRunState() {
+        alwaysRunClicked = false;
     }
 
-    const result = commandText.trim().toLowerCase();
-    if (result.length > 0) {
-        log(`[BannedCmd] Extracted command text (${result.length} chars): "${result.substring(0, 150)}..."`);
-    }
-    return result;
-}
 
-function isCommandBanned(commandText) {
-    const state = window.__autoAllState;
-    const bannedList = state.bannedCommands || [];
+    async function expandCollapsedSections() {
+        // Expand collapsed sections ONLY within the chat/response area
+        // IMPORTANT: Do NOT query globally — that would click file explorer, sidebar, etc.
+        const expandTargets = [];
+        let clicked = 0;
 
-    if (bannedList.length === 0) return false;
-    if (!commandText || commandText.length === 0) return false;
+        // Scope: broad search within the active editor/workbench area
+        // We look for any element with aria-expanded="false" that is inside a relevant container
+        const workbench = document.querySelector('.monaco-workbench') || document.body;
 
-    const lowerText = commandText.toLowerCase();
+        // 1. Generic aria-expanded check (most reliable)
+        const candidates = workbench.querySelectorAll('[aria-expanded="false"]');
+        for (const el of candidates) {
+            if (!isElementVisible(el)) continue;
 
-    for (const banned of bannedList) {
-        const pattern = banned.trim();
-        if (!pattern || pattern.length === 0) continue;
-
-        try {
-
-            if (pattern.startsWith('/') && pattern.lastIndexOf('/') > 0) {
-
-                const lastSlash = pattern.lastIndexOf('/');
-                const regexPattern = pattern.substring(1, lastSlash);
-                const flags = pattern.substring(lastSlash + 1) || 'i';
-
-                const regex = new RegExp(regexPattern, flags);
-                if (regex.test(commandText)) {
-                    log(`[BANNED] Command blocked by regex: /${regexPattern}/${flags}`);
-                    Analytics.trackBlocked(log);
-                    return true;
+            // Filter out obvious noise (like file explorer trees if we are not focused there)
+            // But keep it broad enough to catch chat response toggles
+            if (el.matches('.monaco-list-row, .monaco-tl-row, .monaco-tree-row')) {
+                // Check if it looks like a "step" or "run" item
+                const text = (el.textContent || '').toLowerCase();
+                if (text.includes('run') || text.includes('step') || text.includes('command') || text.includes('terminal')) {
+                    expandTargets.push(el);
                 }
             } else {
-
-                const lowerPattern = pattern.toLowerCase();
-                if (lowerText.includes(lowerPattern)) {
-                    log(`[BANNED] Command blocked by pattern: "${pattern}"`);
-                    Analytics.trackBlocked(log);
-                    return true;
-                }
+                // Chevrons/Buttons
+                expandTargets.push(el);
             }
-        } catch (e) {
+        }
 
-            log(`[BANNED] Invalid regex pattern "${pattern}", using literal match: ${e.message}`);
-            if (lowerText.includes(pattern.toLowerCase())) {
-                log(`[BANNED] Command blocked by pattern (fallback): "${pattern}"`);
-                Analytics.trackBlocked(log);
+        // 2. Explicit "Show" / "Expand" buttons
+        const explicitButtons = queryAll('button, [role="button"], .clickable');
+        for (const el of explicitButtons) {
+            if (!isElementVisible(el)) continue;
+            const text = (el.textContent || '').trim().toLowerCase();
+            const label = (el.getAttribute('aria-label') || '').toLowerCase();
+
+            if ((text === 'show' || text === 'expand' || label.includes('show') || label.includes('expand')) &&
+                !text.includes('explorer') && !label.includes('explorer')) {
+                expandTargets.push(el);
+            }
+        }
+
+        // 4. Click unique targets
+        const unique = [...new Set(expandTargets)];
+        if (unique.length > 0) {
+            log('[Expand] Found ' + unique.length + ' collapse toggles in chat area. Expanding...');
+            for (const btn of unique) {
+                try { await remoteClick(btn); clicked++; } catch (e) { }
+                await new Promise(r => setTimeout(r, 50));
+            }
+            if (clicked > 0) {
+                await workerDelay(300);
                 return true;
             }
         }
-    }
-    return false;
-}
-
-function isAcceptButton(el) {
-    const text = (el.textContent || "").trim().toLowerCase();
-    if (text.length === 0 || text.length > 50) return false;
-
-    // Use configured patterns from state if available, otherwise use defaults
-    const state = window.__autoAllState || {};
-    const defaultPatterns = ['accept', 'accept all', 'run', 'run command', 'retry', 'apply', 'execute', 'confirm', 'allow once', 'allow', 'proceed', 'continue', 'yes', 'ok', 'save', 'approve', 'overwrite'];
-
-    // Safety: Do not click buttons in the Extensions view or Source Control (unless specific)
-    if (el.closest && (el.closest('.extensions-viewlet') || el.closest('[id="workbench.view.extensions"]'))) {
-        log(`[SAFETY] Skipping button in Extensions view: "${text}"`);
         return false;
     }
-    const patterns = state.acceptPatterns || defaultPatterns;
 
-    const defaultRejects = ['skip', 'reject', 'cancel', 'close', 'refine', 'deny', 'no', 'dismiss', 'abort', 'ask every time', 'always run', 'always allow', 'stop', 'pause', 'disconnect'];
-    const rejects = state.rejectPatterns ? [...defaultRejects, ...state.rejectPatterns] : defaultRejects;
 
-    if (rejects.some(r => text.includes(r))) return false;
-    if (!patterns.some(p => text.includes(p))) return false;
 
-    const isCommandButton = text.includes('run') || text.includes('execute') || text.includes('accept');
+    // --- Auto-Bump Logic ---
 
-    // Special Case: "Accept" in Diff Editor
-    if (text === 'accept' || text.includes('accept changes')) {
-        // Check if it's the global "Accept All" in SCM title
-        // or a specific file accept.
-        // For SCM "Accept All", we can use git.stageAll
-        // But how do we know?
-        // Heuristic: If it's in a view with "Source Control" title?
-        // Actually, keep clicking for now, BUT if it fails (stuck), we might want to use command.
-        // Let's use command if possible.
-        // "Accept All" in SCM view -> git.stageAll
-        if (el.closest('[id*="scm-view"]')) {
-            log('Detected SCM Accept All -> Using Command');
-            sendCommandToBridge('git.stageAll');
-            return true;
+    function isConversationIdle() {
+        const badges = queryAll('span, [class*="badge"], [class*="feedback"]');
+        for (const b of badges) {
+            const text = (b.textContent || '').trim();
+            if ((text === 'Good' || text === 'Bad') && isElementVisible(b)) {
+                return true;
+            }
         }
+
+        const thumbIcons = queryAll('.codicon-thumbsup, .codicon-thumbsdown, [aria-label*="thumb"], [aria-label*="feedback"]');
+        for (const icon of thumbIcons) {
+            if (isElementVisible(icon)) return true;
+        }
+
+        return false;
+    }
+
+    async function sendMessage(text) {
+        if (!text) return false;
+        if (window.showAutoAllToast) {
+            window.showAutoAllToast(`Bump: "${text}"`, 2000, 'rgba(0,100,200,0.8)');
+        }
+        log(`[Chat] Sending Hybrid Bump: "${text}"`);
+        console.log('__ANTIGRAVITY_HYBRID_BUMP__:' + text);
         return true;
     }
 
-    if (isCommandButton) {
-        // Only ban if explicitly banned by nearby text
-        const nearbyText = findNearbyCommandText(el);
-        if (isCommandBanned(nearbyText)) {
-            log(`[BANNED] Skipping button: "${text}" - command is banned`);
-            return false;
-        }
-    }
+    let lastBumpTime = 0;
+    let lastClickTime = 0;
 
-    const style = window.getComputedStyle(el);
-    const rect = el.getBoundingClientRect();
-    return style.display !== 'none' && rect.width > 0 && style.pointerEvents !== 'none' && !el.disabled;
-}
+    async function autoBump() {
+        const state = window.__autoAllState;
+        const bumpMsg = state.bumpMessage;
+        if (!bumpMsg || !state.bumpEnabled) return false;
 
-function isElementVisible(el) {
-    if (!el || !el.isConnected) return false;
-    const style = window.getComputedStyle(el);
-    const rect = el.getBoundingClientRect();
-    return style.display !== 'none' && rect.width > 0 && style.visibility !== 'hidden';
-}
+        const now = Date.now();
+        const cooldown = state.autoApproveDelay || 30000;
 
-function waitForDisappear(el, timeout = 500) {
-    return new Promise(resolve => {
-        const startTime = Date.now();
-        const check = () => {
-            if (!isElementVisible(el)) {
-                resolve(true);
-            } else if (Date.now() - startTime >= timeout) {
-                resolve(false);
-            } else {
-                requestAnimationFrame(check);
-            }
-        };
+        if (now - lastBumpTime < cooldown) return false;
+        if (now - lastClickTime < cooldown) return false;
 
-        setTimeout(check, 50);
-    });
-}
+        if (!isConversationIdle()) return false;
 
-// Click "Always run" option in Antigravity's permission dropdown (new UI feature)
-// Track if we've already clicked it to avoid re-triggering the dropdown
-let alwaysRunClicked = false;
-
-async function clickAlwaysRunDropdown() {
-    // If we've already clicked "Always run", don't interact with dropdown anymore
-    if (alwaysRunClicked) {
-        return false;
-    }
-
-    // Look for dropdown menu items containing "Always run" or "Always allow"
-    const dropdownSelectors = [
-        '[role="menuitem"]',
-        '[role="option"]',
-        '.dropdown-item',
-        '.menu-item',
-        'div[class*="dropdown"] div',
-        'div[class*="menu"] div',
-        'li'
-    ];
-
-    for (const selector of dropdownSelectors) {
-        const items = queryAll(selector);
-        for (const item of items) {
-            const text = (item.textContent || '').trim().toLowerCase();
-            // Match "Always run", "Always allow", etc.
-            if (text === 'always run' ||
-                text === 'always allow' ||
-                (text.includes('always') && (text.includes('run') || text.includes('allow')))) {
-
-                // Make sure it's visible and clickable
-                const style = window.getComputedStyle(item);
-                const rect = item.getBoundingClientRect();
-                const isVisible = style.display !== 'none' &&
-                    style.visibility !== 'hidden' &&
-                    parseFloat(style.opacity) > 0.1 &&
-                    rect.width > 0 && rect.height > 0;
-
-                if (isVisible) {
-                    log('[Dropdown] Clicking "Always run" option - will not click again');
-                    await remoteClick(item);
-                    alwaysRunClicked = true;  // Remember we clicked it
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
-}
-
-// Reset the alwaysRunClicked flag when a new session starts
-function resetAlwaysRunState() {
-    alwaysRunClicked = false;
-}
-
-
-async function expandCollapsedSections() {
-    // Expand collapsed sections ONLY within the chat/response area
-    // IMPORTANT: Do NOT query globally — that would click file explorer, sidebar, etc.
-    const expandTargets = [];
-    let clicked = 0;
-
-    // Scope: broad search within the active editor/workbench area
-    // We look for any element with aria-expanded="false" that is inside a relevant container
-    const workbench = document.querySelector('.monaco-workbench') || document.body;
-
-    // 1. Generic aria-expanded check (most reliable)
-    const candidates = workbench.querySelectorAll('[aria-expanded="false"]');
-    for (const el of candidates) {
-        if (!isElementVisible(el)) continue;
-
-        // Filter out obvious noise (like file explorer trees if we are not focused there)
-        // But keep it broad enough to catch chat response toggles
-        if (el.matches('.monaco-list-row, .monaco-tl-row, .monaco-tree-row')) {
-            // Check if it looks like a "step" or "run" item
-            const text = (el.textContent || '').toLowerCase();
-            if (text.includes('run') || text.includes('step') || text.includes('command') || text.includes('terminal')) {
-                expandTargets.push(el);
-            }
-        } else {
-            // Chevrons/Buttons
-            expandTargets.push(el);
-        }
-    }
-
-    // 2. Explicit "Show" / "Expand" buttons
-    const explicitButtons = queryAll('button, [role="button"], .clickable');
-    for (const el of explicitButtons) {
-        if (!isElementVisible(el)) continue;
-        const text = (el.textContent || '').trim().toLowerCase();
-        const label = (el.getAttribute('aria-label') || '').toLowerCase();
-
-        if ((text === 'show' || text === 'expand' || label.includes('show') || label.includes('expand')) &&
-            !text.includes('explorer') && !label.includes('explorer')) {
-            expandTargets.push(el);
-        }
-    }
-
-    // 4. Click unique targets
-    const unique = [...new Set(expandTargets)];
-    if (unique.length > 0) {
-        log('[Expand] Found ' + unique.length + ' collapse toggles in chat area. Expanding...');
-        for (const btn of unique) {
-            try { await remoteClick(btn); clicked++; } catch (e) { }
-            await new Promise(r => setTimeout(r, 50));
-        }
-        if (clicked > 0) {
-            await workerDelay(300);
-            return true;
-        }
-    }
-    return false;
-}
-
-
-
-// --- Auto-Bump Logic (Restored from Submodule) ---
-
-// Detect if the AI conversation is idle (Good/Bad feedback badges visible)
-function isConversationIdle() {
-    const badges = queryAll('span, [class*="badge"], [class*="feedback"]');
-    for (const b of badges) {
-        const text = (b.textContent || '').trim();
-        if (text === 'Good' || text === 'Bad') {
-            if (isElementVisible(b)) return true;
-        }
-    }
-    // Also check for thumbs up/down icons
-    const thumbIcons = queryAll('.codicon-thumbsup, .codicon-thumbsdown, [aria-label*="thumbs"], [aria-label*="feedback"]');
-    for (const icon of thumbIcons) {
-        if (isElementVisible(icon)) return true;
-    }
-    return false;
-}
-
-// Auto-bump: send a message when the conversation is idle
-let lastBumpTime = 0;
-async function autoBump() {
-    const state = window.__autoAllState;
-    const bumpMsg = state.bumpMessage;
-    if (!bumpMsg || !state.bumpEnabled) return false;
-
-    const now = Date.now();
-    const cooldown = state.autoApproveDelay || 30000;
-
-    // Don't bump more often than the cooldown
-    if (now - lastBumpTime < cooldown) {
-        const remaining = Math.round((cooldown - (now - lastBumpTime)) / 1000);
-        // log(`[Bump] Cooldown: ${remaining}s remaining`); // verbose
-        return false;
-    }
-
-    if (isConversationIdle()) {
-        log(`[Bump] AI is idle (Good/Bad visible). Sending: "${bumpMsg}"`);
         const sent = await sendMessage(bumpMsg);
         if (sent) {
             lastBumpTime = now;
-            log('[Bump] Bump sent successfully!');
+            log('[Bump] Bump sent successfully');
             return true;
-        } else {
-            log('[Bump] Failed to send bump');
-        }
-    }
-    return false;
-}
-
-async function sendMessage(text) {
-    if (!text) return false;
-
-    // VISUAL DEBUG: Toast start
-    if (window.showAutoAllToast) window.showAutoAllToast(`Bump: "${text}"`, 2000, 'rgba(0,100,200,0.8)');
-
-    // HYBRID STRATEGY: Delegate to Extension Host
-    // This avoids "No renderer found" crashes by using official VS Code APIs via Bridge
-    log(`[Chat] Sending Hybrid Bump: "${text}"`);
-    console.log('__ANTIGRAVITY_HYBRID_BUMP__:' + text);
-
-    return true;
-})
-chatInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-chatInput.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-chatInput.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-await workerDelay(300);
-
-// Strategy 2: Alt+Enter (VS Code chat default submit)
-chatInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true, cancelable: true }));
-chatInput.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
-await workerDelay(300);
-
-// Strategy 3: Ctrl+Enter (alternative submit shortcut)
-chatInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, ctrlKey: true, bubbles: true, cancelable: true }));
-chatInput.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, ctrlKey: true, bubbles: true }));
-await workerDelay(300);
-
-// Strategy 4: Find send/submit button anywhere near the input
-const inputForm = chatInput.closest('form, div, section');
-const allBtns = inputForm ? Array.from(inputForm.querySelectorAll('button, [role="button"], a')) : Array.from(document.querySelectorAll('button, [role="button"]'));
-const sendCandidate = allBtns.find(b => {
-    const lbl = ((b.getAttribute('aria-label') || '') + ' ' + (b.getAttribute('title') || '') + ' ' + (b.textContent || '') + ' ' + (b.className || '')).toLowerCase();
-    return lbl.includes('send') || lbl.includes('submit') || lbl.includes('run') || lbl.includes('arrow') || lbl.includes('codicon-send') || lbl.includes('codicon-run');
-});
-if (sendCandidate && isElementVisible(sendCandidate)) {
-    log('[Chat] Found send/run button, clicking: ' + (sendCandidate.getAttribute('aria-label') || sendCandidate.textContent || '').trim());
-    await remoteClick(sendCandidate);
-    if (window.showAutoAllToast) window.showAutoAllToast('Bump: Found Send Btn', 2000, 'rgba(0,200,0,0.8)');
-}
-if (window.showAutoAllToast) window.showAutoAllToast('Bump Triggered', 2000, 'rgba(0,200,0,0.8)');
-return true;
-    } else {
-    log('[SendMessage] No textarea found. Trying Hybrid Fallback...');
-
-    // Hybrid Fallback: Use VS Code Commands (Phase 18.1 Re-applied)
-    try {
-        // 1. Focus Input
-        sendCommandToBridge('workbench.action.chat.open');
-        await workerDelay(500);
-        sendCommandToBridge('workbench.action.chat.focusInput');
-        await workerDelay(300);
-
-        // 2. Copy to Clipboard (using DOM hack since navigator.clipboard might be blocked)
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        log('[SendMessage] Copied text to clipboard');
-
-        // 3. Paste
-        sendCommandToBridge('editor.action.clipboardPasteAction');
-        await workerDelay(300);
-
-        // 4. Submit
-        sendCommandToBridge('workbench.action.chat.submit');
-        log('[SendMessage] Sent Submit Command');
-
-        // Visual Feedback (Yellow Flash on Body?)
-        if (document.body) {
-            const original = document.body.style.border;
-            document.body.style.border = '5px solid yellow';
-            setTimeout(() => document.body.style.border = original, 500);
         }
 
-        return true;
-    } catch (e) {
-        log('[SendMessage] Hybrid Fallback Failed: ' + e.message);
-        if (window.showAutoAllToast) window.showAutoAllToast('Bump Failed: Hybrid Error ❌', 3000, 'rgba(200,0,0,0.8)');
-    }
-}
-return false;
-}
-
-// Detect if the AI conversation is idle (Good/Bad feedback badges visible)
-function isConversationIdle() {
-    // ... unused now ...
-    return false;
-}
-
-// Auto-bump: send a message when no buttons were found and cooldown has elapsed
-// Called only when clicked === 0, so the absence of buttons IS the idle signal
-let lastBumpTime = 0;
-let lastClickTime = 0;
-async function autoBump() {
-    const state = window.__autoAllState;
-    const bumpMsg = state.bumpMessage;
-    if (!bumpMsg || !state.bumpEnabled) return false;
-
-    const now = Date.now();
-    const cooldown = state.autoApproveDelay || 30000;
-
-    // Don't bump more often than the cooldown
-    if (now - lastBumpTime < cooldown) {
         return false;
     }
-
-    // Don't bump if we recently clicked a button (AI might still be processing)
-    if (now - lastClickTime < cooldown) {
-        return false;
-    }
-
-    log(`[Bump] No buttons found and cooldown elapsed. Sending: "${bumpMsg}"`);
-    if (window.showAutoAllToast) window.showAutoAllToast(`Auto-Bumping: "${bumpMsg}"... ⏳`, 2000, 'rgba(0,0,200,0.8)');
-
-    const sent = await sendMessage(bumpMsg);
-    if (sent) {
-        lastBumpTime = now;
-        log('[Bump] ✅ Bump sent successfully!');
-        if (window.showAutoAllToast) window.showAutoAllToast('Bump Sent! ✅', 2000);
-        return true;
-    } else {
-        log('[Bump] ❌ Failed to send bump (no chat input found)');
-    }
-    return false;
-}
 
 async function performClick(selectors) {
     // PRE-CHECK: Expand any collapsed sections that might be hiding buttons

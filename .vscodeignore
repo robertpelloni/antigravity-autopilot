@@ -21,3 +21,5 @@ free-auto-accept-antigravity/**
 yoke-antigravity/**
 # Exclude previous builds
 *.vsix
+# Exclude local maintenance helpers
+fix_cdp_script.js

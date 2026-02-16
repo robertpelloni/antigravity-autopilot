@@ -4,6 +4,7 @@ export const CONFIG_SECTION = 'antigravity';
 
 export interface AntigravityConfig {
     strategy: 'simple' | 'cdp';
+    interactionUiProfile: 'auto' | 'vscode' | 'antigravity' | 'cursor';
     autoAcceptEnabled: boolean;
     autoAllEnabled: boolean;
     multiTabEnabled: boolean;
@@ -46,6 +47,13 @@ export interface AntigravityConfig {
     interactionTimings: Record<string, number>; // Per-method timing overrides (ms)
     interactionRetryCount: number;      // How many methods to try before giving up
     interactionParallel: boolean;       // Try methods simultaneously vs sequentially
+    interactionVisualDiffThreshold: number; // Screenshot diff threshold for visual-verify methods
+    interactionClickMethodsVSCode: string[];
+    interactionClickMethodsAntigravity: string[];
+    interactionClickMethodsCursor: string[];
+    interactionClickSelectorsVSCode: string[];
+    interactionClickSelectorsAntigravity: string[];
+    interactionClickSelectorsCursor: string[];
 }
 
 export class ConfigManager {
@@ -74,6 +82,7 @@ export class ConfigManager {
         const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
         return {
             strategy: config.get('strategy', 'cdp'),
+            interactionUiProfile: config.get('interactionUiProfile', 'auto'),
             autoAcceptEnabled: config.get('autoAcceptEnabled', false),
             autoAllEnabled: config.get('autoAllEnabled', false),
             multiTabEnabled: config.get('multiTabEnabled', false),
@@ -101,12 +110,37 @@ export class ConfigManager {
             maxConsecutiveTestLoops: config.get('maxConsecutiveTestLoops', 3),
             acceptPatterns: config.get('acceptPatterns', []),
             rejectPatterns: config.get('rejectPatterns', []),
-            interactionTextMethods: config.get('interactionTextMethods', ['cdp-keys', 'clipboard-paste', 'dom-inject']),
-            interactionClickMethods: config.get('interactionClickMethods', ['dom-click', 'cdp-mouse', 'vscode-cmd', 'script-force']),
-            interactionSubmitMethods: config.get('interactionSubmitMethods', ['vscode-submit', 'cdp-enter', 'script-submit']),
+            interactionTextMethods: config.get('interactionTextMethods', ['cdp-keys', 'cdp-insert-text', 'clipboard-paste', 'dom-inject', 'bridge-type']),
+            interactionClickMethods: config.get('interactionClickMethods', ['dom-scan-click', 'dom-click', 'bridge-click', 'cdp-mouse', 'native-accept', 'vscode-cmd', 'script-force', 'process-peek']),
+            interactionSubmitMethods: config.get('interactionSubmitMethods', ['vscode-submit', 'cdp-enter', 'script-submit', 'ctrl-enter', 'alt-enter']),
             interactionTimings: config.get('interactionTimings', {}),
             interactionRetryCount: config.get('interactionRetryCount', 3),
-            interactionParallel: config.get('interactionParallel', false)
+            interactionParallel: config.get('interactionParallel', false),
+            interactionVisualDiffThreshold: config.get('interactionVisualDiffThreshold', 0.001),
+            interactionClickMethodsVSCode: config.get('interactionClickMethodsVSCode', ['dom-scan-click', 'native-accept', 'process-peek', 'vscode-cmd', 'cdp-mouse', 'bridge-click']),
+            interactionClickMethodsAntigravity: config.get('interactionClickMethodsAntigravity', ['dom-scan-click', 'dom-click', 'bridge-click', 'cdp-mouse', 'script-force', 'native-accept']),
+            interactionClickMethodsCursor: config.get('interactionClickMethodsCursor', ['dom-scan-click', 'dom-click', 'cdp-mouse', 'script-force', 'native-accept']),
+            interactionClickSelectorsVSCode: config.get('interactionClickSelectorsVSCode', [
+                'button[aria-label*="Accept"]',
+                'button[title*="Accept"]',
+                'button[aria-label*="Apply"]',
+                'button[title*="Apply"]',
+                '.monaco-button',
+                '.monaco-dialog-box button',
+                '.monaco-notification-list button'
+            ]),
+            interactionClickSelectorsAntigravity: config.get('interactionClickSelectorsAntigravity', [
+                '#antigravity\\.agentPanel button',
+                '#antigravity\\.agentPanel [role="button"]',
+                '.bg-ide-button-background',
+                'button.grow'
+            ]),
+            interactionClickSelectorsCursor: config.get('interactionClickSelectorsCursor', [
+                '#workbench\\.parts\\.auxiliarybar button',
+                '#workbench\\.parts\\.auxiliarybar [role="button"]',
+                '.chat-session-item [role="button"]',
+                '.monaco-button'
+            ])
         };
     }
 }

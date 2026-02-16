@@ -6,6 +6,8 @@
  * @module strategies/interaction-methods
  */
 
+import * as vscode from 'vscode';
+
 // ============ Interfaces ============
 
 export interface InteractionContext {
@@ -15,6 +17,9 @@ export interface InteractionContext {
     selector?: string;      // CSS selector (for click methods)
     coordinates?: { x: number; y: number }; // Screen coordinates
     commandId?: string;     // VS Code command ID
+    acceptPatterns?: string[];
+    rejectPatterns?: string[];
+    visualDiffThreshold?: number;
 }
 
 export interface IInteractionMethod {
@@ -44,6 +49,25 @@ export interface RegistryConfig {
     retryCount: number;
     parallelExecution: boolean;
 }
+
+export interface MethodDescriptor {
+    id: string;
+    name: string;
+    description: string;
+    category: 'text' | 'click' | 'submit';
+    requiresCDP: boolean;
+}
+
+const DEFAULT_ACCEPT_PATTERNS = [
+    'accept', 'accept all', 'run', 'run command', 'retry', 'apply', 'execute',
+    'confirm', 'allow once', 'allow', 'proceed', 'continue', 'yes', 'ok',
+    'save', 'approve', 'overwrite'
+];
+
+const DEFAULT_REJECT_PATTERNS = [
+    'skip', 'reject', 'cancel', 'close', 'refine', 'deny', 'no', 'dismiss',
+    'abort', 'ask every time', 'always run', 'always allow', 'stop', 'pause', 'disconnect'
+];
 
 // ============ Text Input Methods ============
 
@@ -79,6 +103,52 @@ export class CDPKeyDispatch implements IInteractionMethod {
     }
 }
 
+export class CDPInsertText implements IInteractionMethod {
+    id = 'cdp-insert-text';
+    name = 'CDP Insert Text';
+    description = 'Uses Input.insertText for active text input';
+    category = 'text' as const;
+    enabled = true;
+    priority = 2;
+    timingMs = 20;
+    requiresCDP = true;
+
+    async execute(ctx: InteractionContext): Promise<boolean> {
+        if (!ctx.cdpHandler || !ctx.text) return false;
+        try {
+            if (typeof ctx.cdpHandler.insertTextToAll === 'function') {
+                await ctx.cdpHandler.insertTextToAll(ctx.text);
+                return true;
+            }
+
+            if (typeof ctx.cdpHandler.executeScriptInAllSessions === 'function') {
+                const escapedText = escapeJsSingleQuoted(ctx.text);
+                const script = `
+                    (function() {
+                        const el = document.activeElement;
+                        if (!el) return false;
+                        if (el.isContentEditable) {
+                            document.execCommand('insertText', false, '${escapedText}');
+                            return true;
+                        }
+                        if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+                            el.value = (el.value || '') + '${escapedText}';
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                            return true;
+                        }
+                        return false;
+                    })()
+                `;
+                await ctx.cdpHandler.executeScriptInAllSessions(script);
+                return true;
+            }
+            return false;
+        } catch {
+            return false;
+        }
+    }
+}
+
 export class ClipboardPaste implements IInteractionMethod {
     id = 'clipboard-paste';
     name = 'Clipboard Paste';
@@ -92,12 +162,40 @@ export class ClipboardPaste implements IInteractionMethod {
     async execute(ctx: InteractionContext): Promise<boolean> {
         if (!ctx.vscodeCommands || !ctx.text) return false;
         try {
-            // env.clipboard.writeText is available in vscode
-            await ctx.vscodeCommands.executeCommand('editor.action.clipboardCopyAction');
+            await vscode.env.clipboard.writeText(ctx.text);
             await delay(50);
             await ctx.vscodeCommands.executeCommand('editor.action.clipboardPasteAction');
             return true;
         } catch { return false; }
+    }
+}
+
+export class BridgeType implements IInteractionMethod {
+    id = 'bridge-type';
+    name = 'Bridge Type Injection';
+    description = 'Sends __ANTIGRAVITY_TYPE__ payload to extension bridge';
+    category = 'text' as const;
+    enabled = true;
+    priority = 4;
+    timingMs = 30;
+    requiresCDP = true;
+
+    async execute(ctx: InteractionContext): Promise<boolean> {
+        if (!ctx.cdpHandler || !ctx.text) return false;
+        const escapedText = escapeJsSingleQuoted(ctx.text);
+        const script = `
+            (function() {
+                const payload = '__ANTIGRAVITY_TYPE__:${escapedText}';
+                if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
+                    window.__ANTIGRAVITY_BRIDGE__(payload);
+                    return true;
+                }
+                console.log(payload);
+                return true;
+            })()
+        `;
+        await ctx.cdpHandler.executeScriptInAllSessions(script);
+        return true;
     }
 }
 
@@ -167,15 +265,63 @@ export class DOMSelectorClick implements IInteractionMethod {
 
     async execute(ctx: InteractionContext): Promise<boolean> {
         if (!ctx.cdpHandler || !ctx.selector) return false;
+        const escapedSelector = escapeJsSingleQuoted(ctx.selector);
         const script = `
             (function() {
-                const el = document.querySelector('${ctx.selector}');
+                const el = document.querySelector('${escapedSelector}');
                 if (el) { el.click(); return true; }
                 return false;
             })()
         `;
         await ctx.cdpHandler.executeScriptInAllSessions(script);
         return true;
+    }
+}
+
+export class DOMScanClick implements IInteractionMethod {
+    id = 'dom-scan-click';
+    name = 'DOM Scan + Click';
+    description = 'Scans candidate elements, applies accept/reject patterns, and clicks best match';
+    category = 'click' as const;
+    enabled = true;
+    priority = 1;
+    timingMs = 30;
+    requiresCDP = true;
+
+    async execute(ctx: InteractionContext): Promise<boolean> {
+        if (!ctx.cdpHandler) return false;
+        const acceptPatterns = JSON.stringify((ctx.acceptPatterns && ctx.acceptPatterns.length > 0) ? ctx.acceptPatterns : DEFAULT_ACCEPT_PATTERNS);
+        const rejectPatterns = JSON.stringify((ctx.rejectPatterns && ctx.rejectPatterns.length > 0) ? ctx.rejectPatterns : DEFAULT_REJECT_PATTERNS);
+
+        const script = `
+            (function() {
+                const accept = ${acceptPatterns}.map(x => String(x).toLowerCase());
+                const reject = ${rejectPatterns}.map(x => String(x).toLowerCase());
+
+                const candidates = Array.from(document.querySelectorAll('button, [role="button"], .monaco-button, [class*="button"]'));
+                function visible(el) {
+                    if (!el || !el.isConnected) return false;
+                    const style = window.getComputedStyle(el);
+                    const rect = el.getBoundingClientRect();
+                    return style.display !== 'none' && style.visibility !== 'hidden' && style.pointerEvents !== 'none' && !el.disabled && rect.width > 0 && rect.height > 0;
+                }
+
+                for (const el of candidates) {
+                    const text = ((el.textContent || '') + ' ' + (el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')).trim().toLowerCase();
+                    if (!text || text.length > 120) continue;
+                    if (!visible(el)) continue;
+                    if (reject.some(p => text.includes(p))) continue;
+                    if (!accept.some(p => text.includes(p))) continue;
+                    el.click();
+                    return true;
+                }
+
+                return false;
+            })()
+        `;
+
+        const results = await ctx.cdpHandler.executeInAllSessions?.(script, true);
+        return Array.isArray(results) ? results.some((r: any) => !!r) : true;
     }
 }
 
@@ -192,15 +338,50 @@ export class CDPMouseEvent implements IInteractionMethod {
     async execute(ctx: InteractionContext): Promise<boolean> {
         if (!ctx.cdpHandler || !ctx.coordinates) return false;
         const { x, y } = ctx.coordinates;
-        // mousePressed then mouseReleased
-        await ctx.cdpHandler.dispatchKeyEventToAll({
+        await ctx.cdpHandler.dispatchMouseEventToAll({
             type: 'mousePressed', x, y, button: 'left', clickCount: 1
         });
         await delay(30);
-        await ctx.cdpHandler.dispatchKeyEventToAll({
+        await ctx.cdpHandler.dispatchMouseEventToAll({
             type: 'mouseReleased', x, y, button: 'left', clickCount: 1
         });
         return true;
+    }
+}
+
+export class BridgeCoordinateClick implements IInteractionMethod {
+    id = 'bridge-click';
+    name = 'Bridge Coordinate Click';
+    description = 'Finds target element and sends __ANTIGRAVITY_CLICK__ through bridge';
+    category = 'click' as const;
+    enabled = true;
+    priority = 3;
+    timingMs = 50;
+    requiresCDP = true;
+
+    async execute(ctx: InteractionContext): Promise<boolean> {
+        if (!ctx.cdpHandler || !ctx.selector) return false;
+        const escapedSelector = escapeJsSingleQuoted(ctx.selector);
+        const script = `
+            (function() {
+                const el = document.querySelector('${escapedSelector}');
+                if (!el) return false;
+                const rect = el.getBoundingClientRect();
+                if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+                const x = Math.round(rect.left + (rect.width / 2));
+                const y = Math.round(rect.top + (rect.height / 2));
+                const payload = '__ANTIGRAVITY_CLICK__:' + x + ':' + y;
+                if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
+                    window.__ANTIGRAVITY_BRIDGE__(payload);
+                } else {
+                    console.log(payload);
+                }
+                return true;
+            })()
+        `;
+
+        const results = await ctx.cdpHandler.executeInAllSessions?.(script, true);
+        return Array.isArray(results) ? results.some((r: any) => !!r) : true;
     }
 }
 
@@ -223,6 +404,80 @@ export class VSCodeCommandClick implements IInteractionMethod {
     }
 }
 
+export class NativeAcceptCommands implements IInteractionMethod {
+    id = 'native-accept';
+    name = 'Native Accept Commands';
+    description = 'Attempts native/extension command-based acceptance for editor, terminal, and chat';
+    category = 'click' as const;
+    enabled = true;
+    priority = 4;
+    timingMs = 60;
+    requiresCDP = false;
+
+    private static readonly COMMANDS = [
+        'antigravity.agent.acceptAgentStep',
+        'antigravity.terminal.accept',
+        'workbench.action.chat.submit',
+        'workbench.action.chat.send',
+        'interactive.acceptChanges'
+    ];
+
+    async execute(ctx: InteractionContext): Promise<boolean> {
+        const commandsApi = ctx.vscodeCommands;
+        if (!commandsApi) return false;
+        let atLeastOneSuccess = false;
+
+        for (const cmd of NativeAcceptCommands.COMMANDS) {
+            try {
+                await commandsApi.executeCommand(cmd);
+                atLeastOneSuccess = true;
+            } catch {
+                // try next
+            }
+        }
+
+        return atLeastOneSuccess;
+    }
+}
+
+export class ProcessPeekClick implements IInteractionMethod {
+    id = 'process-peek';
+    name = 'Process Peek + Command Click';
+    description = 'Discovers available commands at runtime and executes best accept/submit candidates';
+    category = 'click' as const;
+    enabled = true;
+    priority = 5;
+    timingMs = 80;
+    requiresCDP = false;
+
+    async execute(ctx: InteractionContext): Promise<boolean> {
+        if (!ctx.vscodeCommands) return false;
+        try {
+            const available: string[] = await ctx.vscodeCommands.getCommands(true);
+            const candidates = available.filter(cmd =>
+                cmd.includes('accept') ||
+                cmd.includes('submit') ||
+                cmd.includes('chat.send') ||
+                cmd.includes('chat.submit') ||
+                cmd.includes('terminal.accept')
+            );
+
+            for (const command of candidates.slice(0, 6)) {
+                try {
+                    await ctx.vscodeCommands.executeCommand(command);
+                    return true;
+                } catch {
+                    // keep trying
+                }
+            }
+
+            return false;
+        } catch {
+            return false;
+        }
+    }
+}
+
 export class ScriptForceClick implements IInteractionMethod {
     id = 'script-force';
     name = 'Script Force Click';
@@ -235,9 +490,10 @@ export class ScriptForceClick implements IInteractionMethod {
 
     async execute(ctx: InteractionContext): Promise<boolean> {
         if (!ctx.cdpHandler || !ctx.selector) return false;
+        const escapedSelector = escapeJsSingleQuoted(ctx.selector);
         const script = `
             (function() {
-                const el = document.querySelector('${ctx.selector}');
+                const el = document.querySelector('${escapedSelector}');
                 if (el) {
                     el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
                     el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
@@ -249,6 +505,43 @@ export class ScriptForceClick implements IInteractionMethod {
         `;
         await ctx.cdpHandler.executeScriptInAllSessions(script);
         return true;
+    }
+}
+
+export class VisualVerifiedClick implements IInteractionMethod {
+    id = 'visual-verify-click';
+    name = 'Visual Verification Click';
+    description = 'Captures screenshots before/after click and verifies a visual diff';
+    category = 'click' as const;
+    enabled = true;
+    priority = 7;
+    timingMs = 120;
+    requiresCDP = true;
+
+    async execute(ctx: InteractionContext): Promise<boolean> {
+        if (!ctx.cdpHandler || !ctx.selector) return false;
+
+        if (typeof ctx.cdpHandler.captureScreenshots !== 'function') {
+            return false;
+        }
+
+        const before: string[] = await ctx.cdpHandler.captureScreenshots();
+
+        const escapedSelector = escapeJsSingleQuoted(ctx.selector);
+        const clickScript = `
+            (function() {
+                const el = document.querySelector('${escapedSelector}');
+                if (!el) return false;
+                el.click();
+                return true;
+            })()
+        `;
+        await ctx.cdpHandler.executeScriptInAllSessions(clickScript);
+        await delay(75);
+
+        const after: string[] = await ctx.cdpHandler.captureScreenshots();
+        const threshold = Math.max(0, Math.min(1, ctx.visualDiffThreshold ?? 0.001));
+        return visualDiffExceeded(before, after, threshold);
     }
 }
 
@@ -390,6 +683,35 @@ export class AltEnterShortcut implements IInteractionMethod {
     }
 }
 
+export class CtrlEnterShortcut implements IInteractionMethod {
+    id = 'ctrl-enter';
+    name = 'Ctrl+Enter Shortcut';
+    description = 'Dispatches Ctrl+Enter key combination for submit variants';
+    category = 'submit' as const;
+    enabled = true;
+    priority = 4;
+    timingMs = 50;
+    requiresCDP = true;
+
+    async execute(ctx: InteractionContext): Promise<boolean> {
+        if (!ctx.cdpHandler) return false;
+        await ctx.cdpHandler.dispatchKeyEventToAll({
+            type: 'keyDown', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
+            windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+            modifiers: 2,
+            text: '\r', unmodifiedText: '\r'
+        });
+        await delay(50);
+        await ctx.cdpHandler.dispatchKeyEventToAll({
+            type: 'keyUp', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
+            windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+            modifiers: 2,
+            text: '\r', unmodifiedText: '\r'
+        });
+        return true;
+    }
+}
+
 // ============ Registry ============
 
 export class InteractionMethodRegistry {
@@ -398,9 +720,9 @@ export class InteractionMethodRegistry {
 
     constructor(registryConfig?: Partial<RegistryConfig>) {
         this.config = {
-            textInput: ['cdp-keys', 'clipboard-paste', 'dom-inject'],
-            click: ['dom-click', 'cdp-mouse', 'vscode-cmd', 'script-force'],
-            submit: ['vscode-submit', 'cdp-enter', 'script-submit'],
+            textInput: ['cdp-keys', 'cdp-insert-text', 'clipboard-paste', 'dom-inject', 'bridge-type'],
+            click: ['dom-scan-click', 'dom-click', 'bridge-click', 'cdp-mouse', 'native-accept', 'vscode-cmd', 'script-force', 'process-peek'],
+            submit: ['vscode-submit', 'cdp-enter', 'script-submit', 'ctrl-enter', 'alt-enter'],
             timings: {},
             retryCount: 3,
             parallelExecution: false,
@@ -414,19 +736,27 @@ export class InteractionMethodRegistry {
     private registerDefaults() {
         // Text input
         this.register(new CDPKeyDispatch());
+        this.register(new CDPInsertText());
         this.register(new ClipboardPaste());
         this.register(new DOMValueInjection());
+        this.register(new BridgeType());
         this.register(new VSCodeTypeCommand());
         // Click
+        this.register(new DOMScanClick());
         this.register(new DOMSelectorClick());
+        this.register(new BridgeCoordinateClick());
         this.register(new CDPMouseEvent());
+        this.register(new NativeAcceptCommands());
         this.register(new VSCodeCommandClick());
         this.register(new ScriptForceClick());
+        this.register(new ProcessPeekClick());
+        this.register(new VisualVerifiedClick());
         this.register(new CoordinateClick());
         // Submit
         this.register(new VSCodeSubmitCommands());
         this.register(new CDPEnterKey());
         this.register(new ScriptForceSubmit());
+        this.register(new CtrlEnterShortcut());
         this.register(new AltEnterShortcut());
     }
 
@@ -528,12 +858,48 @@ export class InteractionMethodRegistry {
                 : this.config.submit;
         return list.includes(method.id);
     }
+
+    /**
+     * Returns a static descriptor list for UI/docs generation.
+     */
+    static getMethodDescriptors(): MethodDescriptor[] {
+        const registry = new InteractionMethodRegistry();
+        return registry.getAllMethods().map(m => ({
+            id: m.id,
+            name: m.name,
+            description: m.description,
+            category: m.category,
+            requiresCDP: m.requiresCDP
+        }));
+    }
 }
 
 // ============ Helpers ============
 
 function delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function escapeJsSingleQuoted(input: string): string {
+    return input
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r');
+}
+
+function visualDiffExceeded(before: string[], after: string[], threshold: number): boolean {
+    if (before.length === 0 || after.length === 0) return false;
+    const count = Math.min(before.length, after.length);
+    for (let i = 0; i < count; i++) {
+        const a = before[i] || '';
+        const b = after[i] || '';
+        if (a === b) continue;
+        const maxLen = Math.max(a.length, b.length, 1);
+        const ratio = Math.abs(a.length - b.length) / maxLen;
+        if (ratio >= threshold || a !== b) return true;
+    }
+    return false;
 }
 
 // Default singleton

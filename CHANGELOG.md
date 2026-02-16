@@ -5,6 +5,43 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.3] - 2026-02-15
+
+### Changed
+- **VSIX Packaging Hygiene**: Excluded `fix_cdp_script.js` from extension artifacts via `.vscodeignore` so maintenance-only helper scripts are not shipped in release packages.
+
+## [4.10.2] - 2026-02-15
+
+### Added
+- **Quick Preset Switcher**: Added one-click `Conservative`, `Balanced`, and `Aggressive` preset application in the dashboard.
+- **Preset Profile Targeting**: Added preset target selector (`vscode`, `antigravity`, `cursor`) so each profile can be tuned independently.
+
+### Changed
+- **Preset Application Logic**: Dashboard now updates per-profile click methods/selectors plus shared execution settings (`interactionParallel`, `interactionRetryCount`) when a preset is applied.
+
+## [4.10.1] - 2026-02-15
+
+### Added
+- **UI Profile Routing**: Added `interactionUiProfile` with `auto|vscode|antigravity|cursor` to select the UI targeting stack explicitly.
+- **Per-Profile Click Bundles**: Added profile-specific click method settings (`interactionClickMethodsVSCode`, `interactionClickMethodsAntigravity`, `interactionClickMethodsCursor`).
+- **Per-Profile Selector Bundles**: Added profile-specific selector lists (`interactionClickSelectorsVSCode`, `interactionClickSelectorsAntigravity`, `interactionClickSelectorsCursor`).
+
+### Changed
+- **CDP Strategy Resolution**: Auto-accept now resolves profile-aware selector strings and method bundles so VS Code uses a dedicated element/method path instead of Antigravity-focused defaults.
+- **Dashboard Controls**: Added UI Profile selector and editable per-profile method/selector text areas.
+
+## [4.10.0] - 2026-02-15
+
+### Added
+- **Expanded Interaction Matrix**: Added selectable methods for text (`cdp-insert-text`, `bridge-type`), click (`dom-scan-click`, `bridge-click`, `native-accept`, `process-peek`, `visual-verify-click`), and submit (`ctrl-enter`).
+- **Visual Verification Setting**: New `antigravity.interactionVisualDiffThreshold` setting for screenshot-diff click confirmation sensitivity.
+- **CDP Helper APIs**: Added `dispatchMouseEventToAll`, `insertTextToAll`, `executeInAllSessions`, `captureScreenshots`, and `getConnectedPageIds` for richer interaction routing.
+
+### Changed
+- **CDP Strategy Execution**: Auto-accept now executes configured click methods through `InteractionMethodRegistry` instead of fixed command-only fallback.
+- **Dashboard Controls**: Interaction Methods card now exposes all newly added methods and visual diff threshold tuning.
+- **Connection Reliability**: `CDPHandler.connect()` now establishes WebSocket page connections instead of only scanning ports.
+
 ## [4.9.4] - 2026-02-15
 
 ### Added

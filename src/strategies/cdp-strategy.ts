@@ -23,9 +23,11 @@ export class CDPStrategy implements IStrategy {
     private pollTimer: NodeJS.Timeout | null = null;
     private registry: InteractionMethodRegistry;
     private context: vscode.ExtensionContext;
+    private appName: string;
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
+        this.appName = vscode.env.appName || 'Visual Studio Code';
         this.cdpHandler = new CDPHandler();
         this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 9999);
         this.statusBarItem.command = 'antigravity.toggleAutoAccept';
@@ -97,6 +99,9 @@ export class CDPStrategy implements IStrategy {
     }
 
     async executeAction(action: string): Promise<void> {
+        const profile = this.resolveUiProfile();
+        const selector = this.getClickSelectorForProfile(profile);
+        const clickRegistry = this.createRegistryForProfile(profile);
         const ctx: InteractionContext = {
             cdpHandler: this.cdpHandler,
             vscodeCommands: vscode.commands,
@@ -105,8 +110,12 @@ export class CDPStrategy implements IStrategy {
 
         switch (action) {
             case 'accept':
-                await this.registry.executeCategory('click', {
+                await clickRegistry.executeCategory('click', {
                     ...ctx,
+                    selector,
+                    acceptPatterns: config.get<string[]>('acceptPatterns') || [],
+                    rejectPatterns: config.get<string[]>('rejectPatterns') || [],
+                    visualDiffThreshold: config.get<number>('interactionVisualDiffThreshold') || 0.001,
                     commandId: 'antigravity.agent.acceptAgentStep'
                 });
                 break;
@@ -116,10 +125,25 @@ export class CDPStrategy implements IStrategy {
             case 'type':
                 await this.registry.executeCategory('text', ctx);
                 break;
+            case 'run':
+                await clickRegistry.executeCategory('click', {
+                    ...ctx,
+                    selector,
+                    commandId: 'antigravity.clickRun'
+                });
+                break;
+            case 'expand':
+                await clickRegistry.executeCategory('click', {
+                    ...ctx,
+                    selector,
+                    commandId: 'antigravity.clickExpand'
+                });
+                break;
             default:
                 // Try as VS Code command
-                await this.registry.executeCategory('click', {
+                await clickRegistry.executeCategory('click', {
                     ...ctx,
+                    selector,
                     commandId: action
                 });
         }
@@ -129,21 +153,61 @@ export class CDPStrategy implements IStrategy {
      * Auto-accept agent steps using configured interaction methods.
      */
     private async executeAutoAccept() {
+        const profile = this.resolveUiProfile();
+        const selector = this.getClickSelectorForProfile(profile);
+        const clickRegistry = this.createRegistryForProfile(profile);
         const ctx: InteractionContext = {
             cdpHandler: this.cdpHandler,
             vscodeCommands: vscode.commands,
+            selector,
+            acceptPatterns: config.get<string[]>('acceptPatterns') || [],
+            rejectPatterns: config.get<string[]>('rejectPatterns') || [],
+            visualDiffThreshold: config.get<number>('interactionVisualDiffThreshold') || 0.001,
             commandId: 'antigravity.agent.acceptAgentStep'
         };
 
-        // Try VS Code commands first
-        try {
-            await vscode.commands.executeCommand('antigravity.agent.acceptAgentStep');
-        } catch { /* ignore */ }
+        await clickRegistry.executeCategory('click', ctx);
+    }
 
-        // Also try terminal accept
-        try {
-            await vscode.commands.executeCommand('antigravity.terminal.accept');
-        } catch { /* ignore */ }
+    private resolveUiProfile(): 'vscode' | 'antigravity' | 'cursor' {
+        const configured = config.get<'auto' | 'vscode' | 'antigravity' | 'cursor'>('interactionUiProfile') || 'auto';
+        if (configured !== 'auto') {
+            return configured;
+        }
+
+        const lower = this.appName.toLowerCase();
+        if (lower.includes('antigravity')) return 'antigravity';
+        if (lower.includes('cursor')) return 'cursor';
+        return 'vscode';
+    }
+
+    private getClickSelectorForProfile(profile: 'vscode' | 'antigravity' | 'cursor'): string {
+        const selectors = profile === 'antigravity'
+            ? (config.get<string[]>('interactionClickSelectorsAntigravity') || [])
+            : profile === 'cursor'
+                ? (config.get<string[]>('interactionClickSelectorsCursor') || [])
+                : (config.get<string[]>('interactionClickSelectorsVSCode') || []);
+
+        const filtered = selectors.map(s => s.trim()).filter(Boolean);
+        return filtered.length > 0 ? filtered.join(', ') : 'button, [role="button"], .monaco-button';
+    }
+
+    private createRegistryForProfile(profile: 'vscode' | 'antigravity' | 'cursor'): InteractionMethodRegistry {
+        const cfg = config.getAll();
+        const clickMethods = profile === 'antigravity'
+            ? (cfg.interactionClickMethodsAntigravity || cfg.interactionClickMethods)
+            : profile === 'cursor'
+                ? (cfg.interactionClickMethodsCursor || cfg.interactionClickMethods)
+                : (cfg.interactionClickMethodsVSCode || cfg.interactionClickMethods);
+
+        return new InteractionMethodRegistry({
+            textInput: cfg.interactionTextMethods,
+            click: clickMethods,
+            submit: cfg.interactionSubmitMethods,
+            timings: cfg.interactionTimings,
+            retryCount: cfg.interactionRetryCount,
+            parallelExecution: cfg.interactionParallel
+        });
     }
 
     private updateStatusBar() {

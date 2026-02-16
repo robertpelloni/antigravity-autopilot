@@ -80,7 +80,10 @@ export class BlindBumpHandler {
         const ctx: InteractionContext = {
             commandId: 'workbench.action.chat.open',
             vscodeCommands: vscode.commands,
-            cdpHandler: this.cdp
+            cdpHandler: this.cdp,
+            acceptPatterns: config.get<string[]>('acceptPatterns') || [],
+            rejectPatterns: config.get<string[]>('rejectPatterns') || [],
+            visualDiffThreshold: config.get<number>('interactionVisualDiffThreshold') || 0.001
         };
         const openResults = await this.registry.executeCategory('click', ctx);
         allResults.push(...openResults);
@@ -94,7 +97,8 @@ export class BlindBumpHandler {
         const typeCtx: InteractionContext = {
             text: msg,
             cdpHandler: this.cdp,
-            vscodeCommands: vscode.commands
+            vscodeCommands: vscode.commands,
+            visualDiffThreshold: config.get<number>('interactionVisualDiffThreshold') || 0.001
         };
         const typeResults = await this.registry.executeCategory('text', typeCtx);
         allResults.push(...typeResults);
@@ -103,7 +107,8 @@ export class BlindBumpHandler {
         // Step 3: Submit (submit method)
         const submitCtx: InteractionContext = {
             cdpHandler: this.cdp,
-            vscodeCommands: vscode.commands
+            vscodeCommands: vscode.commands,
+            visualDiffThreshold: config.get<number>('interactionVisualDiffThreshold') || 0.001
         };
         const submitResults = await this.registry.executeCategory('submit', submitCtx);
         allResults.push(...submitResults);

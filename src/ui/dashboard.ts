@@ -33,6 +33,13 @@ export class DashboardPanel {
                         vscode.window.showInformationMessage(`${message.enabled ? 'Enabled' : 'Disabled'} ${message.methodId}`);
                         return;
                     }
+                    case 'applyInteractionPreset': {
+                        const profile = String(message.profile || 'vscode') as 'vscode' | 'antigravity' | 'cursor';
+                        const preset = String(message.preset || 'balanced') as 'conservative' | 'balanced' | 'aggressive';
+                        await this._applyInteractionPreset(profile, preset);
+                        vscode.window.showInformationMessage(`Applied ${preset} preset to ${profile} profile`);
+                        return;
+                    }
                 }
             },
             null,
@@ -87,6 +94,91 @@ export class DashboardPanel {
         const webview = this._panel.webview;
         this._panel.title = 'Antigravity Settings';
         this._panel.webview.html = this._getHtmlForWebview(webview);
+    }
+
+    private async _applyInteractionPreset(
+        profile: 'vscode' | 'antigravity' | 'cursor',
+        preset: 'conservative' | 'balanced' | 'aggressive'
+    ) {
+        const mapping = this._getPreset(profile, preset);
+
+        const methodKey = profile === 'vscode'
+            ? 'interactionClickMethodsVSCode'
+            : profile === 'antigravity'
+                ? 'interactionClickMethodsAntigravity'
+                : 'interactionClickMethodsCursor';
+
+        const selectorKey = profile === 'vscode'
+            ? 'interactionClickSelectorsVSCode'
+            : profile === 'antigravity'
+                ? 'interactionClickSelectorsAntigravity'
+                : 'interactionClickSelectorsCursor';
+
+        await config.update(methodKey as any, mapping.methods);
+        await config.update(selectorKey as any, mapping.selectors);
+        await config.update('interactionParallel', mapping.parallel);
+        await config.update('interactionRetryCount', mapping.retryCount);
+    }
+
+    private _getPreset(
+        profile: 'vscode' | 'antigravity' | 'cursor',
+        preset: 'conservative' | 'balanced' | 'aggressive'
+    ): { methods: string[]; selectors: string[]; parallel: boolean; retryCount: number } {
+        const vscodeSelectors = [
+            'button[aria-label*="Accept"]',
+            'button[title*="Accept"]',
+            'button[aria-label*="Apply"]',
+            'button[title*="Apply"]',
+            '.monaco-dialog-box button',
+            '.monaco-notification-list button',
+            '.monaco-button'
+        ];
+
+        const antigravitySelectors = [
+            '#antigravity\\.agentPanel button',
+            '#antigravity\\.agentPanel [role="button"]',
+            '.bg-ide-button-background',
+            'button.grow',
+            '.monaco-button'
+        ];
+
+        const cursorSelectors = [
+            '#workbench\\.parts\\.auxiliarybar button',
+            '#workbench\\.parts\\.auxiliarybar [role="button"]',
+            '.chat-session-item [role="button"]',
+            '.monaco-button'
+        ];
+
+        const selectors = profile === 'vscode'
+            ? vscodeSelectors
+            : profile === 'antigravity'
+                ? antigravitySelectors
+                : cursorSelectors;
+
+        if (preset === 'conservative') {
+            return {
+                methods: ['native-accept', 'vscode-cmd', 'dom-scan-click'],
+                selectors,
+                parallel: false,
+                retryCount: 2
+            };
+        }
+
+        if (preset === 'aggressive') {
+            return {
+                methods: ['dom-scan-click', 'dom-click', 'bridge-click', 'cdp-mouse', 'native-accept', 'vscode-cmd', 'script-force', 'process-peek', 'visual-verify-click', 'coord-click'],
+                selectors,
+                parallel: true,
+                retryCount: 8
+            };
+        }
+
+        return {
+            methods: ['dom-scan-click', 'dom-click', 'bridge-click', 'cdp-mouse', 'native-accept', 'vscode-cmd', 'script-force', 'process-peek'],
+            selectors,
+            parallel: false,
+            retryCount: 4
+        };
     }
 
     private _getHtmlForWebview(webview: vscode.Webview) {
@@ -216,11 +308,73 @@ export class DashboardPanel {
                 <h2>🔧 Interaction Methods</h2>
                 <p style="font-size:12px;color:var(--vscode-descriptionForeground);margin:0 0 10px;">Select which methods to use for text input, clicking, and submission. Higher priority methods are tried first.</p>
 
+                <div class="setting">
+                    <label>UI Profile:</label>
+                    <select onchange="updateConfig('interactionUiProfile', this.value)">
+                        <option value="auto" ${settings.interactionUiProfile === 'auto' ? 'selected' : ''}>Auto Detect</option>
+                        <option value="vscode" ${settings.interactionUiProfile === 'vscode' ? 'selected' : ''}>VS Code</option>
+                        <option value="antigravity" ${settings.interactionUiProfile === 'antigravity' ? 'selected' : ''}>Antigravity</option>
+                        <option value="cursor" ${settings.interactionUiProfile === 'cursor' ? 'selected' : ''}>Cursor</option>
+                    </select>
+                </div>
+
+                <details open>
+                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">🎛️ Quick Presets</summary>
+                    <div class="setting">
+                        <label>Preset Profile:</label>
+                        <select id="presetProfileSelect">
+                            <option value="vscode">VS Code</option>
+                            <option value="antigravity">Antigravity</option>
+                            <option value="cursor">Cursor</option>
+                        </select>
+                    </div>
+                    <div class="setting" style="justify-content:flex-start;gap:8px;">
+                        <button onclick="applyInteractionPreset('conservative')">Apply Conservative</button>
+                        <button onclick="applyInteractionPreset('balanced')">Apply Balanced</button>
+                        <button onclick="applyInteractionPreset('aggressive')">Apply Aggressive</button>
+                    </div>
+                    <p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-top:6px;">
+                        Conservative = safer command-first; Balanced = mixed defaults; Aggressive = broad methods + parallel.
+                    </p>
+                </details>
+
+                <details>
+                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">🧭 Profile Selector Bundles</summary>
+                    <div class="setting vertical">
+                        <label>VS Code Click Methods (one per line):</label>
+                        <textarea onchange="updateConfig('interactionClickMethodsVSCode', this.value.split('\n').map(v=>v.trim()).filter(Boolean))">${(settings.interactionClickMethodsVSCode || []).join('\n')}</textarea>
+                    </div>
+                    <div class="setting vertical">
+                        <label>Antigravity Click Methods (one per line):</label>
+                        <textarea onchange="updateConfig('interactionClickMethodsAntigravity', this.value.split('\n').map(v=>v.trim()).filter(Boolean))">${(settings.interactionClickMethodsAntigravity || []).join('\n')}</textarea>
+                    </div>
+                    <div class="setting vertical">
+                        <label>Cursor Click Methods (one per line):</label>
+                        <textarea onchange="updateConfig('interactionClickMethodsCursor', this.value.split('\n').map(v=>v.trim()).filter(Boolean))">${(settings.interactionClickMethodsCursor || []).join('\n')}</textarea>
+                    </div>
+                    <div class="setting vertical">
+                        <label>VS Code Click Selectors (one per line):</label>
+                        <textarea onchange="updateConfig('interactionClickSelectorsVSCode', this.value.split('\n').map(v=>v.trim()).filter(Boolean))">${(settings.interactionClickSelectorsVSCode || []).join('\n')}</textarea>
+                    </div>
+                    <div class="setting vertical">
+                        <label>Antigravity Click Selectors (one per line):</label>
+                        <textarea onchange="updateConfig('interactionClickSelectorsAntigravity', this.value.split('\n').map(v=>v.trim()).filter(Boolean))">${(settings.interactionClickSelectorsAntigravity || []).join('\n')}</textarea>
+                    </div>
+                    <div class="setting vertical">
+                        <label>Cursor Click Selectors (one per line):</label>
+                        <textarea onchange="updateConfig('interactionClickSelectorsCursor', this.value.split('\n').map(v=>v.trim()).filter(Boolean))">${(settings.interactionClickSelectorsCursor || []).join('\n')}</textarea>
+                    </div>
+                </details>
+
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin-bottom:8px;">📝 Text Input Methods</summary>
                     <div class="setting">
                         <label>CDP Key Dispatch (cdp-keys):</label>
                         <input type="checkbox" ${settings.interactionTextMethods.includes('cdp-keys') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'cdp-keys', this.checked)">
+                    </div>
+                    <div class="setting">
+                        <label>CDP Insert Text (cdp-insert-text):</label>
+                        <input type="checkbox" ${settings.interactionTextMethods.includes('cdp-insert-text') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'cdp-insert-text', this.checked)">
                     </div>
                     <div class="setting">
                         <label>Clipboard Paste (clipboard-paste):</label>
@@ -231,6 +385,10 @@ export class DashboardPanel {
                         <input type="checkbox" ${settings.interactionTextMethods.includes('dom-inject') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'dom-inject', this.checked)">
                     </div>
                     <div class="setting">
+                        <label>Bridge Type Injection (bridge-type):</label>
+                        <input type="checkbox" ${settings.interactionTextMethods.includes('bridge-type') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'bridge-type', this.checked)">
+                    </div>
+                    <div class="setting">
                         <label>VS Code Type Command (vscode-type):</label>
                         <input type="checkbox" ${settings.interactionTextMethods.includes('vscode-type') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'vscode-type', this.checked)">
                     </div>
@@ -239,12 +397,24 @@ export class DashboardPanel {
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">🖱️ Click Methods</summary>
                     <div class="setting">
+                        <label>DOM Scan + Click (dom-scan-click):</label>
+                        <input type="checkbox" ${settings.interactionClickMethods.includes('dom-scan-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'dom-scan-click', this.checked)">
+                    </div>
+                    <div class="setting">
                         <label>DOM Selector Click (dom-click):</label>
                         <input type="checkbox" ${settings.interactionClickMethods.includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'dom-click', this.checked)">
                     </div>
                     <div class="setting">
+                        <label>Bridge Coordinate Click (bridge-click):</label>
+                        <input type="checkbox" ${settings.interactionClickMethods.includes('bridge-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'bridge-click', this.checked)">
+                    </div>
+                    <div class="setting">
                         <label>CDP Mouse Event (cdp-mouse):</label>
                         <input type="checkbox" ${settings.interactionClickMethods.includes('cdp-mouse') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'cdp-mouse', this.checked)">
+                    </div>
+                    <div class="setting">
+                        <label>Native Accept Commands (native-accept):</label>
+                        <input type="checkbox" ${settings.interactionClickMethods.includes('native-accept') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'native-accept', this.checked)">
                     </div>
                     <div class="setting">
                         <label>VS Code Command (vscode-cmd):</label>
@@ -253,6 +423,14 @@ export class DashboardPanel {
                     <div class="setting">
                         <label>Script Force Click (script-force):</label>
                         <input type="checkbox" ${settings.interactionClickMethods.includes('script-force') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'script-force', this.checked)">
+                    </div>
+                    <div class="setting">
+                        <label>Process Peek + Command (process-peek):</label>
+                        <input type="checkbox" ${settings.interactionClickMethods.includes('process-peek') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'process-peek', this.checked)">
+                    </div>
+                    <div class="setting">
+                        <label>Visual Verify Click (visual-verify-click):</label>
+                        <input type="checkbox" ${settings.interactionClickMethods.includes('visual-verify-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'visual-verify-click', this.checked)">
                     </div>
                     <div class="setting">
                         <label>Coordinate Click (coord-click):</label>
@@ -278,6 +456,10 @@ export class DashboardPanel {
                         <label>Alt+Enter Shortcut (alt-enter):</label>
                         <input type="checkbox" ${settings.interactionSubmitMethods.includes('alt-enter') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'alt-enter', this.checked)">
                     </div>
+                    <div class="setting">
+                        <label>Ctrl+Enter Shortcut (ctrl-enter):</label>
+                        <input type="checkbox" ${settings.interactionSubmitMethods.includes('ctrl-enter') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'ctrl-enter', this.checked)">
+                    </div>
                 </details>
 
                 <hr style="border-color:var(--vscode-widget-border);margin:12px 0;">
@@ -288,6 +470,10 @@ export class DashboardPanel {
                 <div class="setting">
                     <label>Retry Count:</label>
                     <input type="number" value="${settings.interactionRetryCount}" min="1" max="13" onchange="updateConfig('interactionRetryCount', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Visual Diff Threshold:</label>
+                    <input type="number" value="${settings.interactionVisualDiffThreshold}" min="0" max="1" step="0.001" onchange="updateConfig('interactionVisualDiffThreshold', parseFloat(this.value))">
                 </div>
             </div>
 
@@ -355,6 +541,15 @@ export class DashboardPanel {
                         configKey: configKey,
                         methodId: methodId,
                         enabled: enabled
+                    });
+                }
+                function applyInteractionPreset(preset) {
+                    const profileEl = document.getElementById('presetProfileSelect');
+                    const profile = profileEl ? profileEl.value : 'vscode';
+                    vscode.postMessage({
+                        command: 'applyInteractionPreset',
+                        profile: profile,
+                        preset: preset
                     });
                 }
             </script>

@@ -235,4 +235,46 @@ describe('Interaction Method Registry', () => {
         assert.strictEqual(results.length, 2);
         assert.ok(results.every(r => !r.success));
     });
+
+    it('should support expanded method ID combinations from settings', () => {
+        const reg = new TestRegistry({
+            textInput: ['cdp-keys', 'cdp-insert-text', 'bridge-type'],
+            click: ['dom-scan-click', 'bridge-click', 'native-accept', 'process-peek', 'visual-verify-click'],
+            submit: ['vscode-submit', 'cdp-enter', 'ctrl-enter', 'alt-enter']
+        });
+
+        reg.register(new TestMethod('cdp-keys', 'text', 1));
+        reg.register(new TestMethod('cdp-insert-text', 'text', 2));
+        reg.register(new TestMethod('bridge-type', 'text', 3));
+        reg.register(new TestMethod('dom-scan-click', 'click', 1));
+        reg.register(new TestMethod('bridge-click', 'click', 2));
+        reg.register(new TestMethod('native-accept', 'click', 3));
+        reg.register(new TestMethod('process-peek', 'click', 4));
+        reg.register(new TestMethod('visual-verify-click', 'click', 5));
+        reg.register(new TestMethod('vscode-submit', 'submit', 1));
+        reg.register(new TestMethod('cdp-enter', 'submit', 2));
+        reg.register(new TestMethod('ctrl-enter', 'submit', 3));
+        reg.register(new TestMethod('alt-enter', 'submit', 4));
+
+        assert.strictEqual(reg.getMethodsByCategory('text').length, 3);
+        assert.strictEqual(reg.getMethodsByCategory('click').length, 5);
+        assert.strictEqual(reg.getMethodsByCategory('submit').length, 4);
+    });
+
+    it('should execute mixed click methods until retry success target is reached', async () => {
+        const reg = new TestRegistry({
+            click: ['dom-scan-click', 'bridge-click', 'native-accept', 'process-peek'],
+            retryCount: 2
+        });
+
+        reg.register(new TestMethod('dom-scan-click', 'click', 1, false));
+        reg.register(new TestMethod('bridge-click', 'click', 2, true));
+        reg.register(new TestMethod('native-accept', 'click', 3, true));
+        reg.register(new TestMethod('process-peek', 'click', 4, true));
+
+        const results = await reg.executeCategory('click', {});
+        assert.strictEqual(results.length, 3);
+        assert.deepStrictEqual(results.map(r => r.methodId), ['dom-scan-click', 'bridge-click', 'native-accept']);
+        assert.strictEqual(results.filter(r => r.success).length, 2);
+    });
 });

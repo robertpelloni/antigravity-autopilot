@@ -110,6 +110,10 @@ export class CDPHandler extends EventEmitter {
                     // Handle Attachment Success
                     if (msg.method === 'Target.attachedToTarget') {
                         const sessionId = msg.params.sessionId;
+                        const conn = this.connections.get(page.id);
+                        if (conn) {
+                            conn.sessions.add(sessionId);
+                        }
                         this.sendCommand(page.id, 'Runtime.enable', {}, undefined, sessionId).catch(() => { });
                         this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' }, undefined, sessionId).catch(() => { });
                         this.emit('sessionAttached', { pageId: page.id, sessionId, type: msg.params.targetInfo.type, url: msg.params.targetInfo.url });
@@ -221,7 +225,23 @@ export class CDPHandler extends EventEmitter {
 
     async connect(): Promise<boolean> {
         const instances = await this.scanForInstances();
-        return instances.length > 0;
+        let connectedCount = 0;
+
+        for (const instance of instances) {
+            for (const page of instance.pages) {
+                if (this.connections.has(page.id)) {
+                    connectedCount++;
+                    continue;
+                }
+
+                const ok = await this.connectToPage(page);
+                if (ok) {
+                    connectedCount++;
+                }
+            }
+        }
+
+        return connectedCount > 0;
     }
 
     private async handleBridgeMessage(pageId: string, text: string, sessionId?: string) {
@@ -319,21 +339,88 @@ export class CDPHandler extends EventEmitter {
     }
 
     async executeScriptInAllSessions(script: string) {
-    for (const [pageId, conn] of this.connections) {
-        this.injectScript(pageId, script).catch(() => { });
-        for (const sessionId of conn.sessions) {
-            this.injectScript(pageId, script, false, sessionId).catch(() => { });
+        for (const [pageId, conn] of this.connections) {
+            this.injectScript(pageId, script).catch(() => { });
+            for (const sessionId of conn.sessions) {
+                this.injectScript(pageId, script, false, sessionId).catch(() => { });
+            }
         }
     }
-}
 
     async dispatchKeyEventToAll(event: any) {
-    for (const [pageId, conn] of this.connections) {
-        this.sendCommand(pageId, 'Input.dispatchKeyEvent', event).catch(() => { });
-        for (const sessionId of conn.sessions) {
-            this.sendCommand(pageId, 'Input.dispatchKeyEvent', event, undefined, sessionId).catch(() => { });
+        for (const [pageId, conn] of this.connections) {
+            this.sendCommand(pageId, 'Input.dispatchKeyEvent', event).catch(() => { });
+            for (const sessionId of conn.sessions) {
+                this.sendCommand(pageId, 'Input.dispatchKeyEvent', event, undefined, sessionId).catch(() => { });
+            }
         }
     }
-}
+
+    async dispatchMouseEventToAll(event: any) {
+        for (const [pageId, conn] of this.connections) {
+            this.sendCommand(pageId, 'Input.dispatchMouseEvent', event).catch(() => { });
+            for (const sessionId of conn.sessions) {
+                this.sendCommand(pageId, 'Input.dispatchMouseEvent', event, undefined, sessionId).catch(() => { });
+            }
+        }
+    }
+
+    async insertTextToAll(text: string) {
+        for (const [pageId, conn] of this.connections) {
+            this.sendCommand(pageId, 'Input.insertText', { text }).catch(() => { });
+            for (const sessionId of conn.sessions) {
+                this.sendCommand(pageId, 'Input.insertText', { text }, undefined, sessionId).catch(() => { });
+            }
+        }
+    }
+
+    async executeInAllSessions(expression: string, returnByValue: boolean = true): Promise<any[]> {
+        const results: any[] = [];
+        for (const [pageId, conn] of this.connections) {
+            try {
+                const mainResult = await this.sendCommand(pageId, 'Runtime.evaluate', {
+                    expression,
+                    returnByValue,
+                    awaitPromise: true
+                });
+                results.push(mainResult?.result?.value);
+            } catch {
+                // ignore
+            }
+
+            for (const sessionId of conn.sessions) {
+                try {
+                    const sessionResult = await this.sendCommand(pageId, 'Runtime.evaluate', {
+                        expression,
+                        returnByValue,
+                        awaitPromise: true
+                    }, undefined, sessionId);
+                    results.push(sessionResult?.result?.value);
+                } catch {
+                    // ignore
+                }
+            }
+        }
+        return results;
+    }
+
+    async captureScreenshots(): Promise<string[]> {
+        const screenshots: string[] = [];
+        for (const [pageId] of this.connections) {
+            try {
+                const result = await this.sendCommand(pageId, 'Page.captureScreenshot', { format: 'png' });
+                if (result?.data) {
+                    screenshots.push(result.data);
+                }
+            } catch {
+                // ignore capture errors for pages that do not support screenshots
+            }
+        }
+        return screenshots;
+    }
+
+    getConnectedPageIds(): string[] {
+        return Array.from(this.connections.keys());
+    }
 }
 

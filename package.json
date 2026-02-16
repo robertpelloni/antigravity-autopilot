@@ -2,7 +2,7 @@
     "name": "antigravity-autopilot",
     "displayName": "Antigravity Autopilot (Unified)",
     "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-    "version": "4.9.4",
+    "version": "4.10.3",
     "repository": {
         "type": "git",
         "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -16,8 +16,7 @@
         "Other"
     ],
     "activationEvents": [
-        "onStartupFinished",
-        "onCommand:antigravity.resetConnection"
+        "onStartupFinished"
     ],
     "main": "./dist/extension.js",
     "contributes": {
@@ -109,6 +108,17 @@
                     ],
                     "default": "cdp",
                     "description": "Driver Strategy: 'simple' uses VS Code commands (no restart), 'cdp' uses Browser Protocol (robust, multi-tab, requires restart)."
+                },
+                "antigravity.interactionUiProfile": {
+                    "type": "string",
+                    "enum": [
+                        "auto",
+                        "vscode",
+                        "antigravity",
+                        "cursor"
+                    ],
+                    "default": "auto",
+                    "description": "Select UI targeting profile for element selectors and click method bundle."
                 },
                 "antigravity.autoAcceptEnabled": {
                     "type": "boolean",
@@ -276,29 +286,37 @@
                     "type": "array",
                     "default": [
                         "cdp-keys",
+                        "cdp-insert-text",
                         "clipboard-paste",
-                        "dom-inject"
+                        "dom-inject",
+                        "bridge-type"
                     ],
-                    "description": "Enabled text input methods (IDs). Options: cdp-keys, clipboard-paste, dom-inject, vscode-type"
+                    "description": "Enabled text input methods (IDs). Options: cdp-keys, cdp-insert-text, clipboard-paste, dom-inject, bridge-type, vscode-type"
                 },
                 "antigravity.interactionClickMethods": {
                     "type": "array",
                     "default": [
+                        "dom-scan-click",
                         "dom-click",
+                        "bridge-click",
                         "cdp-mouse",
+                        "native-accept",
                         "vscode-cmd",
-                        "script-force"
+                        "script-force",
+                        "process-peek"
                     ],
-                    "description": "Enabled click methods (IDs). Options: dom-click, cdp-mouse, vscode-cmd, script-force, coord-click"
+                    "description": "Enabled click methods (IDs). Options: dom-scan-click, dom-click, bridge-click, cdp-mouse, native-accept, vscode-cmd, script-force, process-peek, visual-verify-click, coord-click"
                 },
                 "antigravity.interactionSubmitMethods": {
                     "type": "array",
                     "default": [
                         "vscode-submit",
                         "cdp-enter",
-                        "script-submit"
+                        "script-submit",
+                        "ctrl-enter",
+                        "alt-enter"
                     ],
-                    "description": "Enabled submit methods (IDs). Options: vscode-submit, cdp-enter, script-submit, alt-enter"
+                    "description": "Enabled submit methods (IDs). Options: vscode-submit, cdp-enter, script-submit, ctrl-enter, alt-enter"
                 },
                 "antigravity.interactionTimings": {
                     "type": "object",
@@ -314,6 +332,81 @@
                     "type": "boolean",
                     "default": false,
                     "description": "Try all enabled methods simultaneously instead of sequentially."
+                },
+                "antigravity.interactionVisualDiffThreshold": {
+                    "type": "number",
+                    "default": 0.001,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Visual diff sensitivity for screenshot-verified click methods (0-1)."
+                },
+                "antigravity.interactionClickMethodsVSCode": {
+                    "type": "array",
+                    "default": [
+                        "dom-scan-click",
+                        "native-accept",
+                        "process-peek",
+                        "vscode-cmd",
+                        "cdp-mouse",
+                        "bridge-click"
+                    ],
+                    "description": "Click method IDs used when UI profile resolves to vscode."
+                },
+                "antigravity.interactionClickMethodsAntigravity": {
+                    "type": "array",
+                    "default": [
+                        "dom-scan-click",
+                        "dom-click",
+                        "bridge-click",
+                        "cdp-mouse",
+                        "script-force",
+                        "native-accept"
+                    ],
+                    "description": "Click method IDs used when UI profile resolves to antigravity."
+                },
+                "antigravity.interactionClickMethodsCursor": {
+                    "type": "array",
+                    "default": [
+                        "dom-scan-click",
+                        "dom-click",
+                        "cdp-mouse",
+                        "script-force",
+                        "native-accept"
+                    ],
+                    "description": "Click method IDs used when UI profile resolves to cursor."
+                },
+                "antigravity.interactionClickSelectorsVSCode": {
+                    "type": "array",
+                    "default": [
+                        "button[aria-label*=\"Accept\"]",
+                        "button[title*=\"Accept\"]",
+                        "button[aria-label*=\"Apply\"]",
+                        "button[title*=\"Apply\"]",
+                        ".monaco-button",
+                        ".monaco-dialog-box button",
+                        ".monaco-notification-list button"
+                    ],
+                    "description": "CSS selector list used for VS Code UI element discovery."
+                },
+                "antigravity.interactionClickSelectorsAntigravity": {
+                    "type": "array",
+                    "default": [
+                        "#antigravity\\.agentPanel button",
+                        "#antigravity\\.agentPanel [role=\"button\"]",
+                        ".bg-ide-button-background",
+                        "button.grow"
+                    ],
+                    "description": "CSS selector list used for Antigravity UI element discovery."
+                },
+                "antigravity.interactionClickSelectorsCursor": {
+                    "type": "array",
+                    "default": [
+                        "#workbench\\.parts\\.auxiliarybar button",
+                        "#workbench\\.parts\\.auxiliarybar [role=\"button\"]",
+                        ".chat-session-item [role=\"button\"]",
+                        ".monaco-button"
+                    ],
+                    "description": "CSS selector list used for Cursor UI element discovery."
                 }
             }
         }
