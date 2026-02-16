@@ -57,6 +57,18 @@ export interface TestGeneratorConfig {
     includeEdgeCases: boolean;
 }
 
+interface ExtractedFunction {
+    name: string;
+    params: string[];
+    async: boolean;
+    body: string;
+}
+
+interface ExtractedClass {
+    name: string;
+    methods: string[];
+}
+
 // ============ Test Templates ============
 const TEST_TEMPLATES = {
     vitest: {
@@ -142,9 +154,9 @@ export class TestGenerator {
 
         log.info(`Generating tests for: ${filePath}`);
 
-        // Extract functions and classes from file
-        const functions = this.extractFunctions(content);
-        const classes = this.extractClasses(content);
+        // Extract functions and classes from file (AST-backed symbols first, regex fallback)
+        const functions = await this.extractFunctions(absolutePath, content);
+        const classes = await this.extractClasses(absolutePath, content);
 
         const tests: TestCase[] = [];
 
@@ -171,14 +183,50 @@ export class TestGenerator {
         this.suites.set(suiteId, suite);
 
         // Write test file
-        await this.writeTestFile(suite, filePath);
+        await this.writeTestFile(suite, filePath, functions, classes);
 
         log.info(`Generated ${tests.length} tests for ${suiteName}`);
         return suite;
     }
 
-    private extractFunctions(content: string): Array<{ name: string; params: string[]; async: boolean; body: string }> {
-        const functions: Array<{ name: string; params: string[]; async: boolean; body: string }> = [];
+    private async extractFunctions(filePath: string, content: string): Promise<ExtractedFunction[]> {
+        const symbols = await this.extractDocumentSymbols(filePath);
+        const fromSymbols: ExtractedFunction[] = [];
+
+        const walk = (nodes: vscode.DocumentSymbol[]) => {
+            for (const node of nodes) {
+                if (node.kind === vscode.SymbolKind.Function) {
+                    const name = (node.name || '').trim();
+                    if (name && !name.startsWith('_')) {
+                        const meta = this.parseFunctionMetadata(name, content);
+                        fromSymbols.push({
+                            name,
+                            params: meta.params,
+                            async: meta.async,
+                            body: ''
+                        });
+                    }
+                }
+
+                if (node.children && node.children.length > 0) {
+                    walk(node.children);
+                }
+            }
+        };
+
+        if (symbols.length > 0) {
+            walk(symbols);
+        }
+
+        if (fromSymbols.length > 0) {
+            return fromSymbols;
+        }
+
+        return this.extractFunctionsRegex(content);
+    }
+
+    private extractFunctionsRegex(content: string): ExtractedFunction[] {
+        const functions: ExtractedFunction[] = [];
 
         // Match function declarations and arrow functions
         const patterns = [
@@ -204,8 +252,39 @@ export class TestGenerator {
         return functions;
     }
 
-    private extractClasses(content: string): Array<{ name: string; methods: string[] }> {
-        const classes: Array<{ name: string; methods: string[] }> = [];
+    private async extractClasses(filePath: string, content: string): Promise<ExtractedClass[]> {
+        const symbols = await this.extractDocumentSymbols(filePath);
+        const fromSymbols: ExtractedClass[] = [];
+
+        if (symbols.length > 0) {
+            for (const symbol of symbols) {
+                if (symbol.kind !== vscode.SymbolKind.Class) {
+                    continue;
+                }
+
+                const methods = (symbol.children || [])
+                    .filter(child => child.kind === vscode.SymbolKind.Method || child.kind === vscode.SymbolKind.Function)
+                    .map(child => child.name)
+                    .filter(methodName => methodName !== 'constructor' && !methodName.startsWith('_'));
+
+                if (symbol.name) {
+                    fromSymbols.push({
+                        name: symbol.name,
+                        methods
+                    });
+                }
+            }
+        }
+
+        if (fromSymbols.length > 0) {
+            return fromSymbols;
+        }
+
+        return this.extractClassesRegex(content);
+    }
+
+    private extractClassesRegex(content: string): ExtractedClass[] {
+        const classes: ExtractedClass[] = [];
 
         const classPattern = /(?:export\s+)?class\s+(\w+)(?:\s+extends\s+\w+)?\s*\{([^]*?)\n\}/g;
         const methodPattern = /(?:async\s+)?(\w+)\s*\([^)]*\)\s*(?::\s*[^{]+)?\s*\{/g;
@@ -229,6 +308,61 @@ export class TestGenerator {
         }
 
         return classes;
+    }
+
+    private async extractDocumentSymbols(filePath: string): Promise<vscode.DocumentSymbol[]> {
+        try {
+            const uri = vscode.Uri.file(filePath);
+            const symbols = await vscode.commands.executeCommand<(vscode.DocumentSymbol | vscode.SymbolInformation)[]>('vscode.executeDocumentSymbolProvider', uri);
+
+            if (!symbols || symbols.length === 0) {
+                return [];
+            }
+
+            const first = symbols[0] as any;
+            if (!first || !('children' in first)) {
+                return [];
+            }
+
+            return symbols as vscode.DocumentSymbol[];
+        } catch {
+            return [];
+        }
+    }
+
+    private parseFunctionMetadata(name: string, content: string): { params: string[]; async: boolean } {
+        const escapedName = this.escapeRegExp(name);
+        const functionPattern = new RegExp(`(?:export\\s+)?(async\\s+)?function\\s+${escapedName}\\s*\\(([^)]*)\\)`, 'm');
+        const arrowPattern = new RegExp(`(?:export\\s+)?const\\s+${escapedName}\\s*=\\s*(async\\s+)?\\(([^)]*)\\)\\s*=>`, 'm');
+
+        const fnMatch = functionPattern.exec(content);
+        if (fnMatch) {
+            return {
+                async: !!fnMatch[1],
+                params: this.parseParams(fnMatch[2] || '')
+            };
+        }
+
+        const arrowMatch = arrowPattern.exec(content);
+        if (arrowMatch) {
+            return {
+                async: !!arrowMatch[1],
+                params: this.parseParams(arrowMatch[2] || '')
+            };
+        }
+
+        return { params: [], async: false };
+    }
+
+    private parseParams(rawParams: string): string[] {
+        return rawParams
+            .split(',')
+            .map(p => p.trim().split(':')[0].trim())
+            .filter(Boolean);
+    }
+
+    private escapeRegExp(value: string): string {
+        return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     private generateFunctionTests(
@@ -345,14 +479,17 @@ export class TestGenerator {
     }
 
     // ============ Test File Operations ============
-    private async writeTestFile(suite: TestSuite, sourceFile: string): Promise<string> {
+    private async writeTestFile(
+        suite: TestSuite,
+        sourceFile: string,
+        extractedFunctions: ExtractedFunction[],
+        extractedClasses: ExtractedClass[]
+    ): Promise<string> {
         const testFilePath = this.getTestFilePath(sourceFile);
         const absoluteTestPath = this.resolvePath(testFilePath);
         const template = TEST_TEMPLATES[this.config.framework];
-        const sourceAbsolutePath = this.resolvePath(sourceFile);
-        const sourceContent = fs.readFileSync(sourceAbsolutePath, 'utf-8');
-        const functionNames = this.extractFunctions(sourceContent).map(fn => fn.name);
-        const classNames = this.extractClasses(sourceContent).map(cls => cls.name);
+        const functionNames = extractedFunctions.map(fn => fn.name);
+        const classNames = extractedClasses.map(cls => cls.name);
         const importNames = Array.from(new Set([...functionNames, ...classNames]));
 
         const imports = [

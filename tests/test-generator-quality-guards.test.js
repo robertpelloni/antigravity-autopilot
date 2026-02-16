@@ -22,4 +22,10 @@ test('Test generator quality guards', async (t) => {
         assert.ok(source.includes('path.relative(this.workspaceRoot, resolvedSource)'));
         assert.ok(source.includes("return path.join(this.config.testDirectory, `${withoutExt}.test${ext}`);"));
     });
+
+    await t.test('uses AST-backed document symbol extraction before regex fallback', () => {
+        assert.ok(source.includes("vscode.executeDocumentSymbolProvider"));
+        assert.ok(source.includes('extractFunctionsRegex(content)'));
+        assert.ok(source.includes('extractClassesRegex(content)'));
+    });
 });

@@ -107,7 +107,7 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - **Definition of done:** progress report is audit-grade and actionable
 
 ### P2.2 Upgrade test generator from scaffold to production utility
-- [ ] Replace naive regex parser with AST-based extraction
+- [x] Replace naive regex parser with AST-based extraction
 - [x] Remove placeholder `expect(true).toBe(true)` generation
 - [x] Generate framework-correct imports and deterministic paths
 - [x] Add safe overwrite/merge strategy for existing tests

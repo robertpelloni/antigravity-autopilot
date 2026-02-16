@@ -16,5 +16,5 @@ Canonical backlog is maintained in `TODO.md`.
 - [x] P1.3 Harden model selection and model ID consistency
 - [x] P1.4 Improve model scraper reliability
 - [x] P2.1 Replace progress tracker placeholder metrics with real telemetry
-- [ ] P2.2 Upgrade test generator to remove placeholder assertions *(partially complete; AST extraction still pending)*
+- [x] P2.2 Upgrade test generator to remove placeholder assertions *(completed with AST-backed extraction + merge-safe generation)*
 - [ ] P3.1 Replace replica tests with real source-module tests

@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.69] - 2026-02-16
+
+### Changed
+- **AST-Backed Test Extraction**: `src/core/test-generator.ts` now uses `vscode.executeDocumentSymbolProvider` for primary function/class discovery with regex fallback only when symbols are unavailable.
+- **Metadata Recovery for Generated Tests**: Added function metadata parsing helpers for async/param extraction from symbol-discovered functions, improving generated edge-case coverage quality.
+- **P2.2 Completion**: Closed remaining AST extraction gap for test generator hardening.
+
+### Tests
+- **Quality Guard Update**: Extended `tests/test-generator-quality-guards.test.js` to enforce AST-backed discovery path plus fallback guards.
+
 ## [4.10.68] - 2026-02-16
 
 ### Added
