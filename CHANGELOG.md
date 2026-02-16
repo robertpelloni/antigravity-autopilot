@@ -5,6 +5,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.12] - 2026-02-16
+
+### Added
+- **Cross-UI Coverage Validator**: Added `Antigravity: Validate Cross-UI Coverage` command to quickly verify Antigravity and VS Code runtime detection signals.
+
+### Changed
+- **Send Fallback Expansion**: Text sending now attempts current profile first, then explicitly falls back across `vscode`, `antigravity`, and `cursor` selectors before bridge fallback.
+- **Click Discovery Expansion**: Button discovery now performs cross-profile selector sweeps when primary selectors return no candidates.
+
+## [4.10.11] - 2026-02-16
+
+### Added
+- **Resume Delivery Fallback Matrix**: Auto-resume now attempts CDP bridge delivery first, then falls back to VS Code command-driven chat open/focus/paste/submit flow.
+- **Idle Signal Coverage Expansion**: Waiting detection now recognizes additional feedback variants (`Helpful`, `Not Helpful`, thumbs labels) beyond only `Good/Bad`.
+
+### Changed
+- **Completion Inference Hardening**: Runtime state now infers completion for no-tab environments using signal-based logic (`isIdle && noPendingActions`) to better support VS Code/Copilot Insider chat panes.
+- **Bridge Return Semantics**: `sendHybridBump()` now returns success/failure so higher layers can choose fallback strategies deterministically.
+
 ## [4.10.10] - 2026-02-16
 
 ### Added

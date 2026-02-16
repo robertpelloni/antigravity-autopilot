@@ -527,7 +527,9 @@
         const allKnownTabsDone = totalTabs > 0 && doneCount === totalTabs;
         const noPendingActions = pendingAcceptButtons === 0;
 
-        const allTasksComplete = allKnownTabsDone && noPendingActions;
+        const allTasksCompleteByTabs = allKnownTabsDone && noPendingActions;
+        const allTasksCompleteBySignals = noPendingActions && isIdle;
+        const allTasksComplete = totalTabs > 0 ? allTasksCompleteByTabs : allTasksCompleteBySignals;
         const waitingForChatMessage = !!state.isRunning && allTasksComplete && isIdle && (hasVisibleInput || hasVisibleSendButton);
 
         let status = 'processing';
@@ -547,6 +549,8 @@
             hasVisibleSendButton,
             totalTabs,
             doneTabs: doneCount,
+            allTasksCompleteByTabs,
+            allTasksCompleteBySignals,
             allTasksComplete,
             waitingForChatMessage,
             profileCoverage,
@@ -1248,22 +1252,26 @@
         const mode = getCurrentMode();
         log(`[Chat] Sending message (mode=${mode}): "${text}"`);
 
-        try {
-            const inputEl = findVisibleElementBySelectors(getUnifiedTextInputSelectors(mode));
-            if (inputEl && setInputValue(inputEl, text)) {
-                const sendEl = findVisibleElementBySelectors(getUnifiedSendButtonSelectors(mode));
-                if (sendEl) {
-                    await remoteClick(sendEl);
-                    log('[Chat] Message sent via visible send button');
+        const profileOrder = [mode, 'vscode', 'antigravity', 'cursor'].filter((v, i, arr) => arr.indexOf(v) === i);
+
+        for (const profile of profileOrder) {
+            try {
+                const inputEl = findVisibleElementBySelectors(getUnifiedTextInputSelectors(profile));
+                if (inputEl && setInputValue(inputEl, text)) {
+                    const sendEl = findVisibleElementBySelectors(getUnifiedSendButtonSelectors(profile));
+                    if (sendEl) {
+                        await remoteClick(sendEl);
+                        log(`[Chat] Message sent via visible send button (profile=${profile})`);
+                        return true;
+                    }
+
+                    await submitWithKeys();
+                    log(`[Chat] Message submitted via keyboard fallback (profile=${profile})`);
                     return true;
                 }
-
-                await submitWithKeys();
-                log('[Chat] Message submitted via keyboard fallback');
-                return true;
+            } catch (e) {
+                log(`[Chat] DOM send strategy failed for profile=${profile}: ${e.message}`);
             }
-        } catch (e) {
-            log(`[Chat] DOM send strategy failed: ${e.message}`);
         }
 
         log('[Chat] Falling back to hybrid bump bridge strategy');
@@ -1304,11 +1312,29 @@ async function performClick(selectors) {
     let found = [];
     selectors.forEach(s => queryAll(s).forEach(el => found.push(el)));
 
+    if (found.length === 0) {
+        const fallbackSelectors = [
+            ...getUnifiedClickSelectors('vscode'),
+            ...getUnifiedClickSelectors('antigravity'),
+            ...getUnifiedClickSelectors('cursor')
+        ];
+        [...new Set(fallbackSelectors)].forEach(s => queryAll(s).forEach(el => found.push(el)));
+    }
+
     // If nothing found, try expanding ONE MORE TIME aggressively, then search again
     if (found.length === 0) {
         const expanded = await expandCollapsedSections();
         if (expanded) {
             selectors.forEach(s => queryAll(s).forEach(el => found.push(el)));
+
+            if (found.length === 0) {
+                const fallbackSelectors = [
+                    ...getUnifiedClickSelectors('vscode'),
+                    ...getUnifiedClickSelectors('antigravity'),
+                    ...getUnifiedClickSelectors('cursor')
+                ];
+                [...new Set(fallbackSelectors)].forEach(s => queryAll(s).forEach(el => found.push(el)));
+            }
         }
     }
 

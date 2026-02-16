@@ -125,14 +125,6 @@ export function activate(context: vscode.ExtensionContext) {
     };
 
     const sendAutoResumeMessage = async (reason: 'automatic' | 'manual') => {
-        const cdp = resolveCDPStrategy() as any;
-        if (!cdp || typeof cdp.sendHybridBump !== 'function') {
-            if (reason === 'manual') {
-                vscode.window.showWarningMessage('Antigravity: CDP strategy is not active.');
-            }
-            return false;
-        }
-
         const message = (config.get<string>('runtimeAutoResumeMessage') || '').trim();
         if (!message) {
             if (reason === 'manual') {
@@ -141,12 +133,56 @@ export function activate(context: vscode.ExtensionContext) {
             return false;
         }
 
-        await cdp.sendHybridBump(message);
-        log.info(`[AutoResume] Sent ${reason} resume message.`);
-        if (reason === 'manual') {
-            vscode.window.showInformationMessage('Antigravity: resume message sent.');
+        const sendViaCommands = async (): Promise<boolean> => {
+            try {
+                await vscode.env.clipboard.writeText(message);
+                const commands = [
+                    'workbench.action.chat.open',
+                    'workbench.action.chat.focusInput',
+                    'editor.action.clipboardPasteAction',
+                    'workbench.action.chat.submit',
+                    'workbench.action.chat.send',
+                    'interactive.acceptChanges',
+                    'workbench.action.terminal.chat.accept',
+                    'inlineChat.accept'
+                ];
+
+                for (const cmd of commands) {
+                    try { await vscode.commands.executeCommand(cmd); } catch { }
+                }
+                return true;
+            } catch {
+                return false;
+            }
+        };
+
+        const cdp = resolveCDPStrategy() as any;
+        if (cdp && typeof cdp.sendHybridBump === 'function') {
+            try {
+                const sent = await cdp.sendHybridBump(message);
+                if (sent) {
+                    log.info(`[AutoResume] Sent ${reason} resume message via CDP bridge.`);
+                    if (reason === 'manual') {
+                        vscode.window.showInformationMessage('Antigravity: resume message sent.');
+                    }
+                    return true;
+                }
+            } catch { }
         }
-        return true;
+
+        const fallbackSent = await sendViaCommands();
+        if (fallbackSent) {
+            log.info(`[AutoResume] Sent ${reason} resume message via VS Code fallback commands.`);
+            if (reason === 'manual') {
+                vscode.window.showInformationMessage('Antigravity: resume message sent via fallback commands.');
+            }
+            return true;
+        }
+
+        if (reason === 'manual') {
+            vscode.window.showWarningMessage('Antigravity: failed to send resume message (CDP and command fallback both failed).');
+        }
+        return false;
     };
 
     DashboardPanel.setRuntimeStateProvider(async () => {
@@ -355,6 +391,16 @@ export function activate(context: vscode.ExtensionContext) {
                     action: 'antigravity.resumeFromWaitingState'
                 },
                 {
+                    label: '$(shield) Validate Cross-UI Coverage',
+                    description: 'Check Antigravity/VS Code send+button detection coverage',
+                    action: 'antigravity.validateCrossUiCoverage'
+                },
+                {
+                    label: '$(beaker) Run Cross-UI Self-Test',
+                    description: 'Generate structured readiness report for Antigravity/VS Code/Cursor',
+                    action: 'antigravity.runCrossUiSelfTest'
+                },
+                {
                     label: '$(clippy) Copy Runtime State JSON',
                     description: 'Copy full runtime snapshot to clipboard',
                     action: 'antigravity.copyRuntimeStateJson'
@@ -416,6 +462,98 @@ export function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('antigravity.resumeFromWaitingState', async () => {
             await sendAutoResumeMessage('manual');
+        }),
+        vscode.commands.registerCommand('antigravity.validateCrossUiCoverage', async () => {
+            const cdp = resolveCDPStrategy();
+            if (!cdp) {
+                vscode.window.showWarningMessage('Antigravity: CDP strategy is not active.');
+                return;
+            }
+
+            const state = await cdp.getRuntimeState();
+            if (!state || !state.profileCoverage) {
+                vscode.window.showWarningMessage('Antigravity: profile coverage is unavailable.');
+                return;
+            }
+
+            const ag = state.profileCoverage.antigravity;
+            const vs = state.profileCoverage.vscode;
+
+            const agReady = !!ag && (ag.hasVisibleInput || ag.hasVisibleSendButton || ag.pendingAcceptButtons > 0);
+            const vsReady = !!vs && (vs.hasVisibleInput || vs.hasVisibleSendButton || vs.pendingAcceptButtons > 0);
+
+            const summary = `Coverage — Antigravity: ${agReady ? 'ready' : 'no-signals'} | VS Code: ${vsReady ? 'ready' : 'no-signals'}`;
+            log.info(`[CrossUI] ${summary}`);
+            vscode.window.showInformationMessage(summary);
+        }),
+        vscode.commands.registerCommand('antigravity.runCrossUiSelfTest', async () => {
+            const cdp = resolveCDPStrategy();
+            if (!cdp) {
+                vscode.window.showWarningMessage('Antigravity: CDP strategy is not active.');
+                return;
+            }
+
+            const state = await cdp.getRuntimeState();
+            if (!state || !state.profileCoverage) {
+                vscode.window.showWarningMessage('Antigravity: profile coverage is unavailable.');
+                return;
+            }
+
+            const coverage = state.profileCoverage as any;
+            const evaluate = (name: string, cov: any) => {
+                const hasInput = !!cov?.hasVisibleInput;
+                const hasSend = !!cov?.hasVisibleSendButton;
+                const pending = Number(cov?.pendingAcceptButtons || 0);
+                const ready = hasInput || hasSend || pending > 0;
+                return { name, ready, hasInput, hasSend, pending };
+            };
+
+            const report = {
+                timestamp: new Date().toISOString(),
+                runtimeStatus: state.status || 'unknown',
+                mode: state.mode || 'unknown',
+                waitingForChatMessage: !!state.waitingForChatMessage,
+                tabs: {
+                    done: state.doneTabs ?? 0,
+                    total: state.totalTabs ?? 0
+                },
+                profiles: {
+                    vscode: evaluate('vscode', coverage.vscode),
+                    antigravity: evaluate('antigravity', coverage.antigravity),
+                    cursor: evaluate('cursor', coverage.cursor)
+                }
+            };
+
+            const suggestions: string[] = [];
+            if (!report.profiles.vscode.ready) {
+                suggestions.push('VS Code coverage has no active signals; verify chat panel is visible and focused.');
+            }
+            if (!report.profiles.antigravity.ready) {
+                suggestions.push('Antigravity coverage has no active signals; verify agent panel is open.');
+            }
+            if (!report.profiles.cursor.ready) {
+                suggestions.push('Cursor coverage has no active signals; this is normal if not running in Cursor.');
+            }
+            if (report.waitingForChatMessage) {
+                suggestions.push('Runtime is waiting for chat message; use Resume From Waiting State or enable auto-resume.');
+            }
+
+            const fullReport = {
+                ...report,
+                suggestions
+            };
+
+            const serialized = JSON.stringify(fullReport, null, 2);
+            await vscode.env.clipboard.writeText(serialized);
+            const doc = await vscode.workspace.openTextDocument({
+                content: serialized,
+                language: 'json'
+            });
+            await vscode.window.showTextDocument(doc, { preview: false });
+
+            const summary = `Cross-UI self-test complete. VSCode=${report.profiles.vscode.ready ? 'ready' : 'no-signals'}, Antigravity=${report.profiles.antigravity.ready ? 'ready' : 'no-signals'}, Cursor=${report.profiles.cursor.ready ? 'ready' : 'no-signals'}.`;
+            log.info(`[CrossUI SelfTest] ${summary}`);
+            vscode.window.showInformationMessage(summary + ' Report copied to clipboard.');
         })
     );
 

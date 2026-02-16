@@ -452,8 +452,8 @@ export class CDPHandler extends EventEmitter {
     /**
      * Sends a chat bump/resume message through the browser bridge.
      */
-    async sendHybridBump(message: string): Promise<void> {
-        if (!message || !message.trim()) return;
+    async sendHybridBump(message: string): Promise<boolean> {
+        if (!message || !message.trim()) return false;
         const safe = JSON.stringify(String(message));
         const expression = `
             (function() {
@@ -467,7 +467,9 @@ export class CDPHandler extends EventEmitter {
                 return true;
             })()
         `;
-        await this.executeScriptInAllSessions(expression);
+        const results = await this.executeInAllSessions(expression, true);
+        if (!Array.isArray(results)) return false;
+        return results.some(r => r === true);
     }
 }
 

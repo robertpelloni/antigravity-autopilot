@@ -62,6 +62,12 @@ export class DashboardPanel {
                         });
                         return;
                     }
+                    case 'runCommand': {
+                        if (typeof message.id === 'string' && message.id.trim().length > 0) {
+                            await vscode.commands.executeCommand(message.id);
+                        }
+                        return;
+                    }
                 }
             },
             null,
@@ -266,6 +272,7 @@ export class DashboardPanel {
                 </div>
                 <div style="margin-top:10px;display:flex;gap:8px;">
                     <button onclick="requestRuntimeState()">Refresh Runtime State</button>
+                    <button onclick="runCommand('antigravity.runCrossUiSelfTest')">Run Cross-UI Self-Test</button>
                 </div>
                 <div class="runtime-history" id="runtimeHistory"></div>
             </div>
@@ -760,6 +767,10 @@ export class DashboardPanel {
 
                 function requestRuntimeState() {
                     vscode.postMessage({ command: 'requestRuntimeState' });
+                }
+
+                function runCommand(id) {
+                    vscode.postMessage({ command: 'runCommand', id });
                 }
 
                 window.addEventListener('message', event => {
