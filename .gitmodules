@@ -28,3 +28,6 @@
 [submodule "Claude-Autopilot"]
 	path = Claude-Autopilot
 	url = https://github.com/benbasha/Claude-Autopilot
+[submodule "copilot-auto-continue"]
+	path = copilot-auto-continue
+	url = https://github.com/PawiX25/copilot-auto-continue
