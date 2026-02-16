@@ -38,6 +38,7 @@ export function activate(context: vscode.ExtensionContext) {
     let waitingStateSince: number | null = null;
     let lastWaitingReminderAt = 0;
     let lastAutoResumeAt = 0;
+    let readyToResumeStreak = 0;
     let lastAutoResumeOutcome: 'none' | 'sent' | 'blocked' | 'send-failed' = 'none';
     let lastAutoResumeBlockedReason = 'not evaluated';
 
@@ -55,6 +56,7 @@ export function activate(context: vscode.ExtensionContext) {
             if (!cdp || !cdp.isConnected()) {
                 latestRuntimeState = null;
                 waitingStateSince = null;
+                readyToResumeStreak = 0;
                 statusBar.updateRuntimeState(null);
                 return;
             }
@@ -68,8 +70,17 @@ export function activate(context: vscode.ExtensionContext) {
             const waitingCooldownMs = Math.max(5, config.get<number>('runtimeWaitingReminderCooldownSec') || 180) * 1000;
             const autoResumeEnabled = config.get<boolean>('runtimeAutoResumeEnabled');
             const autoResumeCooldownMs = Math.max(5, config.get<number>('runtimeAutoResumeCooldownSec') || 300) * 1000;
+            const stablePollsRequired = Math.max(1, Math.min(10, config.get<number>('runtimeAutoResumeStabilityPolls') || 2));
             const now = Date.now();
-            const isWaiting = runtimeState?.status === 'waiting_for_chat_message' || runtimeState?.waitingForChatMessage === true;
+            const isWaiting = runtimeState?.completionWaiting?.readyToResume === true
+                || runtimeState?.status === 'waiting_for_chat_message'
+                || runtimeState?.waitingForChatMessage === true;
+
+            if (isWaiting) {
+                readyToResumeStreak += 1;
+            } else {
+                readyToResumeStreak = 0;
+            }
 
             if (!isWaiting) {
                 waitingStateSince = null;
@@ -103,11 +114,11 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             }
 
-            if (autoResumeEnabled && waitingElapsed >= waitingDelayMs && (now - lastAutoResumeAt) >= autoResumeCooldownMs) {
+            if (autoResumeEnabled && waitingElapsed >= waitingDelayMs && (now - lastAutoResumeAt) >= autoResumeCooldownMs && readyToResumeStreak >= stablePollsRequired) {
                 const guard = getAutoResumeGuardReport(runtimeState);
 
                 if (guard.allowed) {
-                    const sent = await sendAutoResumeMessage('automatic');
+                    const sent = await sendAutoResumeMessage('automatic', runtimeState);
                     if (sent) {
                         lastAutoResumeAt = now;
                         lastAutoResumeOutcome = 'sent';
@@ -121,10 +132,14 @@ export function activate(context: vscode.ExtensionContext) {
                     lastAutoResumeBlockedReason = guard.reason;
                     log.info(`[AutoResume] Guard blocked auto-resume: score=${guard.health.score}/${guard.minScore}, strictPass=${guard.health.strictPass}, requireStrict=${guard.requireStrict}, reason=${guard.reason}`);
                 }
+            } else if (autoResumeEnabled && waitingElapsed >= waitingDelayMs && (now - lastAutoResumeAt) >= autoResumeCooldownMs && readyToResumeStreak < stablePollsRequired) {
+                lastAutoResumeOutcome = 'blocked';
+                lastAutoResumeBlockedReason = `awaiting stable waiting signal (${readyToResumeStreak}/${stablePollsRequired})`;
             }
         } catch {
             latestRuntimeState = null;
             waitingStateSince = null;
+            readyToResumeStreak = 0;
             statusBar.updateRuntimeState(null);
         }
     };
@@ -287,11 +302,16 @@ export function activate(context: vscode.ExtensionContext) {
         };
     };
 
-    const sendAutoResumeMessage = async (reason: 'automatic' | 'manual') => {
-        const message = (config.get<string>('runtimeAutoResumeMessage') || '').trim();
+    const sendAutoResumeMessage = async (reason: 'automatic' | 'manual', runtimeState?: any) => {
+        const fullMessage = (config.get<string>('runtimeAutoResumeMessage') || '').trim();
+        const minimalMessage = (config.get<string>('runtimeAutoResumeMinimalMessage') || '').trim();
+        const useMinimal = !!config.get<boolean>('runtimeAutoResumeUseMinimalContinue')
+            && !!runtimeState?.completionWaiting?.readyToResume;
+        const message = (useMinimal ? minimalMessage : fullMessage).trim();
+
         if (!message) {
             if (reason === 'manual') {
-                vscode.window.showWarningMessage('Antigravity: runtimeAutoResumeMessage is empty.');
+                vscode.window.showWarningMessage('Antigravity: selected resume message is empty (check runtimeAutoResumeMessage/runtimeAutoResumeMinimalMessage).');
             }
             return false;
         }
@@ -324,7 +344,7 @@ export function activate(context: vscode.ExtensionContext) {
             try {
                 const sent = await cdp.sendHybridBump(message);
                 if (sent) {
-                    log.info(`[AutoResume] Sent ${reason} resume message via CDP bridge.`);
+                    log.info(`[AutoResume] Sent ${reason} ${useMinimal ? 'minimal-continue' : 'resume'} message via CDP bridge.`);
                     if (reason === 'manual') {
                         vscode.window.showInformationMessage('Antigravity: resume message sent.');
                     }
@@ -335,7 +355,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         const fallbackSent = await sendViaCommands();
         if (fallbackSent) {
-            log.info(`[AutoResume] Sent ${reason} resume message via VS Code fallback commands.`);
+            log.info(`[AutoResume] Sent ${reason} ${useMinimal ? 'minimal-continue' : 'resume'} message via VS Code fallback commands.`);
             if (reason === 'manual') {
                 vscode.window.showInformationMessage('Antigravity: resume message sent via fallback commands.');
             }
@@ -394,7 +414,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         if (canRetryNow) {
             immediateRetryAttempted = true;
-            const sent = await sendAutoResumeMessage('automatic');
+            const sent = await sendAutoResumeMessage('automatic', afterState || latestRuntimeState);
             if (sent) {
                 immediateRetrySent = true;
                 immediateRetryReason = 'guard passed in waiting state; resume message sent';
@@ -457,9 +477,12 @@ export function activate(context: vscode.ExtensionContext) {
             return null;
         }
 
-        const isWaiting = state?.status === 'waiting_for_chat_message' || state?.waitingForChatMessage === true;
+        const isWaiting = state?.completionWaiting?.readyToResume === true
+            || state?.status === 'waiting_for_chat_message'
+            || state?.waitingForChatMessage === true;
         const guard = getAutoResumeGuardReport(state);
         const timing = getAutoResumeTimingReport(isWaiting);
+        const stablePollsRequired = Math.max(1, Math.min(10, config.get<number>('runtimeAutoResumeStabilityPolls') || 2));
 
         return {
             ...state,
@@ -469,6 +492,8 @@ export function activate(context: vscode.ExtensionContext) {
                 lastAutoResumeAt,
                 lastAutoResumeOutcome,
                 lastAutoResumeBlockedReason,
+                readyToResumeStreak,
+                stablePollsRequired,
                 timing,
                 guard: {
                     allowed: guard.allowed,
@@ -758,11 +783,16 @@ export function activate(context: vscode.ExtensionContext) {
             const guard = getAutoResumeGuardReport(state);
             const timing = getAutoResumeTimingReport(state?.status === 'waiting_for_chat_message' || state?.waitingForChatMessage === true);
             const nextIn = formatDurationShort(Math.max(0, timing.nextEligibleAt - Date.now()));
+            const stablePollsRequired = Math.max(1, Math.min(10, config.get<number>('runtimeAutoResumeStabilityPolls') || 2));
+            const completion = state.completionWaiting;
+            const completionReady = completion?.readyToResume === true;
+            const completionConfidence = completion?.confidence ?? '-';
+            const completionConfidenceLabel = completion?.confidenceLabel || 'n/a';
 
             statusBar.updateRuntimeState(state);
             latestRuntimeState = state;
-            log.info(`[RuntimeState] status=${status} tabs=${done}/${total} pending=${pending} waitingForChatMessage=${waiting} guard=${guard.allowed ? 'allow' : 'block'} reason=${guard.reason} next=${nextIn}`);
-            vscode.window.showInformationMessage(`Antigravity Runtime: ${status} | tabs ${done}/${total} | pending ${pending} | waiting chat: ${waiting} | guard: ${guard.allowed ? 'allow' : 'block'} | next eligible: ${nextIn}`);
+            log.info(`[RuntimeState] status=${status} tabs=${done}/${total} pending=${pending} waitingForChatMessage=${waiting} readyToResume=${completionReady} confidence=${completionConfidence}(${completionConfidenceLabel}) streak=${readyToResumeStreak}/${stablePollsRequired} guard=${guard.allowed ? 'allow' : 'block'} reason=${guard.reason} next=${nextIn}`);
+            vscode.window.showInformationMessage(`Antigravity Runtime: ${status} | tabs ${done}/${total} | pending ${pending} | waiting chat: ${waiting} | ready=${completionReady ? 'yes' : 'no'} (${completionConfidenceLabel}) | streak: ${readyToResumeStreak}/${stablePollsRequired} | guard: ${guard.allowed ? 'allow' : 'block'} | next eligible: ${nextIn}`);
         }),
         vscode.commands.registerCommand('antigravity.detectCompletionWaitingState', async () => {
             const cdp = resolveCDPStrategy();
@@ -831,7 +861,7 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage('Antigravity runtime state JSON copied to clipboard.');
         }),
         vscode.commands.registerCommand('antigravity.resumeFromWaitingState', async () => {
-            await sendAutoResumeMessage('manual');
+            await sendAutoResumeMessage('manual', latestRuntimeState);
         }),
         vscode.commands.registerCommand('antigravity.validateCrossUiCoverage', async () => {
             const cdp = resolveCDPStrategy();

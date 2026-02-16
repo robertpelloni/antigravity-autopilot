@@ -281,6 +281,7 @@ export class DashboardPanel {
                     <div><strong>Ready To Resume:</strong> <span id="runtimeReadyToResume" class="muted">-</span></div>
                     <div><strong>Completion Confidence:</strong> <span id="runtimeCompletionConfidence" class="muted">-</span></div>
                     <div><strong>Completion Reasoning:</strong> <span id="runtimeCompletionReasoning" class="muted">-</span></div>
+                    <div><strong>Ready Streak:</strong> <span id="runtimeReadyStreak" class="muted">-</span></div>
                 </div>
                 <div style="margin-top:10px;display:flex;gap:8px;">
                     <button onclick="requestRuntimeState()">Refresh Runtime State</button>
@@ -391,8 +392,16 @@ export class DashboardPanel {
                     <input type="checkbox" ${settings.runtimeAutoResumeEnabled ? 'checked' : ''} onchange="updateConfig('runtimeAutoResumeEnabled', this.checked)">
                 </div>
                 <div class="setting">
+                    <label>Use Minimal Continue:</label>
+                    <input type="checkbox" ${settings.runtimeAutoResumeUseMinimalContinue ? 'checked' : ''} onchange="updateConfig('runtimeAutoResumeUseMinimalContinue', this.checked)">
+                </div>
+                <div class="setting">
                     <label>Auto Resume Cooldown (s):</label>
                     <input type="number" value="${settings.runtimeAutoResumeCooldownSec}" min="5" max="7200" onchange="updateConfig('runtimeAutoResumeCooldownSec', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Auto Resume Stability Polls:</label>
+                    <input type="number" value="${settings.runtimeAutoResumeStabilityPolls}" min="1" max="10" onchange="updateConfig('runtimeAutoResumeStabilityPolls', parseInt(this.value))">
                 </div>
                 <div class="setting">
                     <label>Auto Resume Min Score:</label>
@@ -405,6 +414,10 @@ export class DashboardPanel {
                 <div class="setting vertical">
                     <label>Auto Resume Message:</label>
                     <textarea onchange="updateConfig('runtimeAutoResumeMessage', this.value)">${settings.runtimeAutoResumeMessage || ''}</textarea>
+                </div>
+                <div class="setting vertical">
+                    <label>Minimal Continue Message:</label>
+                    <textarea onchange="updateConfig('runtimeAutoResumeMinimalMessage', this.value)">${settings.runtimeAutoResumeMinimalMessage || ''}</textarea>
                 </div>
                  <div class="setting">
                      <label>Max Loops/Session:</label>
@@ -792,6 +805,7 @@ export class DashboardPanel {
                     const readyToResume = document.getElementById('runtimeReadyToResume');
                     const completionConfidence = document.getElementById('runtimeCompletionConfidence');
                     const completionReasoning = document.getElementById('runtimeCompletionReasoning');
+                    const readyStreak = document.getElementById('runtimeReadyStreak');
 
                     function coverageText(cov) {
                         if (!cov) return '-';
@@ -825,6 +839,7 @@ export class DashboardPanel {
                         readyToResume.textContent = '-';
                         completionConfidence.textContent = '-';
                         completionReasoning.textContent = '-';
+                        readyStreak.textContent = '-';
                         renderRuntimeHistory();
                         return;
                     }
@@ -882,6 +897,9 @@ export class DashboardPanel {
                         : '-';
                     completionReasoning.textContent = completion && Array.isArray(completion.reasons)
                         ? completion.reasons.slice(0, 2).join('; ')
+                        : '-';
+                    readyStreak.textContent = host
+                        ? ((host.readyToResumeStreak ?? 0) + ' / ' + (host.stablePollsRequired ?? '-'))
                         : '-';
                     renderRuntimeHistory();
                 }

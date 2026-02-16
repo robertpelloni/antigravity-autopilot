@@ -30,7 +30,10 @@ export interface AntigravityConfig {
     runtimeWaitingReminderCooldownSec: number;
     runtimeAutoResumeEnabled: boolean;
     runtimeAutoResumeMessage: string;
+    runtimeAutoResumeUseMinimalContinue: boolean;
+    runtimeAutoResumeMinimalMessage: string;
     runtimeAutoResumeCooldownSec: number;
+    runtimeAutoResumeStabilityPolls: number;
     runtimeAutoResumeMinScore: number;
     runtimeAutoResumeRequireStrictPrimary: boolean;
 
@@ -115,7 +118,10 @@ export class ConfigManager {
             runtimeWaitingReminderCooldownSec: config.get('runtimeWaitingReminderCooldownSec', 180),
             runtimeAutoResumeEnabled: config.get('runtimeAutoResumeEnabled', true),
             runtimeAutoResumeMessage: config.get('runtimeAutoResumeMessage', 'Continue with the next highest-priority development task in this workspace. If everything is complete, summarize what is done and propose the next best improvement.'),
+            runtimeAutoResumeUseMinimalContinue: config.get('runtimeAutoResumeUseMinimalContinue', true),
+            runtimeAutoResumeMinimalMessage: config.get('runtimeAutoResumeMinimalMessage', 'Continue with the next highest-priority development task in this workspace.'),
             runtimeAutoResumeCooldownSec: config.get('runtimeAutoResumeCooldownSec', 300),
+            runtimeAutoResumeStabilityPolls: config.get('runtimeAutoResumeStabilityPolls', 2),
             runtimeAutoResumeMinScore: config.get('runtimeAutoResumeMinScore', 70),
             runtimeAutoResumeRequireStrictPrimary: config.get('runtimeAutoResumeRequireStrictPrimary', true),
             cdpPort: config.get('cdpPort', 9000),

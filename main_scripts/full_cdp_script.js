@@ -598,6 +598,7 @@
                 evidence: {
                     isRunning: !!state.isRunning,
                     isIdle,
+                    feedbackSignalDetected: isIdle,
                     pendingAcceptButtons,
                     totalTabs,
                     doneTabs: doneCount,
@@ -1282,15 +1283,19 @@
     // --- Auto-Bump Logic ---
 
     function isConversationIdle() {
-        const badges = queryAll('span, [class*="badge"], [class*="feedback"]');
+        const badges = queryAll('span, button, [role="button"], [class*="badge"], [class*="feedback"], [data-testid*="feedback"]');
+        const feedbackTextPattern = /^(good|bad|helpful|not helpful)$/i;
+        const feedbackLabelPattern = /(good|bad|helpful|not helpful|thumbs up|thumbs down|positive feedback|negative feedback)/i;
+
         for (const b of badges) {
-            const text = (b.textContent || '').trim();
-            if ((text === 'Good' || text === 'Bad') && isElementVisible(b)) {
+            const text = (b.textContent || '').trim().replace(/\s+/g, ' ');
+            const label = `${b.getAttribute('aria-label') || ''} ${b.getAttribute('title') || ''}`.trim();
+            if ((feedbackTextPattern.test(text) || feedbackLabelPattern.test(label)) && isElementVisible(b)) {
                 return true;
             }
         }
 
-        const thumbIcons = queryAll('.codicon-thumbsup, .codicon-thumbsdown, [aria-label*="thumb"], [aria-label*="feedback"]');
+        const thumbIcons = queryAll('.codicon-thumbsup, .codicon-thumbsdown, [aria-label*="thumb"], [aria-label*="feedback"], [title*="thumb"], [title*="feedback"]');
         for (const icon of thumbIcons) {
             if (isElementVisible(icon)) return true;
         }

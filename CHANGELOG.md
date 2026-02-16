@@ -5,6 +5,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.26] - 2026-02-16
+
+### Added
+- **Adaptive Minimal Continue Mode**: Added `runtimeAutoResumeUseMinimalContinue` and `runtimeAutoResumeMinimalMessage` so waiting-state auto-resume can send concise continuation nudges tailored for Copilot Insiders.
+
+### Changed
+- **Resume Send Path Intelligence**: Auto/manual resume now select minimal vs full prompt based on `completionWaiting.readyToResume` to keep chats moving after Good/Bad completion states without overlong nudges.
+- **Dashboard Control Surface**: Added new settings controls for minimal continue mode and message customization.
+
+## [4.10.25] - 2026-02-16
+
+### Added
+- **Stable Waiting Gate**: Added `runtimeAutoResumeStabilityPolls` to require consecutive `readyToResume` polls before auto-resume sends a continuation message.
+- **Feedback Signal Evidence**: Runtime `completionWaiting.evidence` now includes `feedbackSignalDetected` for Good/Bad/Helpful-style idle confirmation.
+
+### Changed
+- **Copilot Insiders Idle Detection**: Expanded feedback detection beyond exact `Good/Bad` text to include Helpful/Not Helpful variants, thumbs labels, and feedback-related aria/title signals.
+- **Waiting-State Continuation Robustness**: Auto-resume waiting detection now prioritizes explicit `completionWaiting.readyToResume` verdict and tracks streak telemetry in dashboard runtime data.
+
 ## [4.10.24] - 2026-02-16
 
 ### Added

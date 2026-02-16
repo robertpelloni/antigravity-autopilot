@@ -2,7 +2,7 @@
     "name": "antigravity-autopilot",
     "displayName": "Antigravity Autopilot (Unified)",
     "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-    "version": "4.10.24",
+    "version": "4.10.26",
     "repository": {
         "type": "git",
         "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -333,12 +333,29 @@
                     "default": "Continue with the next highest-priority development task in this workspace. If everything is complete, summarize what is done and propose the next best improvement.",
                     "description": "Message sent automatically (or manually) to resume Copilot chat when waiting."
                 },
+                "antigravity.runtimeAutoResumeUseMinimalContinue": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "When waiting-for-chat completion is confidently detected, send a concise continuation nudge for Copilot Insiders instead of the full resume prompt."
+                },
+                "antigravity.runtimeAutoResumeMinimalMessage": {
+                    "type": "string",
+                    "default": "Continue with the next highest-priority development task in this workspace.",
+                    "description": "Short continuation message used when minimal continue mode is enabled and runtime is waiting for a new chat message."
+                },
                 "antigravity.runtimeAutoResumeCooldownSec": {
                     "type": "number",
                     "default": 300,
                     "minimum": 5,
                     "maximum": 7200,
                     "description": "Minimum seconds between automatic resume messages while waiting."
+                },
+                "antigravity.runtimeAutoResumeStabilityPolls": {
+                    "type": "number",
+                    "default": 2,
+                    "minimum": 1,
+                    "maximum": 10,
+                    "description": "How many consecutive runtime polls must report ready-to-resume before automatic resume sends a message."
                 },
                 "antigravity.runtimeAutoResumeMinScore": {
                     "type": "number",
