@@ -524,6 +524,24 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             };
 
+            const strict = {
+                vscodeTextReady: !!report.profiles.vscode.hasInput,
+                vscodeButtonReady: !!report.profiles.vscode.hasSend || report.profiles.vscode.pending > 0,
+                antigravityTextReady: !!report.profiles.antigravity.hasInput,
+                antigravityButtonReady: !!report.profiles.antigravity.hasSend || report.profiles.antigravity.pending > 0
+            };
+
+            const scoreParts = {
+                vscodeCoverage: report.profiles.vscode.ready ? 30 : 0,
+                antigravityCoverage: report.profiles.antigravity.ready ? 30 : 0,
+                activeRuntimeSignal: (state.status && state.status !== 'unknown' && state.status !== 'stopped') ? 20 : 0,
+                waitingDetection: (typeof state.waitingForChatMessage === 'boolean') ? 10 : 0,
+                cursorBonus: report.profiles.cursor.ready ? 10 : 0
+            };
+            const score = Object.values(scoreParts).reduce((a, b) => a + b, 0);
+            const grade = score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 40 ? 'D' : 'F';
+            const bothPrimaryProfilesStrictReady = strict.vscodeTextReady && strict.vscodeButtonReady && strict.antigravityTextReady && strict.antigravityButtonReady;
+
             const suggestions: string[] = [];
             if (!report.profiles.vscode.ready) {
                 suggestions.push('VS Code coverage has no active signals; verify chat panel is visible and focused.');
@@ -537,9 +555,26 @@ export function activate(context: vscode.ExtensionContext) {
             if (report.waitingForChatMessage) {
                 suggestions.push('Runtime is waiting for chat message; use Resume From Waiting State or enable auto-resume.');
             }
+            if (!strict.vscodeTextReady) {
+                suggestions.push('VS Code text-input signal missing; ensure chat input is visible and selected.');
+            }
+            if (!strict.vscodeButtonReady) {
+                suggestions.push('VS Code submit/accept signal missing; ensure send button or pending action buttons are visible.');
+            }
+            if (!strict.antigravityTextReady) {
+                suggestions.push('Antigravity text-input signal missing; ensure the agent panel input is visible.');
+            }
+            if (!strict.antigravityButtonReady) {
+                suggestions.push('Antigravity submit/accept signal missing; ensure send button or pending action buttons are visible.');
+            }
 
             const fullReport = {
                 ...report,
+                strict,
+                score,
+                grade,
+                scoreParts,
+                bothPrimaryProfilesStrictReady,
                 suggestions
             };
 
@@ -551,7 +586,7 @@ export function activate(context: vscode.ExtensionContext) {
             });
             await vscode.window.showTextDocument(doc, { preview: false });
 
-            const summary = `Cross-UI self-test complete. VSCode=${report.profiles.vscode.ready ? 'ready' : 'no-signals'}, Antigravity=${report.profiles.antigravity.ready ? 'ready' : 'no-signals'}, Cursor=${report.profiles.cursor.ready ? 'ready' : 'no-signals'}.`;
+            const summary = `Cross-UI self-test complete. Score=${score}/100 (${grade}) | strict primary readiness=${bothPrimaryProfilesStrictReady ? 'PASS' : 'FAIL'} | VSCode=${report.profiles.vscode.ready ? 'ready' : 'no-signals'}, Antigravity=${report.profiles.antigravity.ready ? 'ready' : 'no-signals'}, Cursor=${report.profiles.cursor.ready ? 'ready' : 'no-signals'}.`;
             log.info(`[CrossUI SelfTest] ${summary}`);
             vscode.window.showInformationMessage(summary + ' Report copied to clipboard.');
         })

@@ -380,6 +380,14 @@ export class DashboardPanel {
                     <label>Auto Resume Cooldown (s):</label>
                     <input type="number" value="${settings.runtimeAutoResumeCooldownSec}" min="5" max="7200" onchange="updateConfig('runtimeAutoResumeCooldownSec', parseInt(this.value))">
                 </div>
+                <div class="setting">
+                    <label>Auto Resume Min Score:</label>
+                    <input type="number" value="${settings.runtimeAutoResumeMinScore}" min="0" max="100" onchange="updateConfig('runtimeAutoResumeMinScore', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Require Strict Primary:</label>
+                    <input type="checkbox" ${settings.runtimeAutoResumeRequireStrictPrimary ? 'checked' : ''} onchange="updateConfig('runtimeAutoResumeRequireStrictPrimary', this.checked)">
+                </div>
                 <div class="setting vertical">
                     <label>Auto Resume Message:</label>
                     <textarea onchange="updateConfig('runtimeAutoResumeMessage', this.value)">${settings.runtimeAutoResumeMessage || ''}</textarea>

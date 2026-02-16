@@ -2,7 +2,7 @@
     "name": "antigravity-autopilot",
     "displayName": "Antigravity Autopilot (Unified)",
     "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-    "version": "4.10.12",
+    "version": "4.10.14",
     "repository": {
         "type": "git",
         "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -327,6 +327,18 @@
                     "minimum": 5,
                     "maximum": 7200,
                     "description": "Minimum seconds between automatic resume messages while waiting."
+                },
+                "antigravity.runtimeAutoResumeMinScore": {
+                    "type": "number",
+                    "default": 70,
+                    "minimum": 0,
+                    "maximum": 100,
+                    "description": "Minimum Cross-UI self-test score required before automatic resume sends a message."
+                },
+                "antigravity.runtimeAutoResumeRequireStrictPrimary": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Require strict VS Code + Antigravity text/button readiness before automatic resume is allowed."
                 },
                 "antigravity.acceptPatterns": {
                     "type": "array",

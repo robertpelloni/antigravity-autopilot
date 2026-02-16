@@ -5,6 +5,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.14] - 2026-02-16
+
+### Added
+- **Cross-UI Health Score**: `runCrossUiSelfTest` now computes a weighted score (0–100) and letter grade to quantify runtime readiness.
+- **Strict Primary Gates**: Added strict pass/fail checks for VS Code + Antigravity text-input and button/signal readiness.
+- **Score Breakdown**: Self-test report now includes component-level scoring (`scoreParts`) and `bothPrimaryProfilesStrictReady` flag.
+
+### Changed
+- **Self-Test Summary**: Command summary now reports score, grade, strict readiness status, and profile readiness in one line.
+
+## [4.10.13] - 2026-02-16
+
+### Added
+- **Cross-UI Self-Test Command**: Added `Antigravity: Run Cross-UI Self-Test` to generate a structured readiness report for `vscode`, `antigravity`, and `cursor` profiles.
+- **Self-Test Report Export**: Self-test now opens a JSON report document and copies it to clipboard for quick troubleshooting handoff.
+- **Dashboard Trigger**: Added `Run Cross-UI Self-Test` button in runtime card.
+
+### Changed
+- **Dashboard Command Bridge**: Dashboard can now invoke extension commands through a dedicated `runCommand` message path.
+
 ## [4.10.12] - 2026-02-16
 
 ### Added

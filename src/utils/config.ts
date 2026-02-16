@@ -31,6 +31,8 @@ export interface AntigravityConfig {
     runtimeAutoResumeEnabled: boolean;
     runtimeAutoResumeMessage: string;
     runtimeAutoResumeCooldownSec: number;
+    runtimeAutoResumeMinScore: number;
+    runtimeAutoResumeRequireStrictPrimary: boolean;
 
     // CDP Settings
     cdpPort: number;
@@ -114,6 +116,8 @@ export class ConfigManager {
             runtimeAutoResumeEnabled: config.get('runtimeAutoResumeEnabled', true),
             runtimeAutoResumeMessage: config.get('runtimeAutoResumeMessage', 'Continue with the next highest-priority development task in this workspace. If everything is complete, summarize what is done and propose the next best improvement.'),
             runtimeAutoResumeCooldownSec: config.get('runtimeAutoResumeCooldownSec', 300),
+            runtimeAutoResumeMinScore: config.get('runtimeAutoResumeMinScore', 70),
+            runtimeAutoResumeRequireStrictPrimary: config.get('runtimeAutoResumeRequireStrictPrimary', true),
             cdpPort: config.get('cdpPort', 9000),
             cdpTimeout: config.get('cdpTimeout', 10000),
             preferredModelForReasoning: config.get('preferredModelForReasoning', 'claude-opus-4.5-thinking'),
