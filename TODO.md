@@ -100,9 +100,9 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 ## P2 — Quality and implementation-depth upgrades
 
 ### P2.1 Replace placeholder progress metrics
-- [ ] Compute real `filesChanged` from git diff or workspace snapshot
-- [ ] Compute actual response length/hash from captured response
-- [ ] Add error taxonomy fields (transport, parse, timeout, policy)
+- [x] Compute real `filesChanged` from git diff or workspace snapshot
+- [x] Compute actual response length/hash from captured response
+- [x] Add error taxonomy fields (transport, parse, timeout, policy)
 - **Evidence:** `src/core/progress-tracker.ts` returns placeholder values
 - **Definition of done:** progress report is audit-grade and actionable
 

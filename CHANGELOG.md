@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.67] - 2026-02-16
+
+### Added
+- **Progress Metrics Guard Test**: Added `tests/progress-tracker-real-metrics.test.js` to prevent regression to placeholder hashes/counts and enforce taxonomy coverage fields.
+
+### Changed
+- **Real Progress Telemetry**: `src/core/progress-tracker.ts` now computes `filesChanged` from `git diff --name-only`, derives response length/hash from captured response text, and tracks structured error taxonomy (`transport`, `parse`, `timeout`, `policy`, `unknown`).
+- **Autonomous Loop Error Classification**: `src/core/autonomous-loop.ts` now passes response text and classified loop error type into progress tracking for audit-quality session metrics.
+
 ## [4.10.66] - 2026-02-16
 
 ### Added

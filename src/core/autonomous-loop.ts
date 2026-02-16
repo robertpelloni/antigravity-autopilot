@@ -15,6 +15,7 @@ import { config } from '../utils/config';
 import { createLogger } from '../utils/logger';
 import { testLoopDetector } from './test-loop-detector';
 import { memoryManager } from './memory-manager';
+import type { ProgressErrorType } from './progress-tracker';
 
 const log = createLogger('AutonomousLoop');
 // const circuitBreaker = new CircuitBreaker(); // Use local instance for now or singleton if preferred
@@ -44,6 +45,8 @@ export class AutonomousLoop {
     private goal: string = '';
     private onStatusChange: ((status: LoopStatus) => void) | null = null;
     private previousModel: string | null = null;
+    private lastResponseText = '';
+    private lastErrorType: ProgressErrorType | null = null;
     private consecutiveFailures = 0;
     private readonly MAX_BACKOFF_MINUTES = 5;
 
@@ -162,6 +165,8 @@ export class AutonomousLoop {
             await progressTracker.recordLoop({
                 modelUsed: this.previousModel || 'unknown',
                 hasErrors: !success,
+                responseText: this.lastResponseText,
+                errorType: !success ? (this.lastErrorType || 'unknown') : undefined,
             });
 
             // Git Commit logic
@@ -225,6 +230,9 @@ export class AutonomousLoop {
     }
 
     private async executeTask(): Promise<boolean> {
+        this.lastResponseText = '';
+        this.lastErrorType = null;
+
         if (!cdpClient.isConnected()) {
             const connected = await cdpClient.connect();
             if (!connected) {
@@ -241,6 +249,7 @@ export class AutonomousLoop {
             const injected = await cdpClient.injectPrompt(prompt);
             if (!injected) {
                 log.error('Failed to inject prompt');
+                this.lastErrorType = 'transport';
                 return false;
             }
 
@@ -249,6 +258,7 @@ export class AutonomousLoop {
             log.info('Waiting for response...');
             const timeoutMs = (config.get<number>('executionTimeout') || 15) * 60 * 1000;
             const response = await cdpClient.waitForResponse(timeoutMs);
+            this.lastResponseText = String(response || '');
 
             const exitCheck = exitDetector.checkResponse(response);
             if (exitCheck.shouldExit) {
@@ -289,6 +299,19 @@ export class AutonomousLoop {
             log.error(`Execution error: ${err.message}`);
             // Report to circuit breaker
             // Circuit breaker wrapper around executeTask is better, but here we just report
+
+            const rawMessage = String(err?.message || err || '').toLowerCase();
+            if (rawMessage.includes('timeout') || rawMessage.includes('timed out')) {
+                this.lastErrorType = 'timeout';
+            } else if (rawMessage.includes('parse') || rawMessage.includes('json')) {
+                this.lastErrorType = 'parse';
+            } else if (rawMessage.includes('policy') || rawMessage.includes('banned') || rawMessage.includes('blocked')) {
+                this.lastErrorType = 'policy';
+            } else if (rawMessage.includes('cdp') || rawMessage.includes('connect') || rawMessage.includes('network')) {
+                this.lastErrorType = 'transport';
+            } else {
+                this.lastErrorType = 'unknown';
+            }
 
             const failCheck = exitDetector.reportFailure();
             if (failCheck.shouldExit) {
