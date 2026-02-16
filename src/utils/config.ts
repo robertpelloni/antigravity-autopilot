@@ -46,6 +46,7 @@ export interface AntigravityConfig {
     runtimeAutoFixWaitingEscalationMaxEvents: number;
     runtimeEscalationClearRequireConfirm: boolean;
     runtimeTelemetryStaleSec: number;
+    runtimeStatusMenuRefreshDebounceMs: number;
     runtimeAutoResumeMinScore: number;
     runtimeAutoResumeRequireStrictPrimary: boolean;
 
@@ -146,6 +147,7 @@ export class ConfigManager {
             runtimeAutoFixWaitingEscalationMaxEvents: config.get('runtimeAutoFixWaitingEscalationMaxEvents', 10),
             runtimeEscalationClearRequireConfirm: config.get('runtimeEscalationClearRequireConfirm', true),
             runtimeTelemetryStaleSec: config.get('runtimeTelemetryStaleSec', 12),
+            runtimeStatusMenuRefreshDebounceMs: config.get('runtimeStatusMenuRefreshDebounceMs', 800),
             runtimeAutoResumeMinScore: config.get('runtimeAutoResumeMinScore', 70),
             runtimeAutoResumeRequireStrictPrimary: config.get('runtimeAutoResumeRequireStrictPrimary', true),
             cdpPort: config.get('cdpPort', 9000),

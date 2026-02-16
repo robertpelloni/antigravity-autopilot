@@ -52,6 +52,8 @@ export function activate(context: vscode.ExtensionContext) {
     let lastWatchdogEscalationAt = 0;
     let lastWatchdogEscalationReason = 'none';
     let watchdogEscalationEvents: Array<{ at: number; event: string; detail: string }> = [];
+    let refreshStatusMenuInFlight = false;
+    let lastRefreshStatusMenuAt = 0;
 
     const pushWatchdogEscalationEvent = (event: string, detail: string) => {
         const maxEvents = Math.max(3, Math.min(100, config.get<number>('runtimeAutoFixWaitingEscalationMaxEvents') || 10));
@@ -959,12 +961,24 @@ export function activate(context: vscode.ExtensionContext) {
             const statusTiming = latestRuntimeState
                 ? getAutoResumeTimingReport(latestRuntimeState?.status === 'waiting_for_chat_message' || latestRuntimeState?.waitingForChatMessage === true)
                 : null;
+            const telemetryStaleSec = Math.max(3, config.get<number>('runtimeTelemetryStaleSec') || 12);
+            const runtimeTimestamp = Number((latestRuntimeState as any)?.timestamp || Date.now());
+            const telemetryAgeMs = Math.max(0, Date.now() - runtimeTimestamp);
+            const telemetryIsStale = telemetryAgeMs > (telemetryStaleSec * 1000);
+            const runtimeHeaderLabel = telemetryIsStale
+                ? '$(warning) Runtime [STALE]: ' + runtimeSummary(latestRuntimeState)
+                : '$(graph) Runtime: ' + runtimeSummary(latestRuntimeState);
             const escalationStateLabel = watchdogEscalationForceFullNext ? 'ARMED' : 'IDLE';
             const items = [
                 {
-                    label: '$(graph) Runtime: ' + runtimeSummary(latestRuntimeState),
-                    description: 'Live runtime snapshot (read-only)',
+                    label: runtimeHeaderLabel,
+                    description: `Live runtime snapshot (read-only) | telemetry age ${formatDurationShort(telemetryAgeMs)} | stale threshold ${telemetryStaleSec}s`,
                     action: undefined as string | undefined
+                },
+                {
+                    label: '$(sync) Refresh Runtime + Reopen Status Menu',
+                    description: 'Force runtime refresh, then reopen this menu for rapid staleness checks',
+                    action: 'antigravity.refreshRuntimeAndReopenStatusMenu'
                 },
                 {
                     label: '$(watch) Guard: ' + (statusGuard ? (statusGuard.allowed ? 'ALLOW' : 'BLOCK') : 'n/a'),
@@ -1179,6 +1193,26 @@ export function activate(context: vscode.ExtensionContext) {
             latestRuntimeState = state;
             await vscode.env.clipboard.writeText(JSON.stringify(state, null, 2));
             vscode.window.showInformationMessage('Antigravity runtime state JSON copied to clipboard.');
+        }),
+        vscode.commands.registerCommand('antigravity.refreshRuntimeAndReopenStatusMenu', async () => {
+            const now = Date.now();
+            const debounceMs = Math.max(100, Math.min(5000, config.get<number>('runtimeStatusMenuRefreshDebounceMs') || 800));
+
+            if (refreshStatusMenuInFlight) {
+                return;
+            }
+            if ((now - lastRefreshStatusMenuAt) < debounceMs) {
+                return;
+            }
+
+            refreshStatusMenuInFlight = true;
+            try {
+                await refreshRuntimeState().catch(() => { });
+                lastRefreshStatusMenuAt = Date.now();
+                await vscode.commands.executeCommand('antigravity.showStatusMenu');
+            } finally {
+                refreshStatusMenuInFlight = false;
+            }
         }),
         vscode.commands.registerCommand('antigravity.copyLastResumePayloadReport', async () => {
             const cdp = resolveCDPStrategy();

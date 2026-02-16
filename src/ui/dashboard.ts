@@ -486,6 +486,10 @@ export class DashboardPanel {
                     <label>Telemetry Stale Threshold (s):</label>
                     <input type="number" value="${settings.runtimeTelemetryStaleSec}" min="3" max="300" onchange="updateConfig('runtimeTelemetryStaleSec', parseInt(this.value))">
                 </div>
+                <div class="setting">
+                    <label>Status Refresh Debounce (ms):</label>
+                    <input type="number" value="${settings.runtimeStatusMenuRefreshDebounceMs}" min="100" max="5000" onchange="updateConfig('runtimeStatusMenuRefreshDebounceMs', parseInt(this.value))">
+                </div>
                 <p class="muted" style="margin-top:-6px;">Stale logic: <code>telemetryAgeSec &gt; runtimeTelemetryStaleSec</code> using runtime state <code>timestamp</code>.</p>
                 <div class="setting">
                     <label>Auto Resume Min Score:</label>

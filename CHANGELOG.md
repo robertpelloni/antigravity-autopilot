@@ -5,6 +5,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.55] - 2026-02-16
+
+### Added
+- **Configurable Status Refresh Debounce**: Added `runtimeStatusMenuRefreshDebounceMs` (default `800`) to tune debounce window for `Refresh Runtime + Reopen Status Menu`.
+
+### Changed
+- **Dashboard Control Surface**: Added `Status Refresh Debounce (ms)` setting in CDP & Automation section.
+
+## [4.10.54] - 2026-02-16
+
+### Changed
+- **Refresh Action Debounce Guard**: `Refresh Runtime + Reopen Status Menu` now ignores overlapping/instant-repeat invocations (in-flight + short cooldown) to prevent runtime refresh flood loops.
+
+## [4.10.53] - 2026-02-16
+
+### Added
+- **Rapid Status Recheck Action**: Added `Antigravity: Refresh Runtime + Reopen Status Menu` (`antigravity.refreshRuntimeAndReopenStatusMenu`) for quick stale/fresh reassessment loops.
+
+### Changed
+- **Status Menu UX**: Added one-click `Refresh Runtime + Reopen Status Menu` action at the top of status menu.
+
+## [4.10.52] - 2026-02-16
+
+### Changed
+- **Status Menu Stale Warning**: Runtime header now shows a warning badge when telemetry age exceeds `runtimeTelemetryStaleSec`, including age and threshold context in the description.
+
 ## [4.10.51] - 2026-02-16
 
 ### Changed
