@@ -60,11 +60,11 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 ## P1 — Core reliability and control-surface completeness
 
 ### P1.1 Fix dashboard-config parity gaps
-- [ ] Add controls for:
-  - [ ] `maxConsecutiveTestLoops`
-  - [ ] `maxCallsPerHour`
-  - [ ] `interactionTimings` (structured editor)
-- [ ] Ensure values are validated before `updateConfig`
+- [x] Add controls for:
+  - [x] `maxConsecutiveTestLoops`
+  - [x] `maxCallsPerHour`
+  - [x] `interactionTimings` (structured editor)
+- [x] Ensure values are validated before `updateConfig`
 - **Evidence:** automated parity check found 3 manifest settings not represented in dashboard
 - **Definition of done:** every public setting is represented in UI or explicitly documented as advanced-only
 

@@ -389,6 +389,10 @@ export class DashboardPanel {
                     <label>Auto Git Commit:</label>
                     <input type="checkbox" ${settings.autoGitCommit ? 'checked' : ''} onchange="updateConfig('autoGitCommit', this.checked)">
                 </div>
+                <div class="setting">
+                    <label>Max Calls/Hour:</label>
+                    <input type="number" value="${settings.maxCallsPerHour}" min="1" onchange="updateConfig('maxCallsPerHour', parseInt(this.value))">
+                </div>
             </div>
 
             <!-- CDP & TIMING -->
@@ -530,6 +534,10 @@ export class DashboardPanel {
                  <div class="setting">
                      <label>Execution Timeout (min):</label>
                      <input type="number" value="${settings.executionTimeout}" onchange="updateConfig('executionTimeout', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Max Consecutive Test Loops:</label>
+                    <input type="number" value="${settings.maxConsecutiveTestLoops}" min="1" max="10" onchange="updateConfig('maxConsecutiveTestLoops', parseInt(this.value))">
                 </div>
             </div>
 
@@ -705,6 +713,10 @@ export class DashboardPanel {
                     <label>Visual Diff Threshold:</label>
                     <input type="number" value="${settings.interactionVisualDiffThreshold}" min="0" max="1" step="0.001" onchange="updateConfig('interactionVisualDiffThreshold', parseFloat(this.value))">
                 </div>
+                <div class="setting vertical">
+                    <label>Interaction Timings (JSON):</label>
+                    <textarea onchange="updateConfig('interactionTimings', parseInteractionTimings(this.value))">${JSON.stringify(settings.interactionTimings || {}, null, 2)}</textarea>
+                </div>
             </div>
 
             <div class="card">
@@ -781,6 +793,16 @@ export class DashboardPanel {
                         profile: profile,
                         preset: preset
                     });
+                }
+
+                function parseInteractionTimings(raw) {
+                    try {
+                        if (!raw || !raw.trim()) return {};
+                        const parsed = JSON.parse(raw);
+                        return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+                    } catch {
+                        return {};
+                    }
                 }
 
                 function runtimeClassForStatus(status) {

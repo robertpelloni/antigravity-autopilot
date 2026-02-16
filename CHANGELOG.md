@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.62] - 2026-02-16
+
+### Changed
+- **Dashboard Config Parity Completion**: Added missing dashboard controls for `maxCallsPerHour`, `maxConsecutiveTestLoops`, and `interactionTimings`.
+- **Safe Interaction Timing Input**: Added JSON parsing guard for `interactionTimings` updates to prevent invalid payload writes from the dashboard.
+
 ## [4.10.61] - 2026-02-16
 
 ### Changed
