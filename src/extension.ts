@@ -703,6 +703,19 @@ export function activate(context: vscode.ExtensionContext) {
         };
     };
 
+    const buildEscalationHealthSummaryLine = () => {
+        const escalationCooldownMs = Math.max(5, config.get<number>('runtimeAutoFixWaitingEscalationCooldownSec') || 900) * 1000;
+        const escalationCooldownRemainingMs = lastWatchdogEscalationAt > 0
+            ? Math.max(0, escalationCooldownMs - (Date.now() - lastWatchdogEscalationAt))
+            : 0;
+        const escalationStateLabel = watchdogEscalationForceFullNext ? 'ARMED' : 'IDLE';
+        const latestEvent = watchdogEscalationEvents[0];
+        const latestEventText = latestEvent
+            ? `${latestEvent.event}@${new Date(latestEvent.at).toLocaleTimeString()}`
+            : 'none';
+        return `Escalation ${escalationStateLabel} | streak ${watchdogEscalationConsecutiveFailures} | last watchdog ${lastAutoFixWatchdogOutcome || 'n/a'} | cooldown ${formatDurationShort(escalationCooldownRemainingMs)} | reason ${lastWatchdogEscalationReason} | latest event ${latestEventText}`;
+    };
+
     const clearEscalationTimelineState = async (source: string) => {
         watchdogEscalationEvents = [];
         watchdogEscalationConsecutiveFailures = 0;
@@ -932,6 +945,7 @@ export function activate(context: vscode.ExtensionContext) {
             const statusTiming = latestRuntimeState
                 ? getAutoResumeTimingReport(latestRuntimeState?.status === 'waiting_for_chat_message' || latestRuntimeState?.waitingForChatMessage === true)
                 : null;
+            const escalationStateLabel = watchdogEscalationForceFullNext ? 'ARMED' : 'IDLE';
             const items = [
                 {
                     label: '$(graph) Runtime: ' + runtimeSummary(latestRuntimeState),
@@ -944,6 +958,11 @@ export function activate(context: vscode.ExtensionContext) {
                         ? `score ${statusGuard.health.score}/${statusGuard.minScore}, strict ${statusGuard.health.strictPass ? 'PASS' : 'FAIL'}${statusGuard.requireStrict ? ' (required)' : ''}, next ${statusTiming ? formatDurationShort(statusTiming.nextEligibleAt - Date.now()) : '-'} | (${statusGuard.recommendedNextActionConfidence}) ${statusGuard.recommendedNextAction}`
                         : 'Auto-resume guard state unavailable',
                     action: 'antigravity.explainAutoResumeGuard'
+                },
+                {
+                    label: '$(pulse) Escalation: ' + escalationStateLabel,
+                    description: buildEscalationHealthSummaryLine(),
+                    action: 'antigravity.showEscalationMenu'
                 },
                 {
                     label: '$(rocket) Start Autonomous Loop (Yoke)',
@@ -1016,9 +1035,24 @@ export function activate(context: vscode.ExtensionContext) {
                     action: 'antigravity.copyEscalationDiagnosticsReport'
                 },
                 {
+                    label: '$(copy) Copy Escalation Health Summary',
+                    description: 'Copy/open compact one-line escalation status summary',
+                    action: 'antigravity.copyEscalationHealthSummary'
+                },
+                {
+                    label: '$(list-tree) Escalation Controls',
+                    description: 'Open grouped escalation diagnostics/reset actions',
+                    action: 'antigravity.showEscalationMenu'
+                },
+                {
                     label: '$(trash) Clear Escalation Timeline',
                     description: 'Reset in-memory escalation event buffer and related escalation flags',
                     action: 'antigravity.clearEscalationTimeline'
+                },
+                {
+                    label: '$(zap) Clear Escalation Timeline (No Prompt)',
+                    description: 'Immediate reset for power users; bypasses confirmation dialog',
+                    action: 'antigravity.clearEscalationTimelineNow'
                 }
             ];
 
@@ -1169,6 +1203,60 @@ export function activate(context: vscode.ExtensionContext) {
             await vscode.window.showTextDocument(doc, { preview: false });
 
             vscode.window.showInformationMessage('Antigravity: escalation diagnostics report copied to clipboard.');
+        }),
+        vscode.commands.registerCommand('antigravity.copyEscalationHealthSummary', async () => {
+            await refreshRuntimeState().catch(() => { });
+            const summary = buildEscalationHealthSummaryLine();
+            await vscode.env.clipboard.writeText(summary);
+
+            const doc = await vscode.workspace.openTextDocument({
+                content: summary,
+                language: 'text'
+            });
+            await vscode.window.showTextDocument(doc, { preview: false });
+
+            vscode.window.showInformationMessage('Antigravity: escalation health summary copied to clipboard.');
+        }),
+        vscode.commands.registerCommand('antigravity.showEscalationMenu', async () => {
+            const items = [
+                {
+                    label: '$(pulse) Copy Escalation Diagnostics',
+                    description: 'Copy/open focused escalation watchdog diagnostics report',
+                    action: 'antigravity.copyEscalationDiagnosticsReport'
+                },
+                {
+                    label: '$(copy) Copy Escalation Health Summary',
+                    description: 'Copy/open compact one-line escalation status summary',
+                    action: 'antigravity.copyEscalationHealthSummary'
+                },
+                {
+                    label: '$(note) Copy Last Resume Payload',
+                    description: 'Copy/open full continuation telemetry payload report',
+                    action: 'antigravity.copyLastResumePayloadReport'
+                },
+                {
+                    label: '$(trash) Clear Escalation Timeline',
+                    description: 'Clear escalation timeline with confirmation (if enabled)',
+                    action: 'antigravity.clearEscalationTimeline'
+                },
+                {
+                    label: '$(zap) Clear Escalation Timeline (No Prompt)',
+                    description: 'Immediate clear path for power users',
+                    action: 'antigravity.clearEscalationTimelineNow'
+                },
+                {
+                    label: '$(gear) Open Dashboard',
+                    description: 'Open dashboard runtime controls and settings',
+                    action: 'antigravity.openSettings'
+                }
+            ];
+
+            const selection = await vscode.window.showQuickPick(items, {
+                placeHolder: 'Escalation Controls'
+            });
+            if (selection?.action) {
+                await vscode.commands.executeCommand(selection.action);
+            }
         }),
         vscode.commands.registerCommand('antigravity.clearEscalationTimeline', async () => {
             const requireConfirm = config.get<boolean>('runtimeEscalationClearRequireConfirm');

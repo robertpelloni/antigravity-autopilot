@@ -5,6 +5,33 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.43] - 2026-02-16
+
+### Added
+- **Escalation Health Summary Command**: Added `Antigravity: Copy Escalation Health Summary` (`antigravity.copyEscalationHealthSummary`) for compact one-line operator diagnostics.
+
+### Changed
+- **Status & Escalation Menus**: Added quick actions to copy escalation health summary directly from status menu and Escalation Controls submenu.
+- **Dashboard Runtime Actions**: Added `Copy Escalation Health` button for quick sharing without full JSON payloads.
+
+## [4.10.42] - 2026-02-16
+
+### Changed
+- **Status Escalation Health Line**: Status menu now shows a one-line escalation summary (`armed/idle`, failure streak, last watchdog outcome, cooldown remaining, and latest reason) with direct jump to Escalation Controls.
+
+## [4.10.41] - 2026-02-16
+
+### Added
+- **Escalation Controls Submenu**: Added `Antigravity: Show Escalation Controls` (`antigravity.showEscalationMenu`) with grouped actions for diagnostics export, timeline clear (safe/no-prompt), payload export, and dashboard access.
+
+### Changed
+- **Status Menu Navigation**: Added `Escalation Controls` entry for cleaner operator UX with fewer clicks.
+
+## [4.10.40] - 2026-02-16
+
+### Changed
+- **Status Menu Power Shortcut**: Added `Clear Escalation Timeline (No Prompt)` action in status menu for fast operator resets.
+
 ## [4.10.39] - 2026-02-16
 
 ### Added

@@ -301,6 +301,7 @@ export class DashboardPanel {
                     <button onclick="runCommand('antigravity.autoFixAutoResumeReadiness')">Auto-Fix Resume Readiness</button>
                     <button onclick="runCommand('antigravity.copyLastResumePayloadReport')">Copy Last Resume Payload</button>
                     <button onclick="runCommand('antigravity.copyEscalationDiagnosticsReport')">Copy Escalation Diagnostics</button>
+                    <button onclick="runCommand('antigravity.copyEscalationHealthSummary')">Copy Escalation Health</button>
                     <button onclick="runCommand('antigravity.clearEscalationTimeline')">Clear Escalation Timeline</button>
                 </div>
                 <div class="runtime-history" id="runtimeHistory"></div>
