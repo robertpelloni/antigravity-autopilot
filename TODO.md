@@ -69,9 +69,9 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - **Definition of done:** every public setting is represented in UI or explicitly documented as advanced-only
 
 ### P1.2 Command manifest parity and discoverability
-- [ ] Decide policy for internal commands (`showStatusMenu`, `getChromeDevtoolsMcpUrl`)
-- [ ] Either add to `package.json` command contributions or mark internal and remove UI dependencies
-- [ ] Add parity test for manifest vs registered handlers
+- [x] Decide policy for internal commands (`showStatusMenu`, `getChromeDevtoolsMcpUrl`)
+- [x] Either add to `package.json` command contributions or mark internal and remove UI dependencies
+- [x] Add parity test for manifest vs registered handlers
 - **Evidence:** registered handlers exceed manifest commands by 2
 - **Definition of done:** intentional parity with automated guard
 

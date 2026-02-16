@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.64] - 2026-02-16
+
+### Added
+- **Command Parity Guard Test**: Added `tests/command-parity.test.js` to enforce manifest-handler parity while supporting an explicit internal-command allowlist.
+
+### Changed
+- **Command Discoverability Policy**: Added `antigravity.showStatusMenu` to contributed commands so it is discoverable and no longer an undocumented registered handler.
+- **Internal Command Policy Annotation**: Documented internal-only command policy in `src/extension.ts` (currently `antigravity.getChromeDevtoolsMcpUrl`).
+
 ## [4.10.63] - 2026-02-16
 
 ### Changed

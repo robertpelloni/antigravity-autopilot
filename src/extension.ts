@@ -871,6 +871,8 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // Register Commands
+    // Internal-only commands are intentionally not contributed in package.json.
+    // Current internal command policy allowlist: antigravity.getChromeDevtoolsMcpUrl
     context.subscriptions.push(
         vscode.commands.registerCommand('antigravity.toggleExtension', async () => {
             await strategyManager.toggle();
