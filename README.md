@@ -52,7 +52,7 @@ vsce package
 
 ## Version
 
-**v4.10.59** — See [CHANGELOG.md](CHANGELOG.md) for details.
+**v4.10.61** — See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## Implementation Status Note
 

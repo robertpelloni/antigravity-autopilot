@@ -175,6 +175,16 @@ Following the audit, core P0 transport work was started and implemented:
   - `src/utils/constants.ts` version bumped to `4.10.60`
   - `CHANGELOG.md` updated with `4.10.60` entry
 
+4. **Runtime placeholder elimination wave**
+  - Replaced autonomous-loop circuit-state placeholder with real breaker state reporting (`circuitBreaker.getState()`)
+  - Added `getState()` API to root circuit breaker
+  - Replaced dummy `antigravity.getChromeDevtoolsMcpUrl` return with runtime CDP target discovery + config fallback
+
+5. **Release metadata sync (follow-up)**
+  - `package.json` bumped to `4.10.61`
+  - `src/utils/constants.ts` bumped to `4.10.61`
+  - `CHANGELOG.md` updated with `4.10.61`
+
 ### Still open from the same priority band
 
 - Add auth/header support for remote federation endpoints

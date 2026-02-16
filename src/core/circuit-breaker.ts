@@ -52,6 +52,10 @@ export class CircuitBreaker {
         this.failureCount = 0;
         console.log('[CircuitBreaker] Circuit RESET to CLOSED state.');
     }
+
+    getState(): CircuitState {
+        return this.state;
+    }
 }
 
 export const circuitBreaker = new CircuitBreaker();

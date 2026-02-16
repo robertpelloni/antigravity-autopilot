@@ -838,7 +838,21 @@ export function activate(context: vscode.ExtensionContext) {
     // Assuming `cdpStrategy` refers to an instance of CDPHandler or similar.
     context.subscriptions.push(
         vscode.commands.registerCommand('antigravity.getChromeDevtoolsMcpUrl', async () => {
-            return 'ws://localhost:9222'; // Dummy return to satisfy whatever is calling this
+            try {
+                const probe = new CDPHandler();
+                const instances = await probe.scanForInstances();
+                for (const instance of instances) {
+                    const wsTarget = instance.pages.find((p: any) => typeof p?.webSocketDebuggerUrl === 'string' && p.webSocketDebuggerUrl.length > 0);
+                    if (wsTarget?.webSocketDebuggerUrl) {
+                        return wsTarget.webSocketDebuggerUrl as string;
+                    }
+                }
+            } catch (error: any) {
+                log.warn(`DevTools URL probe failed: ${String(error?.message || error || 'unknown error')}`);
+            }
+
+            const fallbackPort = config.get<number>('cdpPort') || 9000;
+            return `ws://127.0.0.1:${fallbackPort}`;
         }),
         vscode.commands.registerCommand('antigravity.clickRun', () => resolveCDPStrategy()?.executeAction('run')),
         vscode.commands.registerCommand('antigravity.clickExpand', () => resolveCDPStrategy()?.executeAction('expand')),

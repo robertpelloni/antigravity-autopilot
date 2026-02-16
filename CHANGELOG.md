@@ -5,6 +5,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.61] - 2026-02-16
+
+### Changed
+- **Autonomous Loop Status Accuracy**: Replaced placeholder loop status value with real circuit breaker state via `circuitBreaker.getState()`.
+- **Circuit Breaker API**: Added `getState()` to expose current breaker status for runtime reporting.
+- **DevTools MCP URL Command Hardening**: Replaced hardcoded dummy URL in `antigravity.getChromeDevtoolsMcpUrl` with runtime target discovery from scanned CDP instances and configured-port fallback.
+
 ## [4.10.60] - 2026-02-16
 
 ### Added

@@ -36,14 +36,14 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - **Definition of done:** federation calls real downstream tools and returns true protocol responses
 
 ### P0.3 Eliminate runtime placeholders in active loop status
-- [ ] Replace `circuitState: CircuitState.CLOSED // Placeholder` with real breaker state
-- [ ] Ensure status is surfaced consistently in runtime telemetry and status menu
+- [x] Replace `circuitState: CircuitState.CLOSED // Placeholder` with real breaker state
+- [x] Ensure status is surfaced consistently in runtime telemetry and status menu
 - **Evidence:** `src/core/autonomous-loop.ts`
 - **Definition of done:** loop status reflects true runtime protection state under failure tests
 
 ### P0.4 Remove dummy command wiring
-- [ ] Replace hardcoded dummy result for `antigravity.getChromeDevtoolsMcpUrl`
-- [ ] Derive endpoint from active CDP connection context/config
+- [x] Replace hardcoded dummy result for `antigravity.getChromeDevtoolsMcpUrl`
+- [x] Derive endpoint from active CDP connection context/config
 - [ ] Either expose command in manifest or document as intentionally internal
 - **Evidence:** `src/extension.ts` returns `'ws://localhost:9222'` dummy
 - **Definition of done:** command returns actual runtime-resolved value (or is removed)

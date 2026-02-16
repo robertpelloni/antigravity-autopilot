@@ -344,7 +344,7 @@ export class AutonomousLoop {
             loopCount: this.loopCount,
             currentTask: this.currentTask,
             currentModel: this.previousModel || 'default',
-            circuitState: CircuitState.CLOSED, // Placeholder
+            circuitState: circuitBreaker.getState(),
             message: 'Running',
         };
     }
