@@ -17,6 +17,16 @@ export interface CDPRuntimeState {
     doneTabs?: number;
     allTasksComplete?: boolean;
     waitingForChatMessage?: boolean;
+    completionWaiting?: {
+        readyToResume?: boolean;
+        isComplete?: boolean;
+        isWaitingForChatMessage?: boolean;
+        confidence?: number;
+        confidenceLabel?: 'high' | 'medium' | 'low' | string;
+        reasons?: string[];
+        recommendedAction?: string;
+        evidence?: Record<string, any>;
+    };
     timestamp?: number;
     [key: string]: any;
 }

@@ -277,9 +277,14 @@ export class DashboardPanel {
                     <div><strong>Cooldown Left:</strong> <span id="runtimeCooldownLeft" class="muted">-</span></div>
                     <div><strong>Delay Left:</strong> <span id="runtimeDelayLeft" class="muted">-</span></div>
                     <div><strong>Last Resume Outcome:</strong> <span id="runtimeLastResumeOutcome" class="muted">-</span></div>
+                    <div><strong>Recommended Next:</strong> <span id="runtimeRecommendedNext" class="muted">-</span></div>
+                    <div><strong>Ready To Resume:</strong> <span id="runtimeReadyToResume" class="muted">-</span></div>
+                    <div><strong>Completion Confidence:</strong> <span id="runtimeCompletionConfidence" class="muted">-</span></div>
+                    <div><strong>Completion Reasoning:</strong> <span id="runtimeCompletionReasoning" class="muted">-</span></div>
                 </div>
                 <div style="margin-top:10px;display:flex;gap:8px;">
                     <button onclick="requestRuntimeState()">Refresh Runtime State</button>
+                    <button onclick="runCommand('antigravity.detectCompletionWaitingState')">Detect Completion + Waiting</button>
                     <button onclick="runCommand('antigravity.runCrossUiSelfTest')">Run Cross-UI Self-Test</button>
                     <button onclick="runCommand('antigravity.autoFixAutoResumeReadiness')">Auto-Fix Resume Readiness</button>
                 </div>
@@ -783,6 +788,10 @@ export class DashboardPanel {
                     const cooldownLeft = document.getElementById('runtimeCooldownLeft');
                     const delayLeft = document.getElementById('runtimeDelayLeft');
                     const lastResumeOutcome = document.getElementById('runtimeLastResumeOutcome');
+                    const recommendedNext = document.getElementById('runtimeRecommendedNext');
+                    const readyToResume = document.getElementById('runtimeReadyToResume');
+                    const completionConfidence = document.getElementById('runtimeCompletionConfidence');
+                    const completionReasoning = document.getElementById('runtimeCompletionReasoning');
 
                     function coverageText(cov) {
                         if (!cov) return '-';
@@ -812,6 +821,10 @@ export class DashboardPanel {
                         cooldownLeft.textContent = '-';
                         delayLeft.textContent = '-';
                         lastResumeOutcome.textContent = '-';
+                        recommendedNext.textContent = '-';
+                        readyToResume.textContent = '-';
+                        completionConfidence.textContent = '-';
+                        completionReasoning.textContent = '-';
                         renderRuntimeHistory();
                         return;
                     }
@@ -858,6 +871,18 @@ export class DashboardPanel {
                     cooldownLeft.textContent = timing ? formatDurationMs(timing.cooldownRemainingMs || 0) : '-';
                     delayLeft.textContent = timing ? formatDurationMs(timing.waitingDelayRemainingMs || 0) : '-';
                     lastResumeOutcome.textContent = host ? ((host.lastAutoResumeOutcome || 'none') + (host.lastAutoResumeBlockedReason && host.lastAutoResumeBlockedReason !== 'none' ? ' (' + host.lastAutoResumeBlockedReason + ')' : '')) : '-';
+                    recommendedNext.textContent = (host && host.guard && host.guard.recommendedNextAction)
+                        ? ('(' + (host.guard.recommendedNextActionConfidence || 'n/a') + ') ' + host.guard.recommendedNextAction)
+                        : '-';
+
+                    const completion = state.completionWaiting || null;
+                    readyToResume.textContent = completion ? yesNo(!!completion.readyToResume) : '-';
+                    completionConfidence.textContent = completion
+                        ? ((completion.confidence ?? '-') + ' (' + (completion.confidenceLabel || 'n/a') + ')')
+                        : '-';
+                    completionReasoning.textContent = completion && Array.isArray(completion.reasons)
+                        ? completion.reasons.slice(0, 2).join('; ')
+                        : '-';
                     renderRuntimeHistory();
                 }
 

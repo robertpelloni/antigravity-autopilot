@@ -532,6 +532,40 @@
         const allTasksComplete = totalTabs > 0 ? allTasksCompleteByTabs : allTasksCompleteBySignals;
         const waitingForChatMessage = !!state.isRunning && allTasksComplete && isIdle && (hasVisibleInput || hasVisibleSendButton);
 
+        const completionReasons = [];
+        if (!state.isRunning) completionReasons.push('automation not running');
+        if (pendingAcceptButtons > 0) completionReasons.push(`${pendingAcceptButtons} pending accept action(s)`);
+        if (totalTabs > 0 && !allKnownTabsDone) completionReasons.push(`tab completion ${doneCount}/${totalTabs}`);
+        if (!isIdle) completionReasons.push('conversation not idle yet');
+        if (allTasksComplete && !waitingForChatMessage) completionReasons.push('completion detected but input/send signal missing');
+        if (waitingForChatMessage) completionReasons.push('all tasks complete and waiting for chat resume');
+
+        let completionConfidence = 0;
+        if (!!state.isRunning) completionConfidence += 10;
+        if (allTasksCompleteByTabs) completionConfidence += 35;
+        if (allTasksCompleteBySignals) completionConfidence += 20;
+        if (isIdle) completionConfidence += 20;
+        if (hasVisibleInput || hasVisibleSendButton) completionConfidence += 15;
+        if (completionConfidence > 100) completionConfidence = 100;
+
+        let completionConfidenceLabel = 'low';
+        if (completionConfidence >= 80) completionConfidenceLabel = 'high';
+        else if (completionConfidence >= 55) completionConfidenceLabel = 'medium';
+
+        const readyToResume = !!state.isRunning && waitingForChatMessage;
+        let recommendedAction = 'Continue monitoring runtime state.';
+        if (readyToResume) {
+            recommendedAction = 'Safe to send a resume message and continue development.';
+        } else if (!state.isRunning) {
+            recommendedAction = 'Start Auto-All/CDP automation to produce runtime completion signals.';
+        } else if (pendingAcceptButtons > 0) {
+            recommendedAction = 'Process pending accept actions before attempting resume.';
+        } else if (!isIdle) {
+            recommendedAction = 'Wait for conversation idle feedback signals before resuming.';
+        } else if (!(hasVisibleInput || hasVisibleSendButton)) {
+            recommendedAction = 'Open/focus chat input so waiting-for-message state can be confirmed.';
+        }
+
         let status = 'processing';
         if (!state.isRunning) status = 'stopped';
         else if (pendingAcceptButtons > 0) status = 'pending_accept_actions';
@@ -553,6 +587,26 @@
             allTasksCompleteBySignals,
             allTasksComplete,
             waitingForChatMessage,
+            completionWaiting: {
+                readyToResume,
+                isComplete: allTasksComplete,
+                isWaitingForChatMessage: waitingForChatMessage,
+                confidence: completionConfidence,
+                confidenceLabel: completionConfidenceLabel,
+                reasons: completionReasons,
+                recommendedAction,
+                evidence: {
+                    isRunning: !!state.isRunning,
+                    isIdle,
+                    pendingAcceptButtons,
+                    totalTabs,
+                    doneTabs: doneCount,
+                    hasVisibleInput,
+                    hasVisibleSendButton,
+                    allTasksCompleteByTabs,
+                    allTasksCompleteBySignals
+                }
+            },
             profileCoverage,
             lastClickTime,
             lastBumpTime,

@@ -5,6 +5,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.24] - 2026-02-16
+
+### Added
+- **Explicit Completion+Waiting Verdict**: Runtime snapshot now includes `completionWaiting` with `readyToResume`, confidence score/label, reasons, and recommended action.
+- **State Detection Command**: Added `Antigravity: Detect Completion + Waiting State` (`antigravity.detectCompletionWaitingState`) to generate a focused JSON verdict report.
+- **Dashboard Detection Surface**: Runtime card now shows Ready-to-Resume, completion confidence, reasoning summary, and a one-click detection button.
+
+### Changed
+- **State Confidence Pipeline**: Completion/waiting detection is now first-class data from the CDP runtime script instead of only status inference.
+
+## [4.10.23] - 2026-02-16
+
+### Added
+- **Guidance Confidence Scoring**: Guard analysis now emits `recommendedNextActionConfidence` (`high|medium|low`) alongside recommended actions.
+
+### Changed
+- **Operator Visibility**: Status menu guard snapshot, dashboard runtime telemetry, and guard/fix JSON reports now display action confidence with the recommended next step.
+
+## [4.10.22] - 2026-02-16
+
+### Added
+- **Recommended Next Action Engine**: Guard evaluation now computes a single `recommendedNextAction` to guide operators toward the highest-impact fix.
+
+### Changed
+- **Diagnostics Guidance Upgrade**: `Explain Auto-Resume Guard`, `Auto-Fix Resume Readiness`, status menu guard snapshot, and dashboard runtime telemetry now surface `recommendedNextAction` directly.
+
 ## [4.10.21] - 2026-02-16
 
 ### Added

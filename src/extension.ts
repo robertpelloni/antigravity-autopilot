@@ -225,11 +225,37 @@ export function activate(context: vscode.ExtensionContext) {
             suggestions.push('No action needed; auto-resume is permitted under current settings.');
         }
 
+        let recommendedNextAction = 'No action needed; auto-resume is currently allowed.';
+        let recommendedNextActionConfidence: 'high' | 'medium' | 'low' = 'high';
+        if (!allowed) {
+            if (requireStrict && !health.strict.vscodeTextReady) {
+                recommendedNextAction = 'Open/focus VS Code Copilot chat input, then re-run Auto-Fix Resume Readiness.';
+                recommendedNextActionConfidence = 'high';
+            } else if (requireStrict && !health.strict.vscodeButtonReady) {
+                recommendedNextAction = 'Expose VS Code send/accept controls (or pending action buttons), then re-check guard.';
+                recommendedNextActionConfidence = 'high';
+            } else if (requireStrict && !health.strict.antigravityTextReady) {
+                recommendedNextAction = 'Open/focus Antigravity agent panel input, then re-run guard check.';
+                recommendedNextActionConfidence = 'high';
+            } else if (requireStrict && !health.strict.antigravityButtonReady) {
+                recommendedNextAction = 'Expose Antigravity send/accept controls, then re-check guard.';
+                recommendedNextActionConfidence = 'high';
+            } else if (!scorePass) {
+                recommendedNextAction = 'Run Cross-UI Self-Test to improve coverage signals or lower runtimeAutoResumeMinScore temporarily.';
+                recommendedNextActionConfidence = 'medium';
+            } else {
+                recommendedNextAction = 'Run Auto-Fix Resume Readiness and then Explain Auto-Resume Guard to inspect remaining blockers.';
+                recommendedNextActionConfidence = 'low';
+            }
+        }
+
         return {
             allowed,
             reason: reasons.join('; '),
             reasons,
             suggestions,
+            recommendedNextAction,
+            recommendedNextActionConfidence,
             minScore,
             requireStrict,
             scorePass,
@@ -396,6 +422,8 @@ export function activate(context: vscode.ExtensionContext) {
                 status: beforeState?.status || 'unknown',
                 allowed: beforeGuard.allowed,
                 reason: beforeGuard.reason,
+                recommendedNextAction: beforeGuard.recommendedNextAction,
+                recommendedNextActionConfidence: beforeGuard.recommendedNextActionConfidence,
                 score: beforeGuard.health.score,
                 strictPass: beforeGuard.health.strictPass
             } : null,
@@ -403,6 +431,8 @@ export function activate(context: vscode.ExtensionContext) {
                 status: afterState?.status || 'unknown',
                 allowed: afterGuard.allowed,
                 reason: afterGuard.reason,
+                recommendedNextAction: afterGuard.recommendedNextAction,
+                recommendedNextActionConfidence: afterGuard.recommendedNextActionConfidence,
                 score: afterGuard.health.score,
                 strictPass: afterGuard.health.strictPass
             } : null,
@@ -443,6 +473,8 @@ export function activate(context: vscode.ExtensionContext) {
                 guard: {
                     allowed: guard.allowed,
                     reason: guard.reason,
+                    recommendedNextAction: guard.recommendedNextAction,
+                    recommendedNextActionConfidence: guard.recommendedNextActionConfidence,
                     minScore: guard.minScore,
                     requireStrict: guard.requireStrict,
                     score: guard.health.score,
@@ -627,7 +659,7 @@ export function activate(context: vscode.ExtensionContext) {
                 {
                     label: '$(watch) Guard: ' + (statusGuard ? (statusGuard.allowed ? 'ALLOW' : 'BLOCK') : 'n/a'),
                     description: statusGuard
-                        ? `score ${statusGuard.health.score}/${statusGuard.minScore}, strict ${statusGuard.health.strictPass ? 'PASS' : 'FAIL'}${statusGuard.requireStrict ? ' (required)' : ''}, next ${statusTiming ? formatDurationShort(statusTiming.nextEligibleAt - Date.now()) : '-'} `
+                        ? `score ${statusGuard.health.score}/${statusGuard.minScore}, strict ${statusGuard.health.strictPass ? 'PASS' : 'FAIL'}${statusGuard.requireStrict ? ' (required)' : ''}, next ${statusTiming ? formatDurationShort(statusTiming.nextEligibleAt - Date.now()) : '-'} | (${statusGuard.recommendedNextActionConfidence}) ${statusGuard.recommendedNextAction}`
                         : 'Auto-resume guard state unavailable',
                     action: 'antigravity.explainAutoResumeGuard'
                 },
@@ -655,6 +687,11 @@ export function activate(context: vscode.ExtensionContext) {
                     label: '$(pulse) Check Runtime State',
                     description: 'Inspect processing/waiting/completion status',
                     action: 'antigravity.checkRuntimeState'
+                },
+                {
+                    label: '$(info) Detect Completion + Waiting State',
+                    description: 'Determine if all tasks are complete and chat is waiting to resume',
+                    action: 'antigravity.detectCompletionWaitingState'
                 },
                 {
                     label: '$(debug-start) Resume From Waiting State',
@@ -726,6 +763,55 @@ export function activate(context: vscode.ExtensionContext) {
             latestRuntimeState = state;
             log.info(`[RuntimeState] status=${status} tabs=${done}/${total} pending=${pending} waitingForChatMessage=${waiting} guard=${guard.allowed ? 'allow' : 'block'} reason=${guard.reason} next=${nextIn}`);
             vscode.window.showInformationMessage(`Antigravity Runtime: ${status} | tabs ${done}/${total} | pending ${pending} | waiting chat: ${waiting} | guard: ${guard.allowed ? 'allow' : 'block'} | next eligible: ${nextIn}`);
+        }),
+        vscode.commands.registerCommand('antigravity.detectCompletionWaitingState', async () => {
+            const cdp = resolveCDPStrategy();
+            if (!cdp) {
+                vscode.window.showWarningMessage('Antigravity: CDP strategy is not active.');
+                return;
+            }
+
+            const state = await cdp.getRuntimeState();
+            if (!state) {
+                vscode.window.showWarningMessage('Antigravity: Runtime state unavailable.');
+                return;
+            }
+
+            const fallbackVerdict = {
+                readyToResume: !!state.isRunning && !!state.waitingForChatMessage,
+                isComplete: !!state.allTasksComplete,
+                isWaitingForChatMessage: !!state.waitingForChatMessage,
+                confidence: 50,
+                confidenceLabel: 'medium',
+                reasons: ['fallback verdict used (completionWaiting not provided by runtime script)'],
+                recommendedAction: state.waitingForChatMessage
+                    ? 'Safe to send a resume message and continue development.'
+                    : 'Wait for waiting_for_chat_message state or run Auto-Fix Resume Readiness.'
+            };
+
+            const verdict = (state.completionWaiting && typeof state.completionWaiting === 'object')
+                ? state.completionWaiting
+                : fallbackVerdict;
+
+            const payload = {
+                timestamp: new Date().toISOString(),
+                runtimeStatus: state.status || 'unknown',
+                mode: state.mode || 'unknown',
+                tabs: {
+                    done: state.doneTabs ?? 0,
+                    total: state.totalTabs ?? 0
+                },
+                completionWaiting: verdict
+            };
+
+            const serialized = JSON.stringify(payload, null, 2);
+            await vscode.env.clipboard.writeText(serialized);
+            const doc = await vscode.workspace.openTextDocument({ content: serialized, language: 'json' });
+            await vscode.window.showTextDocument(doc, { preview: false });
+
+            const summary = `Completion+Waiting: ready=${verdict.readyToResume ? 'YES' : 'NO'} | complete=${verdict.isComplete ? 'YES' : 'NO'} | waiting=${verdict.isWaitingForChatMessage ? 'YES' : 'NO'} | confidence=${verdict.confidence ?? '-'} (${verdict.confidenceLabel || 'n/a'})`;
+            log.info(`[CompletionWaiting] ${summary} | action=${verdict.recommendedAction || 'n/a'}`);
+            vscode.window.showInformationMessage(summary + ' Report copied to clipboard.');
         }),
         vscode.commands.registerCommand('antigravity.copyRuntimeStateJson', async () => {
             const cdp = resolveCDPStrategy();
@@ -895,6 +981,8 @@ export function activate(context: vscode.ExtensionContext) {
                     allowed: guard.allowed,
                     reason: guard.reason,
                     reasons: guard.reasons,
+                    recommendedNextAction: guard.recommendedNextAction,
+                    recommendedNextActionConfidence: guard.recommendedNextActionConfidence,
                     minScore: guard.minScore,
                     requireStrict: guard.requireStrict,
                     scorePass: guard.scorePass,
@@ -907,7 +995,9 @@ export function activate(context: vscode.ExtensionContext) {
                     scoreParts: guard.health.scoreParts,
                     profiles: guard.health.profiles
                 },
-                suggestions: guard.suggestions
+                suggestions: guard.suggestions,
+                recommendedNextAction: guard.recommendedNextAction,
+                recommendedNextActionConfidence: guard.recommendedNextActionConfidence
             };
 
             const serialized = JSON.stringify(payload, null, 2);
@@ -938,7 +1028,8 @@ export function activate(context: vscode.ExtensionContext) {
             const afterAllowed = report.after?.allowed;
             const summary = `Auto-fix readiness complete | before=${beforeAllowed === undefined || beforeAllowed === null ? 'n/a' : (beforeAllowed ? 'ALLOW' : 'BLOCK')} | after=${afterAllowed === undefined || afterAllowed === null ? 'n/a' : (afterAllowed ? 'ALLOW' : 'BLOCK')} | improved=${report.improved ? 'yes' : 'no'} | retry=${report.immediateRetry?.attempted ? (report.immediateRetry?.sent ? 'sent' : 'failed') : 'skipped'}.`;
             log.info(`[AutoResume Fix] ${summary}`);
-            vscode.window.showInformationMessage(summary + ' Report copied to clipboard.');
+            const actionHint = report.after?.recommendedNextAction || report.before?.recommendedNextAction || 'See report for details.';
+            vscode.window.showInformationMessage(summary + ` Next: ${actionHint} Report copied to clipboard.`);
         })
     );
 
