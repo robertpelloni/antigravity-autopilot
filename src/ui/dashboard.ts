@@ -273,10 +273,15 @@ export class DashboardPanel {
                     <div><strong>Strict Primary:</strong> <span id="runtimeGuardStrict" class="muted">-</span></div>
                     <div><strong>Auto-Resume Gate:</strong> <span id="runtimeGuardAllowed" class="muted">-</span></div>
                     <div><strong>Gate Reason:</strong> <span id="runtimeGuardReason" class="muted">-</span></div>
+                    <div><strong>Next Eligible:</strong> <span id="runtimeNextEligible" class="muted">-</span></div>
+                    <div><strong>Cooldown Left:</strong> <span id="runtimeCooldownLeft" class="muted">-</span></div>
+                    <div><strong>Delay Left:</strong> <span id="runtimeDelayLeft" class="muted">-</span></div>
+                    <div><strong>Last Resume Outcome:</strong> <span id="runtimeLastResumeOutcome" class="muted">-</span></div>
                 </div>
                 <div style="margin-top:10px;display:flex;gap:8px;">
                     <button onclick="requestRuntimeState()">Refresh Runtime State</button>
                     <button onclick="runCommand('antigravity.runCrossUiSelfTest')">Run Cross-UI Self-Test</button>
+                    <button onclick="runCommand('antigravity.autoFixAutoResumeReadiness')">Auto-Fix Resume Readiness</button>
                 </div>
                 <div class="runtime-history" id="runtimeHistory"></div>
             </div>
@@ -674,7 +679,7 @@ export class DashboardPanel {
                 const autoResumeRequireStrict = ${settings.runtimeAutoResumeRequireStrictPrimary ? 'true' : 'false'};
 
                 function formatDurationMs(ms) {
-                    if (!ms || ms < 0) return '-';
+                    if (ms === null || ms === undefined || ms < 0) return '-';
                     const totalSec = Math.floor(ms / 1000);
                     const mins = Math.floor(totalSec / 60);
                     const secs = totalSec % 60;
@@ -774,6 +779,10 @@ export class DashboardPanel {
                     const guardStrict = document.getElementById('runtimeGuardStrict');
                     const guardAllowed = document.getElementById('runtimeGuardAllowed');
                     const guardReason = document.getElementById('runtimeGuardReason');
+                    const nextEligible = document.getElementById('runtimeNextEligible');
+                    const cooldownLeft = document.getElementById('runtimeCooldownLeft');
+                    const delayLeft = document.getElementById('runtimeDelayLeft');
+                    const lastResumeOutcome = document.getElementById('runtimeLastResumeOutcome');
 
                     function coverageText(cov) {
                         if (!cov) return '-';
@@ -799,6 +808,10 @@ export class DashboardPanel {
                         guardStrict.textContent = '-';
                         guardAllowed.textContent = '-';
                         guardReason.textContent = '-';
+                        nextEligible.textContent = '-';
+                        cooldownLeft.textContent = '-';
+                        delayLeft.textContent = '-';
+                        lastResumeOutcome.textContent = '-';
                         renderRuntimeHistory();
                         return;
                     }
@@ -838,6 +851,13 @@ export class DashboardPanel {
                     guardStrict.textContent = yesNo(guard.strictPass) + (guard.requireStrict ? ' (required)' : ' (optional)');
                     guardAllowed.textContent = guard.allowed ? 'allow' : 'block';
                     guardReason.textContent = guard.reason;
+
+                    const host = state.hostTelemetry || null;
+                    const timing = host && host.timing ? host.timing : null;
+                    nextEligible.textContent = timing && timing.nextEligibleAt ? new Date(timing.nextEligibleAt).toLocaleTimeString() : '-';
+                    cooldownLeft.textContent = timing ? formatDurationMs(timing.cooldownRemainingMs || 0) : '-';
+                    delayLeft.textContent = timing ? formatDurationMs(timing.waitingDelayRemainingMs || 0) : '-';
+                    lastResumeOutcome.textContent = host ? ((host.lastAutoResumeOutcome || 'none') + (host.lastAutoResumeBlockedReason && host.lastAutoResumeBlockedReason !== 'none' ? ' (' + host.lastAutoResumeBlockedReason + ')' : '')) : '-';
                     renderRuntimeHistory();
                 }
 

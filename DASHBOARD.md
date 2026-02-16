@@ -1,6 +1,6 @@
 # Antigravity Autopilot — Project Dashboard
 
-**Version**: 4.10.17
+**Version**: 4.10.21
 **Build Date**: 2026-02-16
 **Status**: ✅ Active Development
 

@@ -5,6 +5,41 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.21] - 2026-02-16
+
+### Added
+- **Immediate Guarded Retry**: `Auto-Fix Resume Readiness` now attempts an immediate resume message when (and only when) runtime is waiting, auto-resume is enabled, and guard checks pass.
+
+### Changed
+- **Auto-Fix Report Enrichment**: Auto-fix diagnostics now include `immediateRetry` metadata (`attempted`, `sent`, `reason`, waiting/enable state) and command summary now reports retry outcome.
+
+## [4.10.20] - 2026-02-16
+
+### Added
+- **Auto-Fix Resume Readiness Command**: Added `Antigravity: Auto-Fix Resume Readiness` (`antigravity.autoFixAutoResumeReadiness`) to run safe chat-focus recovery steps and re-evaluate guard readiness.
+- **Dashboard Runtime Action**: Added `Auto-Fix Resume Readiness` button in Runtime State card for one-click recovery + verification.
+- **Status Menu Action**: Added quick action in status menu to run the same auto-fix workflow without opening dashboard.
+
+### Changed
+- **Recovery Diagnostics**: Auto-fix now emits a structured before/after JSON report (copied to clipboard + opened in editor) including command outcomes, guard state changes, and improvement flag.
+
+## [4.10.19] - 2026-02-16
+
+### Added
+- **Status Menu Guard Snapshot**: Status menu now includes an auto-resume guard row with allow/block state, score/strict summary, and next eligibility countdown.
+
+### Changed
+- **Runtime Check Enrichment**: `Antigravity: Check Runtime State` now reports guard allow/block status and next eligibility timing in its notification/log output.
+
+## [4.10.18] - 2026-02-16
+
+### Added
+- **Auto-Resume Timing Telemetry**: Host now tracks waiting-delay and cooldown windows, last resume outcome, and blocked reason.
+- **Runtime Countdown Visibility**: Dashboard runtime card now shows next eligible auto-resume time, cooldown remaining, delay remaining, and last resume outcome.
+
+### Changed
+- **Explain Guard Report Enrichment**: `Antigravity: Explain Auto-Resume Guard` now includes host telemetry timing details for deeper diagnostics.
+
 ## [4.10.17] - 2026-02-16
 
 ### Added
