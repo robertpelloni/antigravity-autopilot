@@ -1123,7 +1123,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('antigravity.syncProjectTasks', async () => {
             await projectManager.syncFromFixPlan();
-            vscode.window.showInformationMessage('Project tasks synced from @fix_plan.md');
+            vscode.window.showInformationMessage('Project tasks synced from planner files (task.md → TODO.md → @fix_plan.md → ROADMAP.md).');
         }),
         vscode.commands.registerCommand('antigravity.checkRuntimeState', async () => {
             const cdp = resolveCDPStrategy();

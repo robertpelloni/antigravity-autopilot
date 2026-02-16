@@ -55,7 +55,8 @@ export interface ProjectConfig {
 export class ProjectManager {
     private config: ProjectConfig | null = null;
     private workspaceRoot: string | null = null;
-    private fixPlanPath: string | null = null;
+    private plannerPath: string | null = null;
+    private readonly plannerPriority = ['task.md', 'TODO.md', '@fix_plan.md', 'ROADMAP.md'];
 
     constructor() {
         this.initializeWorkspace();
@@ -65,9 +66,28 @@ export class ProjectManager {
         const folders = vscode.workspace.workspaceFolders;
         if (folders?.[0]) {
             this.workspaceRoot = folders[0].uri.fsPath;
-            this.fixPlanPath = path.join(this.workspaceRoot, '@fix_plan.md');
+            this.plannerPath = this.resolvePlannerPath();
         }
         this.loadConfig();
+    }
+
+    private resolvePlannerPath(preferWritable = false): string | null {
+        if (!this.workspaceRoot) {
+            return null;
+        }
+
+        for (const file of this.plannerPriority) {
+            const candidate = path.join(this.workspaceRoot, file);
+            if (fs.existsSync(candidate)) {
+                return candidate;
+            }
+        }
+
+        if (preferWritable) {
+            return path.join(this.workspaceRoot, 'task.md');
+        }
+
+        return null;
     }
 
     private loadConfig(): void {
@@ -86,11 +106,12 @@ export class ProjectManager {
 
     // ============ Fix Plan Sync ============
     async syncFromFixPlan(): Promise<ProjectTask[]> {
-        if (!this.fixPlanPath || !fs.existsSync(this.fixPlanPath)) {
+        this.plannerPath = this.resolvePlannerPath();
+        if (!this.plannerPath || !fs.existsSync(this.plannerPath)) {
             return [];
         }
 
-        const content = fs.readFileSync(this.fixPlanPath, 'utf-8');
+        const content = fs.readFileSync(this.plannerPath, 'utf-8');
         const tasks: ProjectTask[] = [];
         const lines = content.split('\n');
 
@@ -112,12 +133,13 @@ export class ProjectManager {
             }
         }
 
-        log.info(`Synced ${tasks.length} tasks from @fix_plan.md`);
+        log.info(`Synced ${tasks.length} tasks from ${path.basename(this.plannerPath)}`);
         return tasks;
     }
 
     async updateFixPlan(tasks: ProjectTask[]): Promise<void> {
-        if (!this.fixPlanPath) return;
+        this.plannerPath = this.resolvePlannerPath(true);
+        if (!this.plannerPath) return;
 
         const lines: string[] = ['# Fix Plan\n'];
 
@@ -141,8 +163,8 @@ export class ProjectManager {
             }
         }
 
-        fs.writeFileSync(this.fixPlanPath, lines.join('\n'));
-        log.info('Updated @fix_plan.md');
+        fs.writeFileSync(this.plannerPath, lines.join('\n'));
+        log.info(`Updated ${path.basename(this.plannerPath)}`);
     }
 
     // ============ GitHub Integration ============

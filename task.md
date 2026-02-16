@@ -10,7 +10,7 @@ Canonical backlog is maintained in `TODO.md`.
 - [x] P0.2 Replace simulated MCP federation transport in `src/modules/mcp/federation.ts` *(HTTP/WebSocket complete; stdio still pending by design)*
 - [x] P0.3 Replace autonomous-loop circuit-state placeholder with real breaker state
 - [x] P0.4 Replace hardcoded dummy `antigravity.getChromeDevtoolsMcpUrl` return
-- [ ] P0.5 Unify project task source-of-truth behavior (`task.md`, `TODO.md`, tracker order)
+- [x] P0.5 Unify project task source-of-truth behavior (`task.md`, `TODO.md`, tracker order)
 - [x] P1.1 Add dashboard controls for `maxConsecutiveTestLoops`, `maxCallsPerHour`, `interactionTimings`
 - [ ] P1.2 Resolve manifest/handler parity for internal commands
 - [ ] P2.1 Replace progress tracker placeholder metrics with real telemetry

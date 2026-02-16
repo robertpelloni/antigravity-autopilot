@@ -5,6 +5,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.63] - 2026-02-16
+
+### Changed
+- **Task Source-of-Truth Hardening**: `ProjectTracker` now uses deterministic planner priority order: `task.md` → `TODO.md` → `@fix_plan.md` → `ROADMAP.md` for both next-task resolution and completion writes.
+- **Planner Sync Alignment**: `ProjectManager` task sync now resolves planner files using the same canonical order and logs the actual source file used.
+- **Status Messaging Clarity**: Updated project task sync command messaging to reflect canonical planner order instead of implying `@fix_plan.md` only.
+
 ## [4.10.62] - 2026-02-16
 
 ### Changed

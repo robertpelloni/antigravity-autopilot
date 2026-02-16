@@ -23,16 +23,13 @@ export class ProjectTracker {
     }
 
     /**
-     * Gets the next incomplete task from project files
-     * Priority: task.md -> ROADMAP.md -> @fix_plan.md
+     * Gets the next incomplete task from project files.
+     * Canonical priority: task.md -> TODO.md -> @fix_plan.md -> ROADMAP.md
      */
     getNextTask(): string | null {
         if (!this.workspaceRoot) return null;
 
-        // Prioritize task.md as the main source of truth
-        // But check .gemini/antigravity/brain/*/task.md if standard one missing? 
-        // For now, assume root task.md or @fix_plan.md as per existing patterns
-        const files = ['task.md', 'ROADMAP.md', '@fix_plan.md'];
+        const files = ['task.md', 'TODO.md', '@fix_plan.md', 'ROADMAP.md'];
 
         for (const file of files) {
             const filePath = path.join(this.workspaceRoot, file);
@@ -59,7 +56,7 @@ export class ProjectTracker {
     completeTask(taskDescription: string): boolean {
         if (!this.workspaceRoot) return false;
 
-        const files = ['task.md', 'ROADMAP.md', '@fix_plan.md'];
+        const files = ['task.md', 'TODO.md', '@fix_plan.md', 'ROADMAP.md'];
 
         for (const file of files) {
             const filePath = path.join(this.workspaceRoot, file);

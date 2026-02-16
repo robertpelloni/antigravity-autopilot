@@ -49,9 +49,9 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - **Definition of done:** command returns actual runtime-resolved value (or is removed)
 
 ### P0.5 Establish a single task source-of-truth
-- [ ] Decide canonical planning file (`TODO.md` or `task.md`)
-- [ ] Update `ProjectTracker` and `ProjectManager` to consistent file order
-- [ ] Update docs that currently refer to missing `task.md`
+- [x] Decide canonical planning file (`TODO.md` or `task.md`)
+- [x] Update `ProjectTracker` and `ProjectManager` to consistent file order
+- [x] Update docs that currently refer to missing `task.md`
 - **Evidence:** `AGENTS.md` mandates `task.md`, but root lacked it; tracker falls back across multiple files
 - **Definition of done:** autonomous task selection is deterministic and documented
 
