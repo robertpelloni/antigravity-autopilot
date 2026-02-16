@@ -245,6 +245,13 @@ export class DashboardPanel {
                 .runtime-chip.escalation-idle { background: rgba(107,114,128,0.25); color: #d1d5db; }
                 .runtime-chip.watchdog-running { background: rgba(59,130,246,0.28); color: #bfdbfe; }
                 .runtime-chip.watchdog-idle { background: rgba(107,114,128,0.25); color: #d1d5db; }
+                .runtime-chip.event-armed { background: rgba(245,158,11,0.28); color: #fde68a; }
+                .runtime-chip.event-suppressed { background: rgba(239,68,68,0.25); color: #fecaca; }
+                .runtime-chip.event-reset { background: rgba(107,114,128,0.25); color: #d1d5db; }
+                .runtime-chip.event-consumed { background: rgba(34,197,94,0.25); color: #86efac; }
+                .runtime-chip.event-none { background: rgba(75,85,99,0.25); color: #e5e7eb; }
+                .runtime-chip.telemetry-fresh { background: rgba(34,197,94,0.25); color: #86efac; }
+                .runtime-chip.telemetry-stale { background: rgba(239,68,68,0.25); color: #fecaca; }
                 .runtime-legend { margin-top: 8px; display:flex; flex-wrap: wrap; gap: 8px; align-items: center; }
                 .runtime-legend .runtime-chip { font-size: 11px; }
                 .muted { color: var(--vscode-descriptionForeground); font-size: 12px; }
@@ -265,10 +272,12 @@ export class DashboardPanel {
                 <div class="runtime-grid">
                     <div><strong>Mode:</strong> <span id="runtimeMode" class="muted">-</span></div>
                     <div><strong>Idle:</strong> <span id="runtimeIdle" class="muted">-</span></div>
+                    <div><strong>Telemetry:</strong> <span id="runtimeTelemetryFreshness" class="runtime-chip telemetry-fresh" title="Freshness is computed from current time minus runtime state timestamp">FRESH</span></div>
                     <div><strong>Tabs:</strong> <span id="runtimeTabs" class="muted">-</span></div>
                     <div><strong>Pending Accept:</strong> <span id="runtimePending" class="muted">-</span></div>
                     <div><strong>Waiting Chat:</strong> <span id="runtimeWaiting" class="muted">-</span></div>
                     <div><strong>Updated:</strong> <span id="runtimeUpdated" class="muted">-</span></div>
+                    <div><strong>Telemetry Age:</strong> <span id="runtimeTelemetryAge" class="muted">-</span></div>
                     <div><strong>State Duration:</strong> <span id="runtimeStateDuration" class="muted">-</span></div>
                     <div><strong>Waiting Since:</strong> <span id="runtimeWaitingSince" class="muted">-</span></div>
                     <div><strong>Active Coverage:</strong> <span id="runtimeCoverageActive" class="muted">-</span></div>
@@ -298,6 +307,7 @@ export class DashboardPanel {
                     <div><strong>Escalation Fail Streak:</strong> <span id="runtimeWatchdogEscalationStreak" class="muted">-</span></div>
                     <div><strong>Escalation Cooldown Left:</strong> <span id="runtimeWatchdogEscalationCooldownLeft" class="muted">-</span></div>
                     <div><strong>Escalation Next Eligible:</strong> <span id="runtimeWatchdogEscalationNextEligible" class="muted">-</span></div>
+                    <div><strong>Last Escalation Event:</strong> <span id="runtimeWatchdogEscalationLastEvent" class="runtime-chip event-none">NONE</span></div>
                     <div><strong>Escalation Last Trigger:</strong> <span id="runtimeWatchdogEscalationLast" class="muted">-</span></div>
                     <div><strong>Escalation Reason:</strong> <span id="runtimeWatchdogEscalationReason" class="muted">-</span></div>
                     <div><strong>Escalation Events:</strong> <span id="runtimeWatchdogEscalationEvents" class="muted">-</span></div>
@@ -318,7 +328,14 @@ export class DashboardPanel {
                     <span class="runtime-chip escalation-idle">Escalation IDLE</span>
                     <span class="runtime-chip watchdog-running">Watchdog RUNNING</span>
                     <span class="runtime-chip watchdog-idle">Watchdog IDLE</span>
+                    <span class="runtime-chip event-armed">Event ARMED</span>
+                    <span class="runtime-chip event-suppressed">Event SUPPRESSED</span>
+                    <span class="runtime-chip event-consumed">Event CONSUMED</span>
+                    <span class="runtime-chip event-reset">Event RESET</span>
+                    <span class="runtime-chip telemetry-fresh">Telemetry FRESH</span>
+                    <span class="runtime-chip telemetry-stale">Telemetry STALE</span>
                 </div>
+                <p class="muted" title="Computed from Date.now() - runtime timestamp">Telemetry is marked <strong>STALE</strong> when telemetry age exceeds the configured stale threshold.</p>
                 <div class="runtime-history" id="runtimeHistory"></div>
             </div>
             
@@ -465,6 +482,11 @@ export class DashboardPanel {
                     <label>Confirm Timeline Clear:</label>
                     <input type="checkbox" ${settings.runtimeEscalationClearRequireConfirm ? 'checked' : ''} onchange="updateConfig('runtimeEscalationClearRequireConfirm', this.checked)">
                 </div>
+                <div class="setting">
+                    <label>Telemetry Stale Threshold (s):</label>
+                    <input type="number" value="${settings.runtimeTelemetryStaleSec}" min="3" max="300" onchange="updateConfig('runtimeTelemetryStaleSec', parseInt(this.value))">
+                </div>
+                <p class="muted" style="margin-top:-6px;">Stale logic: <code>telemetryAgeSec &gt; runtimeTelemetryStaleSec</code> using runtime state <code>timestamp</code>.</p>
                 <div class="setting">
                     <label>Auto Resume Min Score:</label>
                     <input type="number" value="${settings.runtimeAutoResumeMinScore}" min="0" max="100" onchange="updateConfig('runtimeAutoResumeMinScore', parseInt(this.value))">
@@ -767,6 +789,7 @@ export class DashboardPanel {
                 let currentStatus = null;
                 let currentStatusSince = null;
                 let waitingSince = null;
+                const telemetryStaleSec = Number(${settings.runtimeTelemetryStaleSec ?? 12});
                 const autoResumeMinScore = Number(${settings.runtimeAutoResumeMinScore ?? 70});
                 const autoResumeRequireStrict = ${settings.runtimeAutoResumeRequireStrictPrimary ? 'true' : 'false'};
 
@@ -802,6 +825,15 @@ export class DashboardPanel {
 
                 function yesNo(value) {
                     return value ? 'yes' : 'no';
+                }
+
+                function escalationEventChipClass(eventName) {
+                    const normalized = String(eventName || '').toLowerCase();
+                    if (normalized === 'armed') return 'event-armed';
+                    if (normalized === 'suppressed') return 'event-suppressed';
+                    if (normalized === 'consumed') return 'event-consumed';
+                    if (normalized === 'reset') return 'event-reset';
+                    return 'event-none';
                 }
 
                 function evaluateCrossUiHealth(state) {
@@ -857,10 +889,12 @@ export class DashboardPanel {
                     const chip = document.getElementById('runtimeStatusChip');
                     const mode = document.getElementById('runtimeMode');
                     const idle = document.getElementById('runtimeIdle');
+                    const telemetryFreshness = document.getElementById('runtimeTelemetryFreshness');
                     const tabs = document.getElementById('runtimeTabs');
                     const pending = document.getElementById('runtimePending');
                     const waiting = document.getElementById('runtimeWaiting');
                     const updated = document.getElementById('runtimeUpdated');
+                    const telemetryAge = document.getElementById('runtimeTelemetryAge');
                     const stateDuration = document.getElementById('runtimeStateDuration');
                     const waitingSinceEl = document.getElementById('runtimeWaitingSince');
                     const coverageActive = document.getElementById('runtimeCoverageActive');
@@ -890,6 +924,7 @@ export class DashboardPanel {
                     const watchdogEscalationStreak = document.getElementById('runtimeWatchdogEscalationStreak');
                     const watchdogEscalationCooldownLeft = document.getElementById('runtimeWatchdogEscalationCooldownLeft');
                     const watchdogEscalationNextEligible = document.getElementById('runtimeWatchdogEscalationNextEligible');
+                    const watchdogEscalationLastEvent = document.getElementById('runtimeWatchdogEscalationLastEvent');
                     const watchdogEscalationLast = document.getElementById('runtimeWatchdogEscalationLast');
                     const watchdogEscalationReason = document.getElementById('runtimeWatchdogEscalationReason');
                     const watchdogEscalationEvents = document.getElementById('runtimeWatchdogEscalationEvents');
@@ -904,10 +939,13 @@ export class DashboardPanel {
                         chip.textContent = 'UNAVAILABLE';
                         mode.textContent = '-';
                         idle.textContent = '-';
+                        telemetryFreshness.textContent = 'STALE';
+                        telemetryFreshness.className = 'runtime-chip telemetry-stale';
                         tabs.textContent = '-';
                         pending.textContent = '-';
                         waiting.textContent = '-';
                         updated.textContent = new Date().toLocaleTimeString();
+                        telemetryAge.textContent = '-';
                         stateDuration.textContent = '-';
                         waitingSinceEl.textContent = '-';
                         coverageActive.textContent = '-';
@@ -939,6 +977,8 @@ export class DashboardPanel {
                         watchdogEscalationStreak.textContent = '-';
                         watchdogEscalationCooldownLeft.textContent = '-';
                         watchdogEscalationNextEligible.textContent = '-';
+                        watchdogEscalationLastEvent.textContent = 'NONE';
+                        watchdogEscalationLastEvent.className = 'runtime-chip event-none';
                         watchdogEscalationLast.textContent = '-';
                         watchdogEscalationReason.textContent = '-';
                         watchdogEscalationEvents.textContent = '-';
@@ -948,6 +988,8 @@ export class DashboardPanel {
 
                     const status = String(state.status || 'unknown');
                     const ts = state.timestamp || Date.now();
+                    const telemetryAgeMs = Math.max(0, Date.now() - ts);
+                    const isTelemetryStale = telemetryAgeMs > (Math.max(3, telemetryStaleSec) * 1000);
 
                     if (currentStatus !== status) {
                         currentStatus = status;
@@ -965,10 +1007,13 @@ export class DashboardPanel {
                     chip.textContent = status.toUpperCase();
                     mode.textContent = state.mode || '-';
                     idle.textContent = yesNo(!!state.isIdle);
+                    telemetryFreshness.textContent = isTelemetryStale ? 'STALE' : 'FRESH';
+                    telemetryFreshness.className = 'runtime-chip ' + (isTelemetryStale ? 'telemetry-stale' : 'telemetry-fresh');
                     tabs.textContent = (state.doneTabs ?? 0) + ' / ' + (state.totalTabs ?? 0);
                     pending.textContent = String(state.pendingAcceptButtons ?? 0);
                     waiting.textContent = yesNo(!!state.waitingForChatMessage);
                     updated.textContent = new Date(ts).toLocaleTimeString();
+                    telemetryAge.textContent = formatDurationMs(telemetryAgeMs);
                     stateDuration.textContent = formatDurationMs(ts - (currentStatusSince || ts));
                     waitingSinceEl.textContent = waitingSince ? new Date(waitingSince).toLocaleTimeString() : '-';
                     const profileCoverage = state.profileCoverage || {};
@@ -1017,6 +1062,11 @@ export class DashboardPanel {
                     watchdogEscalationStreak.textContent = host ? String(host.watchdogEscalationConsecutiveFailures ?? 0) : '-';
                     watchdogEscalationCooldownLeft.textContent = host ? formatDurationMs(host.escalationCooldownRemainingMs || 0) : '-';
                     watchdogEscalationNextEligible.textContent = host?.escalationNextEligibleAt ? new Date(host.escalationNextEligibleAt).toLocaleTimeString() : '-';
+                    const lastEscalationEventName = Array.isArray(host?.watchdogEscalationEvents) && host.watchdogEscalationEvents.length > 0
+                        ? String(host.watchdogEscalationEvents[0].event || 'none').toUpperCase()
+                        : 'NONE';
+                    watchdogEscalationLastEvent.textContent = lastEscalationEventName;
+                    watchdogEscalationLastEvent.className = 'runtime-chip ' + escalationEventChipClass(lastEscalationEventName);
                     watchdogEscalationLast.textContent = host?.lastWatchdogEscalationAt ? new Date(host.lastWatchdogEscalationAt).toLocaleTimeString() : '-';
                     watchdogEscalationReason.textContent = host?.lastWatchdogEscalationReason || '-';
                     watchdogEscalationEvents.textContent = Array.isArray(host?.watchdogEscalationEvents) && host.watchdogEscalationEvents.length > 0
@@ -1029,4 +1079,23 @@ export class DashboardPanel {
                 }
 
                 function requestRuntimeState() {
-                    vscod
+                    vscode.postMessage({ command: 'requestRuntimeState' });
+                }
+
+                function runCommand(id) {
+                    vscode.postMessage({ command: 'runCommand', id });
+                }
+
+                window.addEventListener('message', event => {
+                    const message = event.data;
+                    if (!message || message.command !== 'runtimeStateUpdate') return;
+                    updateRuntimeUi(message.state || null);
+                });
+
+                requestRuntimeState();
+                setInterval(requestRuntimeState, 3000);
+            </script>
+        </body>
+        </html>`;
+    }
+}

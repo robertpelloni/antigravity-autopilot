@@ -5,6 +5,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.51] - 2026-02-16
+
+### Changed
+- **Telemetry Freshness Explainability**: Added inline help text and tooltips in dashboard runtime card/settings to explain stale calculation (`telemetryAgeSec > runtimeTelemetryStaleSec`) and its dependency on runtime `timestamp`.
+
+## [4.10.50] - 2026-02-16
+
+### Added
+- **Telemetry Freshness Indicator**: Dashboard runtime card now shows `Telemetry` (FRESH/STALE chip) and `Telemetry Age` for data recency at a glance.
+- **Configurable Stale Threshold**: Added `runtimeTelemetryStaleSec` (default `12`) to tune when runtime telemetry is marked stale.
+
+### Changed
+- **Runtime Legend**: Added telemetry freshness chips to legend for quick interpretation.
+
+## [4.10.49] - 2026-02-16
+
+### Changed
+- **Last Escalation Event Chip**: Dashboard runtime card now displays a color-coded chip for latest escalation event (`ARMED`, `SUPPRESSED`, `RESET`, `CONSUMED`) to accelerate triage.
+- **Legend Enrichment**: Runtime legend now includes escalation event chip examples for instant interpretation.
+
+## [4.10.48] - 2026-02-16
+
+### Changed
+- **Runtime Chip Legend**: Added compact legend row in dashboard runtime card for escalation/watchdog state chips (`ARMED`, `IDLE`, `RUNNING`) to improve operator readability.
+
 ## [4.10.47] - 2026-02-16
 
 ### Changed
