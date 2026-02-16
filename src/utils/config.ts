@@ -42,6 +42,7 @@ export interface AntigravityConfig {
     runtimeAutoFixWaitingCooldownSec: number;
     runtimeAutoFixWaitingEscalationEnabled: boolean;
     runtimeAutoFixWaitingEscalationThreshold: number;
+    runtimeAutoFixWaitingEscalationCooldownSec: number;
     runtimeAutoResumeMinScore: number;
     runtimeAutoResumeRequireStrictPrimary: boolean;
 
@@ -138,6 +139,7 @@ export class ConfigManager {
             runtimeAutoFixWaitingCooldownSec: config.get('runtimeAutoFixWaitingCooldownSec', 300),
             runtimeAutoFixWaitingEscalationEnabled: config.get('runtimeAutoFixWaitingEscalationEnabled', true),
             runtimeAutoFixWaitingEscalationThreshold: config.get('runtimeAutoFixWaitingEscalationThreshold', 2),
+            runtimeAutoFixWaitingEscalationCooldownSec: config.get('runtimeAutoFixWaitingEscalationCooldownSec', 900),
             runtimeAutoResumeMinScore: config.get('runtimeAutoResumeMinScore', 70),
             runtimeAutoResumeRequireStrictPrimary: config.get('runtimeAutoResumeRequireStrictPrimary', true),
             cdpPort: config.get('cdpPort', 9000),

@@ -292,6 +292,7 @@ export class DashboardPanel {
                     <div><strong>Escalation Fail Streak:</strong> <span id="runtimeWatchdogEscalationStreak" class="muted">-</span></div>
                     <div><strong>Escalation Last Trigger:</strong> <span id="runtimeWatchdogEscalationLast" class="muted">-</span></div>
                     <div><strong>Escalation Reason:</strong> <span id="runtimeWatchdogEscalationReason" class="muted">-</span></div>
+                    <div><strong>Escalation Events:</strong> <span id="runtimeWatchdogEscalationEvents" class="muted">-</span></div>
                 </div>
                 <div style="margin-top:10px;display:flex;gap:8px;">
                     <button onclick="requestRuntimeState()">Refresh Runtime State</button>
@@ -299,6 +300,7 @@ export class DashboardPanel {
                     <button onclick="runCommand('antigravity.runCrossUiSelfTest')">Run Cross-UI Self-Test</button>
                     <button onclick="runCommand('antigravity.autoFixAutoResumeReadiness')">Auto-Fix Resume Readiness</button>
                     <button onclick="runCommand('antigravity.copyLastResumePayloadReport')">Copy Last Resume Payload</button>
+                    <button onclick="runCommand('antigravity.copyEscalationDiagnosticsReport')">Copy Escalation Diagnostics</button>
                 </div>
                 <div class="runtime-history" id="runtimeHistory"></div>
             </div>
@@ -433,6 +435,10 @@ export class DashboardPanel {
                 <div class="setting">
                     <label>Escalation Threshold:</label>
                     <input type="number" value="${settings.runtimeAutoFixWaitingEscalationThreshold}" min="1" max="10" onchange="updateConfig('runtimeAutoFixWaitingEscalationThreshold', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Escalation Cooldown (s):</label>
+                    <input type="number" value="${settings.runtimeAutoFixWaitingEscalationCooldownSec}" min="5" max="14400" onchange="updateConfig('runtimeAutoFixWaitingEscalationCooldownSec', parseInt(this.value))">
                 </div>
                 <div class="setting">
                     <label>Auto Resume Min Score:</label>
@@ -859,6 +865,7 @@ export class DashboardPanel {
                     const watchdogEscalationStreak = document.getElementById('runtimeWatchdogEscalationStreak');
                     const watchdogEscalationLast = document.getElementById('runtimeWatchdogEscalationLast');
                     const watchdogEscalationReason = document.getElementById('runtimeWatchdogEscalationReason');
+                    const watchdogEscalationEvents = document.getElementById('runtimeWatchdogEscalationEvents');
 
                     function coverageText(cov) {
                         if (!cov) return '-';
@@ -903,6 +910,7 @@ export class DashboardPanel {
                         watchdogEscalationStreak.textContent = '-';
                         watchdogEscalationLast.textContent = '-';
                         watchdogEscalationReason.textContent = '-';
+                        watchdogEscalationEvents.textContent = '-';
                         renderRuntimeHistory();
                         return;
                     }
@@ -974,6 +982,12 @@ export class DashboardPanel {
                     watchdogEscalationStreak.textContent = host ? String(host.watchdogEscalationConsecutiveFailures ?? 0) : '-';
                     watchdogEscalationLast.textContent = host?.lastWatchdogEscalationAt ? new Date(host.lastWatchdogEscalationAt).toLocaleTimeString() : '-';
                     watchdogEscalationReason.textContent = host?.lastWatchdogEscalationReason || '-';
+                    watchdogEscalationEvents.textContent = Array.isArray(host?.watchdogEscalationEvents) && host.watchdogEscalationEvents.length > 0
+                        ? host.watchdogEscalationEvents
+                            .slice(0, 4)
+                            .map(e => (new Date(e.at).toLocaleTimeString() + ' ' + String(e.event || 'event') + ': ' + String(e.detail || '')))
+                            .join(' | ')
+                        : '-';
                     renderRuntimeHistory();
                 }
 

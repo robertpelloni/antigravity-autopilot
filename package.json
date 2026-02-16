@@ -2,7 +2,7 @@
     "name": "antigravity-autopilot",
     "displayName": "Antigravity Autopilot (Unified)",
     "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-    "version": "4.10.31",
+    "version": "4.10.35",
     "repository": {
         "type": "git",
         "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -104,6 +104,10 @@
             {
                 "command": "antigravity.copyLastResumePayloadReport",
                 "title": "Antigravity: Copy Last Resume Payload Report"
+            },
+            {
+                "command": "antigravity.copyEscalationDiagnosticsReport",
+                "title": "Antigravity: Copy Escalation Diagnostics Report"
             },
             {
                 "command": "antigravity.resumeFromWaitingState",
@@ -406,6 +410,13 @@
                     "minimum": 1,
                     "maximum": 10,
                     "description": "Number of consecutive watchdog non-recovery outcomes before escalation arms a one-time full resume prompt."
+                },
+                "antigravity.runtimeAutoFixWaitingEscalationCooldownSec": {
+                    "type": "number",
+                    "default": 900,
+                    "minimum": 5,
+                    "maximum": 14400,
+                    "description": "Minimum seconds between escalation re-arms to prevent repeated full-prompt bursts during prolonged noisy waiting states."
                 },
                 "antigravity.runtimeAutoResumeMinScore": {
                     "type": "number",

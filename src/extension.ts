@@ -51,6 +51,18 @@ export function activate(context: vscode.ExtensionContext) {
     let watchdogEscalationForceFullNext = false;
     let lastWatchdogEscalationAt = 0;
     let lastWatchdogEscalationReason = 'none';
+    let watchdogEscalationEvents: Array<{ at: number; event: string; detail: string }> = [];
+
+    const pushWatchdogEscalationEvent = (event: string, detail: string) => {
+        watchdogEscalationEvents.unshift({
+            at: Date.now(),
+            event,
+            detail
+        });
+        if (watchdogEscalationEvents.length > 10) {
+            watchdogEscalationEvents = watchdogEscalationEvents.slice(0, 10);
+        }
+    };
 
     const resolveCDPStrategy = (): CDPStrategy | null => {
         const strategy = strategyManager.getStrategy('cdp') as any;
@@ -86,10 +98,30 @@ export function activate(context: vscode.ExtensionContext) {
             const autoFixWaitingCooldownMs = Math.max(5, config.get<number>('runtimeAutoFixWaitingCooldownSec') || 300) * 1000;
             const escalationEnabled = config.get<boolean>('runtimeAutoFixWaitingEscalationEnabled');
             const escalationThreshold = Math.max(1, Math.min(10, config.get<number>('runtimeAutoFixWaitingEscalationThreshold') || 2));
+            const escalationCooldownMs = Math.max(5, config.get<number>('runtimeAutoFixWaitingEscalationCooldownSec') || 900) * 1000;
             const now = Date.now();
             const isWaiting = runtimeState?.completionWaiting?.readyToResume === true
                 || runtimeState?.status === 'waiting_for_chat_message'
                 || runtimeState?.waitingForChatMessage === true;
+
+            const tryArmEscalation = (triggerReason: string) => {
+                if (!escalationEnabled || watchdogEscalationConsecutiveFailures < escalationThreshold) {
+                    return;
+                }
+
+                const cooldownElapsed = now - lastWatchdogEscalationAt;
+                if (lastWatchdogEscalationAt > 0 && cooldownElapsed < escalationCooldownMs) {
+                    lastWatchdogEscalationReason = `threshold reached but cooldown active (${Math.ceil((escalationCooldownMs - cooldownElapsed) / 1000)}s left)`;
+                    pushWatchdogEscalationEvent('suppressed', lastWatchdogEscalationReason);
+                    return;
+                }
+
+                watchdogEscalationForceFullNext = true;
+                lastWatchdogEscalationAt = Date.now();
+                lastWatchdogEscalationReason = triggerReason;
+                pushWatchdogEscalationEvent('armed', triggerReason);
+                log.info(`[AutoResume Watchdog] Escalation armed: forcing full resume prompt on next auto-resume attempt (${watchdogEscalationConsecutiveFailures}/${escalationThreshold}).`);
+            };
 
             if (isWaiting) {
                 readyToResumeStreak += 1;
@@ -99,9 +131,13 @@ export function activate(context: vscode.ExtensionContext) {
 
             if (!isWaiting) {
                 waitingStateSince = null;
+                const hadEscalationState = watchdogEscalationConsecutiveFailures > 0 || watchdogEscalationForceFullNext;
                 watchdogEscalationConsecutiveFailures = 0;
                 watchdogEscalationForceFullNext = false;
                 lastWatchdogEscalationReason = 'reset: not waiting';
+                if (hadEscalationState) {
+                    pushWatchdogEscalationEvent('reset', 'waiting state cleared');
+                }
                 return;
             }
 
@@ -133,25 +169,16 @@ export function activate(context: vscode.ExtensionContext) {
                         watchdogEscalationConsecutiveFailures = 0;
                         watchdogEscalationForceFullNext = false;
                         lastWatchdogEscalationReason = `reset: ${outcome}`;
+                        pushWatchdogEscalationEvent('reset', `watchdog recovered (${outcome})`);
                     } else {
                         watchdogEscalationConsecutiveFailures += 1;
-                        if (escalationEnabled && watchdogEscalationConsecutiveFailures >= escalationThreshold) {
-                            watchdogEscalationForceFullNext = true;
-                            lastWatchdogEscalationAt = Date.now();
-                            lastWatchdogEscalationReason = `threshold reached (${watchdogEscalationConsecutiveFailures}/${escalationThreshold}) after ${outcome}`;
-                            log.info(`[AutoResume Watchdog] Escalation armed: forcing full resume prompt on next auto-resume attempt (${watchdogEscalationConsecutiveFailures}/${escalationThreshold}).`);
-                        }
+                        tryArmEscalation(`threshold reached (${watchdogEscalationConsecutiveFailures}/${escalationThreshold}) after ${outcome}`);
                     }
                 } catch (e: any) {
                     lastAutoFixWatchdogAt = Date.now();
                     lastAutoFixWatchdogOutcome = `error: ${String(e?.message || e || 'unknown')}`;
                     watchdogEscalationConsecutiveFailures += 1;
-                    if (escalationEnabled && watchdogEscalationConsecutiveFailures >= escalationThreshold) {
-                        watchdogEscalationForceFullNext = true;
-                        lastWatchdogEscalationAt = Date.now();
-                        lastWatchdogEscalationReason = `threshold reached (${watchdogEscalationConsecutiveFailures}/${escalationThreshold}) after watchdog error`;
-                        log.info(`[AutoResume Watchdog] Escalation armed after watchdog error (${watchdogEscalationConsecutiveFailures}/${escalationThreshold}).`);
-                    }
+                    tryArmEscalation(`threshold reached (${watchdogEscalationConsecutiveFailures}/${escalationThreshold}) after watchdog error`);
                 } finally {
                     autoFixWatchdogInProgress = false;
                 }
@@ -194,6 +221,7 @@ export function activate(context: vscode.ExtensionContext) {
                             watchdogEscalationForceFullNext = false;
                             watchdogEscalationConsecutiveFailures = 0;
                             lastWatchdogEscalationReason = 'consumed: full prompt sent';
+                            pushWatchdogEscalationEvent('consumed', 'forced full prompt sent successfully');
                         }
                     } else {
                         lastAutoResumeOutcome = 'send-failed';
@@ -603,6 +631,13 @@ export function activate(context: vscode.ExtensionContext) {
                 messagePreview: lastAutoResumeMessagePreview,
                 sentAt: lastAutoResumeAt || null
             },
+            watchdogEscalation: {
+                consecutiveFailures: watchdogEscalationConsecutiveFailures,
+                forceFullNext: watchdogEscalationForceFullNext,
+                lastTriggeredAt: lastWatchdogEscalationAt || null,
+                reason: lastWatchdogEscalationReason,
+                events: watchdogEscalationEvents
+            },
             readiness: {
                 readyToResumeStreak,
                 stablePollsRequired: Math.max(1, Math.min(10, config.get<number>('runtimeAutoResumeStabilityPolls') || 2))
@@ -613,6 +648,55 @@ export function activate(context: vscode.ExtensionContext) {
                 useMinimalContinue: config.get<boolean>('runtimeAutoResumeUseMinimalContinue'),
                 minScore: config.get<number>('runtimeAutoResumeMinScore'),
                 requireStrictPrimary: config.get<boolean>('runtimeAutoResumeRequireStrictPrimary')
+            }
+        };
+    };
+
+    const buildEscalationDiagnosticsReport = (state?: any) => {
+        const runtime = state || latestRuntimeState || null;
+        const isWaiting = !!runtime?.completionWaiting?.readyToResume
+            || runtime?.status === 'waiting_for_chat_message'
+            || runtime?.waitingForChatMessage === true;
+        const timing = runtime ? getAutoResumeTimingReport(isWaiting) : null;
+
+        return {
+            timestamp: new Date().toISOString(),
+            runtimeStatus: runtime?.status || 'unknown',
+            runtimeMode: runtime?.mode || 'unknown',
+            waiting: {
+                isWaiting,
+                readyToResume: !!runtime?.completionWaiting?.readyToResume,
+                confidence: runtime?.completionWaiting?.confidence ?? null,
+                confidenceLabel: runtime?.completionWaiting?.confidenceLabel || null
+            },
+            escalation: {
+                consecutiveFailures: watchdogEscalationConsecutiveFailures,
+                forceFullNext: watchdogEscalationForceFullNext,
+                lastTriggeredAt: lastWatchdogEscalationAt || null,
+                reason: lastWatchdogEscalationReason,
+                events: watchdogEscalationEvents
+            },
+            watchdog: {
+                inProgress: autoFixWatchdogInProgress,
+                lastRunAt: lastAutoFixWatchdogAt || null,
+                lastOutcome: lastAutoFixWatchdogOutcome
+            },
+            autoResume: {
+                enabled: config.get<boolean>('runtimeAutoResumeEnabled'),
+                useMinimalContinue: config.get<boolean>('runtimeAutoResumeUseMinimalContinue'),
+                lastOutcome: lastAutoResumeOutcome,
+                lastBlockedReason: lastAutoResumeBlockedReason,
+                lastMessageKind: lastAutoResumeMessageKind,
+                lastMessageProfile: lastAutoResumeMessageProfile,
+                lastSentAt: lastAutoResumeAt || null
+            },
+            timing,
+            configSnapshot: {
+                escalationEnabled: config.get<boolean>('runtimeAutoFixWaitingEscalationEnabled'),
+                escalationThreshold: config.get<number>('runtimeAutoFixWaitingEscalationThreshold'),
+                escalationCooldownSec: config.get<number>('runtimeAutoFixWaitingEscalationCooldownSec'),
+                watchdogDelaySec: config.get<number>('runtimeAutoFixWaitingDelaySec'),
+                watchdogCooldownSec: config.get<number>('runtimeAutoFixWaitingCooldownSec')
             }
         };
     };
@@ -652,6 +736,7 @@ export function activate(context: vscode.ExtensionContext) {
                 watchdogEscalationForceFullNext,
                 lastWatchdogEscalationAt,
                 lastWatchdogEscalationReason,
+                watchdogEscalationEvents,
                 readyToResumeStreak,
                 stablePollsRequired,
                 timing,
@@ -912,6 +997,11 @@ export function activate(context: vscode.ExtensionContext) {
                     label: '$(note) Copy Last Resume Payload Report',
                     description: 'Copy/open structured telemetry for the last continuation message',
                     action: 'antigravity.copyLastResumePayloadReport'
+                },
+                {
+                    label: '$(pulse) Copy Escalation Diagnostics',
+                    description: 'Copy/open focused watchdog escalation diagnostics JSON',
+                    action: 'antigravity.copyEscalationDiagnosticsReport'
                 }
             ];
 
@@ -1043,6 +1133,25 @@ export function activate(context: vscode.ExtensionContext) {
             await vscode.window.showTextDocument(doc, { preview: false });
 
             vscode.window.showInformationMessage('Antigravity: last resume payload report copied to clipboard.');
+        }),
+        vscode.commands.registerCommand('antigravity.copyEscalationDiagnosticsReport', async () => {
+            const cdp = resolveCDPStrategy();
+            const state = cdp ? await cdp.getRuntimeState() : latestRuntimeState;
+            if (state) {
+                latestRuntimeState = state;
+            }
+
+            const report = buildEscalationDiagnosticsReport(state);
+            const serialized = JSON.stringify(report, null, 2);
+            await vscode.env.clipboard.writeText(serialized);
+
+            const doc = await vscode.workspace.openTextDocument({
+                content: serialized,
+                language: 'json'
+            });
+            await vscode.window.showTextDocument(doc, { preview: false });
+
+            vscode.window.showInformationMessage('Antigravity: escalation diagnostics report copied to clipboard.');
         }),
         vscode.commands.registerCommand('antigravity.resumeFromWaitingState', async () => {
             await sendAutoResumeMessage('manual', latestRuntimeState);

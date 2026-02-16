@@ -5,6 +5,38 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.35] - 2026-02-16
+
+### Added
+- **Focused Escalation Diagnostics Command**: Added `Antigravity: Copy Escalation Diagnostics Report` (`antigravity.copyEscalationDiagnosticsReport`) for one-click watchdog/escalation triage JSON export.
+
+### Changed
+- **Status Menu Shortcut**: Added quick action for escalation diagnostics export in the status menu.
+- **Dashboard Runtime Actions**: Added `Copy Escalation Diagnostics` button next to existing runtime diagnostic controls.
+
+## [4.10.34] - 2026-02-16
+
+### Added
+- **Escalation Event Timeline**: Host runtime now stores a bounded escalation event buffer (arm/suppress/reset/consume) for watchdog diagnostics.
+
+### Changed
+- **Dashboard Runtime Visibility**: Added `Escalation Events` live field in Runtime State card showing recent escalation timeline entries.
+- **Resume Payload Report**: Escalation telemetry now includes recent timeline events for richer forensic export.
+
+## [4.10.33] - 2026-02-16
+
+### Changed
+- **Resume Forensics Enrichment**: `Copy Last Resume Payload Report` now includes watchdog escalation telemetry (`consecutiveFailures`, `forceFullNext`, `lastTriggeredAt`, `reason`) for faster stuck-loop diagnosis.
+
+## [4.10.32] - 2026-02-16
+
+### Added
+- **Escalation Backoff Control**: Added `runtimeAutoFixWaitingEscalationCooldownSec` to throttle re-arming of full-prompt escalation during persistent waiting noise.
+
+### Changed
+- **Escalation Arming Logic**: Watchdog escalation now respects cooldown windows before re-arming and records cooldown suppression reason in runtime telemetry.
+- **Dashboard Settings Surface**: Added `Escalation Cooldown (s)` control in CDP & Automation section.
+
 ## [4.10.31] - 2026-02-16
 
 ### Added
