@@ -2,7 +2,7 @@
     "name": "antigravity-autopilot",
     "displayName": "Antigravity Autopilot (Unified)",
     "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-    "version": "4.10.26",
+    "version": "4.10.29",
     "repository": {
         "type": "git",
         "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -100,6 +100,10 @@
             {
                 "command": "antigravity.copyRuntimeStateJson",
                 "title": "Antigravity: Copy Runtime State JSON"
+            },
+            {
+                "command": "antigravity.copyLastResumePayloadReport",
+                "title": "Antigravity: Copy Last Resume Payload Report"
             },
             {
                 "command": "antigravity.resumeFromWaitingState",
@@ -342,6 +346,21 @@
                     "type": "string",
                     "default": "Continue with the next highest-priority development task in this workspace.",
                     "description": "Short continuation message used when minimal continue mode is enabled and runtime is waiting for a new chat message."
+                },
+                "antigravity.runtimeAutoResumeMinimalMessageVSCode": {
+                    "type": "string",
+                    "default": "Continue with the next highest-priority coding task in this VS Code workspace.",
+                    "description": "Profile-specific minimal continuation message used when runtime mode resolves to vscode."
+                },
+                "antigravity.runtimeAutoResumeMinimalMessageAntigravity": {
+                    "type": "string",
+                    "default": "Continue with the next highest-priority Antigravity development task.",
+                    "description": "Profile-specific minimal continuation message used when runtime mode resolves to antigravity."
+                },
+                "antigravity.runtimeAutoResumeMinimalMessageCursor": {
+                    "type": "string",
+                    "default": "Continue with the next highest-priority Cursor coding task in this workspace.",
+                    "description": "Profile-specific minimal continuation message used when runtime mode resolves to cursor."
                 },
                 "antigravity.runtimeAutoResumeCooldownSec": {
                     "type": "number",

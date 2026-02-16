@@ -32,6 +32,9 @@ export interface AntigravityConfig {
     runtimeAutoResumeMessage: string;
     runtimeAutoResumeUseMinimalContinue: boolean;
     runtimeAutoResumeMinimalMessage: string;
+    runtimeAutoResumeMinimalMessageVSCode: string;
+    runtimeAutoResumeMinimalMessageAntigravity: string;
+    runtimeAutoResumeMinimalMessageCursor: string;
     runtimeAutoResumeCooldownSec: number;
     runtimeAutoResumeStabilityPolls: number;
     runtimeAutoResumeMinScore: number;
@@ -120,6 +123,9 @@ export class ConfigManager {
             runtimeAutoResumeMessage: config.get('runtimeAutoResumeMessage', 'Continue with the next highest-priority development task in this workspace. If everything is complete, summarize what is done and propose the next best improvement.'),
             runtimeAutoResumeUseMinimalContinue: config.get('runtimeAutoResumeUseMinimalContinue', true),
             runtimeAutoResumeMinimalMessage: config.get('runtimeAutoResumeMinimalMessage', 'Continue with the next highest-priority development task in this workspace.'),
+            runtimeAutoResumeMinimalMessageVSCode: config.get('runtimeAutoResumeMinimalMessageVSCode', 'Continue with the next highest-priority coding task in this VS Code workspace.'),
+            runtimeAutoResumeMinimalMessageAntigravity: config.get('runtimeAutoResumeMinimalMessageAntigravity', 'Continue with the next highest-priority Antigravity development task.'),
+            runtimeAutoResumeMinimalMessageCursor: config.get('runtimeAutoResumeMinimalMessageCursor', 'Continue with the next highest-priority Cursor coding task in this workspace.'),
             runtimeAutoResumeCooldownSec: config.get('runtimeAutoResumeCooldownSec', 300),
             runtimeAutoResumeStabilityPolls: config.get('runtimeAutoResumeStabilityPolls', 2),
             runtimeAutoResumeMinScore: config.get('runtimeAutoResumeMinScore', 70),

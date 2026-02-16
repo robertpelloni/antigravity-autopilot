@@ -41,6 +41,9 @@ export function activate(context: vscode.ExtensionContext) {
     let readyToResumeStreak = 0;
     let lastAutoResumeOutcome: 'none' | 'sent' | 'blocked' | 'send-failed' = 'none';
     let lastAutoResumeBlockedReason = 'not evaluated';
+    let lastAutoResumeMessageKind: 'none' | 'full' | 'minimal' = 'none';
+    let lastAutoResumeMessageProfile: 'unknown' | 'vscode' | 'antigravity' | 'cursor' = 'unknown';
+    let lastAutoResumeMessagePreview = '';
 
     const resolveCDPStrategy = (): CDPStrategy | null => {
         const strategy = strategyManager.getStrategy('cdp') as any;
@@ -160,6 +163,12 @@ export function activate(context: vscode.ExtensionContext) {
         const mins = Math.floor(totalSec / 60);
         const secs = totalSec % 60;
         return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+    };
+
+    const toSafePreview = (text: string, max = 120): string => {
+        const normalized = (text || '').replace(/\s+/g, ' ').trim();
+        if (!normalized) return '';
+        return normalized.length <= max ? normalized : `${normalized.slice(0, max)}...`;
     };
 
     const evaluateCrossUiHealth = (state: any) => {
@@ -305,9 +314,28 @@ export function activate(context: vscode.ExtensionContext) {
     const sendAutoResumeMessage = async (reason: 'automatic' | 'manual', runtimeState?: any) => {
         const fullMessage = (config.get<string>('runtimeAutoResumeMessage') || '').trim();
         const minimalMessage = (config.get<string>('runtimeAutoResumeMinimalMessage') || '').trim();
+        const minimalVSCode = (config.get<string>('runtimeAutoResumeMinimalMessageVSCode') || '').trim();
+        const minimalAntigravity = (config.get<string>('runtimeAutoResumeMinimalMessageAntigravity') || '').trim();
+        const minimalCursor = (config.get<string>('runtimeAutoResumeMinimalMessageCursor') || '').trim();
+        const activeMode = String(runtimeState?.mode || '').toLowerCase();
+        const profileMinimalMessage = activeMode === 'vscode'
+            ? minimalVSCode
+            : activeMode === 'antigravity'
+                ? minimalAntigravity
+                : activeMode === 'cursor'
+                    ? minimalCursor
+                    : '';
         const useMinimal = !!config.get<boolean>('runtimeAutoResumeUseMinimalContinue')
             && !!runtimeState?.completionWaiting?.readyToResume;
-        const message = (useMinimal ? minimalMessage : fullMessage).trim();
+        const message = (useMinimal ? (profileMinimalMessage || minimalMessage || fullMessage) : fullMessage).trim();
+        const messageKind: 'full' | 'minimal' = useMinimal ? 'minimal' : 'full';
+        const messageProfile: 'unknown' | 'vscode' | 'antigravity' | 'cursor' = activeMode === 'vscode'
+            ? 'vscode'
+            : activeMode === 'antigravity'
+                ? 'antigravity'
+                : activeMode === 'cursor'
+                    ? 'cursor'
+                    : 'unknown';
 
         if (!message) {
             if (reason === 'manual') {
@@ -344,6 +372,9 @@ export function activate(context: vscode.ExtensionContext) {
             try {
                 const sent = await cdp.sendHybridBump(message);
                 if (sent) {
+                    lastAutoResumeMessageKind = messageKind;
+                    lastAutoResumeMessageProfile = messageProfile;
+                    lastAutoResumeMessagePreview = toSafePreview(message);
                     log.info(`[AutoResume] Sent ${reason} ${useMinimal ? 'minimal-continue' : 'resume'} message via CDP bridge.`);
                     if (reason === 'manual') {
                         vscode.window.showInformationMessage('Antigravity: resume message sent.');
@@ -355,6 +386,9 @@ export function activate(context: vscode.ExtensionContext) {
 
         const fallbackSent = await sendViaCommands();
         if (fallbackSent) {
+            lastAutoResumeMessageKind = messageKind;
+            lastAutoResumeMessageProfile = messageProfile;
+            lastAutoResumeMessagePreview = toSafePreview(message);
             log.info(`[AutoResume] Sent ${reason} ${useMinimal ? 'minimal-continue' : 'resume'} message via VS Code fallback commands.`);
             if (reason === 'manual') {
                 vscode.window.showInformationMessage('Antigravity: resume message sent via fallback commands.');
@@ -467,6 +501,40 @@ export function activate(context: vscode.ExtensionContext) {
         };
     };
 
+    const buildLastResumePayloadReport = (state?: any) => {
+        const runtime = state || latestRuntimeState || null;
+        const completionWaiting = runtime?.completionWaiting || null;
+        const hostTiming = runtime
+            ? getAutoResumeTimingReport(!!completionWaiting?.readyToResume || runtime?.status === 'waiting_for_chat_message' || runtime?.waitingForChatMessage === true)
+            : null;
+
+        return {
+            timestamp: new Date().toISOString(),
+            runtimeStatus: runtime?.status || 'unknown',
+            runtimeMode: runtime?.mode || 'unknown',
+            completionWaiting,
+            lastResume: {
+                outcome: lastAutoResumeOutcome,
+                blockedReason: lastAutoResumeBlockedReason,
+                messageKind: lastAutoResumeMessageKind,
+                messageProfile: lastAutoResumeMessageProfile,
+                messagePreview: lastAutoResumeMessagePreview,
+                sentAt: lastAutoResumeAt || null
+            },
+            readiness: {
+                readyToResumeStreak,
+                stablePollsRequired: Math.max(1, Math.min(10, config.get<number>('runtimeAutoResumeStabilityPolls') || 2))
+            },
+            timing: hostTiming,
+            configSnapshot: {
+                autoResumeEnabled: config.get<boolean>('runtimeAutoResumeEnabled'),
+                useMinimalContinue: config.get<boolean>('runtimeAutoResumeUseMinimalContinue'),
+                minScore: config.get<number>('runtimeAutoResumeMinScore'),
+                requireStrictPrimary: config.get<boolean>('runtimeAutoResumeRequireStrictPrimary')
+            }
+        };
+    };
+
     DashboardPanel.setRuntimeStateProvider(async () => {
         const cdp = resolveCDPStrategy();
         if (!cdp || !cdp.isConnected()) {
@@ -492,6 +560,9 @@ export function activate(context: vscode.ExtensionContext) {
                 lastAutoResumeAt,
                 lastAutoResumeOutcome,
                 lastAutoResumeBlockedReason,
+                lastAutoResumeMessageKind,
+                lastAutoResumeMessageProfile,
+                lastAutoResumeMessagePreview,
                 readyToResumeStreak,
                 stablePollsRequired,
                 timing,
@@ -747,6 +818,11 @@ export function activate(context: vscode.ExtensionContext) {
                     label: '$(clippy) Copy Runtime State JSON',
                     description: 'Copy full runtime snapshot to clipboard',
                     action: 'antigravity.copyRuntimeStateJson'
+                },
+                {
+                    label: '$(note) Copy Last Resume Payload Report',
+                    description: 'Copy/open structured telemetry for the last continuation message',
+                    action: 'antigravity.copyLastResumePayloadReport'
                 }
             ];
 
@@ -859,6 +935,25 @@ export function activate(context: vscode.ExtensionContext) {
             latestRuntimeState = state;
             await vscode.env.clipboard.writeText(JSON.stringify(state, null, 2));
             vscode.window.showInformationMessage('Antigravity runtime state JSON copied to clipboard.');
+        }),
+        vscode.commands.registerCommand('antigravity.copyLastResumePayloadReport', async () => {
+            const cdp = resolveCDPStrategy();
+            const state = cdp ? await cdp.getRuntimeState() : latestRuntimeState;
+            if (state) {
+                latestRuntimeState = state;
+            }
+
+            const report = buildLastResumePayloadReport(state);
+            const serialized = JSON.stringify(report, null, 2);
+            await vscode.env.clipboard.writeText(serialized);
+
+            const doc = await vscode.workspace.openTextDocument({
+                content: serialized,
+                language: 'json'
+            });
+            await vscode.window.showTextDocument(doc, { preview: false });
+
+            vscode.window.showInformationMessage('Antigravity: last resume payload report copied to clipboard.');
         }),
         vscode.commands.registerCommand('antigravity.resumeFromWaitingState', async () => {
             await sendAutoResumeMessage('manual', latestRuntimeState);
@@ -1005,6 +1100,9 @@ export function activate(context: vscode.ExtensionContext) {
                     lastAutoResumeAt,
                     lastAutoResumeOutcome,
                     lastAutoResumeBlockedReason,
+                    lastAutoResumeMessageKind,
+                    lastAutoResumeMessageProfile,
+                    lastAutoResumeMessagePreview,
                     timing
                 },
                 guard: {

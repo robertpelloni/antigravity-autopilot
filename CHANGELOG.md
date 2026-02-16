@@ -5,6 +5,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.29] - 2026-02-16
+
+### Added
+- **Last Resume Payload Report Command**: Added `Antigravity: Copy Last Resume Payload Report` (`antigravity.copyLastResumePayloadReport`) to generate/copy/open structured continuation telemetry.
+
+### Changed
+- **Forensic Visibility**: Status menu and dashboard runtime actions now provide one-click access to last resume payload details (kind/profile/preview/outcome/timing).
+
+## [4.10.28] - 2026-02-16
+
+### Added
+- **Resume Message Audit Telemetry**: Runtime telemetry now tracks last sent continuation message kind (`full|minimal`), active profile source, and a safe preview snippet.
+
+### Changed
+- **Dashboard Runtime Audit Fields**: Added live visibility for last message kind/profile/preview so operators can verify exactly which nudge was sent during waiting-state continuation.
+
+## [4.10.27] - 2026-02-16
+
+### Added
+- **Profile-Specific Continue Nudges**: Added `runtimeAutoResumeMinimalMessageVSCode`, `runtimeAutoResumeMinimalMessageAntigravity`, and `runtimeAutoResumeMinimalMessageCursor` for mode-aware continuation prompts.
+
+### Changed
+- **Adaptive Resume Selection**: Minimal continue mode now picks the active runtime profile message first, then falls back to global minimal/full resume messages.
+- **Dashboard Controls**: Added dedicated textareas for per-profile minimal continuation messages.
+
 ## [4.10.26] - 2026-02-16
 
 ### Added

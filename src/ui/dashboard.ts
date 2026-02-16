@@ -282,12 +282,16 @@ export class DashboardPanel {
                     <div><strong>Completion Confidence:</strong> <span id="runtimeCompletionConfidence" class="muted">-</span></div>
                     <div><strong>Completion Reasoning:</strong> <span id="runtimeCompletionReasoning" class="muted">-</span></div>
                     <div><strong>Ready Streak:</strong> <span id="runtimeReadyStreak" class="muted">-</span></div>
+                    <div><strong>Last Message Kind:</strong> <span id="runtimeLastMessageKind" class="muted">-</span></div>
+                    <div><strong>Last Message Profile:</strong> <span id="runtimeLastMessageProfile" class="muted">-</span></div>
+                    <div><strong>Last Message Preview:</strong> <span id="runtimeLastMessagePreview" class="muted">-</span></div>
                 </div>
                 <div style="margin-top:10px;display:flex;gap:8px;">
                     <button onclick="requestRuntimeState()">Refresh Runtime State</button>
                     <button onclick="runCommand('antigravity.detectCompletionWaitingState')">Detect Completion + Waiting</button>
                     <button onclick="runCommand('antigravity.runCrossUiSelfTest')">Run Cross-UI Self-Test</button>
                     <button onclick="runCommand('antigravity.autoFixAutoResumeReadiness')">Auto-Fix Resume Readiness</button>
+                    <button onclick="runCommand('antigravity.copyLastResumePayloadReport')">Copy Last Resume Payload</button>
                 </div>
                 <div class="runtime-history" id="runtimeHistory"></div>
             </div>
@@ -418,6 +422,18 @@ export class DashboardPanel {
                 <div class="setting vertical">
                     <label>Minimal Continue Message:</label>
                     <textarea onchange="updateConfig('runtimeAutoResumeMinimalMessage', this.value)">${settings.runtimeAutoResumeMinimalMessage || ''}</textarea>
+                </div>
+                <div class="setting vertical">
+                    <label>Minimal Continue (VS Code):</label>
+                    <textarea onchange="updateConfig('runtimeAutoResumeMinimalMessageVSCode', this.value)">${settings.runtimeAutoResumeMinimalMessageVSCode || ''}</textarea>
+                </div>
+                <div class="setting vertical">
+                    <label>Minimal Continue (Antigravity):</label>
+                    <textarea onchange="updateConfig('runtimeAutoResumeMinimalMessageAntigravity', this.value)">${settings.runtimeAutoResumeMinimalMessageAntigravity || ''}</textarea>
+                </div>
+                <div class="setting vertical">
+                    <label>Minimal Continue (Cursor):</label>
+                    <textarea onchange="updateConfig('runtimeAutoResumeMinimalMessageCursor', this.value)">${settings.runtimeAutoResumeMinimalMessageCursor || ''}</textarea>
                 </div>
                  <div class="setting">
                      <label>Max Loops/Session:</label>
@@ -806,6 +822,9 @@ export class DashboardPanel {
                     const completionConfidence = document.getElementById('runtimeCompletionConfidence');
                     const completionReasoning = document.getElementById('runtimeCompletionReasoning');
                     const readyStreak = document.getElementById('runtimeReadyStreak');
+                    const lastMessageKind = document.getElementById('runtimeLastMessageKind');
+                    const lastMessageProfile = document.getElementById('runtimeLastMessageProfile');
+                    const lastMessagePreview = document.getElementById('runtimeLastMessagePreview');
 
                     function coverageText(cov) {
                         if (!cov) return '-';
@@ -840,6 +859,9 @@ export class DashboardPanel {
                         completionConfidence.textContent = '-';
                         completionReasoning.textContent = '-';
                         readyStreak.textContent = '-';
+                        lastMessageKind.textContent = '-';
+                        lastMessageProfile.textContent = '-';
+                        lastMessagePreview.textContent = '-';
                         renderRuntimeHistory();
                         return;
                     }
@@ -901,6 +923,9 @@ export class DashboardPanel {
                     readyStreak.textContent = host
                         ? ((host.readyToResumeStreak ?? 0) + ' / ' + (host.stablePollsRequired ?? '-'))
                         : '-';
+                    lastMessageKind.textContent = host?.lastAutoResumeMessageKind || '-';
+                    lastMessageProfile.textContent = host?.lastAutoResumeMessageProfile || '-';
+                    lastMessagePreview.textContent = host?.lastAutoResumeMessagePreview || '-';
                     renderRuntimeHistory();
                 }
 
