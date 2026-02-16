@@ -76,9 +76,9 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - **Definition of done:** intentional parity with automated guard
 
 ### P1.3 Harden model selection and model ID consistency
-- [ ] Normalize model IDs across `constants.ts`, `config` defaults, and scraper output
-- [ ] Fix typo/keyword bug in quick-task routing (`brieft`)
-- [ ] Improve fallback policy when preferred models unavailable
+- [x] Normalize model IDs across `constants.ts`, `config` defaults, and scraper output
+- [x] Fix typo/keyword bug in quick-task routing (`brieft`)
+- [x] Improve fallback policy when preferred models unavailable
 - **Evidence:** `src/core/model-selector.ts`, `src/utils/constants.ts`
 - **Definition of done:** deterministic model selection with stable fallback and validation
 

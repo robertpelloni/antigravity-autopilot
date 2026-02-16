@@ -6,7 +6,7 @@
 // ============ Extension Metadata ============
 export const EXTENSION_NAME = 'antigravity-autopilot-unified';
 export const EXTENSION_DISPLAY_NAME = 'Antigravity Autopilot';
-export const VERSION = '4.10.64';
+export const VERSION = '4.10.65';
 
 // ============ CDP Ports ============
 export const CDP_PORT_MIN = 9000;
@@ -26,9 +26,9 @@ export const ModelId = {
     GEMINI_PRO_LOW: 'gemini-3-pro-low',
     GEMINI_FLASH: 'gemini-3-flash',
     // Claude Models
-    CLAUDE_SONNET: 'claude-sonnet-4-5',
-    CLAUDE_SONNET_THINKING: 'claude-sonnet-4-5-thinking',
-    CLAUDE_OPUS_THINKING: 'claude-opus-4-5-thinking',
+    CLAUDE_SONNET: 'claude-sonnet-4.5',
+    CLAUDE_SONNET_THINKING: 'claude-sonnet-4.5-thinking',
+    CLAUDE_OPUS_THINKING: 'claude-opus-4.5-thinking',
     // GPT Models
     GPT_OSS: 'gpt-oss-120b-medium',
 } as const;

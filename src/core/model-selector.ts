@@ -3,6 +3,7 @@ import { createLogger } from '../utils/logger';
 import * as vscode from 'vscode';
 import { getAvailableModels } from './model-scraper';
 import { ModelId, TaskType } from '../utils/constants';
+import { taskAnalyzer } from './task-analyzer';
 
 const log = createLogger('ModelSelector');
 
@@ -14,48 +15,67 @@ export interface ModelSelection {
 
 export class ModelSelector {
 
+    private normalizeModelId(modelId: string | null | undefined): string {
+        const raw = String(modelId || '').trim();
+        if (!raw) {
+            return ModelId.GEMINI_FLASH;
+        }
+
+        const aliases: Record<string, string> = {
+            'claude-sonnet-4-5': ModelId.CLAUDE_SONNET,
+            'claude-sonnet-4-5-thinking': ModelId.CLAUDE_SONNET_THINKING,
+            'claude-opus-4-5-thinking': ModelId.CLAUDE_OPUS_THINKING,
+        };
+
+        return aliases[raw] || raw;
+    }
+
     async selectForTask(task: string): Promise<ModelSelection> {
-        const lowerTask = task.toLowerCase();
+        const taskType = taskAnalyzer.analyze(task);
         let model: string = ModelId.GEMINI_FLASH;
         let reason = 'Default general purpose model';
 
-        // Use Yoke-style configuration logic
         const config = vscode.workspace.getConfiguration('antigravity');
-        const prefReasoning = config.get<string>('preferredModelForReasoning') || ModelId.CLAUDE_OPUS_THINKING;
-        const prefFrontend = config.get<string>('preferredModelForFrontend') || ModelId.GEMINI_PRO_HIGH;
-        const prefQuick = config.get<string>('preferredModelForQuick') || ModelId.GEMINI_FLASH;
+        const prefReasoning = this.normalizeModelId(config.get<string>('preferredModelForReasoning') || ModelId.CLAUDE_OPUS_THINKING);
+        const prefFrontend = this.normalizeModelId(config.get<string>('preferredModelForFrontend') || ModelId.GEMINI_PRO_HIGH);
+        const prefQuick = this.normalizeModelId(config.get<string>('preferredModelForQuick') || ModelId.GEMINI_FLASH);
 
-        // 1. Select based on task type (matching Yoke logic)
-        if (lowerTask.includes('css') || lowerTask.includes('ui') || lowerTask.includes('frontend') || lowerTask.includes('style')) {
+        if (taskType === TaskType.FRONTEND) {
             model = prefFrontend;
             reason = 'Configured Frontend Model';
-        } else if (lowerTask.includes('refactor') || lowerTask.includes('architecture') || lowerTask.includes('plan') || lowerTask.includes('complex')) {
+        } else if (taskType === TaskType.REASONING || taskType === TaskType.GENERAL) {
             model = prefReasoning;
             reason = 'Configured Reasoning Model';
-        } else if (lowerTask.includes('fix') || lowerTask.includes('brieft') || lowerTask.includes('quick')) {
+        } else if (taskType === TaskType.QUICK) {
             model = prefQuick;
             reason = 'Configured Quick Model';
         } else {
-            // Default fallback to reasoning for general tasks (as per Yoke)
             model = prefReasoning;
             reason = 'Default to Reasoning Model';
         }
 
-        // 2. Verify availability (Optional enhancement over Yoke, but good for safety)
         const availableModels = await getAvailableModels();
-        const availableValues = availableModels.map(m => m.value);
+        const availableByNormalized = new Map<string, { value: string; label: string }>();
+        for (const candidate of availableModels) {
+            availableByNormalized.set(this.normalizeModelId(candidate.value), candidate);
+        }
+        const normalizedRequested = this.normalizeModelId(model);
 
-        // If preferred model is not available, try to fall back intelligently
-        if (!availableValues.includes(model)) {
-            // If configured model isn't found, try to stick to family or fallback to Flash
-            if (availableValues.includes(ModelId.GEMINI_FLASH)) {
-                reason += ` (Preferred ${model} unavailable, falling back to Flash)`;
-                model = ModelId.GEMINI_FLASH;
+        if (!availableByNormalized.has(normalizedRequested)) {
+            const fallbackCandidates = [prefReasoning, ModelId.GEMINI_FLASH];
+            const fallback = fallbackCandidates.find(candidate => availableByNormalized.has(this.normalizeModelId(candidate)));
+            if (fallback) {
+                reason += ` (Preferred ${normalizedRequested} unavailable, falling back to ${fallback})`;
+                model = this.normalizeModelId(fallback);
+            } else {
+                reason += ` (Preferred ${normalizedRequested} unavailable, no known fallback available)`;
+                model = normalizedRequested;
             }
+        } else {
+            model = normalizedRequested;
         }
 
-        // Find display name
-        const modelObj = availableModels.find(m => m.value === model);
+        const modelObj = availableByNormalized.get(this.normalizeModelId(model));
         const displayName = modelObj ? modelObj.label : model;
 
         return {

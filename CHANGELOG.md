@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.65] - 2026-02-16
+
+### Added
+- **Model Selection Compatibility Guard Test**: Added `tests/model-selection-compat.test.js` to protect canonical ID formatting, quick-route typo regression, and legacy ID alias support.
+
+### Changed
+- **Model ID Normalization**: Canonicalized Claude model IDs in `src/utils/constants.ts` to dotted `4.5` format to align with config defaults and dashboard values.
+- **Model Selector Hardening**: `src/core/model-selector.ts` now routes by `taskAnalyzer` task type, normalizes legacy model ID aliases, and applies deterministic fallback preference order when configured models are unavailable.
+
 ## [4.10.64] - 2026-02-16
 
 ### Added
