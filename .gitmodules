@@ -25,3 +25,6 @@
 [submodule "antigravity-multi-purpose-agent"]
 	path = antigravity-multi-purpose-agent
 	url = https://github.com/rodhayl/antigravity-multi-purpose-agent
+[submodule "Claude-Autopilot"]
+	path = Claude-Autopilot
+	url = https://github.com/benbasha/Claude-Autopilot

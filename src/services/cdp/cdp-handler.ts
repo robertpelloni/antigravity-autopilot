@@ -422,5 +422,31 @@ export class CDPHandler extends EventEmitter {
     getConnectedPageIds(): string[] {
         return Array.from(this.connections.keys());
     }
+
+    /**
+     * Retrieves automation runtime state from injected Auto-All script.
+     * Returns the first non-null state snapshot discovered across sessions.
+     */
+    async getAutomationRuntimeState(): Promise<any | null> {
+        try {
+            const expression = `
+                (function() {
+                    if (window.__autoAllGetRuntimeState) {
+                        return window.__autoAllGetRuntimeState();
+                    }
+                    return null;
+                })()
+            `;
+            const states = await this.executeInAllSessions(expression, true);
+            for (const state of states) {
+                if (state && typeof state === 'object') {
+                    return state;
+                }
+            }
+            return null;
+        } catch {
+            return null;
+        }
+    }
 }
 

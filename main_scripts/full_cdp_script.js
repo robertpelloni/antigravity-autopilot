@@ -316,6 +316,229 @@
         return results;
     };
 
+    const UI_SELECTORS = {
+        shared: {
+            click: [
+                'button',
+                '[role="button"]',
+                '.monaco-button',
+                '[class*="button"]'
+            ],
+            sendButtons: [
+                'button[aria-label*="Send"]',
+                'button[title*="Send"]',
+                '[aria-label*="Submit"]',
+                '[title*="Submit"]',
+                '.codicon-send',
+                'button[data-testid*="send"]'
+            ],
+            textInputs: [
+                'textarea[aria-label*="Chat"]',
+                'textarea[placeholder*="message" i]',
+                'textarea[placeholder*="chat" i]',
+                'textarea',
+                '[contenteditable="true"][role="textbox"]',
+                '[contenteditable="true"]'
+            ]
+        },
+        antigravity: {
+            click: [
+                '#antigravity\\.agentPanel button',
+                '#antigravity\\.agentPanel [role="button"]',
+                '.bg-ide-button-background',
+                'button.grow',
+                '.monaco-action-bar .action-label'
+            ],
+            sendButtons: [
+                '#antigravity\\.agentPanel button[aria-label*="Send"]',
+                '#antigravity\\.agentPanel button[title*="Send"]'
+            ],
+            textInputs: [
+                '#antigravity\\.agentPanel textarea',
+                '#antigravity\\.agentPanel [contenteditable="true"]'
+            ]
+        },
+        cursor: {
+            click: [
+                '#workbench\\.parts\\.auxiliarybar button',
+                '#workbench\\.parts\\.auxiliarybar [role="button"]',
+                '.chat-session-item [role="button"]',
+                '[class*="anysphere"]'
+            ],
+            sendButtons: [
+                '#workbench\\.parts\\.auxiliarybar button[aria-label*="Send"]',
+                '.interactive-editor button[aria-label*="Send"]'
+            ],
+            textInputs: [
+                '#workbench\\.parts\\.auxiliarybar textarea',
+                '.interactive-editor textarea',
+                '.interactive-editor [contenteditable="true"]'
+            ]
+        },
+        vscode: {
+            click: [
+                '.monaco-dialog-box button',
+                '.monaco-notification-list button',
+                '.interactive-editor button',
+                '.chat-input-container button'
+            ],
+            sendButtons: [
+                '.interactive-editor button[aria-label*="Send"]',
+                '.chat-input-container button[aria-label*="Send"]',
+                '.chat-input-container button[title*="Send"]'
+            ],
+            textInputs: [
+                '.interactive-editor textarea',
+                '.chat-input-container textarea',
+                '.chat-input-container [contenteditable="true"]'
+            ]
+        }
+    };
+
+    function getCurrentMode() {
+        const mode = (window.__autoAllState?.currentMode || 'cursor').toLowerCase();
+        if (mode === 'antigravity' || mode === 'cursor' || mode === 'vscode') return mode;
+        return 'vscode';
+    }
+
+    function mergeSelectorSets(mode, category) {
+        const shared = (UI_SELECTORS.shared[category] || []).slice();
+        const modeSpecific = (UI_SELECTORS[mode] && UI_SELECTORS[mode][category]) ? UI_SELECTORS[mode][category] : [];
+        return [...new Set([...modeSpecific, ...shared])];
+    }
+
+    function getUnifiedClickSelectors(mode = getCurrentMode()) {
+        return mergeSelectorSets(mode, 'click');
+    }
+
+    function getUnifiedSendButtonSelectors(mode = getCurrentMode()) {
+        return mergeSelectorSets(mode, 'sendButtons');
+    }
+
+    function getUnifiedTextInputSelectors(mode = getCurrentMode()) {
+        return mergeSelectorSets(mode, 'textInputs');
+    }
+
+    function findVisibleElementBySelectors(selectors) {
+        for (const selector of selectors) {
+            const nodes = queryAll(selector);
+            for (const node of nodes) {
+                if (isElementVisible(node) && !node.disabled) {
+                    return node;
+                }
+            }
+        }
+        return null;
+    }
+
+    function setInputValue(el, value) {
+        if (!el) return false;
+        try {
+            if (el.isContentEditable) {
+                el.focus();
+                el.textContent = value;
+            } else if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+                el.focus();
+                el.value = value;
+            } else {
+                return false;
+            }
+
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    async function submitWithKeys() {
+        const target = document.activeElement;
+        if (!target) return false;
+
+        const combos = [
+            { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: false, shiftKey: false },
+            { key: 'Enter', code: 'Enter', ctrlKey: true, altKey: false, shiftKey: false },
+            { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: true, shiftKey: false }
+        ];
+
+        for (const combo of combos) {
+            try {
+                const down = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...combo });
+                const up = new KeyboardEvent('keyup', { bubbles: true, cancelable: true, ...combo });
+                target.dispatchEvent(down);
+                target.dispatchEvent(up);
+                await workerDelay(40);
+            } catch (e) { }
+        }
+
+        return true;
+    }
+
+    function countPendingAcceptButtons(selectors) {
+        let count = 0;
+        const seen = new Set();
+
+        for (const selector of selectors) {
+            const nodes = queryAll(selector);
+            for (const node of nodes) {
+                if (seen.has(node)) continue;
+                seen.add(node);
+                if (isElementVisible(node) && isAcceptButton(node)) {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    function getRuntimeStateSnapshot() {
+        const state = window.__autoAllState || {};
+        const mode = getCurrentMode();
+        const clickSelectors = getUnifiedClickSelectors(mode);
+        const sendSelectors = getUnifiedSendButtonSelectors(mode);
+        const inputSelectors = getUnifiedTextInputSelectors(mode);
+
+        const pendingAcceptButtons = countPendingAcceptButtons(clickSelectors);
+        const hasVisibleSendButton = !!findVisibleElementBySelectors(sendSelectors);
+        const hasVisibleInput = !!findVisibleElementBySelectors(inputSelectors);
+        const isIdle = isConversationIdle();
+
+        const tabNames = Array.isArray(state.tabNames) ? state.tabNames : [];
+        const doneCount = tabNames.filter(name => state.completionStatus && state.completionStatus[name] === 'done').length;
+        const totalTabs = tabNames.length;
+        const allKnownTabsDone = totalTabs > 0 && doneCount === totalTabs;
+        const noPendingActions = pendingAcceptButtons === 0;
+
+        const allTasksComplete = allKnownTabsDone && noPendingActions;
+        const waitingForChatMessage = !!state.isRunning && allTasksComplete && isIdle && (hasVisibleInput || hasVisibleSendButton);
+
+        let status = 'processing';
+        if (!state.isRunning) status = 'stopped';
+        else if (pendingAcceptButtons > 0) status = 'pending_accept_actions';
+        else if (waitingForChatMessage) status = 'waiting_for_chat_message';
+        else if (allTasksComplete) status = 'all_tasks_complete';
+        else if (isIdle) status = 'idle';
+
+        return {
+            status,
+            mode,
+            isRunning: !!state.isRunning,
+            isIdle,
+            pendingAcceptButtons,
+            hasVisibleInput,
+            hasVisibleSendButton,
+            totalTabs,
+            doneTabs: doneCount,
+            allTasksComplete,
+            waitingForChatMessage,
+            lastClickTime,
+            lastBumpTime,
+            timestamp: Date.now()
+        };
+    }
+
     const stripTimeSuffix = (text) => {
         return (text || '').trim().replace(/\s*\d+[smh]$/, '').trim();
     };
@@ -1005,7 +1228,28 @@
         if (window.showAutoAllToast) {
             window.showAutoAllToast(`Bump: "${text}"`, 2000, 'rgba(0,100,200,0.8)');
         }
-        log(`[Chat] Sending Hybrid Bump: "${text}"`);
+        const mode = getCurrentMode();
+        log(`[Chat] Sending message (mode=${mode}): "${text}"`);
+
+        try {
+            const inputEl = findVisibleElementBySelectors(getUnifiedTextInputSelectors(mode));
+            if (inputEl && setInputValue(inputEl, text)) {
+                const sendEl = findVisibleElementBySelectors(getUnifiedSendButtonSelectors(mode));
+                if (sendEl) {
+                    await remoteClick(sendEl);
+                    log('[Chat] Message sent via visible send button');
+                    return true;
+                }
+
+                await submitWithKeys();
+                log('[Chat] Message submitted via keyboard fallback');
+                return true;
+            }
+        } catch (e) {
+            log(`[Chat] DOM send strategy failed: ${e.message}`);
+        }
+
+        log('[Chat] Falling back to hybrid bump bridge strategy');
         console.log('__ANTIGRAVITY_HYBRID_BUMP__:' + text);
         return true;
     }
@@ -1209,7 +1453,7 @@ async function cursorLoop(sid) {
             cycle++;
             log(`[Loop] Cycle ${cycle}: Starting...`);
 
-            const clicked = await performClick(['button', '[class*="button"]', '[class*="anysphere"]']);
+            const clicked = await performClick(getUnifiedClickSelectors('cursor'));
             if (clicked > 0) {
                 log(`[Loop] Cycle ${cycle}: Clicked ${clicked} buttons`);
             } else {
@@ -1283,15 +1527,7 @@ async function antigravityLoop(sid) {
 
             // Just click accept buttons directly - no dropdown interaction needed
             // Added selectors for Diff Editor actions and SCM titles
-            const clicked = await performClick([
-                '.bg-ide-button-background',
-                'button',
-                '[role="button"]',
-                '[class*="button"]',
-                '.monaco-action-bar .action-label',
-                '[title*="Accept"]',
-                '[aria-label*="Accept"]'
-            ]);
+            const clicked = await performClick(getUnifiedClickSelectors('antigravity'));
             if (clicked > 0) {
                 log(`[Loop] Cycle ${cycle}: Clicked ${clicked} accept buttons`);
             } else {
@@ -1394,6 +1630,20 @@ window.__autoAllGetAwayActions = function () {
     return Analytics.consumeAwayActions(log);
 };
 
+window.__autoAllGetRuntimeState = function () {
+    try {
+        return getRuntimeStateSnapshot();
+    } catch (e) {
+        log(`[State] Failed to compute runtime state: ${e.message}`);
+        return {
+            status: 'error',
+            isRunning: !!window.__autoAllState?.isRunning,
+            error: String(e.message || e),
+            timestamp: Date.now()
+        };
+    }
+};
+
 window.__autoAllSetFocusState = function (isFocused) {
     Analytics.setFocusState(isFocused, log);
 };
@@ -1481,7 +1731,7 @@ window.__autoAllStart = async function (config) {
             (async function staticLoop() {
                 while (state.isRunning && state.sessionID === sid) {
                     try {
-                        const clicks = await performClick(['button', '[class*="button"]', '[class*="anysphere"]']);
+                        const clicks = await performClick(getUnifiedClickSelectors(getCurrentMode()));
                         if (clicks === 0) await autoBump();
                         await workerDelay(config.pollInterval || 1000);
                     } catch (loopErr) {
