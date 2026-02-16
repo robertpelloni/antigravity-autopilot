@@ -1,7 +1,7 @@
 # Antigravity Autopilot — Project Dashboard
 
-**Version**: 4.10.2
-**Build Date**: 2026-02-15
+**Version**: 4.10.5
+**Build Date**: 2026-02-16
 **Status**: ✅ Active Development
 
 ---
@@ -97,6 +97,7 @@ antigravity-autopilot/
 | `AntigravityMobile` | [AvenalJ](https://github.com/AvenalJ/AntigravityMobile) | Mobile companion app concept | 📚 Reference |
 | `antigravity-jules-orchestration` | [Scarmonit](https://github.com/Scarmonit/antigravity-jules-orchestration) | Jules API + MCP orchestration | 📚 Reference |
 | `antigravity-multi-purpose-agent` | [rodhayl](https://github.com/rodhayl/antigravity-multi-purpose-agent) | Multi-purpose agent variant | 📚 Reference |
+| `Claude-Autopilot` | [benbasha](https://github.com/benbasha/Claude-Autopilot) | Claude queue processing + auto-resume reference | 📚 Reference |
 
 ---
 

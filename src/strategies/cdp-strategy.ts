@@ -5,6 +5,22 @@ import { InteractionMethodRegistry, InteractionContext } from './interaction-met
 import { config } from '../utils/config';
 import { CDPHandler } from '../services/cdp/cdp-handler';
 
+export interface CDPRuntimeState {
+    status: string;
+    mode?: string;
+    isRunning?: boolean;
+    isIdle?: boolean;
+    pendingAcceptButtons?: number;
+    hasVisibleInput?: boolean;
+    hasVisibleSendButton?: boolean;
+    totalTabs?: number;
+    doneTabs?: number;
+    allTasksComplete?: boolean;
+    waitingForChatMessage?: boolean;
+    timestamp?: number;
+    [key: string]: any;
+}
+
 /**
  * CDP Strategy
  * Uses Chrome DevTools Protocol for browser automation.
@@ -240,5 +256,16 @@ export class CDPStrategy implements IStrategy {
      */
     isConnected(): boolean {
         return this.cdpHandler.isConnected();
+    }
+
+    /**
+     * Retrieves current browser-side automation state snapshot.
+     */
+    async getRuntimeState(): Promise<CDPRuntimeState | null> {
+        const state = await this.cdpHandler.getAutomationRuntimeState();
+        if (!state || typeof state !== 'object') {
+            return null;
+        }
+        return state as CDPRuntimeState;
     }
 }

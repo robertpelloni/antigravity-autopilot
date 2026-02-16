@@ -179,3 +179,24 @@ Reference for community patterns and user-facing simplicity.
 
 ### Why Selected
 Reference for expanded agent capabilities and alternative approaches to multi-purpose automation.
+
+---
+
+## 10. Claude-Autopilot
+
+| Field | Value |
+|:------|:------|
+| **Path** | `Claude-Autopilot/` |
+| **Origin** | [benbasha/Claude-Autopilot](https://github.com/benbasha/Claude-Autopilot) |
+| **Language** | TypeScript / JavaScript |
+| **Purpose** | Claude task queue automation with auto-resume and mobile/web control surfaces |
+
+### Key Features Extracted
+- Queue-first task processing model with persistent history
+- Usage-limit reset detection and auto-resume workflow
+- Cross-platform dependency validation (Claude CLI + Python)
+- Rich command palette + web interface control patterns
+- Enhanced runtime state concepts (`waiting`, `processing`, `complete`) for automation orchestration
+
+### Why Selected
+Provides mature queue orchestration and session-state patterns that complement Antigravity's CDP-first execution model.

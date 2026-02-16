@@ -122,7 +122,7 @@ This file runs **inside the browser** (VS Code's Chromium process). Special rule
 
 ## 5. Submodules Reference
 
-The workspace contains 9 git submodules. These are **reference implementations** — the active code lives in `src/` and `main_scripts/`.
+The workspace contains 10 git submodules. These are **reference implementations** — the active code lives in `src/` and `main_scripts/`.
 
 | Submodule | Origin | Purpose |
 |:----------|:-------|:--------|
@@ -135,6 +135,7 @@ The workspace contains 9 git submodules. These are **reference implementations**
 | `AntigravityMobile` | AvenalJ | Mobile companion app concept (reference) |
 | `antigravity-jules-orchestration` | Scarmonit | Jules API + MCP orchestration (reference) |
 | `antigravity-multi-purpose-agent` | rodhayl | Multi-purpose agent variant (reference) |
+| `Claude-Autopilot` | benbasha | Claude queue automation + auto-resume reference (reference) |
 
 ---
 

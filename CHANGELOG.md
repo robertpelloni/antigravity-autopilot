@@ -5,6 +5,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.5] - 2026-02-16
+
+### Added
+- **Runtime State Command**: Added `Antigravity: Check Runtime State` command (`antigravity.checkRuntimeState`) to inspect live automation state, including task completion and waiting-for-chat-message detection.
+
+### Changed
+- **Status Bar Runtime Signal**: Status bar now reflects live runtime state labels (`ACTIVE`, `PENDING`, `COMPLETE`, `WAITING`, `IDLE`) while CDP automation is running.
+- **CDP Strategy Resolution**: Extension command handlers now resolve the active CDP strategy at execution time, avoiding stale startup references.
+
+## [4.10.4] - 2026-02-16
+
+### Added
+- **Runtime State API**: Added `window.__autoAllGetRuntimeState()` snapshot API for live status reporting, including `waiting_for_chat_message`, pending accept button counts, tab completion totals, and mode metadata.
+- **Strategy State Accessor**: Added `CDPHandler.getAutomationRuntimeState()` and `CDPStrategy.getRuntimeState()` for extension-side state inspection.
+- **Submodule Integration**: Added `Claude-Autopilot` as a tracked git submodule reference (`benbasha/Claude-Autopilot`).
+
+### Changed
+- **Cross-UI Message Sending**: `sendMessage()` now attempts DOM-native input + send button/keyboard submit first (Antigravity, Cursor, VS Code profiles), then falls back to hybrid bridge submission.
+- **Cross-UI Button Detection**: Unified selector bundles now drive click scanning across Antigravity and VS Code/Cursor surfaces in loop execution and static polling.
+- **DOM Scan Click Routing**: `dom-scan-click` now prioritizes profile selectors passed from strategy context before generic fallback selectors.
+
 ## [4.10.3] - 2026-02-15
 
 ### Changed

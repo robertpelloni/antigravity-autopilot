@@ -19,6 +19,7 @@ import { memoryManager } from './core/memory-manager';
 import { projectManager } from './providers/project-manager';
 
 import { StatusBarManager } from './ui/status-bar';
+import { CDPStrategy, CDPRuntimeState } from './strategies/cdp-strategy';
 
 const log = createLogger('Extension');
 let statusBar: StatusBarManager;
@@ -33,6 +34,29 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Initialize Managers
     const strategyManager = new StrategyManager(context);
+
+    const resolveCDPStrategy = (): CDPStrategy | null => {
+        const strategy = strategyManager.getStrategy('cdp') as any;
+        if (strategy && typeof strategy.getRuntimeState === 'function') {
+            return strategy as CDPStrategy;
+        }
+        return null;
+    };
+
+    const refreshRuntimeState = async () => {
+        try {
+            const cdp = resolveCDPStrategy();
+            if (!cdp || !cdp.isConnected()) {
+                statusBar.updateRuntimeState(null);
+                return;
+            }
+
+            const runtimeState = await cdp.getRuntimeState();
+            statusBar.updateRuntimeState(runtimeState);
+        } catch {
+            statusBar.updateRuntimeState(null);
+        }
+    };
 
     // Wire up Status Bar to Autonomous Loop
     autonomousLoop.setStatusCallback(status => {
@@ -71,20 +95,20 @@ export function activate(context: vscode.ExtensionContext) {
     // Note: cdpStrategy is expected to be defined elsewhere or passed into this scope.
     // For now, it's left as potentially undefined, which TypeScript will flag.
     // Assuming `cdpStrategy` refers to an instance of CDPHandler or similar.
-    const cdpStrategy = strategyManager.getStrategy('cdp'); // Assuming strategyManager can provide this.
     context.subscriptions.push(
         vscode.commands.registerCommand('antigravity.getChromeDevtoolsMcpUrl', async () => {
             return 'ws://localhost:9222'; // Dummy return to satisfy whatever is calling this
         }),
-        vscode.commands.registerCommand('antigravity.clickRun', () => cdpStrategy?.executeAction('run')),
-        vscode.commands.registerCommand('antigravity.clickExpand', () => cdpStrategy?.executeAction('expand')),
-        vscode.commands.registerCommand('antigravity.clickAccept', () => cdpStrategy?.executeAction('accept')),
+        vscode.commands.registerCommand('antigravity.clickRun', () => resolveCDPStrategy()?.executeAction('run')),
+        vscode.commands.registerCommand('antigravity.clickExpand', () => resolveCDPStrategy()?.executeAction('expand')),
+        vscode.commands.registerCommand('antigravity.clickAccept', () => resolveCDPStrategy()?.executeAction('accept')),
         vscode.commands.registerCommand('antigravity.resetConnection', async () => {
+            const cdpStrategy = resolveCDPStrategy();
             if (cdpStrategy) {
                 vscode.window.showInformationMessage('Restoring Anti-Gravity...');
                 try {
                     await strategyManager.stop();
-                    await strategyManager.start('cdp');
+                    await strategyManager.start();
                     vscode.window.showInformationMessage('Anti-Gravity Reset Complete.');
                 } catch (e) { vscode.window.showErrorMessage(`Reset Failed: ${e}`); }
             }
@@ -108,6 +132,7 @@ export function activate(context: vscode.ExtensionContext) {
                 await config.update('strategy', 'cdp');
             }
             await strategyManager.start();
+            await refreshRuntimeState();
         }),
         vscode.commands.registerCommand('antigravity.toggleAutonomous', async () => {
             const isRunning = autonomousLoop.isRunning();
@@ -227,14 +252,44 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('antigravity.syncProjectTasks', async () => {
             await projectManager.syncFromFixPlan();
             vscode.window.showInformationMessage('Project tasks synced from @fix_plan.md');
+        }),
+        vscode.commands.registerCommand('antigravity.checkRuntimeState', async () => {
+            const cdp = resolveCDPStrategy();
+            if (!cdp) {
+                vscode.window.showWarningMessage('Antigravity: CDP strategy is not active.');
+                return;
+            }
+
+            const state = await cdp.getRuntimeState();
+            if (!state) {
+                vscode.window.showWarningMessage('Antigravity: Runtime state unavailable (CDP not connected or script not injected yet).');
+                return;
+            }
+
+            const status = state.status || 'unknown';
+            const done = state.doneTabs ?? 0;
+            const total = state.totalTabs ?? 0;
+            const pending = state.pendingAcceptButtons ?? 0;
+            const waiting = state.waitingForChatMessage ? 'yes' : 'no';
+
+            statusBar.updateRuntimeState(state);
+            log.info(`[RuntimeState] status=${status} tabs=${done}/${total} pending=${pending} waitingForChatMessage=${waiting}`);
+            vscode.window.showInformationMessage(`Antigravity Runtime: ${status} | tabs ${done}/${total} | pending ${pending} | waiting chat: ${waiting}`);
         })
     );
+
+    const runtimeStateTimer = setInterval(() => {
+        refreshRuntimeState().catch(() => { });
+    }, 3000);
+    context.subscriptions.push({ dispose: () => clearInterval(runtimeStateTimer) });
 
     // Initialize based on saved config
     // 1. Strategy (Core Driver)
     if (config.get('autoAllEnabled') || config.get('autoAcceptEnabled')) {
         strategyManager.start().catch(e => log.error(`Failed to start strategy: ${e.message}`));
     }
+
+    refreshRuntimeState().catch(() => { });
 
     // 2. Autonomous Loop
     if (config.get('autonomousEnabled')) {

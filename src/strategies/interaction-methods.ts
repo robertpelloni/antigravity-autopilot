@@ -292,13 +292,39 @@ export class DOMScanClick implements IInteractionMethod {
         if (!ctx.cdpHandler) return false;
         const acceptPatterns = JSON.stringify((ctx.acceptPatterns && ctx.acceptPatterns.length > 0) ? ctx.acceptPatterns : DEFAULT_ACCEPT_PATTERNS);
         const rejectPatterns = JSON.stringify((ctx.rejectPatterns && ctx.rejectPatterns.length > 0) ? ctx.rejectPatterns : DEFAULT_REJECT_PATTERNS);
+        const selectorCsv = JSON.stringify((ctx.selector || '').trim());
 
         const script = `
             (function() {
                 const accept = ${acceptPatterns}.map(x => String(x).toLowerCase());
                 const reject = ${rejectPatterns}.map(x => String(x).toLowerCase());
 
-                const candidates = Array.from(document.querySelectorAll('button, [role="button"], .monaco-button, [class*="button"]'));
+                const selectorCsv = ${selectorCsv};
+                const selectorParts = selectorCsv
+                    ? selectorCsv.split(',').map(s => s.trim()).filter(Boolean)
+                    : [];
+
+                const fallbackSelectors = [
+                    'button',
+                    '[role="button"]',
+                    '.monaco-button',
+                    '[class*="button"]'
+                ];
+
+                const allSelectors = Array.from(new Set([...selectorParts, ...fallbackSelectors]));
+
+                const seen = new Set();
+                const candidates = [];
+                for (const sel of allSelectors) {
+                    let nodes = [];
+                    try { nodes = Array.from(document.querySelectorAll(sel)); } catch (e) { nodes = []; }
+                    for (const node of nodes) {
+                        if (!seen.has(node)) {
+                            seen.add(node);
+                            candidates.push(node);
+                        }
+                    }
+                }
                 function visible(el) {
                     if (!el || !el.isConnected) return false;
                     const style = window.getComputedStyle(el);
