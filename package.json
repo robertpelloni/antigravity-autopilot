@@ -2,7 +2,7 @@
     "name": "antigravity-autopilot",
     "displayName": "Antigravity Autopilot (Unified)",
     "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-    "version": "4.10.8",
+    "version": "4.10.10",
     "repository": {
         "type": "git",
         "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -96,6 +96,10 @@
             {
                 "command": "antigravity.copyRuntimeStateJson",
                 "title": "Antigravity: Copy Runtime State JSON"
+            },
+            {
+                "command": "antigravity.resumeFromWaitingState",
+                "title": "Antigravity: Resume From Waiting State"
             }
         ],
         "keybindings": [
@@ -298,6 +302,23 @@
                     "minimum": 5,
                     "maximum": 7200,
                     "description": "Minimum seconds between repeated waiting-state reminders."
+                },
+                "antigravity.runtimeAutoResumeEnabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically send a resume message when runtime remains in waiting_for_chat_message state."
+                },
+                "antigravity.runtimeAutoResumeMessage": {
+                    "type": "string",
+                    "default": "Continue with the next highest-priority development task in this workspace. If everything is complete, summarize what is done and propose the next best improvement.",
+                    "description": "Message sent automatically (or manually) to resume Copilot chat when waiting."
+                },
+                "antigravity.runtimeAutoResumeCooldownSec": {
+                    "type": "number",
+                    "default": 300,
+                    "minimum": 5,
+                    "maximum": 7200,
+                    "description": "Minimum seconds between automatic resume messages while waiting."
                 },
                 "antigravity.acceptPatterns": {
                     "type": "array",

@@ -448,5 +448,26 @@ export class CDPHandler extends EventEmitter {
             return null;
         }
     }
+
+    /**
+     * Sends a chat bump/resume message through the browser bridge.
+     */
+    async sendHybridBump(message: string): Promise<void> {
+        if (!message || !message.trim()) return;
+        const safe = JSON.stringify(String(message));
+        const expression = `
+            (function() {
+                const msg = ${safe};
+                const payload = '__ANTIGRAVITY_HYBRID_BUMP__:' + msg;
+                if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
+                    window.__ANTIGRAVITY_BRIDGE__(payload);
+                } else {
+                    console.log(payload);
+                }
+                return true;
+            })()
+        `;
+        await this.executeScriptInAllSessions(expression);
+    }
 }
 

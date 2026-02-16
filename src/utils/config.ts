@@ -28,6 +28,9 @@ export interface AntigravityConfig {
     runtimeWaitingReminderEnabled: boolean;
     runtimeWaitingReminderDelaySec: number;
     runtimeWaitingReminderCooldownSec: number;
+    runtimeAutoResumeEnabled: boolean;
+    runtimeAutoResumeMessage: string;
+    runtimeAutoResumeCooldownSec: number;
 
     // CDP Settings
     cdpPort: number;
@@ -108,6 +111,9 @@ export class ConfigManager {
             runtimeWaitingReminderEnabled: config.get('runtimeWaitingReminderEnabled', true),
             runtimeWaitingReminderDelaySec: config.get('runtimeWaitingReminderDelaySec', 60),
             runtimeWaitingReminderCooldownSec: config.get('runtimeWaitingReminderCooldownSec', 180),
+            runtimeAutoResumeEnabled: config.get('runtimeAutoResumeEnabled', true),
+            runtimeAutoResumeMessage: config.get('runtimeAutoResumeMessage', 'Continue with the next highest-priority development task in this workspace. If everything is complete, summarize what is done and propose the next best improvement.'),
+            runtimeAutoResumeCooldownSec: config.get('runtimeAutoResumeCooldownSec', 300),
             cdpPort: config.get('cdpPort', 9000),
             cdpTimeout: config.get('cdpTimeout', 10000),
             preferredModelForReasoning: config.get('preferredModelForReasoning', 'claude-opus-4.5-thinking'),

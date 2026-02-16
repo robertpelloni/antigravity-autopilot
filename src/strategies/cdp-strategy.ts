@@ -268,4 +268,11 @@ export class CDPStrategy implements IStrategy {
         }
         return state as CDPRuntimeState;
     }
+
+    /**
+     * Sends a single hybrid bump/resume message to chat.
+     */
+    async sendHybridBump(message: string): Promise<void> {
+        await this.cdpHandler.sendHybridBump(message);
+    }
 }

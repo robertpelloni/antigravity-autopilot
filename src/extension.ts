@@ -35,6 +35,9 @@ export function activate(context: vscode.ExtensionContext) {
     // Initialize Managers
     const strategyManager = new StrategyManager(context);
     let latestRuntimeState: CDPRuntimeState | null = null;
+    let waitingStateSince: number | null = null;
+    let lastWaitingReminderAt = 0;
+    let lastAutoResumeAt = 0;
 
     const resolveCDPStrategy = (): CDPStrategy | null => {
         const strategy = strategyManager.getStrategy('cdp') as any;
@@ -49,6 +52,7 @@ export function activate(context: vscode.ExtensionContext) {
             const cdp = resolveCDPStrategy();
             if (!cdp || !cdp.isConnected()) {
                 latestRuntimeState = null;
+                waitingStateSince = null;
                 statusBar.updateRuntimeState(null);
                 return;
             }
@@ -56,8 +60,56 @@ export function activate(context: vscode.ExtensionContext) {
             const runtimeState = await cdp.getRuntimeState();
             latestRuntimeState = runtimeState;
             statusBar.updateRuntimeState(runtimeState);
+
+            const waitingEnabled = config.get<boolean>('runtimeWaitingReminderEnabled');
+            const waitingDelayMs = Math.max(5, config.get<number>('runtimeWaitingReminderDelaySec') || 60) * 1000;
+            const waitingCooldownMs = Math.max(5, config.get<number>('runtimeWaitingReminderCooldownSec') || 180) * 1000;
+            const autoResumeEnabled = config.get<boolean>('runtimeAutoResumeEnabled');
+            const autoResumeCooldownMs = Math.max(5, config.get<number>('runtimeAutoResumeCooldownSec') || 300) * 1000;
+            const now = Date.now();
+            const isWaiting = runtimeState?.status === 'waiting_for_chat_message' || runtimeState?.waitingForChatMessage === true;
+
+            if (!isWaiting) {
+                waitingStateSince = null;
+                return;
+            }
+
+            if (waitingStateSince === null) {
+                waitingStateSince = now;
+                return;
+            }
+
+            const waitingElapsed = now - waitingStateSince;
+            if (waitingEnabled) {
+                const cooldownElapsed = now - lastWaitingReminderAt;
+                if (waitingElapsed >= waitingDelayMs && cooldownElapsed >= waitingCooldownMs) {
+                    lastWaitingReminderAt = now;
+                    const done = runtimeState?.doneTabs ?? 0;
+                    const total = runtimeState?.totalTabs ?? 0;
+                    const pending = runtimeState?.pendingAcceptButtons ?? 0;
+                    vscode.window.showInformationMessage(
+                        `Antigravity is waiting for a new chat message (${done}/${total} tabs complete, pending actions: ${pending}).`,
+                        'Check Runtime State',
+                        'Open Dashboard'
+                    ).then(selection => {
+                        if (selection === 'Check Runtime State') {
+                            vscode.commands.executeCommand('antigravity.checkRuntimeState');
+                        } else if (selection === 'Open Dashboard') {
+                            vscode.commands.executeCommand('antigravity.openSettings');
+                        }
+                    });
+                }
+            }
+
+            if (autoResumeEnabled && waitingElapsed >= waitingDelayMs && (now - lastAutoResumeAt) >= autoResumeCooldownMs) {
+                const sent = await sendAutoResumeMessage('automatic');
+                if (sent) {
+                    lastAutoResumeAt = now;
+                }
+            }
         } catch {
             latestRuntimeState = null;
+            waitingStateSince = null;
             statusBar.updateRuntimeState(null);
         }
     };
@@ -70,6 +122,31 @@ export function activate(context: vscode.ExtensionContext) {
         const pending = state.pendingAcceptButtons ?? 0;
         const waiting = state.waitingForChatMessage ? 'yes' : 'no';
         return `${status} | tabs ${done}/${total} | pending ${pending} | waiting chat ${waiting}`;
+    };
+
+    const sendAutoResumeMessage = async (reason: 'automatic' | 'manual') => {
+        const cdp = resolveCDPStrategy() as any;
+        if (!cdp || typeof cdp.sendHybridBump !== 'function') {
+            if (reason === 'manual') {
+                vscode.window.showWarningMessage('Antigravity: CDP strategy is not active.');
+            }
+            return false;
+        }
+
+        const message = (config.get<string>('runtimeAutoResumeMessage') || '').trim();
+        if (!message) {
+            if (reason === 'manual') {
+                vscode.window.showWarningMessage('Antigravity: runtimeAutoResumeMessage is empty.');
+            }
+            return false;
+        }
+
+        await cdp.sendHybridBump(message);
+        log.info(`[AutoResume] Sent ${reason} resume message.`);
+        if (reason === 'manual') {
+            vscode.window.showInformationMessage('Antigravity: resume message sent.');
+        }
+        return true;
     };
 
     DashboardPanel.setRuntimeStateProvider(async () => {
@@ -273,6 +350,11 @@ export function activate(context: vscode.ExtensionContext) {
                     action: 'antigravity.checkRuntimeState'
                 },
                 {
+                    label: '$(debug-start) Resume From Waiting State',
+                    description: 'Send configured resume message to keep Copilot chat moving',
+                    action: 'antigravity.resumeFromWaitingState'
+                },
+                {
                     label: '$(clippy) Copy Runtime State JSON',
                     description: 'Copy full runtime snapshot to clipboard',
                     action: 'antigravity.copyRuntimeStateJson'
@@ -331,6 +413,9 @@ export function activate(context: vscode.ExtensionContext) {
             latestRuntimeState = state;
             await vscode.env.clipboard.writeText(JSON.stringify(state, null, 2));
             vscode.window.showInformationMessage('Antigravity runtime state JSON copied to clipboard.');
+        }),
+        vscode.commands.registerCommand('antigravity.resumeFromWaitingState', async () => {
+            await sendAutoResumeMessage('manual');
         })
     );
 

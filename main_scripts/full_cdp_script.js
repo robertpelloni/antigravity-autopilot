@@ -493,16 +493,32 @@
         return count;
     }
 
-    function getRuntimeStateSnapshot() {
-        const state = window.__autoAllState || {};
-        const mode = getCurrentMode();
+    function getProfileCoverage(mode) {
         const clickSelectors = getUnifiedClickSelectors(mode);
         const sendSelectors = getUnifiedSendButtonSelectors(mode);
         const inputSelectors = getUnifiedTextInputSelectors(mode);
 
-        const pendingAcceptButtons = countPendingAcceptButtons(clickSelectors);
-        const hasVisibleSendButton = !!findVisibleElementBySelectors(sendSelectors);
-        const hasVisibleInput = !!findVisibleElementBySelectors(inputSelectors);
+        return {
+            mode,
+            pendingAcceptButtons: countPendingAcceptButtons(clickSelectors),
+            hasVisibleSendButton: !!findVisibleElementBySelectors(sendSelectors),
+            hasVisibleInput: !!findVisibleElementBySelectors(inputSelectors)
+        };
+    }
+
+    function getRuntimeStateSnapshot() {
+        const state = window.__autoAllState || {};
+        const mode = getCurrentMode();
+        const profileCoverage = {
+            antigravity: getProfileCoverage('antigravity'),
+            vscode: getProfileCoverage('vscode'),
+            cursor: getProfileCoverage('cursor')
+        };
+        const activeCoverage = profileCoverage[mode] || getProfileCoverage(mode);
+
+        const pendingAcceptButtons = activeCoverage.pendingAcceptButtons;
+        const hasVisibleSendButton = activeCoverage.hasVisibleSendButton;
+        const hasVisibleInput = activeCoverage.hasVisibleInput;
         const isIdle = isConversationIdle();
 
         const tabNames = Array.isArray(state.tabNames) ? state.tabNames : [];
@@ -533,6 +549,7 @@
             doneTabs: doneCount,
             allTasksComplete,
             waitingForChatMessage,
+            profileCoverage,
             lastClickTime,
             lastBumpTime,
             timestamp: Date.now()

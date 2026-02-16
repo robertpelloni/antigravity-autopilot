@@ -5,6 +5,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.10] - 2026-02-16
+
+### Added
+- **Auto-Resume Continuation**: When runtime stays in `waiting_for_chat_message`, extension can now automatically send a configurable resume message to keep Copilot Chat moving.
+- **Manual Resume Command**: Added `Antigravity: Resume From Waiting State` command for one-click continuation.
+- **Dashboard Coverage Readout**: Runtime card now shows per-profile coverage (`vscode`, `antigravity`, `cursor`) including input/send visibility and pending accept counts.
+
+### Changed
+- **Waiting Policy Config**: Added and wired `runtimeAutoResumeEnabled`, `runtimeAutoResumeMessage`, and `runtimeAutoResumeCooldownSec` across manifest, config manager, and dashboard.
+- **Status Menu Actions**: Added fast resume action to the status quick menu.
+
+## [4.10.9] - 2026-02-16
+
+### Added
+- **Waiting-State Reminder Policy**: Added configurable reminders when runtime remains in `waiting_for_chat_message` state for a defined duration.
+- **Reminder Settings**: Added `runtimeWaitingReminderEnabled`, `runtimeWaitingReminderDelaySec`, and `runtimeWaitingReminderCooldownSec` settings (manifest + dashboard controls).
+- **Cross-Profile Coverage Metrics**: Runtime snapshot now includes `profileCoverage` for `antigravity`, `vscode`, and `cursor`, exposing send-input/button visibility and pending accept counts per profile.
+
+### Changed
+- **Runtime Poller Behavior**: Extension runtime poll loop now tracks waiting-state entry time and throttles notifications via cooldown.
+
 ## [4.10.8] - 2026-02-16
 
 ### Added

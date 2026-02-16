@@ -259,6 +259,10 @@ export class DashboardPanel {
                     <div><strong>Updated:</strong> <span id="runtimeUpdated" class="muted">-</span></div>
                     <div><strong>State Duration:</strong> <span id="runtimeStateDuration" class="muted">-</span></div>
                     <div><strong>Waiting Since:</strong> <span id="runtimeWaitingSince" class="muted">-</span></div>
+                    <div><strong>Active Coverage:</strong> <span id="runtimeCoverageActive" class="muted">-</span></div>
+                    <div><strong>VS Code Coverage:</strong> <span id="runtimeCoverageVSCode" class="muted">-</span></div>
+                    <div><strong>Antigravity Coverage:</strong> <span id="runtimeCoverageAntigravity" class="muted">-</span></div>
+                    <div><strong>Cursor Coverage:</strong> <span id="runtimeCoverageCursor" class="muted">-</span></div>
                 </div>
                 <div style="margin-top:10px;display:flex;gap:8px;">
                     <button onclick="requestRuntimeState()">Refresh Runtime State</button>
@@ -348,6 +352,30 @@ export class DashboardPanel {
                 <div class="setting">
                     <label>Thread Wait (s):</label>
                     <input type="number" value="${settings.threadWaitInterval}" onchange="updateConfig('threadWaitInterval', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Waiting Reminder:</label>
+                    <input type="checkbox" ${settings.runtimeWaitingReminderEnabled ? 'checked' : ''} onchange="updateConfig('runtimeWaitingReminderEnabled', this.checked)">
+                </div>
+                <div class="setting">
+                    <label>Reminder Delay (s):</label>
+                    <input type="number" value="${settings.runtimeWaitingReminderDelaySec}" min="5" max="3600" onchange="updateConfig('runtimeWaitingReminderDelaySec', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Reminder Cooldown (s):</label>
+                    <input type="number" value="${settings.runtimeWaitingReminderCooldownSec}" min="5" max="7200" onchange="updateConfig('runtimeWaitingReminderCooldownSec', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Auto Resume:</label>
+                    <input type="checkbox" ${settings.runtimeAutoResumeEnabled ? 'checked' : ''} onchange="updateConfig('runtimeAutoResumeEnabled', this.checked)">
+                </div>
+                <div class="setting">
+                    <label>Auto Resume Cooldown (s):</label>
+                    <input type="number" value="${settings.runtimeAutoResumeCooldownSec}" min="5" max="7200" onchange="updateConfig('runtimeAutoResumeCooldownSec', parseInt(this.value))">
+                </div>
+                <div class="setting vertical">
+                    <label>Auto Resume Message:</label>
+                    <textarea onchange="updateConfig('runtimeAutoResumeMessage', this.value)">${settings.runtimeAutoResumeMessage || ''}</textarea>
                 </div>
                  <div class="setting">
                      <label>Max Loops/Session:</label>
@@ -668,6 +696,15 @@ export class DashboardPanel {
                     const updated = document.getElementById('runtimeUpdated');
                     const stateDuration = document.getElementById('runtimeStateDuration');
                     const waitingSinceEl = document.getElementById('runtimeWaitingSince');
+                    const coverageActive = document.getElementById('runtimeCoverageActive');
+                    const coverageVSCode = document.getElementById('runtimeCoverageVSCode');
+                    const coverageAntigravity = document.getElementById('runtimeCoverageAntigravity');
+                    const coverageCursor = document.getElementById('runtimeCoverageCursor');
+
+                    function coverageText(cov) {
+                        if (!cov) return '-';
+                        return 'input:' + yesNo(!!cov.hasVisibleInput) + ', send:' + yesNo(!!cov.hasVisibleSendButton) + ', pending:' + (cov.pendingAcceptButtons ?? 0);
+                    }
 
                     if (!state) {
                         chip.className = 'runtime-chip unknown';
@@ -680,6 +717,10 @@ export class DashboardPanel {
                         updated.textContent = new Date().toLocaleTimeString();
                         stateDuration.textContent = '-';
                         waitingSinceEl.textContent = '-';
+                        coverageActive.textContent = '-';
+                        coverageVSCode.textContent = '-';
+                        coverageAntigravity.textContent = '-';
+                        coverageCursor.textContent = '-';
                         renderRuntimeHistory();
                         return;
                     }
@@ -709,6 +750,11 @@ export class DashboardPanel {
                     updated.textContent = new Date(ts).toLocaleTimeString();
                     stateDuration.textContent = formatDurationMs(ts - (currentStatusSince || ts));
                     waitingSinceEl.textContent = waitingSince ? new Date(waitingSince).toLocaleTimeString() : '-';
+                    const profileCoverage = state.profileCoverage || {};
+                    coverageActive.textContent = coverageText(profileCoverage[state.mode || ''] || null);
+                    coverageVSCode.textContent = coverageText(profileCoverage.vscode || null);
+                    coverageAntigravity.textContent = coverageText(profileCoverage.antigravity || null);
+                    coverageCursor.textContent = coverageText(profileCoverage.cursor || null);
                     renderRuntimeHistory();
                 }
 
