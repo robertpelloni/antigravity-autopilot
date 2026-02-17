@@ -19,7 +19,29 @@ antigravity-multi-purpose-agent/**
 auto-accept-agent/**
 free-auto-accept-antigravity/**
 yoke-antigravity/**
+Claude-Autopilot/**
+copilot-auto-continue/**
 # Exclude previous builds
 *.vsix
 # Exclude local maintenance helpers
 fix_cdp_script.js
+__build_marker.txt
+
+# Exclude local automation/session artifacts
+.yoke/**
+
+# Exclude development-only folders
+tests/**
+scripts/**
+docs/**
+
+# Exclude planning/internal docs not needed at runtime
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+GPT.md
+HANDOFF.md
+ROADMAP.md
+TODO.md
+VISION.md
+task.md
