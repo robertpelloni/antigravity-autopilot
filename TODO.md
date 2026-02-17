@@ -139,7 +139,7 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 ## P3 — Testing architecture corrections (high leverage)
 
 ### P3.1 Convert replica tests to real module tests
-- [ ] Stop testing duplicated mock classes where possible
+- [x] Stop testing duplicated mock classes where possible
 - [x] Add tests importing actual `src` modules with VS Code test harness/mocks
 - [x] Cover command registration, runtime guard behavior, and parity checks
 - [x] Migrate `CircuitBreaker` tests to execute real `src/core/circuit-breaker.ts` module
@@ -153,7 +153,7 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - [x] Migrate `MCPFederation` tests to execute real `src/modules/mcp/federation.ts` module
 - [x] Migrate `InteractionMethodRegistry` tests to execute real `src/strategies/interaction-methods.ts` module
 - [x] Migrate `CodeReviewer` tests to execute real `src/core/code-reviewer.ts` module
-- **Evidence:** several tests in `tests/` re-implement logic rather than test source modules
+- **Evidence:** root `tests/` now execute real `src/` modules for migrated systems; remaining replica-style tests are in reference submodules
 - **Definition of done:** regressions in source modules are caught by tests automatically
 
 ### P3.2 Add CI quality gates
