@@ -10,6 +10,7 @@ import { projectTracker } from './project-tracker';
 import { modelSelector } from './model-selector';
 import { exitDetector } from './exit-detector';
 import { circuitBreaker, CircuitState } from '../core/circuit-breaker';
+import { calculateAdaptiveBackoff } from './backoff';
 import { cdpClient } from '../providers/cdp-client';
 import { config } from '../utils/config';
 import { createLogger } from '../utils/logger';
@@ -59,16 +60,7 @@ export class AutonomousLoop {
 
     // Public for testing
     static calculateBackoff(baseInterval: number, failures: number, maxMinutes: number): number {
-        if (failures === 0) return baseInterval;
-
-        const backoffMultiplier = Math.pow(2, Math.min(failures, 6));
-        let newInterval = baseInterval * backoffMultiplier;
-
-        const maxSeconds = maxMinutes * 60;
-        if (newInterval > maxSeconds) {
-            newInterval = maxSeconds;
-        }
-        return newInterval;
+        return calculateAdaptiveBackoff(baseInterval, failures, maxMinutes);
     }
 
     setStatusCallback(callback: (status: LoopStatus) => void): void {
