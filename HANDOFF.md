@@ -392,3 +392,32 @@ After the initial audit write-up above, additional release-hardening work was ex
   - File: `antigravity-autopilot-4.10.77.vsix`
   - SHA256: `A27BCA26FAE47E223EE37C5864DFEB8BAE65D10CBB6F3576D5FF7D17064796F2`
   - Size: `141,257` bytes
+
+---
+
+## Session continuation snapshot (2026-02-16, secure release path)
+
+### Added stricter release command
+
+- New npm script: `verify:release:secure`
+  - Runs `test:audit-policy`
+  - Runs `audit:policy`
+  - Runs `verify:release`
+- Purpose: one command for policy validation + security gate + full release packaging checks.
+
+### CI policy hardening update
+
+- Updated `.github/workflows/security-audit.yml` to run audit-policy unit tests before enforcing gate:
+  - `npm run test:audit-policy`
+  - `npm run audit:policy`
+
+### Validation outcomes (latest)
+
+- `npm run verify:release:secure --silent` → **PASS**
+  - Audit policy tests: `9 pass / 0 fail`
+  - Audit policy gate: PASS (`high=0 critical=0`)
+  - Full release verify: PASS (`371 pass / 0 fail`)
+- Artifact:
+  - File: `antigravity-autopilot-4.10.77.vsix`
+  - SHA256: `257445B249CF05BA31F5C3A75362C10CCB17E62B1F688142D1152E3106AE4BDB`
+  - Size: `141,370` bytes
