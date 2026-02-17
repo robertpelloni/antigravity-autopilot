@@ -152,6 +152,7 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - [x] Migrate `Swarm` aggregation tests to execute real `src/core/agent-orchestrator.ts` module
 - [x] Migrate `MCPFederation` tests to execute real `src/modules/mcp/federation.ts` module
 - [x] Migrate `InteractionMethodRegistry` tests to execute real `src/strategies/interaction-methods.ts` module
+- [x] Migrate `CodeReviewer` tests to execute real `src/core/code-reviewer.ts` module
 - **Evidence:** several tests in `tests/` re-implement logic rather than test source modules
 - **Definition of done:** regressions in source modules are caught by tests automatically
 
