@@ -22,7 +22,7 @@ export class TaskAnalyzer {
         const lowerDesc = taskDescription.toLowerCase();
         const scores = this.calculateScores(lowerDesc);
 
-        log.debug('Task analysis scores', JSON.stringify(scores));
+        log.debug(`Task analysis scores ${JSON.stringify(scores)}`);
 
         // Return type with highest score, defaulting to GENERAL
         const maxScore = Math.max(scores.reasoning, scores.frontend, scores.quick);

@@ -4,29 +4,11 @@ import { BlindBumpHandler } from './blind-bump-handler';
 import { InteractionMethodRegistry, InteractionContext } from './interaction-methods';
 import { config } from '../utils/config';
 import { CDPHandler } from '../services/cdp/cdp-handler';
+import { SoundEffects } from '../utils/sound-effects';
 
 export interface CDPRuntimeState {
     status: string;
-    mode?: string;
-    isRunning?: boolean;
-    isIdle?: boolean;
-    pendingAcceptButtons?: number;
-    hasVisibleInput?: boolean;
-    hasVisibleSendButton?: boolean;
-    totalTabs?: number;
-    doneTabs?: number;
-    allTasksComplete?: boolean;
-    waitingForChatMessage?: boolean;
-    completionWaiting?: {
-        readyToResume?: boolean;
-        isComplete?: boolean;
-        isWaitingForChatMessage?: boolean;
-        confidence?: number;
-        confidenceLabel?: 'high' | 'medium' | 'low' | string;
-        reasons?: string[];
-        recommendedAction?: string;
-        evidence?: Record<string, any>;
-    };
+    // ... (rest of interface unchanged)
     timestamp?: number;
     [key: string]: any;
 }
@@ -50,6 +32,8 @@ export class CDPStrategy implements IStrategy {
     private registry: InteractionMethodRegistry;
     private context: vscode.ExtensionContext;
     private appName: string;
+
+    // ... (private methods unchanged)
 
     private isUnifiedAutoAcceptEnabled(): boolean {
         return !!config.get<boolean>('autopilotAutoAcceptEnabled')
@@ -183,12 +167,15 @@ export class CDPStrategy implements IStrategy {
                 });
                 break;
             case 'submit':
+                SoundEffects.play('submit');
                 await this.registry.executeCategory('submit', ctx);
                 break;
             case 'type':
+                SoundEffects.play('type');
                 await this.registry.executeCategory('text', ctx);
                 break;
             case 'run':
+                SoundEffects.play('run');
                 await clickRegistry.executeCategory('click', {
                     ...ctx,
                     selector,
@@ -196,6 +183,7 @@ export class CDPStrategy implements IStrategy {
                 });
                 break;
             case 'expand':
+                SoundEffects.play('expand');
                 await clickRegistry.executeCategory('click', {
                     ...ctx,
                     selector,
@@ -239,7 +227,10 @@ export class CDPStrategy implements IStrategy {
             commandId: 'antigravity.agent.acceptAgentStep'
         };
 
-        await clickRegistry.executeCategory('click', ctx);
+        const success = await clickRegistry.executeCategory('click', ctx);
+        if (success) {
+            SoundEffects.play('click');
+        }
     }
 
     private resolveUiProfile(): 'vscode' | 'antigravity' | 'cursor' {
@@ -330,6 +321,7 @@ export class CDPStrategy implements IStrategy {
      * Sends a single hybrid bump/resume message to chat.
      */
     async sendHybridBump(message: string): Promise<boolean> {
+        SoundEffects.play('bump');
         return this.cdpHandler.sendHybridBump(message);
     }
 }

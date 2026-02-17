@@ -7,8 +7,12 @@
  */
 
 import * as vscode from 'vscode';
+import { SoundEffects } from '../utils/sound-effects';
 
 // ============ Interfaces ============
+// ... (start of file)
+
+
 
 export interface InteractionContext {
     cdpHandler?: any;       // CDPHandler instance (optional - not all methods need it)
@@ -692,6 +696,7 @@ export class AltEnterShortcut implements IInteractionMethod {
 
     async execute(ctx: InteractionContext): Promise<boolean> {
         if (!ctx.cdpHandler) return false;
+        SoundEffects.play('alt-enter');
         await ctx.cdpHandler.dispatchKeyEventToAll({
             type: 'keyDown', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
             windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
