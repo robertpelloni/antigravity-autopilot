@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.70] - 2026-02-16
+
+### Changed
+- **Real-Module Test Modernization (P3.1 partial)**: Replaced replica-style `tests/task-analyzer.test.js` logic with execution against the real `src/core/task-analyzer.ts` module using an on-the-fly TypeScript transpile loader and lightweight dependency mocks.
+- **TaskAnalyzer Test Harness Reliability**: Added robust relative `.ts` module resolution in test loader to avoid false failures from unresolved source imports.
+
+### Notes
+- P3.1 remains in progress; other replica-style tests are still queued for migration to real source-module coverage.
+
 ## [4.10.69] - 2026-02-16
 
 ### Changed

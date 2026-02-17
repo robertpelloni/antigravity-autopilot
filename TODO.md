@@ -132,8 +132,8 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 
 ### P3.1 Convert replica tests to real module tests
 - [ ] Stop testing duplicated mock classes where possible
-- [ ] Add tests importing actual `src` modules with VS Code test harness/mocks
-- [ ] Cover command registration, runtime guard behavior, and parity checks
+- [x] Add tests importing actual `src` modules with VS Code test harness/mocks
+- [x] Cover command registration, runtime guard behavior, and parity checks
 - **Evidence:** several tests in `tests/` re-implement logic rather than test source modules
 - **Definition of done:** regressions in source modules are caught by tests automatically
 
