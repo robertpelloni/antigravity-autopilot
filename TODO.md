@@ -130,8 +130,8 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 
 ### P2.4 Project manager integrations hardening
 - [ ] Add robust Jira support (currently interface-only)
-- [ ] Add pagination/rate-limit handling for GitHub issues
-- [ ] Persist sync snapshots and conflict resolution metadata
+- [x] Add pagination/rate-limit handling for GitHub issues
+- [x] Persist sync snapshots and conflict resolution metadata
 - **Definition of done:** reliable bi-directional task sync with audit trail
 
 ---
