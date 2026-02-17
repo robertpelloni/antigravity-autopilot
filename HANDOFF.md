@@ -363,3 +363,32 @@ After the initial audit write-up above, additional release-hardening work was ex
   - `moderate`: `0`
   - `high`: `0`
   - `critical`: `0`
+
+---
+
+## Session continuation snapshot (2026-02-16, CI policy gate)
+
+### Added security policy automation
+
+- Added root script: `scripts/audit-policy.js`
+  - Runs `npm audit --json`
+  - Fails only when `high > 0` or `critical > 0`
+  - Allows moderate/low/info advisories under explicit policy
+- Added root npm script: `npm run audit:policy`
+- Added root GitHub Actions workflow: `.github/workflows/security-audit.yml`
+  - Triggers on push/PR to `master`
+  - Runs `npm ci` then `npm run audit:policy`
+
+### Validation outcomes (latest)
+
+- `npm run audit:policy` → **PASS**
+  - `total=0 info=0 low=0 moderate=0 high=0 critical=0`
+- `npm run verify:release --silent` → **PASS**
+  - Compile: PASS
+  - Lint: PASS
+  - Tests: PASS (`371 pass / 0 fail`)
+  - Package: PASS
+- Artifact:
+  - File: `antigravity-autopilot-4.10.77.vsix`
+  - SHA256: `A27BCA26FAE47E223EE37C5864DFEB8BAE65D10CBB6F3576D5FF7D17064796F2`
+  - Size: `141,257` bytes
