@@ -1,5 +1,9 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+const Module = require('module');
+const ts = require('typescript');
 
 /**
  * RateLimiter Logic Tests
@@ -7,72 +11,88 @@ const assert = require('node:assert');
  * and rate limit detection — without VS Code dependencies.
  */
 
-// ============ Replicate RateLimiter for testing ============
+let mockMaxCallsPerHour = 100;
 
-class TestRateLimiter {
-    constructor(maxCallsPerHour = 100) {
-        this.maxCalls = maxCallsPerHour;
-        this.state = {
-            callsThisHour: 0,
-            hourStartTime: Date.now(),
-            isLimited: false,
-            waitingForReset: false,
-        };
+function loadTsModule(filePath, cache = new Map()) {
+    const absolutePath = path.resolve(filePath);
+    if (cache.has(absolutePath)) {
+        return cache.get(absolutePath).exports;
     }
 
-    canMakeCall() {
-        this.checkHourReset();
-        return this.state.callsThisHour < this.maxCalls && !this.state.waitingForReset;
-    }
+    const source = fs.readFileSync(absolutePath, 'utf-8');
+    const transpiled = ts.transpileModule(source, {
+        compilerOptions: {
+            module: ts.ModuleKind.CommonJS,
+            target: ts.ScriptTarget.ES2020,
+            esModuleInterop: true
+        },
+        fileName: absolutePath
+    }).outputText;
 
-    recordCall() {
-        this.checkHourReset();
-        this.state.callsThisHour++;
-    }
+    const mod = new Module(absolutePath, module);
+    cache.set(absolutePath, mod);
+    mod.filename = absolutePath;
+    mod.paths = Module._nodeModulePaths(path.dirname(absolutePath));
 
-    checkHourReset() {
-        const now = Date.now();
-        const hourMs = 60 * 60 * 1000;
-        if (now - this.state.hourStartTime >= hourMs) {
-            this.state.callsThisHour = 0;
-            this.state.hourStartTime = now;
-            this.state.isLimited = false;
+    const originalRequire = mod.require.bind(mod);
+    mod.require = (request) => {
+        if (request === 'vscode') {
+            return {
+                window: {
+                    createOutputChannel: () => ({ appendLine: () => undefined }),
+                    showWarningMessage: async () => 'Exit Now',
+                    withProgress: async (_options, task) => task({ report: () => undefined }, { isCancellationRequested: false, onCancellationRequested: () => undefined })
+                },
+                workspace: {
+                    getConfiguration: () => ({
+                        get: (key, fallback) => {
+                            if (key === 'maxCallsPerHour') {
+                                return mockMaxCallsPerHour;
+                            }
+                            return fallback;
+                        },
+                        update: async () => undefined
+                    })
+                },
+                ProgressLocation: { Notification: 15 },
+                ConfigurationTarget: { Global: 1 }
+            };
         }
-    }
 
-    getRemainingCalls() {
-        this.checkHourReset();
-        return Math.max(0, this.maxCalls - this.state.callsThisHour);
-    }
+        if (request.startsWith('.')) {
+            const base = path.resolve(path.dirname(absolutePath), request);
+            const candidates = [`${base}.ts`, path.join(base, 'index.ts')];
+            for (const candidate of candidates) {
+                if (fs.existsSync(candidate)) {
+                    return loadTsModule(candidate, cache);
+                }
+            }
+        }
 
-    getTimeUntilReset() {
-        const hourMs = 60 * 60 * 1000;
-        const elapsed = Date.now() - this.state.hourStartTime;
-        return Math.max(0, hourMs - elapsed);
-    }
+        return originalRequire(request);
+    };
 
-    reset() {
-        this.state = {
-            callsThisHour: 0,
-            hourStartTime: Date.now(),
-            isLimited: false,
-            waitingForReset: false,
-        };
-    }
+    mod._compile(transpiled, absolutePath);
+    return mod.exports;
 }
+
+const rateLimiterModule = loadTsModule(path.resolve(__dirname, '../src/core/rate-limiter.ts'));
+const RateLimiter = rateLimiterModule.RateLimiter;
 
 // ============ Tests ============
 
 describe('RateLimiter', () => {
     it('should allow calls under the limit', () => {
-        const rl = new TestRateLimiter(10);
+        mockMaxCallsPerHour = 10;
+        const rl = new RateLimiter();
         assert.strictEqual(rl.canMakeCall(), true);
         for (let i = 0; i < 5; i++) rl.recordCall();
         assert.strictEqual(rl.canMakeCall(), true);
     });
 
     it('should block calls at the limit', () => {
-        const rl = new TestRateLimiter(3);
+        mockMaxCallsPerHour = 3;
+        const rl = new RateLimiter();
         rl.recordCall();
         rl.recordCall();
         rl.recordCall();
@@ -80,7 +100,8 @@ describe('RateLimiter', () => {
     });
 
     it('should track remaining calls', () => {
-        const rl = new TestRateLimiter(10);
+        mockMaxCallsPerHour = 10;
+        const rl = new RateLimiter();
         assert.strictEqual(rl.getRemainingCalls(), 10);
         rl.recordCall();
         rl.recordCall();
@@ -88,7 +109,8 @@ describe('RateLimiter', () => {
     });
 
     it('should reset after hour boundary', () => {
-        const rl = new TestRateLimiter(10);
+        mockMaxCallsPerHour = 10;
+        const rl = new RateLimiter();
         rl.recordCall();
         rl.recordCall();
         // Simulate hour passing
@@ -97,14 +119,16 @@ describe('RateLimiter', () => {
     });
 
     it('should calculate time until reset', () => {
-        const rl = new TestRateLimiter(10);
+        mockMaxCallsPerHour = 10;
+        const rl = new RateLimiter();
         const remaining = rl.getTimeUntilReset();
         assert.ok(remaining > 0);
         assert.ok(remaining <= 60 * 60 * 1000);
     });
 
     it('should fully reset via reset()', () => {
-        const rl = new TestRateLimiter(5);
+        mockMaxCallsPerHour = 5;
+        const rl = new RateLimiter();
         rl.recordCall();
         rl.recordCall();
         rl.recordCall();
@@ -114,7 +138,8 @@ describe('RateLimiter', () => {
     });
 
     it('should not go negative on remaining calls', () => {
-        const rl = new TestRateLimiter(2);
+        mockMaxCallsPerHour = 2;
+        const rl = new RateLimiter();
         rl.recordCall();
         rl.recordCall();
         rl.recordCall(); // over limit

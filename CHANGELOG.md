@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.74] - 2026-02-16
+
+### Changed
+- **Real-Module Test Modernization (P3.1 progress)**: Replaced replica-style `tests/rate-limiter.test.js` with real-module coverage against `src/core/rate-limiter.ts` using TypeScript-on-the-fly source loading.
+- **Rate Limiter Test Harness Stability**: Added deterministic test-side `vscode` configuration/output-channel mocks so real source logic can run in pure Node test sessions.
+
+### Notes
+- P3.1 remains in progress; additional replica-style tests are still queued for migration.
+
 ## [4.10.73] - 2026-02-16
 
 ### Changed
