@@ -5,6 +5,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.81] - 2026-02-17
+
+### Changed
+- **Internal Command Policy Documentation (P0.4 complete)**: Documented `antigravity.getChromeDevtoolsMcpUrl` as intentionally internal-only in `README.md`.
+- **README Status Synchronization**: Updated root README version and implementation-status note to match current MCP runtime/federation reality.
+- **Backlog Tracker Sync**: Updated `TODO.md` and `task.md` to reflect completed P0.4 command-policy documentation state.
+
 ## [4.10.80] - 2026-02-17
 
 ### Added

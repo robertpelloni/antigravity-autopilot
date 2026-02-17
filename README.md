@@ -42,6 +42,12 @@ All settings are under `antigravity.*` in VS Code settings. Key ones:
 - [**Submodules**](docs/SUBMODULES.md) — Reference implementation details
 - [**LLM Instructions**](docs/LLM_INSTRUCTIONS.md) — Agent development protocol
 
+## Internal Commands (Intentional)
+
+- `antigravity.getChromeDevtoolsMcpUrl` is intentionally **internal-only**.
+- It is used for runtime diagnostics/programmatic consumers and is excluded from user-facing command contributions by design.
+- Public command parity is enforced by automated tests, with this command explicitly allowlisted as internal.
+
 ## Building
 
 ```bash
@@ -55,9 +61,9 @@ Use `verify:release:secure` when you want policy-test + audit-gate enforcement b
 
 ## Version
 
-**v4.10.77** — See [CHANGELOG.md](CHANGELOG.md) for details.
+**v4.10.80** — See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## Implementation Status Note
 
-Core CDP runtime, runtime telemetry, and auto-resume watchdog systems are active.
-Some advanced modules (notably MCP server/federation transport, progress analytics depth, and test-generation quality paths) remain partially implemented and are tracked in [TODO.md](TODO.md).
+Core CDP runtime, runtime telemetry, auto-resume watchdog systems, and real MCP server/federation HTTP+WebSocket execution are active.
+Remaining planned work is focused on higher-level reliability tuning and ecosystem expansion (see [TODO.md](TODO.md)).

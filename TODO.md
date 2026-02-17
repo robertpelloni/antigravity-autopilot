@@ -44,8 +44,8 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 ### P0.4 Remove dummy command wiring
 - [x] Replace hardcoded dummy result for `antigravity.getChromeDevtoolsMcpUrl`
 - [x] Derive endpoint from active CDP connection context/config
-- [ ] Either expose command in manifest or document as intentionally internal
-- **Evidence:** `src/extension.ts` returns `'ws://localhost:9222'` dummy
+- [x] Either expose command in manifest or document as intentionally internal
+- **Evidence:** `src/extension.ts` now resolves runtime MCP URL dynamically; internal-only policy is documented in `README.md`.
 - **Definition of done:** command returns actual runtime-resolved value (or is removed)
 
 ### P0.5 Establish a single task source-of-truth
