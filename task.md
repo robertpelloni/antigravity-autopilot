@@ -7,6 +7,7 @@ Canonical backlog is maintained in `TODO.md`.
 ## Current Priority Tasks
 
 - [x] Ops.1 Add one-command release verification (`npm run verify:release`) and document usage
+- [x] Ops.2 Remove unused root `vitest` dependency; confirm root `npm audit` is clean
 
 - [x] P0.1 Replace simulated MCP server transport in `src/modules/mcp/server.ts`
 - [x] P0.2 Replace simulated MCP federation transport in `src/modules/mcp/federation.ts` *(HTTP/WebSocket complete; stdio still pending by design)*

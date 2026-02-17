@@ -334,3 +334,32 @@ After the initial audit write-up above, additional release-hardening work was ex
 - `npm audit --json` still reports a **moderate dev-toolchain advisory** chain (`vitest` → `vite` → `esbuild`) tied to `GHSA-67mh-4wv8-2f99`.
 - Available fix remains a **SemVer-major** migration to `vitest@4.0.18`, previously trialed and deferred in this workspace due to render-integration instability.
 - Current recommendation remains unchanged: perform Vitest 4 migration in a dedicated branch with teardown/timing hardening, then merge.
+
+---
+
+## Session continuation snapshot (2026-02-16, security hardening follow-up)
+
+### Root dependency pruning outcome
+
+- Removed unused root dev dependency: `vitest`
+- Rationale: root test runner uses Node built-in `--test`; root `vitest` was not required for release verification in this workspace.
+
+### Validation after pruning
+
+- `npm run verify:release --silent` → **PASS**
+  - Compile: PASS
+  - Lint: PASS
+  - Tests: PASS (`371 pass / 0 fail`)
+  - Package: PASS
+- Artifact:
+  - File: `antigravity-autopilot-4.10.77.vsix`
+  - SHA256: `C53A75B48E71A194E2D78A3F90AAB8D3A9C987411CC0918B190C8018FEED6260`
+  - Size: `140,779` bytes
+
+### Security status (latest)
+
+- `npm audit --json` now reports:
+  - `total`: `0`
+  - `moderate`: `0`
+  - `high`: `0`
+  - `critical`: `0`

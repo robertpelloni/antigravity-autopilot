@@ -96,12 +96,12 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - **Definition of done:** significantly fewer false-complete stops in manual soak testing
 
 ### P1.6 Dependency security hardening (non-breaking first)
-- [ ] Upgrade `vitest`/`vite` toolchain to a non-vulnerable line and re-baseline tests
-- [ ] Confirm `esbuild` transitive advisory no longer present after toolchain upgrade
+- [x] Remove unused root `vitest` dependency to eliminate vulnerable transitive `vite`/`esbuild` chain
+- [x] Confirm root `npm audit --json` reports zero vulnerabilities after dependency pruning
 - [x] Apply non-breaking `npm audit fix` updates at root
 - [ ] Add CI gate to fail on new high/critical advisories (allowlist moderate dev-only with explicit policy)
-- **Evidence:** root `npm audit --json` reports 4 moderate dev-tool vulnerabilities tied to `vitest` major upgrade path
-- **Definition of done:** `npm audit` reports no unresolved high/critical issues and documented policy for remaining dev-only advisories
+- **Evidence:** root `npm audit --json` now reports 0 vulnerabilities after removing unused root `vitest`
+- **Definition of done:** `npm audit` reports no unresolved high/critical issues and documented policy for any future dev-only advisories
 
 ---
 
