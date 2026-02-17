@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.87] - 2026-02-17
+
+### Added
+- **Unified Control Compatibility Tests**: Added `tests/config-unified-controls.test.js` to validate grouped autopilot toggle fallback behavior and unified timing fallback semantics in `ConfigManager`.
+
+### Changed
+- **Release Metadata Sync**: Updated `package.json` and `src/utils/constants.ts` to `4.10.87`.
+
 ## [4.10.86] - 2026-02-17
 
 ### Changed
