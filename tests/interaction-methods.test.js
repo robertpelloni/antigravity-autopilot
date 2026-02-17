@@ -1,188 +1,142 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+const Module = require('module');
+const ts = require('typescript');
 
-/**
- * Interaction Method Registry Tests
- * Tests registration, priority ordering, sequential/parallel execution,
- * timing, and fallback behavior.
- */
-
-// ============ Replicate core logic for testing ============
-
-class TestMethod {
-    constructor(id, category, priority, shouldSucceed = true, timingMs = 10) {
-        this.id = id;
-        this.name = `Test ${id}`;
-        this.description = `Test method ${id}`;
-        this.category = category;
-        this.enabled = true;
-        this.priority = priority;
-        this.timingMs = timingMs;
-        this.requiresCDP = false;
-        this.shouldSucceed = shouldSucceed;
-        this.callCount = 0;
-        this.callOrder = -1;
+function loadTsModule(filePath, mocks = {}, cache = new Map()) {
+    const absolutePath = path.resolve(filePath);
+    if (cache.has(absolutePath)) {
+        return cache.get(absolutePath).exports;
     }
 
-    async execute(ctx) {
-        this.callCount++;
-        this.callOrder = TestMethod.globalCallOrder++;
-        if (!this.shouldSucceed) throw new Error(`${this.id} failed`);
-        return true;
-    }
-}
-TestMethod.globalCallOrder = 0;
+    const source = fs.readFileSync(absolutePath, 'utf-8');
+    const transpiled = ts.transpileModule(source, {
+        compilerOptions: {
+            module: ts.ModuleKind.CommonJS,
+            target: ts.ScriptTarget.ES2020,
+            esModuleInterop: true
+        },
+        fileName: absolutePath
+    }).outputText;
 
-function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+    const mod = new Module(absolutePath, module);
+    cache.set(absolutePath, mod);
+    mod.filename = absolutePath;
+    mod.paths = Module._nodeModulePaths(path.dirname(absolutePath));
 
-class TestRegistry {
-    constructor(config = {}) {
-        this.methods = new Map();
-        this.config = {
-            textInput: config.textInput || [],
-            click: config.click || [],
-            submit: config.submit || [],
-            timings: config.timings || {},
-            retryCount: config.retryCount || 3,
-            parallelExecution: config.parallelExecution || false
-        };
-    }
-
-    register(method) {
-        if (this.config.timings[method.id] !== undefined) {
-            method.timingMs = this.config.timings[method.id];
+    const originalRequire = mod.require.bind(mod);
+    mod.require = (request) => {
+        if (request in mocks) {
+            return mocks[request];
         }
-        this.methods.set(method.id, method);
-    }
 
-    getMethod(id) { return this.methods.get(id); }
-
-    getMethodsByCategory(category) {
-        const enabledIds = category === 'text' ? this.config.textInput
-            : category === 'click' ? this.config.click
-                : this.config.submit;
-
-        return Array.from(this.methods.values())
-            .filter(m => m.category === category && enabledIds.includes(m.id))
-            .sort((a, b) => a.priority - b.priority);
-    }
-
-    getAllMethods() {
-        return Array.from(this.methods.values()).sort((a, b) => a.priority - b.priority);
-    }
-
-    async executeCategory(category, ctx) {
-        const methods = this.getMethodsByCategory(category);
-        const results = [];
-        let successCount = 0;
-
-        if (this.config.parallelExecution) {
-            const settled = await Promise.allSettled(
-                methods.map(async m => {
-                    const start = Date.now();
-                    try {
-                        const ok = await m.execute(ctx);
-                        return { methodId: m.id, success: ok, durationMs: Date.now() - start };
-                    } catch (e) {
-                        return { methodId: m.id, success: false, durationMs: Date.now() - start, error: e.message };
+        if (request === 'vscode') {
+            return {
+                env: {
+                    clipboard: {
+                        writeText: async () => undefined
                     }
-                })
-            );
-            for (const outcome of settled) {
-                if (outcome.status === 'fulfilled') results.push(outcome.value);
-            }
-        } else {
-            for (const method of methods) {
-                if (successCount >= this.config.retryCount) break;
-                const start = Date.now();
-                try {
-                    const ok = await method.execute(ctx);
-                    results.push({ methodId: method.id, success: ok, durationMs: Date.now() - start });
-                    if (ok) successCount++;
-                } catch (e) {
-                    results.push({ methodId: method.id, success: false, durationMs: Date.now() - start, error: e.message });
+                },
+                commands: {
+                    executeCommand: async () => undefined,
+                    getCommands: async () => []
+                }
+            };
+        }
+
+        if (request.startsWith('.')) {
+            const base = path.resolve(path.dirname(absolutePath), request);
+            const candidates = [`${base}.ts`, path.join(base, 'index.ts')];
+            for (const candidate of candidates) {
+                if (fs.existsSync(candidate)) {
+                    return loadTsModule(candidate, mocks, cache);
                 }
             }
         }
 
-        return results;
-    }
+        return originalRequire(request);
+    };
 
-    getSummary() {
-        return this.getAllMethods().map(m => ({
-            id: m.id, name: m.name, category: m.category,
-            enabled: this.isEnabled(m), priority: m.priority,
-            timingMs: m.timingMs, requiresCDP: m.requiresCDP
-        }));
-    }
-
-    isEnabled(method) {
-        const list = method.category === 'text' ? this.config.textInput
-            : method.category === 'click' ? this.config.click
-                : this.config.submit;
-        return list.includes(method.id);
-    }
+    mod._compile(transpiled, absolutePath);
+    return mod.exports;
 }
 
-// ============ Tests ============
+function createTestMethod(id, category, priority, shouldSucceed = true, timingMs = 0) {
+    return {
+        id,
+        name: `Test ${id}`,
+        description: `Test method ${id}`,
+        category,
+        enabled: true,
+        priority,
+        timingMs,
+        requiresCDP: false,
+        async execute() {
+            if (!shouldSucceed) {
+                throw new Error(`${id} failed`);
+            }
+            return true;
+        }
+    };
+}
 
-describe('Interaction Method Registry', () => {
+const interactionModule = loadTsModule(path.resolve(__dirname, '../src/strategies/interaction-methods.ts'));
+const InteractionMethodRegistry = interactionModule.InteractionMethodRegistry;
+
+describe('Interaction Method Registry (real module)', () => {
     it('should register and retrieve methods by ID', () => {
-        const reg = new TestRegistry({ textInput: ['a'] });
-        const m = new TestMethod('a', 'text', 1);
-        reg.register(m);
+        const reg = new InteractionMethodRegistry({ textInput: ['a'] });
+        reg.register(createTestMethod('a', 'text', 1));
+
         assert.strictEqual(reg.getMethod('a').id, 'a');
     });
 
     it('should return methods sorted by priority', () => {
-        const reg = new TestRegistry({ click: ['low', 'mid', 'high'] });
-        reg.register(new TestMethod('high', 'click', 3));
-        reg.register(new TestMethod('low', 'click', 1));
-        reg.register(new TestMethod('mid', 'click', 2));
+        const reg = new InteractionMethodRegistry({ click: ['low', 'mid', 'high'] });
+        reg.register(createTestMethod('high', 'click', 3));
+        reg.register(createTestMethod('low', 'click', 1));
+        reg.register(createTestMethod('mid', 'click', 2));
 
-        const sorted = reg.getMethodsByCategory('click');
-        assert.deepStrictEqual(sorted.map(m => m.id), ['low', 'mid', 'high']);
+        const sorted = reg.getMethodsByCategory('click').filter((m) => ['low', 'mid', 'high'].includes(m.id));
+        assert.deepStrictEqual(sorted.map((m) => m.id), ['low', 'mid', 'high']);
     });
 
     it('should filter by enabled config', () => {
-        const reg = new TestRegistry({ submit: ['a', 'c'] }); // b not enabled
-        reg.register(new TestMethod('a', 'submit', 1));
-        reg.register(new TestMethod('b', 'submit', 2));
-        reg.register(new TestMethod('c', 'submit', 3));
+        const reg = new InteractionMethodRegistry({ submit: ['a', 'c'] });
+        reg.register(createTestMethod('a', 'submit', 1));
+        reg.register(createTestMethod('b', 'submit', 2));
+        reg.register(createTestMethod('c', 'submit', 3));
 
-        const methods = reg.getMethodsByCategory('submit');
+        const methods = reg.getMethodsByCategory('submit').filter((m) => ['a', 'b', 'c'].includes(m.id));
         assert.strictEqual(methods.length, 2);
-        assert.ok(!methods.find(m => m.id === 'b'));
+        assert.ok(!methods.find((m) => m.id === 'b'));
     });
 
     it('should apply timing overrides from config', () => {
-        const reg = new TestRegistry({ textInput: ['x'], timings: { 'x': 999 } });
-        const m = new TestMethod('x', 'text', 1);
-        reg.register(m);
+        const reg = new InteractionMethodRegistry({ textInput: ['x'], timings: { x: 999 } });
+        reg.register(createTestMethod('x', 'text', 1));
         assert.strictEqual(reg.getMethod('x').timingMs, 999);
     });
 
-    it('should execute methods sequentially and stop at retryCount', async () => {
-        TestMethod.globalCallOrder = 0;
-        const reg = new TestRegistry({ textInput: ['a', 'b', 'c', 'd'], retryCount: 2 });
-        reg.register(new TestMethod('a', 'text', 1));
-        reg.register(new TestMethod('b', 'text', 2));
-        reg.register(new TestMethod('c', 'text', 3));
-        reg.register(new TestMethod('d', 'text', 4));
+    it('should execute methods sequentially and stop at retryCount successes', async () => {
+        const reg = new InteractionMethodRegistry({ textInput: ['a', 'b', 'c', 'd'], retryCount: 2, timings: { a: 0, b: 0, c: 0, d: 0 } });
+        reg.register(createTestMethod('a', 'text', 1, true, 0));
+        reg.register(createTestMethod('b', 'text', 2, true, 0));
+        reg.register(createTestMethod('c', 'text', 3, true, 0));
+        reg.register(createTestMethod('d', 'text', 4, true, 0));
 
         const results = await reg.executeCategory('text', {});
-        // Should stop after 2 successes (retryCount = 2)
         assert.strictEqual(results.length, 2);
-        assert.strictEqual(results[0].methodId, 'a');
-        assert.strictEqual(results[1].methodId, 'b');
+        assert.deepStrictEqual(results.map((r) => r.methodId), ['a', 'b']);
     });
 
     it('should handle failing methods and continue to next', async () => {
-        TestMethod.globalCallOrder = 0;
-        const reg = new TestRegistry({ click: ['fail1', 'ok1', 'ok2'], retryCount: 2 });
-        reg.register(new TestMethod('fail1', 'click', 1, false));
-        reg.register(new TestMethod('ok1', 'click', 2, true));
-        reg.register(new TestMethod('ok2', 'click', 3, true));
+        const reg = new InteractionMethodRegistry({ click: ['fail1', 'ok1', 'ok2'], retryCount: 2, timings: { fail1: 0, ok1: 0, ok2: 0 } });
+        reg.register(createTestMethod('fail1', 'click', 1, false, 0));
+        reg.register(createTestMethod('ok1', 'click', 2, true, 0));
+        reg.register(createTestMethod('ok2', 'click', 3, true, 0));
 
         const results = await reg.executeCategory('click', {});
         assert.strictEqual(results.length, 3);
@@ -192,69 +146,57 @@ describe('Interaction Method Registry', () => {
         assert.strictEqual(results[2].success, true);
     });
 
-    it('should execute all methods in parallel mode', async () => {
-        TestMethod.globalCallOrder = 0;
-        const reg = new TestRegistry({ submit: ['s1', 's2', 's3'], retryCount: 1, parallelExecution: true });
-        reg.register(new TestMethod('s1', 'submit', 1));
-        reg.register(new TestMethod('s2', 'submit', 2));
-        reg.register(new TestMethod('s3', 'submit', 3));
+    it('should execute all methods in parallel mode regardless of retryCount', async () => {
+        const reg = new InteractionMethodRegistry({ submit: ['s1', 's2', 's3'], retryCount: 1, parallelExecution: true, timings: { s1: 0, s2: 0, s3: 0 } });
+        reg.register(createTestMethod('s1', 'submit', 1, true, 0));
+        reg.register(createTestMethod('s2', 'submit', 2, true, 0));
+        reg.register(createTestMethod('s3', 'submit', 3, true, 0));
 
         const results = await reg.executeCategory('submit', {});
-        // In parallel mode, all methods are executed regardless of retryCount
         assert.strictEqual(results.length, 3);
-        assert.ok(results.every(r => r.success));
+        assert.ok(results.every((r) => r.success));
     });
 
-    it('should generate correct summary', () => {
-        const reg = new TestRegistry({ textInput: ['m1'], click: ['m2'] });
-        reg.register(new TestMethod('m1', 'text', 1));
-        reg.register(new TestMethod('m2', 'click', 2));
-        reg.register(new TestMethod('m3', 'submit', 3)); // not enabled
+    it('should generate summary including enabled state for configured IDs', () => {
+        const reg = new InteractionMethodRegistry({ textInput: ['m1'], click: ['m2'], submit: [] });
+        reg.register(createTestMethod('m1', 'text', 1));
+        reg.register(createTestMethod('m2', 'click', 2));
+        reg.register(createTestMethod('m3', 'submit', 3));
 
         const summary = reg.getSummary();
-        assert.strictEqual(summary.length, 3);
-        assert.strictEqual(summary.find(s => s.id === 'm1').enabled, true);
-        assert.strictEqual(summary.find(s => s.id === 'm2').enabled, true);
-        assert.strictEqual(summary.find(s => s.id === 'm3').enabled, false);
+        const m1 = summary.find((s) => s.id === 'm1');
+        const m2 = summary.find((s) => s.id === 'm2');
+        const m3 = summary.find((s) => s.id === 'm3');
+
+        assert.strictEqual(m1.enabled, true);
+        assert.strictEqual(m2.enabled, true);
+        assert.strictEqual(m3.enabled, false);
     });
 
     it('should return empty results for category with no enabled methods', async () => {
-        const reg = new TestRegistry({ textInput: [] }); // nothing enabled
-        reg.register(new TestMethod('x', 'text', 1));
+        const reg = new InteractionMethodRegistry({ textInput: [] });
+        reg.register(createTestMethod('x', 'text', 1));
 
         const results = await reg.executeCategory('text', {});
         assert.strictEqual(results.length, 0);
     });
 
     it('should handle concurrent failures gracefully in parallel mode', async () => {
-        const reg = new TestRegistry({ click: ['f1', 'f2'], parallelExecution: true });
-        reg.register(new TestMethod('f1', 'click', 1, false));
-        reg.register(new TestMethod('f2', 'click', 2, false));
+        const reg = new InteractionMethodRegistry({ click: ['f1', 'f2'], parallelExecution: true, timings: { f1: 0, f2: 0 } });
+        reg.register(createTestMethod('f1', 'click', 1, false, 0));
+        reg.register(createTestMethod('f2', 'click', 2, false, 0));
 
         const results = await reg.executeCategory('click', {});
         assert.strictEqual(results.length, 2);
-        assert.ok(results.every(r => !r.success));
+        assert.ok(results.every((r) => !r.success));
     });
 
     it('should support expanded method ID combinations from settings', () => {
-        const reg = new TestRegistry({
+        const reg = new InteractionMethodRegistry({
             textInput: ['cdp-keys', 'cdp-insert-text', 'bridge-type'],
             click: ['dom-scan-click', 'bridge-click', 'native-accept', 'process-peek', 'visual-verify-click'],
             submit: ['vscode-submit', 'cdp-enter', 'ctrl-enter', 'alt-enter']
         });
-
-        reg.register(new TestMethod('cdp-keys', 'text', 1));
-        reg.register(new TestMethod('cdp-insert-text', 'text', 2));
-        reg.register(new TestMethod('bridge-type', 'text', 3));
-        reg.register(new TestMethod('dom-scan-click', 'click', 1));
-        reg.register(new TestMethod('bridge-click', 'click', 2));
-        reg.register(new TestMethod('native-accept', 'click', 3));
-        reg.register(new TestMethod('process-peek', 'click', 4));
-        reg.register(new TestMethod('visual-verify-click', 'click', 5));
-        reg.register(new TestMethod('vscode-submit', 'submit', 1));
-        reg.register(new TestMethod('cdp-enter', 'submit', 2));
-        reg.register(new TestMethod('ctrl-enter', 'submit', 3));
-        reg.register(new TestMethod('alt-enter', 'submit', 4));
 
         assert.strictEqual(reg.getMethodsByCategory('text').length, 3);
         assert.strictEqual(reg.getMethodsByCategory('click').length, 5);
@@ -262,19 +204,25 @@ describe('Interaction Method Registry', () => {
     });
 
     it('should execute mixed click methods until retry success target is reached', async () => {
-        const reg = new TestRegistry({
+        const reg = new InteractionMethodRegistry({
             click: ['dom-scan-click', 'bridge-click', 'native-accept', 'process-peek'],
-            retryCount: 2
+            retryCount: 2,
+            timings: {
+                'dom-scan-click': 0,
+                'bridge-click': 0,
+                'native-accept': 0,
+                'process-peek': 0
+            }
         });
 
-        reg.register(new TestMethod('dom-scan-click', 'click', 1, false));
-        reg.register(new TestMethod('bridge-click', 'click', 2, true));
-        reg.register(new TestMethod('native-accept', 'click', 3, true));
-        reg.register(new TestMethod('process-peek', 'click', 4, true));
+        reg.register(createTestMethod('dom-scan-click', 'click', 1, false, 0));
+        reg.register(createTestMethod('bridge-click', 'click', 2, true, 0));
+        reg.register(createTestMethod('native-accept', 'click', 3, true, 0));
+        reg.register(createTestMethod('process-peek', 'click', 4, true, 0));
 
         const results = await reg.executeCategory('click', {});
         assert.strictEqual(results.length, 3);
-        assert.deepStrictEqual(results.map(r => r.methodId), ['dom-scan-click', 'bridge-click', 'native-accept']);
-        assert.strictEqual(results.filter(r => r.success).length, 2);
+        assert.deepStrictEqual(results.map((r) => r.methodId), ['dom-scan-click', 'bridge-click', 'native-accept']);
+        assert.strictEqual(results.filter((r) => r.success).length, 2);
     });
 });
