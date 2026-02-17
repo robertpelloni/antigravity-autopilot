@@ -488,3 +488,27 @@ After the initial audit write-up above, additional release-hardening work was ex
   - File: `antigravity-autopilot-4.10.77.vsix`
   - SHA256: `76D05EBD63FBEB576FAC32EBEC6151893BEB7321184A963A41CBA4F981641792`
   - Size: `141,905` bytes
+
+---
+
+## Session continuation snapshot (2026-02-17, P3.1 backoff test modernization)
+
+### Source-backed test conversion
+
+- Added `src/core/backoff.ts` with exported pure utility:
+  - `calculateAdaptiveBackoff(baseInterval, failures, maxMinutes)`
+- Updated `src/core/autonomous-loop.ts` to delegate adaptive backoff math to the shared utility.
+- Migrated `tests/backoff-logic.test.js` from local replica logic to real source-backed coverage of the production utility.
+
+### Validation outcomes (latest)
+
+- `node --test tests/backoff-logic.test.js` → **PASS** (`6 pass / 0 fail`)
+- `npm run test:quality-gates` → **PASS** (`9 pass / 0 fail`)
+- `npm run verify:release:secure --silent` → **PASS**
+  - Audit policy tests: `9 pass / 0 fail`
+  - Audit policy gate: PASS (`high=0 critical=0`)
+  - Full release verify: PASS (`371 pass / 0 fail`)
+- Artifact:
+  - File: `antigravity-autopilot-4.10.77.vsix`
+  - SHA256: `F61C2B5866CE4EB3ED7A3BAE7C5D662E012DDA74CECFD4EDA760C908D78C0036`
+  - Size: `141,943` bytes
