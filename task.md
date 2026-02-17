@@ -17,4 +17,4 @@ Canonical backlog is maintained in `TODO.md`.
 - [x] P1.4 Improve model scraper reliability
 - [x] P2.1 Replace progress tracker placeholder metrics with real telemetry
 - [x] P2.2 Upgrade test generator to remove placeholder assertions *(completed with AST-backed extraction + merge-safe generation)*
-- [ ] P3.1 Replace replica tests with real source-module tests *(in progress: TaskAnalyzer + ProjectTracker + CircuitBreaker + ExitDetector + RateLimiter now test real src modules; additional replica tests remain)*
+- [ ] P3.1 Replace replica tests with real source-module tests *(in progress: TaskAnalyzer + ProjectTracker + CircuitBreaker + ExitDetector + RateLimiter + ProgressTracker now test real src modules; additional replica tests remain)*

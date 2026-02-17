@@ -137,6 +137,7 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - [x] Migrate `CircuitBreaker` tests to execute real `src/core/circuit-breaker.ts` module
 - [x] Migrate `ExitDetector` tests to execute real `src/core/exit-detector.ts` module
 - [x] Migrate `RateLimiter` tests to execute real `src/core/rate-limiter.ts` module
+- [x] Migrate `ProgressTracker` tests to execute real `src/core/progress-tracker.ts` module
 - **Evidence:** several tests in `tests/` re-implement logic rather than test source modules
 - **Definition of done:** regressions in source modules are caught by tests automatically
 

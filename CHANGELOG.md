@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.75] - 2026-02-16
+
+### Changed
+- **Real-Module Test Modernization (P3.1 progress)**: Replaced replica-style `tests/progress-tracker.test.js` with real-module coverage against `src/core/progress-tracker.ts` using TypeScript-on-the-fly source loading.
+- **Progress Tracker Harness Fidelity**: Added deterministic test-side mocks for `vscode.workspace` and `child_process.exec` so git-diff-backed file-change accounting and error-taxonomy logic are validated from production code paths.
+
+### Notes
+- P3.1 remains in progress; additional replica-style tests are still queued for migration.
+
 ## [4.10.74] - 2026-02-16
 
 ### Changed
