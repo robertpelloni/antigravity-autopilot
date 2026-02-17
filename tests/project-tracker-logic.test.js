@@ -1,83 +1,102 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const Module = require('module');
+const ts = require('typescript');
 
-// Mock VS Code
-const vscodeMock = {
-    workspace: {
-        workspaceFolders: [{ uri: { fsPath: path.resolve(__dirname, 'fixtures') } }]
+function createLoggerMock() {
+    const noop = () => { };
+    return {
+        debug: noop,
+        info: noop,
+        warn: noop,
+        error: noop
+    };
+}
+
+function loadTsModule(filePath, mocks = {}, cache = new Map()) {
+    const absolutePath = path.resolve(filePath);
+    if (cache.has(absolutePath)) {
+        return cache.get(absolutePath).exports;
     }
-};
 
-// Mock Module Loading for VS Code
-const originalRequire = require('module').prototype.require;
-require('module').prototype.require = function (id) {
-    if (id === 'vscode') return vscodeMock;
-    return originalRequire.apply(this, arguments);
-};
+    const source = fs.readFileSync(absolutePath, 'utf-8');
+    const transpiled = ts.transpileModule(source, {
+        compilerOptions: {
+            module: ts.ModuleKind.CommonJS,
+            target: ts.ScriptTarget.ES2020,
+            esModuleInterop: true
+        },
+        fileName: absolutePath
+    }).outputText;
 
-// Import ProjectTracker (needs tsc compilation or ts-node, but here we assume JS or compilation)
-// Since source is TS, we might need to test the compiled JS in 'dist' or use 'ts-node'.
-// Given the environment, let's try to verify the Logic directly by mocking or copying the class if imports are hard.
-// Actually, let's try to require the TS file via ts-node if available, or just test logic.
+    const mod = new Module(absolutePath, module);
+    cache.set(absolutePath, mod);
+    mod.filename = absolutePath;
+    mod.paths = Module._nodeModulePaths(path.dirname(absolutePath));
 
-// Wait, the project uses 'esbuild' to bundle to 'dist/extension.js'.
-// Testing source TS files directly with 'node --test' works if we have a loader, but we don't know if we do.
-// 'antigravity-jules-orchestration' tests were JS.
+    const originalRequire = mod.require.bind(mod);
+    mod.require = (request) => {
+        if (request in mocks) {
+            return mocks[request];
+        }
 
-// Better approach: Test the Logic in isolation. 
-// ProjectTracker's core logic is string parsing (TaskAnalyzer) and FS operations.
-// I will create a test that specifically targets the logic we added.
+        if (request === '../utils/logger' || request.endsWith('/utils/logger')) {
+            return { createLogger: () => createLoggerMock() };
+        }
 
-// Since loading 'src/core/project-tracker.ts' is hard without TS loader, 
-// I will rely on manual verification via 'antigravity.toggleAutonomous' as referenced in the plan,
-// OR I will try to create a test file that simulates the parsing logic to ensure regexes are correct.
-
-test('ProjectTracker Parsing Logic', async (t) => {
-    // Re-implement or import the parsing logic to verify it
-    const extractCurrentTask = (content) => {
-        const lines = content.split('\n');
-        for (const line of lines) {
-            if (/^[-*]\s*\[\s*\]/.test(line)) {
-                if (line.includes('~~')) continue;
-                const task = line.replace(/^[-*]\s*\[\s*\]\s*/, '').trim();
-                if (task.length < 3) continue;
-                return task;
+        if (request.startsWith('.')) {
+            const base = path.resolve(path.dirname(absolutePath), request);
+            const candidates = [
+                `${base}.ts`,
+                path.join(base, 'index.ts')
+            ];
+            for (const candidate of candidates) {
+                if (fs.existsSync(candidate)) {
+                    return loadTsModule(candidate, mocks, cache);
+                }
             }
         }
-        return null;
+
+        return originalRequire(request);
     };
 
-    const markTaskComplete = (content, task) => {
-        const escapedTask = task.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const pattern = new RegExp(`^([-*]\\s*)\\[\\s*\\](\\s*${escapedTask})`, 'mi');
-        return content.replace(pattern, '$1[x]$2');
+    mod._compile(transpiled, absolutePath);
+    return mod.exports;
+}
+
+test('ProjectTracker real-module logic', async (t) => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ag-project-tracker-'));
+    const taskFile = path.join(tempRoot, 'task.md');
+
+    fs.writeFileSync(taskFile, [
+        '# Tasks',
+        '- [x] Done task',
+        '- [ ] Current task',
+        '- [ ] Future task'
+    ].join('\n'));
+
+    const vscodeMock = {
+        workspace: {
+            workspaceFolders: [{ uri: { fsPath: tempRoot } }]
+        }
     };
 
-    await t.test('should extract first incomplete task', () => {
-        const content = `
-# Tasks
-- [x] Phase 1
-- [ ] Phase 2: Implementation
-- [ ] Phase 3
-`;
-        const task = extractCurrentTask(content);
-        assert.strictEqual(task, 'Phase 2: Implementation');
+    const projectTrackerPath = path.resolve(__dirname, '../src/core/project-tracker.ts');
+    const mod = loadTsModule(projectTrackerPath, { vscode: vscodeMock });
+    const tracker = new mod.ProjectTracker();
+
+    await t.test('should extract first incomplete task from real module', () => {
+        const task = tracker.getNextTask();
+        assert.strictEqual(task, 'Current task');
     });
 
-    await t.test('should skip crossed out tasks', () => {
-        const content = `
-- [ ] ~~Deprecated Task~~
-- [ ] Valid Task
-`;
-        const task = extractCurrentTask(content);
-        assert.strictEqual(task, 'Valid Task');
-    });
-
-    await t.test('should mark task as complete', () => {
-        const content = '- [ ] Task A';
-        const updated = markTaskComplete(content, 'Task A');
-        assert.strictEqual(updated, '- [x] Task A');
+    await t.test('should mark task complete using real module', () => {
+        const ok = tracker.completeTask('Current task');
+        assert.strictEqual(ok, true);
+        const updated = fs.readFileSync(taskFile, 'utf-8');
+        assert.ok(updated.includes('- [x] Current task'));
     });
 });

@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.71] - 2026-02-16
+
+### Changed
+- **Real-Module Test Modernization (P3.1 progress)**: Replaced replica-style `tests/project-tracker-logic.test.js` with real-module coverage against `src/core/project-tracker.ts` using temporary fixture files and TypeScript-on-the-fly module loading.
+- **Test Harness Reuse**: Extended test-side TS loader approach for source-module tests with `.ts` relative import resolution and lightweight dependency mocks.
+
+### Notes
+- P3.1 remains in progress; additional replica-style tests are still queued for migration.
+
 ## [4.10.70] - 2026-02-16
 
 ### Changed
