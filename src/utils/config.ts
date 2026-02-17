@@ -7,6 +7,9 @@ export interface AntigravityConfig {
     interactionUiProfile: 'auto' | 'vscode' | 'antigravity' | 'cursor';
     autoAcceptEnabled: boolean;
     autoAllEnabled: boolean;
+    autopilotAutoAcceptEnabled: boolean;
+    autopilotAutoBumpEnabled: boolean;
+    autopilotRunExpandContinueEnabled: boolean;
     multiTabEnabled: boolean;
     autonomousEnabled: boolean;
     mcpEnabled: boolean;
@@ -24,6 +27,8 @@ export interface AntigravityConfig {
     // User Requested Settings
     threadWaitInterval: number; // Seconds to wait between steps/threads
     autoApproveDelay: number;   // Seconds to wait before auto-approving
+    autoAcceptPollIntervalMs: number; // Polling interval for auto accept/action scanning
+    autoBumpCooldownSec: number; // Cooldown between auto-bump attempts
     bumpMessage: string;        // Message to post to bump thread
     runtimeWaitingReminderEnabled: boolean;
     runtimeWaitingReminderDelaySec: number;
@@ -110,6 +115,9 @@ export class ConfigManager {
             interactionUiProfile: config.get('interactionUiProfile', 'auto'),
             autoAcceptEnabled: config.get('autoAcceptEnabled', false),
             autoAllEnabled: config.get('autoAllEnabled', false),
+            autopilotAutoAcceptEnabled: config.get('autopilotAutoAcceptEnabled', config.get('autoAllEnabled', false) || config.get('autoAcceptEnabled', false)),
+            autopilotAutoBumpEnabled: config.get('autopilotAutoBumpEnabled', true),
+            autopilotRunExpandContinueEnabled: config.get('autopilotRunExpandContinueEnabled', true),
             multiTabEnabled: config.get('multiTabEnabled', false),
             autonomousEnabled: config.get('autonomousEnabled', false),
             mcpEnabled: config.get('mcpEnabled', false),
@@ -126,6 +134,8 @@ export class ConfigManager {
             enableMemory: config.get('enableMemory', true),
             threadWaitInterval: config.get('threadWaitInterval', 5),
             autoApproveDelay: config.get('autoApproveDelay', 30),
+            autoAcceptPollIntervalMs: config.get('autoAcceptPollIntervalMs', config.get('pollFrequency', 1000)),
+            autoBumpCooldownSec: config.get('autoBumpCooldownSec', config.get('autoApproveDelay', 30)),
             bumpMessage: config.get('bumpMessage', 'bump'),
             runtimeWaitingReminderEnabled: config.get('runtimeWaitingReminderEnabled', true),
             runtimeWaitingReminderDelaySec: config.get('runtimeWaitingReminderDelaySec', 60),
