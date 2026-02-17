@@ -149,6 +149,7 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - [x] Migrate `TestLoopDetector` tests to execute real `src/core/test-loop-detector.ts` module
 - [x] Migrate `VoiceControl` tests to execute real `src/modules/voice/control.ts` module
 - [x] Migrate `Backoff` tests to execute real `src/core/backoff.ts` module
+- [x] Migrate `Swarm` aggregation tests to execute real `src/core/agent-orchestrator.ts` module
 - **Evidence:** several tests in `tests/` re-implement logic rather than test source modules
 - **Definition of done:** regressions in source modules are caught by tests automatically
 
