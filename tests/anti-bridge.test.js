@@ -1,125 +1,67 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { EventEmitter } = require('events');
+const fs = require('fs');
+const path = require('path');
+const Module = require('module');
+const ts = require('typescript');
 
-/**
- * AntiBridge Logic Tests
- * Tests peer management, messaging, task relay, memory sharing,
- * heartbeat, and stats — all without WebSocket dependencies.
- */
+function createLoggerMock() {
+    const noop = () => { };
+    return { debug: noop, info: noop, warn: noop, error: noop };
+}
 
-// ============ Replicate core logic for testing ============
-
-class TestBridge extends EventEmitter {
-    constructor(config = {}) {
-        super();
-        this.config = {
-            instanceId: config.instanceId || `test_${Date.now()}`,
-            instanceName: config.instanceName || 'Test Instance',
-            port: config.port || 9100,
-            heartbeatIntervalMs: config.heartbeatIntervalMs || 10000,
-            maxPeers: config.maxPeers || 10,
-            ...config
-        };
-        this.peers = new Map();
-        this.messageQueue = [];
-        this.messagesSent = 0;
-        this.messagesReceived = 0;
-        this.startTime = Date.now();
-        this.isRunning = false;
+function loadTsModule(filePath, cache = new Map()) {
+    const absolutePath = path.resolve(filePath);
+    if (cache.has(absolutePath)) {
+        return cache.get(absolutePath).exports;
     }
 
-    start() {
-        this.isRunning = true;
-        this.startTime = Date.now();
-        this.emit('started', { instanceId: this.config.instanceId });
-    }
+    const source = fs.readFileSync(absolutePath, 'utf-8');
+    const transpiled = ts.transpileModule(source, {
+        compilerOptions: {
+            module: ts.ModuleKind.CommonJS,
+            target: ts.ScriptTarget.ES2020,
+            esModuleInterop: true
+        },
+        fileName: absolutePath
+    }).outputText;
 
-    stop() {
-        this.isRunning = false;
-        this.peers.clear();
-        this.emit('stopped');
-    }
+    const mod = new Module(absolutePath, module);
+    cache.set(absolutePath, mod);
+    mod.filename = absolutePath;
+    mod.paths = Module._nodeModulePaths(path.dirname(absolutePath));
 
-    addPeer(peer) {
-        if (this.peers.size >= this.config.maxPeers) return false;
-        if (peer.id === this.config.instanceId) return false;
-        this.peers.set(peer.id, { ...peer, connectedAt: Date.now(), lastHeartbeat: Date.now() });
-        this.emit('peerConnected', peer);
-        return true;
-    }
-
-    removePeer(peerId) {
-        const peer = this.peers.get(peerId);
-        if (peer) {
-            this.peers.delete(peerId);
-            this.emit('peerDisconnected', peer);
-            return true;
+    const originalRequire = mod.require.bind(mod);
+    mod.require = (request) => {
+        if (request === '../utils/logger' || request.endsWith('/utils/logger')) {
+            return { createLogger: () => createLoggerMock() };
         }
-        return false;
-    }
 
-    getPeers() { return Array.from(this.peers.values()); }
-
-    send(message) {
-        const full = {
-            ...message,
-            source: this.config.instanceId,
-            timestamp: Date.now(),
-            messageId: `msg_${Date.now()}_${Math.random().toString(36).substring(7)}`
-        };
-        this.messageQueue.push(full);
-        this.messagesSent++;
-        this.emit('messageSent', full);
-        if (full.target) {
-            this.emit(`message:${full.target}`, full);
-        } else {
-            for (const [peerId] of this.peers) {
-                this.emit(`message:${peerId}`, full);
+        if (request.startsWith('.')) {
+            const base = path.resolve(path.dirname(absolutePath), request);
+            const candidates = [`${base}.ts`, path.join(base, 'index.ts')];
+            for (const candidate of candidates) {
+                if (fs.existsSync(candidate)) {
+                    return loadTsModule(candidate, cache);
+                }
             }
         }
-        return full;
-    }
 
-    receive(message) {
-        this.messagesReceived++;
-        const peer = this.peers.get(message.source);
-        if (peer) peer.lastHeartbeat = Date.now();
-        this.emit('messageReceived', message);
-    }
+        return originalRequire(request);
+    };
 
-    sendTask(desc, target) {
-        return this.send({ type: 'task', target, payload: { description: desc } });
-    }
-
-    shareMemory(key, value) {
-        return this.send({ type: 'memory', payload: { key, value } });
-    }
-
-    relayInteraction(action, params, target) {
-        return this.send({ type: 'interaction', target, payload: { action, params } });
-    }
-
-    broadcastStatus(status, details) {
-        return this.send({ type: 'status', payload: { status, details } });
-    }
-
-    getStats() {
-        return {
-            instanceId: this.config.instanceId,
-            peers: this.getPeers(),
-            messagesSent: this.messagesSent,
-            messagesReceived: this.messagesReceived,
-            uptime: Date.now() - this.startTime
-        };
-    }
+    mod._compile(transpiled, absolutePath);
+    return mod.exports;
 }
+
+const antiBridgeModule = loadTsModule(path.resolve(__dirname, '../src/core/anti-bridge.ts'));
+const AntiBridge = antiBridgeModule.AntiBridge;
 
 // ============ Tests ============
 
 describe('AntiBridge Remote Coordination', () => {
     it('should start and stop cleanly', () => {
-        const bridge = new TestBridge({ instanceId: 'ag-1' });
+        const bridge = new AntiBridge({ instanceId: 'ag-1' });
         let started = false, stopped = false;
         bridge.on('started', () => started = true);
         bridge.on('stopped', () => stopped = true);
@@ -134,7 +76,7 @@ describe('AntiBridge Remote Coordination', () => {
     });
 
     it('should add and remove peers', () => {
-        const bridge = new TestBridge({ instanceId: 'ag-1' });
+        const bridge = new AntiBridge({ instanceId: 'ag-1' });
         const ok = bridge.addPeer({ id: 'ag-2', name: 'Machine 2', status: 'idle', capabilities: ['cdp'] });
         assert.strictEqual(ok, true);
         assert.strictEqual(bridge.getPeers().length, 1);
@@ -145,13 +87,13 @@ describe('AntiBridge Remote Coordination', () => {
     });
 
     it('should reject self as peer', () => {
-        const bridge = new TestBridge({ instanceId: 'ag-1' });
+        const bridge = new AntiBridge({ instanceId: 'ag-1' });
         const ok = bridge.addPeer({ id: 'ag-1', name: 'Self', status: 'idle', capabilities: [] });
         assert.strictEqual(ok, false);
     });
 
     it('should enforce maxPeers limit', () => {
-        const bridge = new TestBridge({ instanceId: 'ag-1', maxPeers: 2 });
+        const bridge = new AntiBridge({ instanceId: 'ag-1', maxPeers: 2 });
         bridge.addPeer({ id: 'ag-2', name: 'P2', status: 'idle', capabilities: [] });
         bridge.addPeer({ id: 'ag-3', name: 'P3', status: 'idle', capabilities: [] });
         const ok = bridge.addPeer({ id: 'ag-4', name: 'P4', status: 'idle', capabilities: [] });
@@ -160,7 +102,7 @@ describe('AntiBridge Remote Coordination', () => {
     });
 
     it('should send targeted messages', () => {
-        const bridge = new TestBridge({ instanceId: 'ag-1' });
+        const bridge = new AntiBridge({ instanceId: 'ag-1' });
         bridge.addPeer({ id: 'ag-2', name: 'P2', status: 'idle', capabilities: [] });
 
         let received = null;
@@ -175,7 +117,7 @@ describe('AntiBridge Remote Coordination', () => {
     });
 
     it('should broadcast to all peers', () => {
-        const bridge = new TestBridge({ instanceId: 'ag-1' });
+        const bridge = new AntiBridge({ instanceId: 'ag-1' });
         bridge.addPeer({ id: 'ag-2', name: 'P2', status: 'idle', capabilities: [] });
         bridge.addPeer({ id: 'ag-3', name: 'P3', status: 'idle', capabilities: [] });
 
@@ -188,7 +130,7 @@ describe('AntiBridge Remote Coordination', () => {
     });
 
     it('should track message statistics', () => {
-        const bridge = new TestBridge({ instanceId: 'ag-1' });
+        const bridge = new AntiBridge({ instanceId: 'ag-1' });
         bridge.addPeer({ id: 'ag-2', name: 'P2', status: 'idle', capabilities: [] });
 
         bridge.sendTask('Task 1');
@@ -202,7 +144,7 @@ describe('AntiBridge Remote Coordination', () => {
     });
 
     it('should relay interaction commands to specific peer', () => {
-        const bridge = new TestBridge({ instanceId: 'ag-1' });
+        const bridge = new AntiBridge({ instanceId: 'ag-1' });
         bridge.addPeer({ id: 'ag-2', name: 'P2', status: 'idle', capabilities: ['cdp'] });
 
         let relayed = null;
@@ -216,7 +158,7 @@ describe('AntiBridge Remote Coordination', () => {
     });
 
     it('should share memory across all peers', () => {
-        const bridge = new TestBridge({ instanceId: 'ag-1' });
+        const bridge = new AntiBridge({ instanceId: 'ag-1' });
         bridge.addPeer({ id: 'ag-2', name: 'P2', status: 'idle', capabilities: [] });
         bridge.addPeer({ id: 'ag-3', name: 'P3', status: 'idle', capabilities: [] });
 
@@ -229,7 +171,7 @@ describe('AntiBridge Remote Coordination', () => {
     });
 
     it('should update peer heartbeat on receive', () => {
-        const bridge = new TestBridge({ instanceId: 'ag-1' });
+        const bridge = new AntiBridge({ instanceId: 'ag-1' });
         bridge.addPeer({ id: 'ag-2', name: 'P2', status: 'idle', capabilities: [] });
 
         const before = bridge.getPeers()[0].lastHeartbeat;
