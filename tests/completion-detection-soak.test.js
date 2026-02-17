@@ -149,6 +149,51 @@ describe('Completion detection deterministic soak harness', () => {
                     'npm test completed',
                     'test suite green across modules'
                 ]
+            },
+            {
+                name: 'partial completion should not stop',
+                expectedStop: false,
+                steps: [
+                    'I have completed the backend implementation.',
+                    'Now working on the frontend integration.',
+                    'The backend is done, but the UI is pending.'
+                ]
+            },
+            {
+                name: 'future tense should not stop',
+                expectedStop: false,
+                steps: [
+                    'I will mark this task as complete once the tests pass.',
+                    'When everything is done, I will update the readme.',
+                    'Going to verify if all tasks are complete.'
+                ]
+            },
+            {
+                name: 'checklist update with pending items should not stop',
+                expectedStop: false,
+                steps: [
+                    '- [x] Task A (completed)',
+                    '- [ ] Task B (pending)',
+                    'Updated task.md to reflect progress.'
+                ]
+            },
+            {
+                name: 'hypothetical statement should not stop',
+                expectedStop: false,
+                steps: [
+                    'If everything is complete, we can ship.',
+                    'Check if all tasks are done.',
+                    'Assuming implementation is complete, we proceed to verification.'
+                ]
+            },
+            {
+                name: 'negative confirmation should not stop',
+                expectedStop: false,
+                steps: [
+                    'This is not complete yet.',
+                    'The task is far from done.',
+                    'We are not finished with the refactor.'
+                ]
             }
         ];
 

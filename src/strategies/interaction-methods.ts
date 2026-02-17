@@ -65,7 +65,7 @@ export interface MethodDescriptor {
 const DEFAULT_ACCEPT_PATTERNS = [
     'accept', 'accept all', 'run', 'run command', 'retry', 'apply', 'execute',
     'confirm', 'allow once', 'allow', 'proceed', 'continue', 'yes', 'ok',
-    'save', 'approve', 'overwrite'
+    'save', 'approve', 'overwrite', 'expand'
 ];
 
 const DEFAULT_REJECT_PATTERNS = [
@@ -82,7 +82,7 @@ export class CDPKeyDispatch implements IInteractionMethod {
     category = 'text' as const;
     enabled = true;
     priority = 1;
-    timingMs = 10;
+    timingMs = 50;
     requiresCDP = true;
 
     async execute(ctx: InteractionContext): Promise<boolean> {
@@ -337,7 +337,19 @@ export class DOMScanClick implements IInteractionMethod {
                 }
 
                 for (const el of candidates) {
-                    const text = ((el.textContent || '') + ' ' + (el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')).trim().toLowerCase();
+                    let text = ((el.textContent || '') + ' ' + (el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')).trim().toLowerCase();
+                    
+                    // Icon-only button handling (Run / Expand)
+                    if (!text) {
+                        const classList = (el.className || '').toLowerCase();
+                        if (classList.includes('codicon-play') || classList.includes('codicon-run') || classList.includes('codicon-debug-start')) {
+                            text = 'run';
+                        } else if (classList.includes('codicon-chevron-right') || classList.includes('monaco-tl-twistie') || classList.includes('codicon-tree-item-expanded') === false) { 
+                            // chevron-right usually means collapsed/expandable
+                            text = 'expand';
+                        }
+                    }
+
                     if (!text || text.length > 120) continue;
                     if (!visible(el)) continue;
                     if (reject.some(p => text.includes(p))) continue;

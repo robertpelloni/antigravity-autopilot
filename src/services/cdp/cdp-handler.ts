@@ -376,6 +376,20 @@ export class CDPHandler extends EventEmitter {
                 for (const cmd of commands) {
                     try { await vscode.commands.executeCommand(cmd); } catch (e) { }
                 }
+
+                // 3. Fallback: Physical Enter Key (CDP)
+                await new Promise(r => setTimeout(r, 200));
+                await this.dispatchKeyEventToAll({
+                    type: 'keyDown', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
+                    windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+                    text: '\r', unmodifiedText: '\r'
+                });
+                await new Promise(r => setTimeout(r, 50));
+                await this.dispatchKeyEventToAll({
+                    type: 'keyUp', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
+                    windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+                    text: '\r', unmodifiedText: '\r'
+                });
             }
         } catch (e) {
             console.error('Bridge Message Handler Error', e);

@@ -3,7 +3,23 @@ import { createLogger } from '../utils/logger';
 
 const log = createLogger('ExitDetector');
 
-const COMPLETION_PATTERNS: RegExp[] = [
+const NEGATION_PREFIXES = [
+    /not\s+/i, /isn't\s+/i, /aren't\s+/i, /won't\s+/i, /far\s+from\s+/i
+];
+
+const FUTURE_PREFIXES = [
+    /will\s+/i, /going\s+to\s+/i, /plan\s+to\s+/i, /next\s+/i, /once\s+/i, /when\s+/i
+];
+
+const HYPOTHETICAL_PREFIXES = [
+    /if\s+/i, /assuming\s+/i, /should\s+/i, /maybe\s+/i, /probably\s+/i
+];
+
+const PARTIAL_INDICATORS = [
+    /partially/i, /pending/i, /remaining/i, /todo/i, /\[\s*\]/ // [ ] checklist
+];
+
+const COMPLETION_PATTERNS = [
     /all\s+tasks?\s+(are\s+)?completed?/i,
     /goal\s+achieved/i,
     /implementation\s+(is\s+)?complete/i,
@@ -11,9 +27,10 @@ const COMPLETION_PATTERNS: RegExp[] = [
     /no\s+more\s+tasks?/i,
     /done\s+with\s+all\s+tasks?/i,
     /everything\s+is\s+complete/i,
+    /full\s+scope\s+implemented/i
 ];
 
-const ACTIVE_WORK_PATTERNS: RegExp[] = [
+const ACTIVE_WORK_PATTERNS = [
     /working\s+on/i,
     /implement(ing|ed)?/i,
     /fix(ing|ed)?/i,
@@ -23,7 +40,7 @@ const ACTIVE_WORK_PATTERNS: RegExp[] = [
     /pending/i,
 ];
 
-const UNCERTAINTY_PATTERNS: RegExp[] = [
+const UNCERTAINTY_PATTERNS = [
     /might\s+be\s+done/i,
     /likely\s+complete/i,
     /seems\s+complete/i,
@@ -48,27 +65,69 @@ export class ExitDetector {
             return { shouldExit: false, confidence: 0, reasons: ['empty response'] };
         }
 
-        const completionMatches = COMPLETION_PATTERNS.filter((pattern) => pattern.test(text));
-        const activeWorkMatches = ACTIVE_WORK_PATTERNS.filter((pattern) => pattern.test(text));
-        const uncertaintyMatches = UNCERTAINTY_PATTERNS.filter((pattern) => pattern.test(text));
+        const sentences = text.split(/[.;!?\n]+/).map(s => s.trim()).filter(Boolean);
 
-        const positiveScore = completionMatches.length * 0.55;
-        const negativeScore = (activeWorkMatches.length * 0.4) + (uncertaintyMatches.length * 0.25);
+        // Analyze each sentence for completion signals, but filter out negated/future/hypothetical ones
+        let validCompletionSignals = 0;
+        let activeWorkSignals = 0;
+        let uncertaintySignals = 0;
+        let partialSignals = 0;
+
+        for (const sentence of sentences) {
+            const isNegated = NEGATION_PREFIXES.some(p => p.test(sentence));
+            const isFuture = FUTURE_PREFIXES.some(p => p.test(sentence));
+            const isHypothetical = HYPOTHETICAL_PREFIXES.some(p => p.test(sentence));
+            const isPartial = PARTIAL_INDICATORS.some(p => p.test(sentence));
+
+            if (isPartial) partialSignals++;
+
+            // Check for completion
+            const hasCompletionPattern = COMPLETION_PATTERNS.some(p => p.test(sentence));
+            if (hasCompletionPattern) {
+                if (!isNegated && !isFuture && !isHypothetical) {
+                    validCompletionSignals++;
+                }
+            }
+
+            // Check for active work
+            const hasActiveWorkPattern = ACTIVE_WORK_PATTERNS.some(p => p.test(sentence));
+            if (hasActiveWorkPattern) {
+                activeWorkSignals++;
+            }
+
+            // Check for uncertainty
+            const hasUncertaintyPattern = UNCERTAINTY_PATTERNS.some(p => p.test(sentence));
+            if (hasUncertaintyPattern) {
+                uncertaintySignals++;
+            }
+        }
+
+        // Checklist logic: if there are unchecked boxes [ ], it's a strong signal of pending work
+        const hasPendingChecklist = /\[\s*\]/.test(text);
+        if (hasPendingChecklist) {
+            partialSignals += 2; // Strong penalty
+        }
+
+        const positiveScore = validCompletionSignals * 0.6;
+        const negativeScore = (activeWorkSignals * 0.3) + (uncertaintySignals * 0.2) + (partialSignals * 0.4);
         const confidence = Math.max(0, Math.min(1, positiveScore - negativeScore));
 
-        const shouldExit = completionMatches.length > 0
-            && activeWorkMatches.length === 0
-            && confidence >= 0.5;
+        // Stricter exit criteria
+        const shouldExit = validCompletionSignals > 0
+            && partialSignals === 0
+            && activeWorkSignals === 0
+            && confidence >= 0.7; // Increased threshold
 
         const reasons: string[] = [
-            `completionSignals=${completionMatches.length}`,
-            `activeWorkSignals=${activeWorkMatches.length}`,
-            `uncertaintySignals=${uncertaintyMatches.length}`,
+            `validCompletion=${validCompletionSignals}`,
+            `partial=${partialSignals}`,
+            `activeWork=${activeWorkSignals}`,
+            `uncertainty=${uncertaintySignals}`,
             `confidence=${confidence.toFixed(2)}`
         ];
 
         if (shouldExit) {
-            log.info(`Completion detected (${reasons.join(', ')})`);
+            // log.info(`Completion detected (${reasons.join(', ')})`); // Assuming log is imported/available
             return {
                 shouldExit: true,
                 reason: 'AI indicated completion',

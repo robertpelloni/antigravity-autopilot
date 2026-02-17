@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.89] - 2026-02-17
+### Fixed
+- **Interaction Logic:** `DOMScanClick` strategy now correctly identifies and clicks icon-only "Run" and "Expand" buttons (e.g. `.codicon-play`, `.monaco-tl-twistie`) that lack text labels.
+- **Completion Detection:** Strengthened `ExitDetector` logic to handle negation, future tense, and checklists without false positives.
+
+## [4.10.88] - 2026-02-17
+
+### Changed
+- **Release Packaging**: Maintenance release to validate unified release pipeline and ensure clean VSIX generation.
+
 ## [4.10.87] - 2026-02-17
 
 ### Added
