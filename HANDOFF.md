@@ -454,3 +454,37 @@ After the initial audit write-up above, additional release-hardening work was ex
   - File: `antigravity-autopilot-4.10.77.vsix`
   - SHA256: `EF0C40C5257A90893F7AAA77A8AE9031DAAD926FF701A3E94619B4178EC5AA99`
   - Size: `141,834` bytes
+
+---
+
+## Session continuation snapshot (2026-02-16, P3.2 quality-gate completion)
+
+### Added root quality-gate tests
+
+- New root test: `tests/schema-parity.test.js`
+  - Enforces schema parity between `package.json` config keys and dashboard controls (`updateConfig` + `toggleMethod` paths).
+- New root test: `tests/runtime-placeholder-policy.test.js`
+  - Enforces no known simulated/placeholder anti-patterns in active runtime files:
+    - `src/modules/mcp/server.ts`
+    - `src/modules/mcp/federation.ts`
+    - `src/core/autonomous-loop.ts`
+    - `src/extension.ts`
+- Added script: `npm run test:quality-gates`
+  - Runs `command-parity`, `schema-parity`, and `runtime-placeholder-policy` tests together.
+
+### CI wiring update
+
+- Updated root CI workflow `.github/workflows/ci.yml` to run:
+  - `npm run test:quality-gates`
+
+### Validation outcomes (latest)
+
+- `npm run test:quality-gates` → **PASS** (`9 pass / 0 fail`)
+- `npm run verify:release:secure --silent` → **PASS**
+  - Audit policy tests: `9 pass / 0 fail`
+  - Audit policy gate: PASS (`high=0 critical=0`)
+  - Full release verify: PASS (`371 pass / 0 fail`)
+- Artifact:
+  - File: `antigravity-autopilot-4.10.77.vsix`
+  - SHA256: `76D05EBD63FBEB576FAC32EBEC6151893BEB7321184A963A41CBA4F981641792`
+  - Size: `141,905` bytes
