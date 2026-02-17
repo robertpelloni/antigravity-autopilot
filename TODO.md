@@ -134,6 +134,7 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - [ ] Stop testing duplicated mock classes where possible
 - [x] Add tests importing actual `src` modules with VS Code test harness/mocks
 - [x] Cover command registration, runtime guard behavior, and parity checks
+- [x] Migrate `CircuitBreaker` tests to execute real `src/core/circuit-breaker.ts` module
 - **Evidence:** several tests in `tests/` re-implement logic rather than test source modules
 - **Definition of done:** regressions in source modules are caught by tests automatically
 

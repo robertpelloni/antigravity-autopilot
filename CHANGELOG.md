@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.72] - 2026-02-16
+
+### Changed
+- **Real-Module Test Modernization (P3.1 progress)**: Replaced replica-style `tests/circuit-breaker.test.js` with real-module coverage against `src/core/circuit-breaker.ts` using the TypeScript-on-the-fly source test harness.
+- **Circuit Breaker Regression Confidence**: Updated threshold/open/half-open/reset assertions to validate true runtime behavior from the production module rather than duplicated test logic.
+
+### Notes
+- P3.1 remains in progress; additional replica-style tests are still queued for migration.
+
 ## [4.10.71] - 2026-02-16
 
 ### Changed
