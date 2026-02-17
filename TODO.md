@@ -95,6 +95,14 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - [ ] Add structured confidence + reason telemetry for loop stop causes
 - **Definition of done:** significantly fewer false-complete stops in manual soak testing
 
+### P1.6 Dependency security hardening (non-breaking first)
+- [ ] Upgrade `vitest`/`vite` toolchain to a non-vulnerable line and re-baseline tests
+- [ ] Confirm `esbuild` transitive advisory no longer present after toolchain upgrade
+- [x] Apply non-breaking `npm audit fix` updates at root
+- [ ] Add CI gate to fail on new high/critical advisories (allowlist moderate dev-only with explicit policy)
+- **Evidence:** root `npm audit --json` reports 4 moderate dev-tool vulnerabilities tied to `vitest` major upgrade path
+- **Definition of done:** `npm audit` reports no unresolved high/critical issues and documented policy for remaining dev-only advisories
+
 ---
 
 ## P2 — Quality and implementation-depth upgrades
@@ -199,8 +207,9 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 
 ## Validation checklist (must pass before claiming completion)
 
-- [ ] `npm run compile` passes
-- [ ] Root tests pass and include real-module coverage for changed systems
+- [x] `npm run compile` passes
+- [x] Root tests pass and include real-module coverage for changed systems
+- [x] `npm run lint` passes
 - [ ] No placeholder/simulated behavior remains in active root runtime paths
 - [ ] Dashboard parity test passes for config + command surfaces
 - [ ] Docs updated with exact implementation status and version
