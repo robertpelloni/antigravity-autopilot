@@ -1,39 +1,70 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+const Module = require('module');
+const ts = require('typescript');
 
 /**
  * VoiceControl Command Parsing Tests
  * Tests command recognition, wake word, confidence, and stats.
  */
 
-// ============ Replicate parseCommand for testing ============
+function loadTsModule(filePath, cache = new Map()) {
+    const absolutePath = path.resolve(filePath);
+    if (cache.has(absolutePath)) {
+        return cache.get(absolutePath).exports;
+    }
 
-const COMMAND_PATTERNS = [
-    { intent: 'approve', patterns: [/\b(?:approve|accept|yes|confirm|go ahead|looks good|lgtm)\b/i], description: 'Approve' },
-    { intent: 'reject', patterns: [/\b(?:reject|deny|no|cancel|stop|abort)\b/i], description: 'Reject' },
-    { intent: 'bump', patterns: [/\b(?:bump|nudge|ping|poke|remind)\b/i], description: 'Bump' },
-    { intent: 'switch_model', patterns: [/\b(?:switch|change|use)\s+(?:to\s+)?(?:model\s+)?(\w+)/i], description: 'Switch model', paramExtract: (m) => ({ model: m[1] || '' }) },
-    { intent: 'status', patterns: [/\b(?:status|what's happening|progress|report)\b/i], description: 'Status' },
-    { intent: 'pause', patterns: [/\b(?:pause|wait|hold|freeze)\b/i], description: 'Pause' },
-    { intent: 'resume', patterns: [/\b(?:resume|continue|unpause|proceed)\b/i], description: 'Resume' },
-    { intent: 'open_dashboard', patterns: [/\b(?:open|show|display)\s+(?:the\s+)?dashboard\b/i], description: 'Dashboard' },
-    { intent: 'run_tests', patterns: [/\b(?:run|execute)\s+(?:the\s+)?tests?\b/i], description: 'Tests' },
-    { intent: 'deploy', patterns: [/\b(?:deploy|ship|publish|release)\b/i], description: 'Deploy' }
-];
+    const source = fs.readFileSync(absolutePath, 'utf-8');
+    const transpiled = ts.transpileModule(source, {
+        compilerOptions: {
+            module: ts.ModuleKind.CommonJS,
+            target: ts.ScriptTarget.ES2020,
+            esModuleInterop: true
+        },
+        fileName: absolutePath
+    }).outputText;
 
-function parseCommand(text, patterns = COMMAND_PATTERNS) {
-    const cleaned = text.trim().toLowerCase();
-    if (!cleaned) return null;
-    for (const cmd of patterns) {
-        for (const pattern of cmd.patterns) {
-            const match = cleaned.match(pattern);
-            if (match) {
-                return { raw: text, intent: cmd.intent, confidence: 1.0, params: cmd.paramExtract ? cmd.paramExtract(match) : {}, timestamp: Date.now() };
+    const mod = new Module(absolutePath, module);
+    cache.set(absolutePath, mod);
+    mod.filename = absolutePath;
+    mod.paths = Module._nodeModulePaths(path.dirname(absolutePath));
+
+    const originalRequire = mod.require.bind(mod);
+    mod.require = (request) => {
+        if (request === 'vscode') {
+            return {
+                window: {
+                    createOutputChannel: () => ({ appendLine: () => undefined }),
+                    showInformationMessage: () => undefined
+                },
+                workspace: {
+                    getConfiguration: () => ({ get: (_key, fallback) => fallback, update: async () => undefined })
+                },
+                ConfigurationTarget: { Global: 1 }
+            };
+        }
+
+        if (request.startsWith('.')) {
+            const base = path.resolve(path.dirname(absolutePath), request);
+            const candidates = [`${base}.ts`, path.join(base, 'index.ts')];
+            for (const candidate of candidates) {
+                if (fs.existsSync(candidate)) {
+                    return loadTsModule(candidate, cache);
+                }
             }
         }
-    }
-    return { raw: text, intent: 'unknown', confidence: 0.0, params: {}, timestamp: Date.now() };
+
+        return originalRequire(request);
+    };
+
+    mod._compile(transpiled, absolutePath);
+    return mod.exports;
 }
+
+const voiceControlModule = loadTsModule(path.resolve(__dirname, '../src/modules/voice/control.ts'));
+const parseCommand = voiceControlModule.parseCommand;
 
 // ============ Tests ============
 

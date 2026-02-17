@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.77] - 2026-02-16
+
+### Changed
+- **Real-Module Test Modernization (P3.1 progress)**: Replaced replica-style `tests/voice-control.test.js` with real-module coverage against `src/modules/voice/control.ts` using TypeScript-on-the-fly source loading.
+- **Voice Parser Parity Hardening**: Real parser assertions now validate production command pattern behavior (including model-switch extraction and unknown-intent fallback) instead of duplicated test-only regex logic.
+
+### Notes
+- P3.1 remains in progress; additional replica-style tests are still queued for migration.
+
 ## [4.10.76] - 2026-02-16
 
 ### Changed
