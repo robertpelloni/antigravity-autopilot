@@ -24,11 +24,11 @@ export async function runAutoResumeReadinessFix(options?: { skipRefresh?: boolea
 export async function sendAutoResumeMessage(
     kind: 'automatic' | 'manual',
     state: any,
-    options?: { forceFull?: boolean; escalationReason?: string }
+    options?: { forceFull?: boolean; escalationReason?: string; messageOverride?: string }
 ): Promise<boolean> {
     log.info(`Sending auto-resume message (${kind})...`);
 
-    const message = "continue"; // Simple continue for now, can be enhanced based on state/options
+    const message = options?.messageOverride || "continue"; // Simple continue for now, can be enhanced based on state/options
 
     // Use the robust sendMessage from CDPClient
     // We might want to try multiple times or specific strategies if the first fails

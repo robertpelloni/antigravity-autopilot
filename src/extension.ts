@@ -1618,7 +1618,7 @@ export function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('antigravity.writeAndSubmitBump', async () => {
             const message = config.get<string>('bumpMessage') || 'bump';
-            await sendAutoResumeMessage('manual', null); // Reuse valid logic from auto-resume guard effects
+            await sendAutoResumeMessage('manual', null, { messageOverride: message });
             vscode.window.showInformationMessage(`Antigravity: Bump message "${message}" submitted.`);
         })
     );
