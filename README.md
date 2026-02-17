@@ -46,13 +46,14 @@ All settings are under `antigravity.*` in VS Code settings. Key ones:
 
 ```bash
 npm install
-npm run compile
-vsce package
+npm run verify:release
 ```
+
+This one command compiles, lints, runs tests, packages the VSIX, and prints the artifact SHA256/size.
 
 ## Version
 
-**v4.10.61** — See [CHANGELOG.md](CHANGELOG.md) for details.
+**v4.10.77** — See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## Implementation Status Note
 

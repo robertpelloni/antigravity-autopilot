@@ -6,6 +6,8 @@ Canonical backlog is maintained in `TODO.md`.
 
 ## Current Priority Tasks
 
+- [x] Ops.1 Add one-command release verification (`npm run verify:release`) and document usage
+
 - [x] P0.1 Replace simulated MCP server transport in `src/modules/mcp/server.ts`
 - [x] P0.2 Replace simulated MCP federation transport in `src/modules/mcp/federation.ts` *(HTTP/WebSocket complete; stdio still pending by design)*
 - [x] P0.3 Replace autonomous-loop circuit-state placeholder with real breaker state
