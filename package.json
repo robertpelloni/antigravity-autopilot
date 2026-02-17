@@ -632,6 +632,7 @@
         "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --platform=node --format=cjs --sourcemap",
         "watch": "npm run compile -- --watch",
         "test": "node --test antigravity-jules-orchestration/tests/**/*.test.js",
+        "test:audit-policy": "node --test tests/audit-policy.test.js",
         "package": "vsce package",
         "lint": "eslint src --ext ts",
         "audit:policy": "node scripts/audit-policy.js",
