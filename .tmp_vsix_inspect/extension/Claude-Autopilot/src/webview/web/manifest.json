@@ -1,0 +1,68 @@
+{
+  "name": "Claude Autopilot Remote",
+  "short_name": "Claude Remote",
+  "description": "Remote control interface for Claude Autopilot automation",
+  "start_url": "/?source=pwa",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#007acc",
+  "background_color": "#1e1e1e",
+  "categories": ["productivity", "developer", "utilities"],
+  "lang": "en",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNzIiIGhlaWdodD0iNzIiIHZpZXdCb3g9IjAgMCA3MiA3MiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjcyIiBoZWlnaHQ9IjcyIiByeD0iMTYiIGZpbGw9IiMwMDdhY2MiLz4KPHN2ZyB4PSIxNCIgeT0iMTQiIHdpZHRoPSI0NCIgaGVpZ2h0PSI0NCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjMiLz4KPHN2ZyB4PSI5IiB5PSI5IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwN2FjYyIgc3Ryb2tlLXdpZHRoPSIyIj4KPHA+CjxtcGF0aCBkPSJtMTIgM2MuMTMyIDAgLjI2MyAwIC4zOTMgMGExIDEgMCAwIDEgLjkyMSAxLjE2Yy0uNDMgMi4yNjgtLjg0NiA0LjU0OC0xLjI1IDYuODAyLS4yODggMS41NTgtLjU3MyAzLjExNy0uODU3IDQuNjc0LS4wMDYuMDM0LS4wMTMuMDY4LS4wMjAuMTAydjEuMjA5YzAgLjMxMi0uMjUuNTY1LS41NTkuNTY1UzExIDEyLjMxIDExIDEydi0uODYyQzEwLjc1IDguNzM4IDEwLjUgNi4yNDQgMTAuMjUgMy43NWExIDEgMCAwIDEgMS4wODUtMS4xODZDMTEuNDQ2IDIuNTY4IDExLjU1NiAyLjU2NSAxMS41NzEgMi41NjUgMTEuNzE0IDIuNTY1IDExLjg1NyAyLjU2NCAxMiAzWiIgZmlsbD0iIzAwN2FjYyIvPgo8L3N2Zz4KPHBhdGggZD0ibTIxIDEyLTMtM3YySDZ2MmgxMnYyeiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+Cjwvc3ZnPgo=",
+      "sizes": "72x72",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgdmlld0JveD0iMCAwIDE5MiAxOTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxOTIiIGhlaWdodD0iMTkyIiByeD0iNDgiIGZpbGw9IiMwMDdhY2MiLz4KPHN2ZyB4PSIzMiIgeT0iMzIiIHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPgo8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIzIi8+CjxwYXRoIGQ9Im0xMiAzYy4xMzIgMCAuMjYzIDAgLjM5MyAwYTEgMSAwIDAgMSAuOTIxIDEuMTZjLS40MyAyLjI2OC0uODQ2IDQuNTQ4LTEuMjUgNi44MDItLjI4OCAxLjU1OC0uNTczIDMuMTE3LS44NTcgNC42NzQtLjAwNi4wMzQtLjAxMy4wNjgtLjAyMC4xMDJ2MS4yMDljMCAuMzEyLS4yNS41NjUtLjU1OS41NjVTMTEgMTIuMzEgMTEgMTJ2LS44NjJDMTAuNzUgOC43MzggMTAuNSA2LjI0NCAxMC4yNSAzLjc1YTEgMSAwIDAgMSAxLjA4NS0xLjE4NkMxMS40NDYgMi41NjggMTEuNTU2IDIuNTY1IDExLjU3MSAyLjU2NSAxMS43MTQgMi41NjUgMTEuODU3IDIuNTY0IDEyIDNaIiBmaWxsPSJ3aGl0ZSIvPgo8cGF0aCBkPSJtMjEgMTItMy0zdjJINnYyaDEydjJ6IiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4KPC9zdmc+",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgdmlld0JveD0iMCAwIDUxMiA1MTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iMTI4IiBmaWxsPSIjMDA3YWNjIi8+CjxzdmcgeD0iOTYiIHk9Ijk2IiB3aWR0aD0iMzIwIiBoZWlnaHQ9IjMyMCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjEiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjMiLz4KPHN2ZyB4PSI5IiB5PSI5IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwN2FjYyIgc3Ryb2tlLXdpZHRoPSIwLjUiPgo8cGF0aCBkPSJtMTIgM2MuMTMyIDAgLjI2MyAwIC4zOTMgMGExIDEgMCAwIDEgLjkyMSAxLjE2Yy0uNDMgMi4yNjgtLjg0NiA0LjU0OC0xLjI1IDYuODAyLS4yODggMS41NTgtLjU3MyAzLjExNy0uODU3IDQuNjc0LS4wMDYuMDM0LS4wMTMuMDY4LS4wMjAuMTAydjEuMjA5YzAgLjMxMi0uMjUuNTY1LS41NTkuNTY1UzExIDEyLjMxIDExIDEydi0uODYyQzEwLjc1IDguNzM4IDEwLjUgNi4yNDQgMTAuMjUgMy43NWExIDEgMCAwIDEgMS4wODUtMS4xODZDMTEuNDQ2IDIuNTY4IDExLjU1NiAyLjU2NSAxMS41NzEgMi41NjUgMTEuNzE0IDIuNTY1IDExLjg1NyAyLjU2NCAxMiAzWiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+CjxwYXRoIGQ9Im0yMSAxMi0zLTN2Mkg2djJoMTJ2MnoiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo8L3N2Zz4=",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add Message",
+      "short_name": "Add",
+      "description": "Add a new message to the queue",
+      "url": "/?action=add",
+      "icons": [
+        {
+          "src": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDV2MTRtLTctN2gxNCIgc3Ryb2tlPSIjMDA3YWNjIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4=",
+          "sizes": "24x24",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Start Processing",
+      "short_name": "Start",
+      "description": "Start Claude Autopilot processing",
+      "url": "/?action=start",
+      "icons": [
+        {
+          "src": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBvbHlnb24gcG9pbnRzPSI1LDMgMTksMTIgNSwyMSIgZmlsbD0iIzI4YTc0NSIvPgo8L3N2Zz4=",
+          "sizes": "24x24",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ],
+  "prefer_related_applications": false,
+  "screenshots": [
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzc1IiBoZWlnaHQ9IjY2NyIgdmlld0JveD0iMCAwIDM3NSA2NjciIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzNzUiIGhlaWdodD0iNjY3IiBmaWxsPSIjMWUxZTFlIi8+CjxyZWN0IHg9IjE2IiB5PSIxNiIgd2lkdGg9IjM0MyIgaGVpZ2h0PSI2MzUiIHJ4PSIyNCIgZmlsbD0iIzJkMmQzMCIvPgo8dGV4dCB4PSIzNSIgeT0iNTAiIGZpbGw9IndoaXRlIiBmb250LWZhbWlseT0ic3lzdGVtLXVpIiBmb250LXNpemU9IjE4IiBmb250LXdlaWdodD0iNjAwIj7wn6SWIENsYXVkZSBBdXRvcGlsb3Q8L3RleHQ+CjxyZWN0IHg9IjM1IiB5PSI4MCIgd2lkdGg9IjMwNSIgaGVpZ2h0PSI4MCIgcng9IjEyIiBmaWxsPSIjMDA3YWNjIi8+Cjx0ZXh0IHg9IjE4NyIgeT0iMTMwIiBmaWxsPSJ3aGl0ZSIgZm9udC1mYW1pbHk9InN5c3RlbS11aSIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9IjUwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+QWRkIE1lc3NhZ2U8L3RleHQ+Cjwvc3ZnPg==",
+      "sizes": "375x667",
+      "type": "image/svg+xml",
+      "form_factor": "narrow"
+    }
+  ]
+}

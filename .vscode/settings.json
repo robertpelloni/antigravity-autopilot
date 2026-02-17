@@ -1,0 +1,6 @@
+{
+  "antigravity.autoApproveDelay": 180,
+  "antigravity.pollFrequency": 1000,
+  "antigravity.threadWaitInterval": 10,
+  "antigravity.bumpMessage": "continue"
+}

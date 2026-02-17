@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#007acc">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Claude Remote">
+    <title>Claude Autopilot Remote</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+</head>
+
+<body>
+    <div class="mobile-app">
+        <!-- Header -->
+        <header class="mobile-header">
+            <div class="header-content">
+                <div class="app-title-section">
+                    <h1 class="app-title">
+                        <span class="app-icon">🤖</span>
+                        Claude Autopilot Remote
+                        <span class="version">Web</span>
+                    </h1>
+                    <div class="workspace-info">
+                        <span class="workspace-label">📁</span>
+                        <span id="workspace-name" class="workspace-name">Loading...</span>
+                    </div>
+                </div>
+                <div class="status-indicators">
+                    <div class="connection-status" id="connection-status" data-status="disconnected">
+                        <span class="status-dot"></span>
+                        <span class="status-text">Disconnected</span>
+                    </div>
+                    <div class="session-status" id="session-status" data-status="idle">
+                        <span class="session-icon">⏸️</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="mobile-main">
+            <!-- Quick Actions -->
+            <section class="quick-actions">
+                <button class="action-btn action-btn--start" id="start-btn" data-action="start">
+                    <span class="btn-icon">▶️</span>
+                    <span class="btn-text">Start</span>
+                    <span class="btn-subtitle">Begin processing</span>
+                </button>
+
+                <button class="action-btn action-btn--stop" id="stop-btn" data-action="stop">
+                    <span class="btn-icon">⏹️</span>
+                    <span class="btn-text">Stop</span>
+                    <span class="btn-subtitle">Pause queue</span>
+                </button>
+
+                <button class="action-btn action-btn--interrupt" id="interrupt-btn" data-action="interrupt">
+                    <span class="btn-icon">⚠️</span>
+                    <span class="btn-text">Interrupt</span>
+                    <span class="btn-subtitle">Send ESC key</span>
+                </button>
+
+                <button class="action-btn action-btn--reset" id="reset-btn" data-action="reset">
+                    <span class="btn-icon">🔄</span>
+                    <span class="btn-text">Reset</span>
+                    <span class="btn-subtitle">Clear session</span>
+                </button>
+            </section>
+
+            <!-- Queue Section -->
+            <section class="queue-section">
+                <header class="section-header">
+                    <h2 class="section-title">
+                        Message Queue
+                        <span class="queue-counter" id="queue-counter" data-count="0">0</span>
+                    </h2>
+                    <button class="section-toggle" id="queue-toggle" data-expanded="true">
+                        <span class="toggle-icon">▼</span>
+                    </button>
+                </header>
+
+                <div class="section-content" id="queue-content">
+                    <button class="add-message-btn" id="add-message-btn">
+                        <span class="btn-icon">➕</span>
+                        Add Message
+                    </button>
+
+                    <div class="queue-container" id="queue-container">
+                        <!-- Queue items will be populated by JavaScript -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Output Section -->
+            <section class="output-section">
+                <header class="section-header">
+                    <h2 class="section-title">Live Output</h2>
+                    <div class="output-controls">
+                        <button class="control-btn" id="clear-output-btn" data-action="clear">Clear</button>
+                        <button class="control-btn" id="scroll-lock-btn" data-action="scroll-lock">📌</button>
+                        <button class="section-toggle" id="output-toggle" data-expanded="true">
+                            <span class="toggle-icon">▼</span>
+                        </button>
+                    </div>
+                </header>
+
+                <div class="section-content" id="output-content">
+                    <div class="output-container">
+                        <div class="output-stream" id="claude-output">
+                            <div class="output-line" data-type="system">
+                                <span class="line-prefix">⚙️</span>
+                                <span class="line-content">Waiting for connection...</span>
+                                <span class="line-time" id="current-time"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- File Explorer Section -->
+            <section class="file-explorer-section">
+                <header class="section-header">
+                    <h2 class="section-title">
+                        File Explorer
+                        <span class="file-counter" id="file-counter" data-count="0">0 files</span>
+                    </h2>
+                    <div class="explorer-controls">
+                        <button class="control-btn" id="refresh-files" data-action="refresh"
+                            title="Refresh file tree">🔄</button>
+                        <button class="control-btn" id="search-files" data-action="search"
+                            title="Search in files">🔍</button>
+                        <button class="section-toggle" id="explorer-toggle" data-expanded="true">
+                            <span class="toggle-icon">▼</span>
+                        </button>
+                    </div>
+                </header>
+
+                <div class="section-content" id="explorer-content">
+                    <div class="file-tree-container">
+                        <div class="file-tree-loading" id="file-tree-loading" style="display: none;">
+                            <div class="loading-spinner"></div>
+                            <span class="loading-text">Loading files...</span>
+                        </div>
+                        <div class="file-tree" id="file-tree">
+                            <!-- File tree items populated by JavaScript -->
+                        </div>
+                        <div class="file-tree-empty" id="file-tree-empty" style="display: none;">
+                            <span class="empty-icon">📂</span>
+                            <span class="empty-text">No files found</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Git Changes Section -->
+            <section class="git-changes-section">
+                <header class="section-header">
+                    <h2 class="section-title">
+                        Git Changes
+                        <span class="file-counter" id="git-file-counter" data-count="0">0 files</span>
+                    </h2>
+                    <div class="git-controls">
+                        <button class="control-btn" id="refresh-git" title="Refresh git status">🔄</button>
+                        <button class="section-toggle" id="git-toggle" data-expanded="true">
+                            <span class="toggle-icon">▼</span>
+                        </button>
+                    </div>
+                </header>
+
+                <div class="section-content" id="git-content">
+                    <!-- Git Loading -->
+                    <div class="git-loading" id="git-loading" style="display: none;">
+                        <div class="loading-spinner"></div>
+                        <span class="loading-text">Loading changes...</span>
+                    </div>
+
+                    <!-- Versioned Files Section -->
+                    <div class="git-subsection" id="versioned-section">
+                        <h3 class="subsection-title" id="versioned-toggle" data-expanded="true">
+                            <span class="toggle-icon">▼</span>
+                            📝 Modified Files
+                            <span class="file-counter" id="versioned-counter">0</span>
+                        </h3>
+                        <div class="subsection-content" id="versioned-content">
+                            <div class="git-files" id="versioned-files">
+                                <!-- Versioned file items populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Unversioned Files Section -->
+                    <div class="git-subsection" id="unversioned-section">
+                        <h3 class="subsection-title" id="unversioned-toggle" data-expanded="false">
+                            <span class="toggle-icon">▶</span>
+                            ❓ Unversioned Files
+                            <span class="file-counter" id="unversioned-counter">0</span>
+                        </h3>
+                        <div class="subsection-content" id="unversioned-content" style="display: none;">
+                            <div class="git-files" id="unversioned-files">
+                                <!-- Unversioned file items populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Clean State -->
+                    <div class="git-clean" id="git-clean" style="display: none;">
+                        <span class="clean-icon">✅</span>
+                        <span class="clean-text">No uncommitted changes</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Disclaimer -->
+        <div class="disclaimer-banner">
+            <div class="disclaimer-content">
+                <span class="disclaimer-icon">⚠️</span>
+                <span class="disclaimer-text">
+                    <strong>Use at your own risk:</strong> This remote interface provides access to development tools. 
+                    Ensure you understand security implications and only use in trusted environments.
+                </span>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <footer class="status-bar">
+            <span class="status-item" id="connection-indicator">
+                <span class="status-dot"></span>
+                <span class="status-text">Connecting...</span>
+            </span>
+            <span class="status-item" id="message-count">
+                Messages: <span id="total-messages">0</span>
+            </span>
+        </footer>
+    </div>
+
+    <!-- Add Message Modal -->
+    <div class="modal" id="add-message-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Message</h3>
+                <button class="modal-close" id="close-add-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <textarea id="message-input" placeholder="Enter your message for Claude..." rows="4"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn--secondary" id="cancel-add-message">Cancel</button>
+                <button class="btn btn--primary" id="confirm-add-message">Add Message</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Message Modal -->
+    <div class="modal" id="edit-message-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Message</h3>
+                <button class="modal-close" id="close-edit-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <textarea id="edit-message-input" placeholder="Edit your message..." rows="4"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn--secondary" id="cancel-edit-message">Cancel</button>
+                <button class="btn btn--primary" id="confirm-edit-message">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Preview Modal -->
+    <div class="modal file-preview-modal modal-fullscreen" id="file-preview-modal">
+        <div class="modal-content modal-content-fullscreen">
+            <div class="modal-header">
+                <h4 id="preview-file-name">Loading...</h4>
+                <div class="preview-controls">
+                    <button class="control-btn" id="copy-file-path" title="Copy file path">📋</button>
+                    <button class="modal-close" id="close-preview">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="preview-content-container">
+                    <div class="preview-loading" id="preview-loading" style="display: none;">
+                        <div class="loading-spinner"></div>
+                        <span class="loading-text">Loading file content...</span>
+                    </div>
+                    <div class="preview-content" id="preview-content">
+                        <pre><code id="preview-code-content" class="language-text"></code></pre>
+                    </div>
+                    <div class="preview-error" id="preview-error" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span class="error-text">Failed to load file content</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="file-info">
+                    <span class="file-size" id="preview-file-size">0 KB</span>
+                    <span class="file-separator">•</span>
+                    <span class="file-lines" id="preview-file-lines">0 lines</span>
+                    <span class="file-separator">•</span>
+                    <span class="file-modified" id="preview-file-modified">Modified: --</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Search Modal -->
+    <div class="modal file-search-modal" id="file-search-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Search Files</h3>
+                <button class="modal-close" id="close-search">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="search-form">
+                    <input type="text" id="search-input" placeholder="Search in files..." autocomplete="off">
+                    <div class="search-filters">
+                        <select id="search-extensions">
+                            <option value="">All files</option>
+                            <option value=".ts,.js,.tsx,.jsx">TypeScript/JavaScript</option>
+                            <option value=".py">Python</option>
+                            <option value=".md">Markdown</option>
+                            <option value=".json">JSON</option>
+                            <option value=".css,.scss,.sass">Stylesheets</option>
+                            <option value=".html,.htm">HTML</option>
+                            <option value=".txt,.log">Text/Logs</option>
+                        </select>
+                        <button class="btn btn--primary" id="perform-search">Search</button>
+                    </div>
+                </div>
+                <div class="search-results-container">
+                    <div class="search-loading" id="search-loading" style="display: none;">
+                        <div class="loading-spinner"></div>
+                        <span class="loading-text">Searching...</span>
+                    </div>
+                    <div class="search-results" id="search-results">
+                        <!-- Search results populated by JavaScript -->
+                    </div>
+                    <div class="search-empty" id="search-empty" style="display: none;">
+                        <span class="empty-icon">🔍</span>
+                        <span class="empty-text">No results found</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Diff Viewer Modal -->
+    <div class="modal diff-viewer-modal modal-fullscreen" id="diff-viewer-modal">
+        <div class="modal-content modal-content-fullscreen">
+            <div class="modal-header">
+                <h4 id="diff-file-name">File View</h4>
+                <div class="diff-controls">
+                    <div class="diff-stats-header">
+                        <span class="stat-item additions" id="diff-additions">+0</span>
+                        <span class="stat-item deletions" id="diff-deletions">-0</span>
+                        <span class="stat-item" id="diff-mode">Diff View</span>
+                    </div>
+                    <button class="control-btn" id="toggle-diff-mode" title="Toggle diff view">📄</button>
+                    <button class="modal-close" id="close-diff">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="diff-content-container">
+                    <div class="diff-loading" id="diff-loading" style="display: none;">
+                        <div class="loading-spinner"></div>
+                        <span class="loading-text">Loading file...</span>
+                    </div>
+
+
+                    <!-- Inline Diff Content -->
+                    <div class="diff-content inline-diff" id="diff-content">
+                        <div class="diff-editor" id="diff-editor">
+                            <!-- Inline diff with line numbers populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <div class="diff-error" id="diff-error" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span class="error-text">Failed to load file</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="diff-info">
+                    <span class="file-path" id="diff-file-path">--</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Processing...</div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+
+</html>
