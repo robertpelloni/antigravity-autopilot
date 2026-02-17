@@ -633,6 +633,7 @@
         "watch": "npm run compile -- --watch",
         "test": "node --test antigravity-jules-orchestration/tests/**/*.test.js",
         "test:audit-policy": "node --test tests/audit-policy.test.js",
+        "test:quality-gates": "node --test tests/command-parity.test.js tests/schema-parity.test.js tests/runtime-placeholder-policy.test.js",
         "package": "vsce package",
         "lint": "eslint src --ext ts",
         "audit:policy": "node scripts/audit-policy.js",

@@ -32,6 +32,9 @@ jobs:
       - name: Unit and integration tests
         run: npm test
 
+      - name: Root quality gate tests (parity + runtime policy)
+        run: npm run test:quality-gates
+
       - name: Audit policy unit tests
         run: npm run test:audit-policy
 
