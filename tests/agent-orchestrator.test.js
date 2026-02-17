@@ -148,6 +148,69 @@ describe('AgentOrchestrator', () => {
         assert.ok(result.durationMs >= 0);
     });
 
+    it('should aggregate mixed completed and failed swarm results', async () => {
+        const o = new AgentOrchestrator();
+        let idx = 0;
+        const ids = ['t1', 't2'];
+        const start = Date.now();
+
+        o.submitTask = async () => ids[idx++];
+        o.waitForTask = async (taskId) => {
+            if (taskId === 't1') {
+                return {
+                    id: 't1',
+                    agentId: 'researcher',
+                    status: 'completed',
+                    result: 'ok',
+                    startedAt: start,
+                    completedAt: start + 100
+                };
+            }
+
+            return {
+                id: 't2',
+                agentId: 'implementer',
+                status: 'failed',
+                result: 'timeout',
+                startedAt: start,
+                completedAt: start + 300
+            };
+        };
+
+        const result = await o.swarmExecute(['A', 'B']);
+        assert.strictEqual(result.totalTasks, 2);
+        assert.strictEqual(result.completed, 1);
+        assert.strictEqual(result.failed, 1);
+        assert.strictEqual(result.results[0].durationMs, 100);
+        assert.strictEqual(result.results[1].durationMs, 300);
+    });
+
+    it('should mark rejected waitForTask outcomes as failed with unknown agent', async () => {
+        const o = new AgentOrchestrator();
+
+        o.submitTask = async () => 't1';
+        o.waitForTask = async () => {
+            throw new Error('CDP connection lost');
+        };
+
+        const result = await o.swarmExecute(['A']);
+        assert.strictEqual(result.totalTasks, 1);
+        assert.strictEqual(result.completed, 0);
+        assert.strictEqual(result.failed, 1);
+        assert.strictEqual(result.results[0].agentId, 'unknown');
+        assert.strictEqual(result.results[0].status, 'failed');
+    });
+
+    it('should handle empty swarm task list', async () => {
+        const o = new AgentOrchestrator();
+        const result = await o.swarmExecute([]);
+
+        assert.strictEqual(result.totalTasks, 0);
+        assert.strictEqual(result.completed, 0);
+        assert.strictEqual(result.failed, 0);
+        assert.strictEqual(result.results.length, 0);
+    });
+
     it('should generate unique task IDs', () => {
         const o = new AgentOrchestrator();
         const ids = new Set();
