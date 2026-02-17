@@ -23,6 +23,8 @@ import { projectManager } from './providers/project-manager';
 import { StatusBarManager } from './ui/status-bar';
 import { CDPStrategy, CDPRuntimeState } from './strategies/cdp-strategy';
 
+import { SoundEffects, SOUND_EFFECTS } from './utils/sound-effects';
+
 const log = createLogger('Extension');
 let statusBar: StatusBarManager;
 export function activate(context: vscode.ExtensionContext) {
@@ -871,6 +873,14 @@ export function activate(context: vscode.ExtensionContext) {
             await strategyManager.start();
             await refreshRuntimeState();
         }),
+        vscode.commands.registerCommand('antigravity.clearAutoAll', async () => {
+            await config.update('autopilotAutoAcceptEnabled', false);
+            await config.update('autoAcceptEnabled', false);
+            await config.update('autoAllEnabled', false);
+            await strategyManager.stop();
+            await refreshRuntimeState();
+            vscode.window.showInformationMessage('Antigravity: Accept-All CLEARED (Disabled).');
+        }),
         vscode.commands.registerCommand('antigravity.toggleAutonomous', async () => {
             const isRunning = autonomousLoop.isRunning();
             if (isRunning) {
@@ -1590,6 +1600,26 @@ export function activate(context: vscode.ExtensionContext) {
             log.info(`[AutoResume Fix] ${summary}`);
             const actionHint = report.after?.recommendedNextAction || report.before?.recommendedNextAction || 'See report for details.';
             vscode.window.showInformationMessage(summary + ` Next: ${actionHint} Report copied to clipboard.`);
+        }),
+        vscode.commands.registerCommand('antigravity.testAudio', async () => {
+            const items = SOUND_EFFECTS.map(effect => ({
+                label: `$(symbol-event) Play Sound: ${effect}`,
+                description: `Trigger the "${effect}" sound effect`,
+                effect
+            }));
+
+            const selection = await vscode.window.showQuickPick(items, {
+                placeHolder: 'Select a sound effect to test'
+            });
+
+            if (selection) {
+                SoundEffects.play(selection.effect);
+            }
+        }),
+        vscode.commands.registerCommand('antigravity.writeAndSubmitBump', async () => {
+            const message = config.get<string>('bumpMessage') || 'bump';
+            await sendAutoResumeMessage('manual', null); // Reuse valid logic from auto-resume guard effects
+            vscode.window.showInformationMessage(`Antigravity: Bump message "${message}" submitted.`);
         })
     );
 

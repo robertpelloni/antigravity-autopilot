@@ -164,6 +164,18 @@
             {
                 "command": "antigravity.diagnoseCdp",
                 "title": "Antigravity: Diagnose CDP Connection"
+            },
+            {
+                "command": "antigravity.testAudio",
+                "title": "Antigravity: Test Audio Feedback"
+            },
+            {
+                "command": "antigravity.clearAutoAll",
+                "title": "Antigravity: Clear Accept All"
+            },
+            {
+                "command": "antigravity.writeAndSubmitBump",
+                "title": "Antigravity: Write and Submit Bump"
             }
         ],
         "keybindings": [
@@ -171,6 +183,21 @@
                 "command": "antigravity.toggleAutoAccept",
                 "key": "ctrl+alt+shift+u",
                 "mac": "cmd+alt+shift+u"
+            },
+            {
+                "command": "antigravity.testAudio",
+                "key": "ctrl+alt+shift+t",
+                "mac": "cmd+alt+shift+t"
+            },
+            {
+                "command": "antigravity.clearAutoAll",
+                "key": "ctrl+alt+shift+k",
+                "mac": "cmd+alt+shift+k"
+            },
+            {
+                "command": "antigravity.writeAndSubmitBump",
+                "key": "ctrl+alt+shift+b",
+                "mac": "cmd+alt+shift+b"
             }
         ],
         "configuration": {

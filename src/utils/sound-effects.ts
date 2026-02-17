@@ -3,6 +3,10 @@ import * as os from 'os';
 
 export type SoundEffect = 'submit' | 'bump' | 'type' | 'run' | 'expand' | 'alt-enter' | 'click' | 'success' | 'error';
 
+export const SOUND_EFFECTS: SoundEffect[] = [
+    'submit', 'bump', 'type', 'run', 'expand', 'alt-enter', 'click', 'success', 'error'
+];
+
 export class SoundEffects {
     private static isWindows = os.platform() === 'win32';
 
