@@ -5,6 +5,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.80] - 2026-02-17
+
+### Added
+- **Federation Auth/Header Coverage**: Added `tests/mcp-federation.test.js` assertions validating outbound HTTP RPC requests include configured custom headers and auth credentials.
+
+### Changed
+- **MCP Federation Remote Auth Support (P0.2 complete)**: `src/modules/mcp/federation.ts` now supports per-server outbound auth/header configuration for both HTTP and WebSocket transports.
+- **Header Builder for Remote Endpoints**: Added normalization for `bearer`, `basic`, `token`, and API-key style auth injection with optional custom header names.
+
+### Notes
+- Remaining P0.2 scope is now limited to intentional stdio transport deferral; remote auth/header support is implemented.
+
 ## [4.10.79] - 2026-02-17
 
 ### Added

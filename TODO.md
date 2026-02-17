@@ -31,7 +31,7 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - [x] Implement real connection adapters for configured `transport` values *(HTTP + WebSocket implemented; stdio intentionally unsupported for now)*
 - [x] Perform actual MCP handshake + `tools/list` pull per server *(discovery call path implemented)*
 - [x] Implement resilient `tools/call` with timeout/retry/backoff and per-server state *(timeout + state handling implemented; advanced retry policy still improvable)*
-- [ ] Add auth/headers support for remote endpoints
+- [x] Add auth/headers support for remote endpoints
 - **Evidence:** `src/modules/mcp/federation.ts` explicitly simulates connect/call
 - **Definition of done:** federation calls real downstream tools and returns true protocol responses
 

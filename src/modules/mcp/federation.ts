@@ -24,6 +24,12 @@ export interface MCPServerConfig {
     autoConnect: boolean;
     capabilities: string[];
     timeout: number;
+    headers?: Record<string, string>;
+    auth?: {
+        type: 'bearer' | 'basic' | 'token' | 'api-key';
+        token: string;
+        headerName?: string;
+    };
 }
 
 export interface MCPTool {
@@ -339,15 +345,38 @@ export class MCPFederation extends EventEmitter {
             .filter((tool: MCPTool) => tool.name.length > 0);
     }
 
+    private buildServerHeaders(server: MCPServerConfig): Record<string, string> {
+        const headers: Record<string, string> = {
+            ...(server.headers || {})
+        };
+
+        if (server.auth?.token) {
+            const authType = server.auth.type;
+            if (authType === 'bearer') {
+                headers.Authorization = `Bearer ${server.auth.token}`;
+            } else if (authType === 'basic') {
+                headers.Authorization = `Basic ${server.auth.token}`;
+            } else if (authType === 'token') {
+                headers.Authorization = `token ${server.auth.token}`;
+            } else {
+                headers[server.auth.headerName || 'X-API-Key'] = server.auth.token;
+            }
+        }
+
+        return headers;
+    }
+
     private async sendHttpRpc(server: MCPServerConfig, payload: any): Promise<any> {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), Math.max(1000, server.timeout || 10000));
+        const serverHeaders = this.buildServerHeaders(server);
 
         try {
             const response = await fetch(server.url, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    ...serverHeaders
                 },
                 body: JSON.stringify(payload),
                 signal: controller.signal
@@ -369,7 +398,9 @@ export class MCPFederation extends EventEmitter {
         }
 
         await new Promise<void>((resolve, reject) => {
-            const ws = new WebSocket(server.url);
+            const ws = new WebSocket(server.url, {
+                headers: this.buildServerHeaders(server)
+            });
             const timeout = setTimeout(() => {
                 try {
                     ws.terminate();

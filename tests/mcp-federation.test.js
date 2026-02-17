@@ -255,4 +255,41 @@ describe('MCPFederation (real module)', () => {
         assert.strictEqual(stats.totalCalls, 1);
         assert.strictEqual(stats.totalErrors, 1);
     });
+
+    it('should include configured headers and auth on HTTP RPC requests', async () => {
+        const fed = new MCPFederation();
+        const originalFetch = global.fetch;
+        let capturedHeaders;
+
+        global.fetch = async (_url, options) => {
+            capturedHeaders = options.headers;
+            return {
+                ok: true,
+                json: async () => ({ result: { tools: [] } })
+            };
+        };
+
+        try {
+            await fed.sendHttpRpc(createServer('secure-http', {
+                headers: {
+                    'X-Client-Id': 'antigravity'
+                },
+                auth: {
+                    type: 'bearer',
+                    token: 'secret-token'
+                }
+            }), {
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'tools/list',
+                params: {}
+            });
+        } finally {
+            global.fetch = originalFetch;
+        }
+
+        assert.strictEqual(capturedHeaders['Content-Type'], 'application/json');
+        assert.strictEqual(capturedHeaders['X-Client-Id'], 'antigravity');
+        assert.strictEqual(capturedHeaders.Authorization, 'Bearer secret-token');
+    });
 });

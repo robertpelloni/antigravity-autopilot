@@ -14,7 +14,7 @@ Canonical backlog is maintained in `TODO.md`.
 - [x] Ops.6 Add root quality-gate tests (schema parity + command parity + runtime placeholder policy)
 
 - [x] P0.1 Replace simulated MCP server transport in `src/modules/mcp/server.ts`
-- [x] P0.2 Replace simulated MCP federation transport in `src/modules/mcp/federation.ts` *(HTTP/WebSocket complete; stdio still pending by design)*
+- [x] P0.2 Replace simulated MCP federation transport in `src/modules/mcp/federation.ts` *(HTTP/WebSocket complete with remote auth/header support; stdio still pending by design)*
 - [x] P0.3 Replace autonomous-loop circuit-state placeholder with real breaker state
 - [x] P0.4 Replace hardcoded dummy `antigravity.getChromeDevtoolsMcpUrl` return
 - [x] P0.5 Unify project task source-of-truth behavior (`task.md`, `TODO.md`, tracker order)
