@@ -123,9 +123,9 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - **Definition of done:** generated tests compile and meaningfully assert behavior
 
 ### P2.3 Voice control: parser-to-runtime command execution bridge
-- [ ] Wire parsed intents to real extension commands
-- [ ] Add secure confirmation flow for destructive voice intents
-- [ ] Add telemetry + manual transcript input panel for debug
+- [x] Wire parsed intents to real extension commands
+- [x] Add secure confirmation flow for destructive voice intents
+- [x] Add telemetry + manual transcript input panel for debug
 - **Definition of done:** voice command path is functional beyond parser-only state
 
 ### P2.4 Project manager integrations hardening

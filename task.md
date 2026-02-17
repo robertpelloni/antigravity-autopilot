@@ -25,4 +25,5 @@ Canonical backlog is maintained in `TODO.md`.
 - [x] P2.1 Replace progress tracker placeholder metrics with real telemetry
 - [x] P2.2 Upgrade test generator to remove placeholder assertions *(completed with AST-backed extraction + merge-safe generation)*
 - [x] P3.1 Replace replica tests with real source-module tests *(root extension scope complete: TaskAnalyzer + ProjectTracker + CircuitBreaker + ExitDetector + RateLimiter + ProgressTracker + TestLoopDetector + VoiceControl + Backoff + AgentOrchestrator swarm aggregation + MCPFederation + InteractionMethodRegistry + CodeReviewer now test real src modules; remaining replica-style tests are in reference submodules)*
+- [x] P2.3 Voice control parser-to-runtime bridge *(intents now execute mapped extension actions, destructive intents require explicit confirmation, and manual transcript debug command + execution telemetry are implemented)*
 - [x] P3.3 Deterministic runtime waiting/auto-resume soak harness *(complete: extracted `runtime-auto-resume-guard` pure module, wired extension guard/escalation decisions to pure helpers, and added deterministic replay + no-spam/deadlock escalation assertions)*

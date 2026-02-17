@@ -267,6 +267,76 @@ export function activate(context: vscode.ExtensionContext) {
         return `${status} | tabs ${done}/${total} | pending ${pending} | waiting chat ${waiting}`;
     };
 
+    const confirmDestructiveVoiceIntent = async (command: { intent: string; raw: string }): Promise<boolean> => {
+        const destructiveIntents = new Set(['reject', 'pause', 'deploy']);
+        if (!destructiveIntents.has(command.intent)) {
+            return true;
+        }
+
+        const decision = await vscode.window.showWarningMessage(
+            `Voice command "${command.intent}" is potentially destructive. Confirm execution?\nTranscript: ${command.raw}`,
+            { modal: true },
+            'Confirm',
+            'Cancel'
+        );
+
+        return decision === 'Confirm';
+    };
+
+    voiceControl.setIntentExecutor(async (command) => {
+        const confirmed = await confirmDestructiveVoiceIntent(command);
+        if (!confirmed) {
+            return { handled: false, detail: 'destructive intent cancelled by user confirmation gate' };
+        }
+
+        switch (command.intent) {
+            case 'approve':
+                await vscode.commands.executeCommand('antigravity.clickAccept');
+                return { handled: true };
+            case 'bump':
+                await vscode.commands.executeCommand('antigravity.resumeFromWaitingState');
+                return { handled: true };
+            case 'status':
+                await vscode.commands.executeCommand('antigravity.checkRuntimeState');
+                return { handled: true };
+            case 'pause':
+                if (autonomousLoop.isRunning()) {
+                    autonomousLoop.stop('Voice command: pause');
+                    await config.update('autonomousEnabled', false);
+                }
+                return { handled: true };
+            case 'resume':
+                if (!autonomousLoop.isRunning()) {
+                    await autonomousLoop.start();
+                    await config.update('autonomousEnabled', true);
+                }
+                return { handled: true };
+            case 'open_dashboard':
+                await vscode.commands.executeCommand('antigravity.openSettings');
+                return { handled: true };
+            case 'run_tests':
+                try {
+                    await vscode.commands.executeCommand('workbench.action.tasks.test');
+                } catch {
+                    // Fallback command path
+                    await vscode.commands.executeCommand('testing.runAll');
+                }
+                return { handled: true };
+            case 'switch_model':
+                if (command.params?.model) {
+                    await config.update('preferredModelForQuick', command.params.model);
+                    return { handled: true };
+                }
+                return { handled: false, detail: 'missing model parameter' };
+            case 'reject':
+                return { handled: false, detail: 'reject intent not mapped to a safe runtime action' };
+            case 'deploy':
+                return { handled: false, detail: 'deploy intent confirmed but no direct deploy action is configured' };
+            default:
+                return { handled: false, detail: 'intent not supported' };
+        }
+    });
+
     const formatDurationShort = (ms: number) => {
         if (!Number.isFinite(ms) || ms < 0) return '-';
         const totalSec = Math.floor(ms / 1000);
@@ -820,6 +890,30 @@ export function activate(context: vscode.ExtensionContext) {
                 await voiceControl.start();
             }
             await config.update('voiceControlEnabled', !current);
+        }),
+        vscode.commands.registerCommand('antigravity.processVoiceTranscript', async () => {
+            const transcript = await vscode.window.showInputBox({
+                prompt: 'Voice Transcript Debug',
+                placeHolder: 'Type the transcribed voice command, e.g. "open dashboard" or "resume"'
+            });
+
+            if (!transcript || !transcript.trim()) {
+                return;
+            }
+
+            const outcome = await voiceControl.processAndExecuteTranscription(transcript, { force: true });
+            if (!outcome.command) {
+                vscode.window.showWarningMessage('Voice Debug: no command parsed from transcript.');
+                return;
+            }
+
+            if (outcome.handled) {
+                vscode.window.showInformationMessage(`Voice Debug: executed intent "${outcome.command.intent}".`);
+                return;
+            }
+
+            const reason = outcome.error ? ` (${outcome.error})` : '';
+            vscode.window.showWarningMessage(`Voice Debug: intent "${outcome.command.intent}" not executed${reason}.`);
         }),
         vscode.commands.registerCommand('antigravity.generateTests', async () => {
             const editor = vscode.window.activeTextEditor;

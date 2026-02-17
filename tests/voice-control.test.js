@@ -65,6 +65,7 @@ function loadTsModule(filePath, cache = new Map()) {
 
 const voiceControlModule = loadTsModule(path.resolve(__dirname, '../src/modules/voice/control.ts'));
 const parseCommand = voiceControlModule.parseCommand;
+const VoiceControl = voiceControlModule.VoiceControl;
 
 // ============ Tests ============
 
@@ -124,5 +125,60 @@ describe('VoiceControl Command Parsing', () => {
     it('should return null for empty input', () => {
         assert.strictEqual(parseCommand(''), null);
         assert.strictEqual(parseCommand('   '), null);
+    });
+
+    it('should execute parsed intents through configured runtime executor', async () => {
+        const vc = new VoiceControl();
+        await vc.start();
+
+        const executed = [];
+        vc.setIntentExecutor(async (cmd) => {
+            executed.push(cmd.intent);
+            return { handled: cmd.intent === 'approve' };
+        });
+
+        const outcome = await vc.processAndExecuteTranscription('approve this');
+        assert.strictEqual(outcome.executed, true);
+        assert.strictEqual(outcome.handled, true);
+        assert.deepStrictEqual(executed, ['approve']);
+
+        const stats = vc.getStats();
+        assert.strictEqual(stats.executionSuccesses, 1);
+        assert.strictEqual(stats.executionFailures, 0);
+        assert.strictEqual(stats.commandCounts.approve, 1);
+    });
+
+    it('should support force-processing for manual transcript debug when inactive', async () => {
+        const vc = new VoiceControl();
+        vc.setIntentExecutor(async () => ({ handled: true }));
+
+        const normal = await vc.processAndExecuteTranscription('status');
+        assert.strictEqual(normal.command, null);
+        assert.strictEqual(normal.executed, false);
+
+        const forced = await vc.processAndExecuteTranscription('status', { force: true });
+        assert.strictEqual(forced.executed, true);
+        assert.strictEqual(forced.handled, true);
+        assert.strictEqual(forced.command.intent, 'status');
+    });
+
+    it('should report execution failure when intent is unsupported or unknown', async () => {
+        const vc = new VoiceControl();
+        await vc.start();
+
+        vc.setIntentExecutor(async () => ({ handled: false, detail: 'unsupported intent' }));
+        const unsupported = await vc.processAndExecuteTranscription('deploy now');
+        assert.strictEqual(unsupported.executed, true);
+        assert.strictEqual(unsupported.handled, false);
+        assert.ok(unsupported.error.includes('unsupported'));
+
+        const unknown = await vc.processAndExecuteTranscription('totally unrecognized phrase');
+        assert.strictEqual(unknown.executed, false);
+        assert.strictEqual(unknown.handled, false);
+        assert.strictEqual(unknown.error, 'unknown intent');
+
+        const stats = vc.getStats();
+        assert.ok(stats.executionFailures >= 2);
+        assert.ok(typeof stats.lastExecutionError === 'string');
     });
 });

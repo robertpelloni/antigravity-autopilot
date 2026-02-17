@@ -37,8 +37,21 @@ export interface VoiceStats {
     mode: string;
     commandsProcessed: number;
     lastCommand?: VoiceCommand;
+    executionSuccesses: number;
+    executionFailures: number;
+    commandCounts: Record<string, number>;
+    lastExecutionError?: string;
     uptimeMs: number;
 }
+
+export interface VoiceExecutionOutcome {
+    command: VoiceCommand | null;
+    executed: boolean;
+    handled: boolean;
+    error?: string;
+}
+
+export type VoiceIntentExecutor = (command: VoiceCommand) => Promise<{ handled: boolean; detail?: string }>;
 
 // ============ Command Patterns ============
 
@@ -143,6 +156,11 @@ export class VoiceControl {
     private lastCommand?: VoiceCommand;
     private startTime = 0;
     private commandPatterns: CommandPattern[];
+    private intentExecutor?: VoiceIntentExecutor;
+    private executionSuccesses = 0;
+    private executionFailures = 0;
+    private lastExecutionError?: string;
+    private commandCounts: Record<string, number> = {};
 
     constructor(customPatterns?: CommandPattern[]) {
         this.voiceConfig = {
@@ -196,11 +214,70 @@ export class VoiceControl {
         if (command && command.confidence >= this.voiceConfig.minConfidence) {
             this.commandsProcessed++;
             this.lastCommand = command;
+            this.commandCounts[command.intent] = (this.commandCounts[command.intent] || 0) + 1;
             log.info(`Voice command: "${command.intent}" (confidence: ${command.confidence})`);
             return command;
         }
 
         return command; // Return even low-confidence for caller to decide
+    }
+
+    /**
+     * Bridge parsed voice intents to runtime command execution.
+     */
+    setIntentExecutor(executor: VoiceIntentExecutor): void {
+        this.intentExecutor = executor;
+    }
+
+    /**
+     * Parse and execute a voice transcription. When force=true, parsing runs even if voice mode is inactive.
+     */
+    async processAndExecuteTranscription(text: string, options?: { force?: boolean }): Promise<VoiceExecutionOutcome> {
+        let command: VoiceCommand | null = null;
+
+        if (options?.force) {
+            command = parseCommand(text, this.commandPatterns);
+            if (command && command.confidence >= this.voiceConfig.minConfidence) {
+                this.commandsProcessed++;
+                this.lastCommand = command;
+                this.commandCounts[command.intent] = (this.commandCounts[command.intent] || 0) + 1;
+            }
+        } else {
+            command = this.processTranscription(text);
+        }
+
+        if (!command) {
+            return { command: null, executed: false, handled: false, error: 'no command parsed' };
+        }
+
+        if (command.intent === 'unknown') {
+            this.executionFailures++;
+            this.lastExecutionError = 'unknown intent';
+            return { command, executed: false, handled: false, error: 'unknown intent' };
+        }
+
+        if (!this.intentExecutor) {
+            this.executionFailures++;
+            this.lastExecutionError = 'intent executor not configured';
+            return { command, executed: false, handled: false, error: 'intent executor not configured' };
+        }
+
+        try {
+            const result = await this.intentExecutor(command);
+            if (result.handled) {
+                this.executionSuccesses++;
+                this.lastExecutionError = undefined;
+                return { command, executed: true, handled: true };
+            }
+
+            this.executionFailures++;
+            this.lastExecutionError = result.detail || 'intent not handled';
+            return { command, executed: true, handled: false, error: this.lastExecutionError };
+        } catch (error: any) {
+            this.executionFailures++;
+            this.lastExecutionError = String(error?.message || error || 'voice intent execution failed');
+            return { command, executed: true, handled: false, error: this.lastExecutionError };
+        }
     }
 
     /**
@@ -231,6 +308,10 @@ export class VoiceControl {
             mode: this.voiceConfig.mode,
             commandsProcessed: this.commandsProcessed,
             lastCommand: this.lastCommand,
+            executionSuccesses: this.executionSuccesses,
+            executionFailures: this.executionFailures,
+            commandCounts: { ...this.commandCounts },
+            lastExecutionError: this.lastExecutionError,
             uptimeMs: this.isActive ? Date.now() - this.startTime : 0
         };
     }

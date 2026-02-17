@@ -74,6 +74,10 @@
                 "title": "Antigravity: Toggle Voice Control"
             },
             {
+                "command": "antigravity.processVoiceTranscript",
+                "title": "Antigravity: Process Voice Transcript (Debug)"
+            },
+            {
                 "command": "antigravity.generateTests",
                 "title": "Antigravity: Generate Tests"
             },
