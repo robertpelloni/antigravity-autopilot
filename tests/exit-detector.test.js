@@ -1,5 +1,9 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+const Module = require('module');
+const ts = require('typescript');
 
 /**
  * Exit Detector Logic Tests
@@ -7,51 +11,73 @@ const assert = require('node:assert');
  * without requiring VS Code dependencies.
  */
 
-// Replicate the ExitDetector logic for testability
-class ExitDetectorTestable {
-    failureCount = 0;
-    maxConsecutiveFailures = 5;
+function loadTsModule(filePath, cache = new Map()) {
+    const absolutePath = path.resolve(filePath);
+    if (cache.has(absolutePath)) {
+        return cache.get(absolutePath).exports;
+    }
 
-    checkResponse(response) {
-        const lower = response.toLowerCase();
-        if (lower.includes('all tasks completed') || lower.includes('goal achieved')) {
-            return { shouldExit: true, reason: 'AI indicated completion' };
+    const source = fs.readFileSync(absolutePath, 'utf-8');
+    const transpiled = ts.transpileModule(source, {
+        compilerOptions: {
+            module: ts.ModuleKind.CommonJS,
+            target: ts.ScriptTarget.ES2020,
+            esModuleInterop: true
+        },
+        fileName: absolutePath
+    }).outputText;
+
+    const mod = new Module(absolutePath, module);
+    cache.set(absolutePath, mod);
+    mod.filename = absolutePath;
+    mod.paths = Module._nodeModulePaths(path.dirname(absolutePath));
+
+    const originalRequire = mod.require.bind(mod);
+    mod.require = (request) => {
+        if (request === 'vscode') {
+            return {
+                window: {
+                    createOutputChannel: () => ({
+                        appendLine: () => undefined
+                    })
+                }
+            };
         }
-        return { shouldExit: false };
-    }
 
-    reportSuccess() {
-        this.failureCount = 0;
-    }
-
-    reportFailure() {
-        this.failureCount++;
-        if (this.failureCount >= this.maxConsecutiveFailures) {
-            return { shouldExit: true, reason: `Too many consecutive failures (${this.failureCount})` };
+        if (request.startsWith('.')) {
+            const base = path.resolve(path.dirname(absolutePath), request);
+            const candidates = [`${base}.ts`, path.join(base, 'index.ts')];
+            for (const candidate of candidates) {
+                if (fs.existsSync(candidate)) {
+                    return loadTsModule(candidate, cache);
+                }
+            }
         }
-        return { shouldExit: false };
-    }
+        return originalRequire(request);
+    };
 
-    reset() {
-        this.failureCount = 0;
-    }
+    mod._compile(transpiled, absolutePath);
+    return mod.exports;
 }
+
+const exitDetectorModule = loadTsModule(path.resolve(__dirname, '../src/core/exit-detector.ts'));
+const ExitDetector = exitDetectorModule.ExitDetector;
 
 describe('ExitDetector Logic', () => {
     it('should detect completion phrases', () => {
-        const det = new ExitDetectorTestable();
+        const det = new ExitDetector();
         assert.strictEqual(det.checkResponse('All tasks completed successfully').shouldExit, true);
         assert.strictEqual(det.checkResponse('The goal achieved!').shouldExit, true);
     });
 
     it('should not trigger on normal responses', () => {
-        const det = new ExitDetectorTestable();
+        const det = new ExitDetector();
         assert.strictEqual(det.checkResponse('Working on task 3...').shouldExit, false);
         assert.strictEqual(det.checkResponse('Implemented the feature').shouldExit, false);
     });
 
     it('should track consecutive failures', () => {
-        const det = new ExitDetectorTestable();
+        const det = new ExitDetector();
         for (let i = 0; i < 4; i++) {
             assert.strictEqual(det.reportFailure().shouldExit, false);
         }
@@ -60,7 +86,7 @@ describe('ExitDetector Logic', () => {
     });
 
     it('should reset failure count on success', () => {
-        const det = new ExitDetectorTestable();
+        const det = new ExitDetector();
         det.reportFailure();
         det.reportFailure();
         det.reportSuccess();
@@ -73,7 +99,7 @@ describe('ExitDetector Logic', () => {
     });
 
     it('should reset via reset()', () => {
-        const det = new ExitDetectorTestable();
+        const det = new ExitDetector();
         det.reportFailure();
         det.reportFailure();
         det.reportFailure();

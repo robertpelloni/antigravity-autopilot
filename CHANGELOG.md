@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.73] - 2026-02-16
+
+### Changed
+- **Real-Module Test Modernization (P3.1 progress)**: Replaced replica-style `tests/exit-detector.test.js` with real-module coverage against `src/core/exit-detector.ts` using the TypeScript-on-the-fly source test harness.
+- **Node Test Harness Compatibility**: Added a minimal test-side `vscode` module mock for source modules that rely on logger output channels, enabling pure Node execution without VS Code host runtime.
+
+### Notes
+- P3.1 remains in progress; additional replica-style tests are still queued for migration.
+
 ## [4.10.72] - 2026-02-16
 
 ### Changed
