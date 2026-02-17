@@ -156,4 +156,113 @@ describe('ProjectManager GitHub integration hardening', () => {
         assert.strictEqual(snapshot.retryAfterSec, 60);
         assert.ok(String(snapshot.error || '').includes('rate limit'));
     });
+
+    it('fetchJiraIssues paginates and maps Jira fields to project tasks', async () => {
+        const manager = new ProjectManager();
+        manager.config = {
+            jira: {
+                baseUrl: 'https://jira.example.com',
+                projectKey: 'AG',
+                email: 'dev@example.com',
+                apiToken: 'token'
+            }
+        };
+
+        let callCount = 0;
+        global.fetch = async () => {
+            callCount += 1;
+            if (callCount === 1) {
+                return createResponse({
+                    body: {
+                        startAt: 0,
+                        maxResults: 50,
+                        total: 2,
+                        issues: [
+                            {
+                                id: '1001',
+                                key: 'AG-1',
+                                fields: {
+                                    summary: 'First Jira task',
+                                    description: 'Desc 1',
+                                    status: { name: 'In Progress' },
+                                    priority: { name: 'High' },
+                                    assignee: { displayName: 'Dev One' },
+                                    labels: ['voice', 'runtime'],
+                                    created: '2025-01-01T00:00:00.000Z',
+                                    updated: '2025-01-02T00:00:00.000Z'
+                                }
+                            }
+                        ]
+                    }
+                });
+            }
+
+            return createResponse({
+                body: {
+                    startAt: 1,
+                    maxResults: 50,
+                    total: 2,
+                    issues: [
+                        {
+                            id: '1002',
+                            key: 'AG-2',
+                            fields: {
+                                summary: 'Second Jira task',
+                                description: 'Desc 2',
+                                status: { name: 'Done' },
+                                priority: { name: 'Medium' },
+                                assignee: { displayName: 'Dev Two' },
+                                labels: ['sync'],
+                                created: '2025-01-03T00:00:00.000Z',
+                                updated: '2025-01-04T00:00:00.000Z'
+                            }
+                        }
+                    ]
+                }
+            });
+        };
+
+        const issues = await manager.fetchJiraIssues();
+        assert.strictEqual(issues.length, 2);
+        assert.deepStrictEqual(issues.map((i) => i.key), ['AG-1', 'AG-2']);
+        assert.deepStrictEqual(issues.map((i) => i.status), ['in_progress', 'done']);
+        assert.deepStrictEqual(issues.map((i) => i.priority), ['high', 'medium']);
+
+        const snapshot = manager.getLastSyncSnapshot();
+        assert.ok(snapshot);
+        assert.strictEqual(snapshot.source, 'jira');
+        assert.strictEqual(snapshot.pagesFetched, 2);
+        assert.strictEqual(snapshot.totalItems, 2);
+        assert.strictEqual(snapshot.rateLimited, false);
+    });
+
+    it('fetchJiraIssues captures rate-limit metadata and returns empty list', async () => {
+        const manager = new ProjectManager();
+        manager.config = {
+            jira: {
+                baseUrl: 'https://jira.example.com',
+                projectKey: 'AG',
+                email: 'dev@example.com',
+                apiToken: 'token'
+            }
+        };
+
+        global.fetch = async () => createResponse({
+            ok: false,
+            status: 429,
+            statusText: 'Too Many Requests',
+            headers: {
+                'retry-after': '45'
+            }
+        });
+
+        const issues = await manager.fetchJiraIssues();
+        assert.deepStrictEqual(issues, []);
+
+        const snapshot = manager.getLastSyncSnapshot();
+        assert.ok(snapshot);
+        assert.strictEqual(snapshot.source, 'jira');
+        assert.strictEqual(snapshot.rateLimited, true);
+        assert.strictEqual(snapshot.retryAfterSec, 45);
+    });
 });

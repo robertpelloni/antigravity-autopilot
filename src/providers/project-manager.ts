@@ -52,7 +52,7 @@ export interface ProjectConfig {
 }
 
 export interface SyncSnapshot {
-    source: 'github';
+    source: 'github' | 'jira';
     fetchedAt: number;
     pagesFetched: number;
     totalItems: number;
@@ -299,6 +299,159 @@ export class ProjectManager {
             log.error(`Failed to fetch GitHub issues: ${(error as Error).message}`);
             const snapshot: SyncSnapshot = {
                 source: 'github',
+                fetchedAt: Date.now(),
+                pagesFetched: 0,
+                totalItems: 0,
+                rateLimited: false,
+                nextPageAvailable: false,
+                conflictsDetected: 0,
+                conflictResolution: 'remote-wins',
+                error: (error as Error).message
+            };
+            this.persistSyncSnapshot(snapshot);
+            return [];
+        }
+    }
+
+    // ============ Jira Integration ============
+    async fetchJiraIssues(): Promise<ProjectTask[]> {
+        if (!this.config?.jira) {
+            return [];
+        }
+
+        const { baseUrl, projectKey, email, apiToken } = this.config.jira;
+        try {
+            const normalizedBase = String(baseUrl || '').replace(/\/+$/, '');
+            const auth = Buffer.from(`${email}:${apiToken}`).toString('base64');
+            const headers = {
+                'Authorization': `Basic ${auth}`,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            };
+
+            const allIssues: any[] = [];
+            let startAt = 0;
+            const maxResults = 50;
+            const maxPages = 10;
+            let pagesFetched = 0;
+            let retryAfterSec: number | undefined;
+            let rateLimited = false;
+            let totalExpected = 0;
+
+            while (pagesFetched < maxPages) {
+                const body = {
+                    jql: `project = ${projectKey} ORDER BY updated DESC`,
+                    startAt,
+                    maxResults,
+                    fields: [
+                        'summary',
+                        'description',
+                        'status',
+                        'priority',
+                        'assignee',
+                        'labels',
+                        'created',
+                        'updated'
+                    ]
+                };
+
+                const response = await fetch(`${normalizedBase}/rest/api/3/search`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(body)
+                });
+
+                if (!response.ok) {
+                    const retryAfter = response.headers.get('retry-after');
+                    const remaining = response.headers.get('x-ratelimit-remaining');
+
+                    if (response.status === 429 || (response.status === 403 && remaining === '0')) {
+                        rateLimited = true;
+                        retryAfterSec = retryAfter ? Number(retryAfter) : undefined;
+                        const snapshot: SyncSnapshot = {
+                            source: 'jira',
+                            fetchedAt: Date.now(),
+                            pagesFetched,
+                            totalItems: allIssues.length,
+                            rateLimited: true,
+                            nextPageAvailable: true,
+                            retryAfterSec,
+                            conflictsDetected: 0,
+                            conflictResolution: 'remote-wins',
+                            error: `Jira rate limit reached (${response.status})`
+                        };
+                        this.persistSyncSnapshot(snapshot);
+                        log.warn(`Jira rate limit reached while syncing issues. Retry after ${retryAfterSec ?? 'unknown'}s.`);
+                        return [];
+                    }
+
+                    throw new Error(`Jira API error: ${response.status} ${response.statusText}`);
+                }
+
+                const payload = await response.json() as any;
+                const issues = Array.isArray(payload?.issues) ? payload.issues : [];
+                allIssues.push(...issues);
+                pagesFetched += 1;
+                totalExpected = Number(payload?.total || totalExpected || allIssues.length);
+
+                const received = Number(payload?.maxResults || maxResults);
+                const nextStart = Number(payload?.startAt || startAt) + received;
+                if (allIssues.length >= totalExpected || issues.length === 0) {
+                    break;
+                }
+
+                startAt = nextStart;
+            }
+
+            const snapshot: SyncSnapshot = {
+                source: 'jira',
+                fetchedAt: Date.now(),
+                pagesFetched,
+                totalItems: allIssues.length,
+                rateLimited,
+                nextPageAvailable: totalExpected > allIssues.length,
+                retryAfterSec,
+                conflictsDetected: 0,
+                conflictResolution: 'remote-wins'
+            };
+            this.persistSyncSnapshot(snapshot);
+
+            return allIssues.map(issue => {
+                const fields = issue?.fields || {};
+                const statusName = String(fields?.status?.name || '').toLowerCase();
+                const mappedStatus: ProjectTask['status'] =
+                    statusName.includes('done') || statusName.includes('closed') ? 'done'
+                        : statusName.includes('progress') || statusName.includes('doing') ? 'in_progress'
+                            : statusName.includes('block') ? 'blocked'
+                                : 'todo';
+
+                const priorityName = String(fields?.priority?.name || '').toLowerCase();
+                const mappedPriority: ProjectTask['priority'] | undefined =
+                    priorityName.includes('highest') || priorityName.includes('critical') ? 'critical'
+                        : priorityName.includes('high') ? 'high'
+                            : priorityName.includes('medium') ? 'medium'
+                                : priorityName.includes('low') || priorityName.includes('lowest') ? 'low'
+                                    : undefined;
+
+                return {
+                    id: String(issue?.id || ''),
+                    key: String(issue?.key || ''),
+                    title: String(fields?.summary || ''),
+                    description: typeof fields?.description === 'string' ? fields.description : undefined,
+                    status: mappedStatus,
+                    priority: mappedPriority,
+                    assignee: fields?.assignee?.displayName || fields?.assignee?.emailAddress,
+                    labels: Array.isArray(fields?.labels) ? fields.labels : undefined,
+                    source: 'jira' as const,
+                    url: `${normalizedBase}/browse/${issue?.key}`,
+                    createdAt: new Date(fields?.created || Date.now()).getTime(),
+                    updatedAt: new Date(fields?.updated || Date.now()).getTime()
+                };
+            });
+        } catch (error) {
+            log.error(`Failed to fetch Jira issues: ${(error as Error).message}`);
+            const snapshot: SyncSnapshot = {
+                source: 'jira',
                 fetchedAt: Date.now(),
                 pagesFetched: 0,
                 totalItems: 0,
