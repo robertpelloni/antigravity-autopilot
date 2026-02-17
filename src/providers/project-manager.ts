@@ -51,11 +51,25 @@ export interface ProjectConfig {
     };
 }
 
+export interface SyncSnapshot {
+    source: 'github';
+    fetchedAt: number;
+    pagesFetched: number;
+    totalItems: number;
+    rateLimited: boolean;
+    nextPageAvailable: boolean;
+    retryAfterSec?: number;
+    conflictsDetected: number;
+    conflictResolution: 'remote-wins' | 'local-wins' | 'manual';
+    error?: string;
+}
+
 // ============ Project Manager Class ============
 export class ProjectManager {
     private config: ProjectConfig | null = null;
     private workspaceRoot: string | null = null;
     private plannerPath: string | null = null;
+    private lastSyncSnapshot: SyncSnapshot | null = null;
     private readonly plannerPriority = ['task.md', 'TODO.md', '@fix_plan.md', 'ROADMAP.md'];
 
     constructor() {
@@ -102,6 +116,27 @@ export class ProjectManager {
                 log.warn('Failed to load project config: ' + (error as Error).message);
             }
         }
+    }
+
+    private persistSyncSnapshot(snapshot: SyncSnapshot): void {
+        this.lastSyncSnapshot = snapshot;
+        if (!this.workspaceRoot) return;
+
+        try {
+            const yokeDir = path.join(this.workspaceRoot, '.yoke');
+            if (!fs.existsSync(yokeDir)) {
+                fs.mkdirSync(yokeDir, { recursive: true });
+            }
+
+            const snapshotPath = path.join(yokeDir, 'project-manager-sync.json');
+            fs.writeFileSync(snapshotPath, JSON.stringify(snapshot, null, 2));
+        } catch (error: any) {
+            log.warn(`Failed to persist sync snapshot: ${String(error?.message || error || 'unknown error')}`);
+        }
+    }
+
+    getLastSyncSnapshot(): SyncSnapshot | null {
+        return this.lastSyncSnapshot;
     }
 
     // ============ Fix Plan Sync ============
@@ -175,21 +210,80 @@ export class ProjectManager {
 
         const { owner, repo, token } = this.config.github;
         try {
-            // Use native fetch (available in VS Code node env)
-            const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`, {
-                headers: {
-                    'Authorization': `token ${token}`,
-                    'Accept': 'application/vnd.github.v3+json',
-                    'User-Agent': 'Antigravity-Autopilot'
-                }
-            });
+            const baseUrl = `https://api.github.com/repos/${owner}/${repo}/issues`;
+            const headers = {
+                'Authorization': `token ${token}`,
+                'Accept': 'application/vnd.github.v3+json',
+                'User-Agent': 'Antigravity-Autopilot'
+            };
 
-            if (!response.ok) {
-                throw new Error(`GitHub API error: ${response.statusText}`);
+            const allIssues: any[] = [];
+            let nextUrl: string | null = `${baseUrl}?state=all&per_page=100&page=1`;
+            let pagesFetched = 0;
+            const maxPages = 10;
+            let retryAfterSec: number | undefined;
+            let rateLimited = false;
+
+            while (nextUrl && pagesFetched < maxPages) {
+                const response = await fetch(nextUrl, { headers });
+
+                if (!response.ok) {
+                    const remaining = response.headers.get('x-ratelimit-remaining');
+                    const retryAfter = response.headers.get('retry-after');
+                    const resetAt = response.headers.get('x-ratelimit-reset');
+
+                    if (response.status === 403 && remaining === '0') {
+                        rateLimited = true;
+                        retryAfterSec = retryAfter ? Number(retryAfter) : undefined;
+                        if (!retryAfterSec && resetAt) {
+                            const resetEpoch = Number(resetAt) * 1000;
+                            retryAfterSec = Math.max(1, Math.ceil((resetEpoch - Date.now()) / 1000));
+                        }
+
+                        const snapshot: SyncSnapshot = {
+                            source: 'github',
+                            fetchedAt: Date.now(),
+                            pagesFetched,
+                            totalItems: allIssues.length,
+                            rateLimited: true,
+                            nextPageAvailable: true,
+                            retryAfterSec,
+                            conflictsDetected: 0,
+                            conflictResolution: 'remote-wins',
+                            error: `GitHub rate limit reached (403)`
+                        };
+                        this.persistSyncSnapshot(snapshot);
+                        log.warn(`GitHub rate limit reached while syncing issues. Retry after ${retryAfterSec ?? 'unknown'}s.`);
+                        return [];
+                    }
+
+                    throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+                }
+
+                const issues = await response.json() as any[];
+                const filtered = issues.filter(issue => !issue.pull_request);
+                allIssues.push(...filtered);
+                pagesFetched += 1;
+
+                const linkHeader = response.headers.get('link') || '';
+                const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/i);
+                nextUrl = nextMatch?.[1] || null;
             }
 
-            const issues = await response.json() as any[];
-            return issues.map(issue => ({
+            const snapshot: SyncSnapshot = {
+                source: 'github',
+                fetchedAt: Date.now(),
+                pagesFetched,
+                totalItems: allIssues.length,
+                rateLimited,
+                nextPageAvailable: !!nextUrl,
+                retryAfterSec,
+                conflictsDetected: 0,
+                conflictResolution: 'remote-wins'
+            };
+            this.persistSyncSnapshot(snapshot);
+
+            return allIssues.map(issue => ({
                 id: issue.id.toString(),
                 key: `#${issue.number}`,
                 title: issue.title,
@@ -203,6 +297,18 @@ export class ProjectManager {
             }));
         } catch (error) {
             log.error(`Failed to fetch GitHub issues: ${(error as Error).message}`);
+            const snapshot: SyncSnapshot = {
+                source: 'github',
+                fetchedAt: Date.now(),
+                pagesFetched: 0,
+                totalItems: 0,
+                rateLimited: false,
+                nextPageAvailable: false,
+                conflictsDetected: 0,
+                conflictResolution: 'remote-wins',
+                error: (error as Error).message
+            };
+            this.persistSyncSnapshot(snapshot);
             return [];
         }
     }
