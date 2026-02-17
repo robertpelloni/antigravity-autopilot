@@ -1,7 +1,7 @@
 # Antigravity Autopilot — Project Dashboard
 
-**Version**: 4.10.59
-**Build Date**: 2026-02-16
+**Version**: 4.10.86
+**Build Date**: 2026-02-17
 **Status**: ✅ Active Development
 
 ---
@@ -68,7 +68,7 @@ antigravity-autopilot/
 | **CDP Auto-Clicker** | ✅ Active | `main_scripts/full_cdp_script.js` | Multi-tab + runtime state + click pipeline are operational |
 | **Auto-Bump / Auto-Resume** | ✅ Active | `full_cdp_script.js`, `extension.ts` | Waiting-state detection, reminder, guarded auto-resume, watchdog escalation |
 | **Simple Strategy** | ✅ Active | `src/strategies/simple-strategy.ts` | Command-based fallback strategy |
-| **Dashboard Runtime UX** | ✅ Active | `src/ui/dashboard.ts` | Comprehensive runtime controls and diagnostics |
+| **Dashboard Runtime UX** | ✅ Active | `src/ui/dashboard.ts` | Unified top-level autopilot groups (Auto Accept / Auto Bump / Run-Expand-Continue) plus advanced diagnostics |
 | **Interaction Matrix** | ✅ Active | `src/strategies/interaction-methods.ts` | Multi-method text/click/submit routing with profile bundles |
 | **Status Bar + Status Menu** | ✅ Active | `src/ui/status-bar.ts`, `src/extension.ts` | Runtime labels and operator quick actions |
 | **Autonomous Loop** | 🟡 Partial | `src/core/autonomous-loop.ts` | Functional loop, but still has placeholder circuit-state reporting and simplistic completion path |

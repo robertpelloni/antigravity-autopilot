@@ -18,7 +18,7 @@ Antigravity Autopilot merges auto-accept, auto-click, autonomous agent mode, and
 
 1. Install the `.vsix` file: `Extensions → ⋯ → Install from VSIX`
 2. Open Command Palette → `Antigravity: Open Dashboard`
-3. Enable "Auto-All (CDP)" and configure your settings
+3. Enable unified autopilot controls (`Auto Accept`, `Auto Bump`, and `Run/Expand/Continue`) and configure timings
 4. The extension will prompt to relaunch with CDP if needed
 
 ## Configuration
@@ -28,7 +28,11 @@ All settings are under `antigravity.*` in VS Code settings. Key ones:
 | Setting | Default | Description |
 |:--------|:--------|:------------|
 | `bumpMessage` | `"bump"` | Text sent when AI is idle |
-| `autoApproveDelay` | `30` | Bump cooldown (seconds) |
+| `autopilotAutoAcceptEnabled` | `false` | Unified toggle for automatic accept/action handling |
+| `autopilotAutoBumpEnabled` | `true` | Unified toggle for idle bump/resume behavior |
+| `autopilotRunExpandContinueEnabled` | `true` | Unified toggle for Run/Expand/Continue click actions |
+| `autoAcceptPollIntervalMs` | `1000` | Unified polling interval for action scanning (ms) |
+| `autoBumpCooldownSec` | `30` | Unified bump cooldown (seconds) |
 | `threadWaitInterval` | `5` | Wait between loop cycles (seconds) |
 | `bannedCommands` | `[]` | Commands to never auto-click |
 
@@ -61,7 +65,7 @@ Use `verify:release:secure` when you want policy-test + audit-gate enforcement b
 
 ## Version
 
-**v4.10.85** — See [CHANGELOG.md](CHANGELOG.md) for details.
+**v4.10.86** — See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## Implementation Status Note
 

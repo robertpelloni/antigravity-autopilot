@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.86] - 2026-02-17
+
+### Changed
+- **Unified Controls Documentation Sync**: Updated `README.md` quick-start and configuration highlights to reference grouped autopilot toggles (`Auto Accept`, `Auto Bump`, `Run/Expand/Continue`) and unified timing settings.
+- **Dashboard Snapshot Metadata Refresh**: Updated `DASHBOARD.md` build/version metadata and runtime UX notes to reflect the unified top-level control surface.
+
 ## [4.10.85] - 2026-02-17
 
 ### Added
