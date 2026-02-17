@@ -93,6 +93,7 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - [x] Integrate richer response-state signals and avoid premature “complete” exits
 - [x] Calibrate `TestLoopDetector` thresholds using real historical runs
 - [x] Add structured confidence + reason telemetry for loop stop causes
+- [x] Add deterministic completion-detection soak replay harness with false-complete assertions
 - [ ] Validate reduced false-complete rate in manual soak sessions
 - **Definition of done:** significantly fewer false-complete stops in manual soak testing
 

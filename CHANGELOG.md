@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.84] - 2026-02-17
+
+### Added
+- **Completion Detection Soak Harness**: Added `tests/completion-detection-soak.test.js` to replay deterministic response sequences and assert zero false-complete stops across a mixed scenario corpus.
+- **Soak Runner Script**: Added `npm run test:soak:completion` for quick repeatable validation of completion/loop-stop behavior.
+
+### Changed
+- **P1.5 Validation Track**: Backlog now explicitly tracks deterministic soak coverage as complete, leaving manual in-product soak verification as the final P1.5 step.
+
 ## [4.10.83] - 2026-02-17
 
 ### Added

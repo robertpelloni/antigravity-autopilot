@@ -61,7 +61,7 @@ Use `verify:release:secure` when you want policy-test + audit-gate enforcement b
 
 ## Version
 
-**v4.10.83** — See [CHANGELOG.md](CHANGELOG.md) for details.
+**v4.10.84** — See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## Implementation Status Note
 

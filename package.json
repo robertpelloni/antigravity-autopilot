@@ -2,7 +2,7 @@
     "name": "antigravity-autopilot",
     "displayName": "Antigravity Autopilot (Unified)",
     "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-    "version": "4.10.83",
+    "version": "4.10.84",
     "repository": {
         "type": "git",
         "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -636,6 +636,7 @@
         "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --platform=node --format=cjs --sourcemap",
         "watch": "npm run compile -- --watch",
         "test": "node --test antigravity-jules-orchestration/tests/**/*.test.js",
+        "test:soak:completion": "node --test tests/completion-detection-soak.test.js",
         "test:audit-policy": "node --test tests/audit-policy.test.js",
         "test:quality-gates": "node --test tests/command-parity.test.js tests/schema-parity.test.js tests/runtime-placeholder-policy.test.js",
         "package": "vsce package",
