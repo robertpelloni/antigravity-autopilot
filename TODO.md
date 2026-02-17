@@ -164,7 +164,7 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 
 ### P3.3 Add deterministic soak harness for runtime waiting/auto-resume
 - [x] Replay runtime states into guard/watchdog logic
-- [ ] Assert no spam, no deadlock, correct escalation behavior
+- [x] Assert no spam, no deadlock, correct escalation behavior
 
 ---
 

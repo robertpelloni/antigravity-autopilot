@@ -53,6 +53,21 @@ export interface AutoResumeGuardReport {
     health: CrossUiHealth;
 }
 
+export interface EscalationArmingInput {
+    enabled: boolean;
+    consecutiveFailures: number;
+    threshold: number;
+    now: number;
+    lastEscalationAt: number;
+    cooldownMs: number;
+}
+
+export interface EscalationArmingDecision {
+    arm: boolean;
+    reason: string;
+    cooldownRemainingMs: number;
+}
+
 function evaluateCoverageProfile(cov: any): CrossUiProfileHealth {
     const hasInput = !!cov?.hasVisibleInput;
     const hasSend = !!cov?.hasVisibleSendButton;
@@ -168,5 +183,38 @@ export function buildAutoResumeGuardReport(state: any, options: AutoResumeGuardO
         scorePass,
         strictPass,
         health
+    };
+}
+
+export function evaluateEscalationArming(input: EscalationArmingInput): EscalationArmingDecision {
+    if (!input.enabled) {
+        return { arm: false, reason: 'escalation disabled', cooldownRemainingMs: 0 };
+    }
+
+    if (input.consecutiveFailures < input.threshold) {
+        return {
+            arm: false,
+            reason: `below threshold (${input.consecutiveFailures}/${input.threshold})`,
+            cooldownRemainingMs: 0
+        };
+    }
+
+    const elapsed = input.lastEscalationAt > 0 ? Math.max(0, input.now - input.lastEscalationAt) : Number.MAX_SAFE_INTEGER;
+    const cooldownRemainingMs = input.lastEscalationAt > 0
+        ? Math.max(0, input.cooldownMs - elapsed)
+        : 0;
+
+    if (cooldownRemainingMs > 0) {
+        return {
+            arm: false,
+            reason: `cooldown active (${Math.ceil(cooldownRemainingMs / 1000)}s left)`,
+            cooldownRemainingMs
+        };
+    }
+
+    return {
+        arm: true,
+        reason: `threshold reached (${input.consecutiveFailures}/${input.threshold})`,
+        cooldownRemainingMs: 0
     };
 }

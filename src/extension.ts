@@ -16,7 +16,7 @@ import { testGenerator } from './core/test-generator';
 import { codeReviewer } from './core/code-reviewer';
 import { agentOrchestrator } from './core/agent-orchestrator';
 import { memoryManager } from './core/memory-manager';
-import { buildAutoResumeGuardReport } from './core/runtime-auto-resume-guard';
+import { buildAutoResumeGuardReport, evaluateEscalationArming } from './core/runtime-auto-resume-guard';
 import { projectManager } from './providers/project-manager';
 
 import { StatusBarManager } from './ui/status-bar';
@@ -112,13 +112,19 @@ export function activate(context: vscode.ExtensionContext) {
                 || runtimeState?.waitingForChatMessage === true;
 
             const tryArmEscalation = (triggerReason: string) => {
-                if (!escalationEnabled || watchdogEscalationConsecutiveFailures < escalationThreshold) {
-                    return;
-                }
+                const decision = evaluateEscalationArming({
+                    enabled: escalationEnabled,
+                    consecutiveFailures: watchdogEscalationConsecutiveFailures,
+                    threshold: escalationThreshold,
+                    now,
+                    lastEscalationAt: lastWatchdogEscalationAt,
+                    cooldownMs: escalationCooldownMs
+                });
 
-                const cooldownElapsed = now - lastWatchdogEscalationAt;
-                if (lastWatchdogEscalationAt > 0 && cooldownElapsed < escalationCooldownMs) {
-                    lastWatchdogEscalationReason = `threshold reached but cooldown active (${Math.ceil((escalationCooldownMs - cooldownElapsed) / 1000)}s left)`;
+                if (!decision.arm) {
+                    if (decision.cooldownRemainingMs > 0) {
+                        lastWatchdogEscalationReason = `threshold reached but ${decision.reason}`;
+                    }
                     pushWatchdogEscalationEvent('suppressed', lastWatchdogEscalationReason);
                     return;
                 }

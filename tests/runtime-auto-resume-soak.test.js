@@ -45,7 +45,7 @@ function loadTsModule(filePath, cache = new Map()) {
 }
 
 const runtimeGuardModule = loadTsModule(path.resolve(__dirname, '../src/core/runtime-auto-resume-guard.ts'));
-const { evaluateCrossUiHealth, buildAutoResumeGuardReport } = runtimeGuardModule;
+const { evaluateCrossUiHealth, buildAutoResumeGuardReport, evaluateEscalationArming } = runtimeGuardModule;
 
 function state(overrides = {}) {
     return {
@@ -108,5 +108,46 @@ describe('Runtime auto-resume deterministic soak harness', () => {
         assert.strictEqual(healthA.grade, healthB.grade);
         assert.strictEqual(healthA.score, healthB.score);
         assert.deepStrictEqual(healthA.scoreParts, healthB.scoreParts);
+    });
+
+    it('suppresses escalation while below threshold (deadlock guard)', () => {
+        const decision = evaluateEscalationArming({
+            enabled: true,
+            consecutiveFailures: 1,
+            threshold: 2,
+            now: 100_000,
+            lastEscalationAt: 0,
+            cooldownMs: 900_000
+        });
+
+        assert.strictEqual(decision.arm, false);
+        assert.ok(decision.reason.includes('below threshold'));
+    });
+
+    it('suppresses repeated escalation during cooldown and allows after cooldown (no-spam guard)', () => {
+        const suppressed = evaluateEscalationArming({
+            enabled: true,
+            consecutiveFailures: 3,
+            threshold: 2,
+            now: 200_000,
+            lastEscalationAt: 100_000,
+            cooldownMs: 900_000
+        });
+
+        assert.strictEqual(suppressed.arm, false);
+        assert.ok(suppressed.reason.includes('cooldown active'));
+        assert.ok(suppressed.cooldownRemainingMs > 0);
+
+        const armed = evaluateEscalationArming({
+            enabled: true,
+            consecutiveFailures: 3,
+            threshold: 2,
+            now: 1_100_001,
+            lastEscalationAt: 100_000,
+            cooldownMs: 900_000
+        });
+
+        assert.strictEqual(armed.arm, true);
+        assert.strictEqual(armed.cooldownRemainingMs, 0);
     });
 });
