@@ -33,6 +33,12 @@ export function activate(context: vscode.ExtensionContext) {
     // Initialize UI
     statusBar = new StatusBarManager(context);
 
+    const isUnifiedAutoAcceptEnabled = () => {
+        return !!config.get<boolean>('autopilotAutoAcceptEnabled')
+            || !!config.get<boolean>('autoAllEnabled')
+            || !!config.get<boolean>('autoAcceptEnabled');
+    };
+
     // Initialize Managers
     const strategyManager = new StrategyManager(context);
     let latestRuntimeState: CDPRuntimeState | null = null;
@@ -848,13 +854,18 @@ export function activate(context: vscode.ExtensionContext) {
             // Status bar update triggered by config listener or loop callback
         }),
         vscode.commands.registerCommand('antigravity.toggleAutoAccept', async () => {
-            await config.update('autoAcceptEnabled', !config.get('autoAcceptEnabled'));
+            const next = !isUnifiedAutoAcceptEnabled();
+            await config.update('autopilotAutoAcceptEnabled', next);
+            await config.update('autoAcceptEnabled', next);
+            await config.update('autoAllEnabled', next);
             await strategyManager.start();
         }),
         vscode.commands.registerCommand('antigravity.toggleAutoAll', async () => {
-            const current = config.get<boolean>('autoAllEnabled');
-            await config.update('autoAllEnabled', !current);
-            if (!current) {
+            const next = !isUnifiedAutoAcceptEnabled();
+            await config.update('autopilotAutoAcceptEnabled', next);
+            await config.update('autoAcceptEnabled', next);
+            await config.update('autoAllEnabled', next);
+            if (next) {
                 await config.update('strategy', 'cdp');
             }
             await strategyManager.start();
@@ -1589,7 +1600,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Initialize based on saved config
     // 1. Strategy (Core Driver)
-    if (config.get('autoAllEnabled') || config.get('autoAcceptEnabled')) {
+    if (isUnifiedAutoAcceptEnabled()) {
         strategyManager.start().catch(e => log.error(`Failed to start strategy: ${e.message}`));
     }
 

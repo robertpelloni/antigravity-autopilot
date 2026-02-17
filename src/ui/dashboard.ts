@@ -341,7 +341,7 @@ export class DashboardPanel {
             
             <!-- STRATEGIES -->
             <div class="card">
-                <h2>Strategies</h2>
+                <h2>Unified Autopilot Controls</h2>
                 <div class="setting">
                     <label>Current Strategy:</label>
                     <select onchange="updateConfig('strategy', this.value)">
@@ -350,14 +350,18 @@ export class DashboardPanel {
                     </select>
                 </div>
                 <div class="setting">
-                    <label>Auto-Accept:</label>
-                    <input type="checkbox" ${settings.autoAcceptEnabled ? 'checked' : ''} onchange="updateConfig('autoAcceptEnabled', this.checked)">
+                    <label>Auto Accept:</label>
+                    <input type="checkbox" ${settings.autopilotAutoAcceptEnabled ? 'checked' : ''} onchange="updateUnifiedAutoAccept(this.checked)">
                 </div>
                 <div class="setting">
-                    <label>Auto-All (CDP):</label>
-                    <input type="checkbox" ${settings.autoAllEnabled ? 'checked' : ''} onchange="updateConfig('autoAllEnabled', this.checked)">
+                    <label>Auto Bump:</label>
+                    <input type="checkbox" ${settings.autopilotAutoBumpEnabled ? 'checked' : ''} onchange="updateConfig('autopilotAutoBumpEnabled', this.checked)">
                 </div>
-                 <div class="setting">
+                <div class="setting">
+                    <label>Run / Expand / Continue:</label>
+                    <input type="checkbox" ${settings.autopilotRunExpandContinueEnabled ? 'checked' : ''} onchange="updateConfig('autopilotRunExpandContinueEnabled', this.checked)">
+                </div>
+                <div class="setting">
                     <label>Multi-Tab Mode:</label>
                     <input type="checkbox" ${settings.multiTabEnabled ? 'checked' : ''} onchange="updateConfig('multiTabEnabled', this.checked)">
                 </div>
@@ -411,12 +415,12 @@ export class DashboardPanel {
                     <input type="text" value="${settings.bumpMessage}" onchange="updateConfig('bumpMessage', this.value)">
                 </div>
                 <div class="setting">
-                    <label>Auto-Approve Delay (s):</label>
-                    <input type="number" value="${settings.autoApproveDelay}" onchange="updateConfig('autoApproveDelay', parseInt(this.value))">
+                    <label>Auto-Accept Poll (ms):</label>
+                    <input type="number" value="${settings.autoAcceptPollIntervalMs}" min="100" max="10000" onchange="updateUnifiedPollInterval(parseInt(this.value))">
                 </div>
                 <div class="setting">
-                    <label>Poll Frequency (ms):</label>
-                    <input type="number" value="${settings.pollFrequency}" onchange="updateConfig('pollFrequency', parseInt(this.value))">
+                    <label>Auto-Bump Cooldown (s):</label>
+                    <input type="number" value="${settings.autoBumpCooldownSec}" min="1" max="3600" onchange="updateUnifiedBumpCooldown(parseInt(this.value))">
                 </div>
                 <div class="setting">
                     <label>Loop Interval (s):</label>
@@ -425,6 +429,14 @@ export class DashboardPanel {
                 <div class="setting">
                     <label>Thread Wait (s):</label>
                     <input type="number" value="${settings.threadWaitInterval}" onchange="updateConfig('threadWaitInterval', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Legacy Poll Frequency (ms):</label>
+                    <input type="number" value="${settings.pollFrequency}" onchange="updateConfig('pollFrequency', parseInt(this.value))">
+                </div>
+                <div class="setting">
+                    <label>Legacy Auto-Approve Delay (s):</label>
+                    <input type="number" value="${settings.autoApproveDelay}" onchange="updateConfig('autoApproveDelay', parseInt(this.value))">
                 </div>
                 <div class="setting">
                     <label>Waiting Reminder:</label>
@@ -777,6 +789,25 @@ export class DashboardPanel {
                         value: value
                     });
                 }
+
+                function updateUnifiedAutoAccept(enabled) {
+                    updateConfig('autopilotAutoAcceptEnabled', enabled);
+                    updateConfig('autoAcceptEnabled', enabled);
+                    updateConfig('autoAllEnabled', enabled);
+                }
+
+                function updateUnifiedPollInterval(value) {
+                    const sanitized = Number.isFinite(value) ? Math.max(100, Math.min(10000, value)) : 1000;
+                    updateConfig('autoAcceptPollIntervalMs', sanitized);
+                    updateConfig('pollFrequency', sanitized);
+                }
+
+                function updateUnifiedBumpCooldown(value) {
+                    const sanitized = Number.isFinite(value) ? Math.max(1, Math.min(3600, value)) : 30;
+                    updateConfig('autoBumpCooldownSec', sanitized);
+                    updateConfig('autoApproveDelay', sanitized);
+                }
+
                 function toggleMethod(configKey, methodId, enabled) {
                     vscode.postMessage({
                         command: 'toggleMethod',

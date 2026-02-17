@@ -5,6 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.85] - 2026-02-17
+
+### Added
+- **Unified Autopilot Control Group**: Introduced top-level grouped controls for `Auto Accept`, `Auto Bump`, and `Run/Expand/Continue` behaviors.
+- **Unified Timing Controls**: Added explicit `autoAcceptPollIntervalMs` and `autoBumpCooldownSec` settings with dashboard wiring and legacy fallback synchronization.
+
+### Changed
+- **Runtime Control Wiring**: `CDPStrategy` now honors unified grouped toggles for auto-accept flow, run/expand/continue click gating, and bump handler activation.
+- **Timing Behavior Reliability**: Auto-accept polling now uses unified poll interval, and blind-bump cadence now uses unified bump cooldown (with legacy fallback).
+- **Dashboard Simplification**: Consolidated top-level autopilot controls into logical grouped toggles while preserving advanced settings for deeper tuning.
+
 ## [4.10.84] - 2026-02-17
 
 ### Added

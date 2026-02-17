@@ -36,7 +36,7 @@ export class BlindBumpHandler {
         this.stop();
         this.isActive = true;
         this.cycleCount = 0;
-        const delay = (config.get<number>('autoApproveDelay') || 10) * 1000;
+        const delay = (config.get<number>('autoBumpCooldownSec') || config.get<number>('autoApproveDelay') || 10) * 1000;
 
         this.statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
         this.statusBar.text = '$(pulse) AG: Init';

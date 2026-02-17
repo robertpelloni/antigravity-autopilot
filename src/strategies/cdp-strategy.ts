@@ -51,6 +51,39 @@ export class CDPStrategy implements IStrategy {
     private context: vscode.ExtensionContext;
     private appName: string;
 
+    private isUnifiedAutoAcceptEnabled(): boolean {
+        return !!config.get<boolean>('autopilotAutoAcceptEnabled')
+            || !!config.get<boolean>('autoAllEnabled')
+            || !!config.get<boolean>('autoAcceptEnabled');
+    }
+
+    private isUnifiedAutoBumpEnabled(): boolean {
+        return !!config.get<boolean>('autopilotAutoBumpEnabled');
+    }
+
+    private isRunExpandContinueEnabled(): boolean {
+        return !!config.get<boolean>('autopilotRunExpandContinueEnabled');
+    }
+
+    private shouldRunBlindBump(): boolean {
+        const bumpMessage = (config.get<string>('bumpMessage') || '').trim();
+        return this.isUnifiedAutoBumpEnabled() && this.isUnifiedAutoAcceptEnabled() && bumpMessage.length > 0;
+    }
+
+    private syncBlindBumpHandlerState(): void {
+        const shouldRun = this.shouldRunBlindBump();
+        if (shouldRun && !this.blindBumpHandler) {
+            this.blindBumpHandler = new BlindBumpHandler(this.cdpHandler);
+            this.blindBumpHandler.start();
+            return;
+        }
+
+        if (!shouldRun && this.blindBumpHandler) {
+            this.blindBumpHandler.stop();
+            this.blindBumpHandler = null;
+        }
+    }
+
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
         this.appName = vscode.env.appName || 'Visual Studio Code';
@@ -80,14 +113,14 @@ export class CDPStrategy implements IStrategy {
             vscode.window.showWarningMessage('Antigravity: CDP connection failed. Retrying in background...');
         }
 
-        // Start blind bump handler
-        this.blindBumpHandler = new BlindBumpHandler(this.cdpHandler);
-        this.blindBumpHandler.start();
+        this.syncBlindBumpHandlerState();
 
         // Poll for CDP connection status
-        const frequency = config.get<number>('pollFrequency') || 1000;
+        const frequency = config.get<number>('autoAcceptPollIntervalMs') || config.get<number>('pollFrequency') || 1000;
         this.pollTimer = setInterval(async () => {
             if (!this.isActive) return;
+
+            this.syncBlindBumpHandlerState();
 
             // Reconnect if disconnected
             if (!this.cdpHandler.isConnected()) {
@@ -125,6 +158,10 @@ export class CDPStrategy implements IStrategy {
     }
 
     async executeAction(action: string): Promise<void> {
+        if ((action === 'run' || action === 'expand' || action === 'continue') && !this.isRunExpandContinueEnabled()) {
+            return;
+        }
+
         const profile = this.resolveUiProfile();
         const selector = this.getClickSelectorForProfile(profile);
         const clickRegistry = this.createRegistryForProfile(profile);
@@ -179,15 +216,25 @@ export class CDPStrategy implements IStrategy {
      * Auto-accept agent steps using configured interaction methods.
      */
     private async executeAutoAccept() {
+        if (!this.isUnifiedAutoAcceptEnabled()) {
+            return;
+        }
+
         const profile = this.resolveUiProfile();
         const selector = this.getClickSelectorForProfile(profile);
         const clickRegistry = this.createRegistryForProfile(profile);
+        const rejectPatterns = [...(config.get<string[]>('rejectPatterns') || [])];
+
+        if (!this.isRunExpandContinueEnabled()) {
+            rejectPatterns.push('run', 'continue', 'expand');
+        }
+
         const ctx: InteractionContext = {
             cdpHandler: this.cdpHandler,
             vscodeCommands: vscode.commands,
             selector,
             acceptPatterns: config.get<string[]>('acceptPatterns') || [],
-            rejectPatterns: config.get<string[]>('rejectPatterns') || [],
+            rejectPatterns,
             visualDiffThreshold: config.get<number>('interactionVisualDiffThreshold') || 0.001,
             commandId: 'antigravity.agent.acceptAgentStep'
         };
