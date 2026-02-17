@@ -643,6 +643,7 @@
         "@types/vscode": "^1.75.0",
         "@types/ws": "^8.5.10",
         "@vscode/vsce": "^2.22.0",
+        "compression": "^1.8.1",
         "esbuild": "^0.27.1",
         "eslint": "^8.55.0",
         "joi": "^17.13.3",
