@@ -153,9 +153,9 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 
 ### P3.2 Add CI quality gates
 - [x] Compile + lint + test on PR
-- [ ] Add schema parity test: `package.json` settings vs dashboard controls
-- [ ] Add command parity test: manifest vs registered handlers
-- [ ] Add placeholder/simulated-string policy check for active root modules
+- [x] Add schema parity test: `package.json` settings vs dashboard controls
+- [x] Add command parity test: manifest vs registered handlers
+- [x] Add placeholder/simulated-string policy check for active root modules
 
 ### P3.3 Add deterministic soak harness for runtime waiting/auto-resume
 - [ ] Replay runtime states into guard/watchdog logic
