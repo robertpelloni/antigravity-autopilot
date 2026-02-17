@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.83] - 2026-02-17
+
+### Added
+- **Adaptive Test-Loop Calibration**: `src/core/test-loop-detector.ts` now calibrates effective exit thresholds from rolling historical loop signals (test-only dominance lowers threshold; mixed feature-work history raises it).
+- **Calibration Telemetry Surface**: Detector checks and status now expose `calibratedThreshold` for clearer operator/debug visibility.
+
+### Changed
+- **P1.5 Progress**: Completion-detection pipeline now includes response-signal hardening, stop-cause telemetry, and adaptive threshold calibration; remaining scope is manual soak verification.
+- **Detector Test Coverage**: `tests/test-loop-detector.test.js` now covers threshold up/down calibration behavior and threshold metadata assertions.
+
 ## [4.10.82] - 2026-02-17
 
 ### Added

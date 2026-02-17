@@ -22,7 +22,7 @@ Canonical backlog is maintained in `TODO.md`.
 - [x] P1.2 Resolve manifest/handler parity for internal commands
 - [x] P1.3 Harden model selection and model ID consistency
 - [x] P1.4 Improve model scraper reliability
-- [ ] P1.5 Strengthen autonomous completion detection *(signal/telemetry hardening landed; historical-threshold calibration remains)*
+- [ ] P1.5 Strengthen autonomous completion detection *(signal/telemetry hardening + adaptive threshold calibration landed; manual soak validation remains)*
 - [x] P2.1 Replace progress tracker placeholder metrics with real telemetry
 - [x] P2.2 Upgrade test generator to remove placeholder assertions *(completed with AST-backed extraction + merge-safe generation)*
 - [x] P3.1 Replace replica tests with real source-module tests *(root extension scope complete: TaskAnalyzer + ProjectTracker + CircuitBreaker + ExitDetector + RateLimiter + ProgressTracker + TestLoopDetector + VoiceControl + Backoff + AgentOrchestrator swarm aggregation + MCPFederation + InteractionMethodRegistry + CodeReviewer now test real src modules; remaining replica-style tests are in reference submodules)*

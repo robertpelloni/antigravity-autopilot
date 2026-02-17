@@ -91,8 +91,9 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 
 ### P1.5 Strengthen autonomous completion detection
 - [x] Integrate richer response-state signals and avoid premature “complete” exits
-- [ ] Calibrate `TestLoopDetector` thresholds using real historical runs
+- [x] Calibrate `TestLoopDetector` thresholds using real historical runs
 - [x] Add structured confidence + reason telemetry for loop stop causes
+- [ ] Validate reduced false-complete rate in manual soak sessions
 - **Definition of done:** significantly fewer false-complete stops in manual soak testing
 
 ### P1.6 Dependency security hardening (non-breaking first)

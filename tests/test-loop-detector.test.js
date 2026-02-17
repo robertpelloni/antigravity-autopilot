@@ -84,6 +84,7 @@ describe('TestLoopDetector', () => {
         const result = d.analyzeResponse('All tests passed. 45 tests passing.');
         assert.strictEqual(result.isTestOnly, true);
         assert.ok(result.confidence > 0);
+        assert.strictEqual(result.calibratedThreshold, 3);
     });
 
     it('should detect feature work responses', () => {
@@ -141,6 +142,7 @@ describe('TestLoopDetector', () => {
         d.reset();
         assert.strictEqual(d.getStatus().consecutive, 0);
         assert.strictEqual(d.getStatus().total, 0);
+        assert.strictEqual(d.getStatus().calibratedThreshold, 3);
     });
 
     it('should handle empty responses', () => {
@@ -149,5 +151,30 @@ describe('TestLoopDetector', () => {
         const result = d.analyzeResponse('');
         assert.strictEqual(result.isTestOnly, false);
         assert.strictEqual(result.shouldExit, false);
+    });
+
+    it('should calibrate threshold down when recent history is overwhelmingly test-only', () => {
+        mockMaxConsecutiveTestLoops = 4;
+        const d = new TestLoopDetector();
+        for (let i = 0; i < 6; i++) {
+            d.analyzeResponse('All tests passed');
+        }
+
+        const status = d.getStatus();
+        assert.strictEqual(status.calibratedThreshold, 3);
+    });
+
+    it('should calibrate threshold up when feature work is frequent in recent history', () => {
+        mockMaxConsecutiveTestLoops = 3;
+        const d = new TestLoopDetector();
+        d.analyzeResponse('Created new file api.ts');
+        d.analyzeResponse('Implemented service handler');
+        d.analyzeResponse('Updated auth module');
+        d.analyzeResponse('Running tests now');
+        d.analyzeResponse('Fixed bug in parser');
+        d.analyzeResponse('All tests passed');
+
+        const status = d.getStatus();
+        assert.strictEqual(status.calibratedThreshold, 4);
     });
 });

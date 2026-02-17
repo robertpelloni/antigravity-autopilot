@@ -42,12 +42,54 @@ export interface TestLoopCheck {
     confidence: number;
     shouldExit: boolean;
     reason?: string;
+    calibratedThreshold?: number;
 }
 
 export class TestLoopDetector {
     private consecutiveTestLoops = 0;
     private totalLoops = 0;
     private testLoops = 0;
+    private readonly recentWindowSize = 20;
+    private recentIsTestOnly: boolean[] = [];
+    private recentIsFeatureWork: boolean[] = [];
+
+    private recordLoopSignals(isTestOnly: boolean, hasFeatureWork: boolean): void {
+        this.recentIsTestOnly.push(isTestOnly);
+        if (this.recentIsTestOnly.length > this.recentWindowSize) {
+            this.recentIsTestOnly.shift();
+        }
+
+        this.recentIsFeatureWork.push(hasFeatureWork);
+        if (this.recentIsFeatureWork.length > this.recentWindowSize) {
+            this.recentIsFeatureWork.shift();
+        }
+    }
+
+    private getCalibratedThreshold(baseThreshold: number): number {
+        const historyCount = this.recentIsTestOnly.length;
+        if (historyCount < 5) {
+            return baseThreshold;
+        }
+
+        const testOnlyCount = this.recentIsTestOnly.filter(Boolean).length;
+        const featureWorkCount = this.recentIsFeatureWork.filter(Boolean).length;
+        const testOnlyRate = testOnlyCount / historyCount;
+        const featureWorkRate = featureWorkCount / historyCount;
+
+        let calibrated = baseThreshold;
+
+        // If history is overwhelmingly test-only, be more aggressive about exiting.
+        if (testOnlyRate >= 0.85 && featureWorkRate <= 0.1) {
+            calibrated = Math.max(2, baseThreshold - 1);
+        }
+
+        // If there is substantial feature work mixed in recently, require more evidence before exit.
+        if (featureWorkRate >= 0.35) {
+            calibrated = Math.min(10, calibrated + 1);
+        }
+
+        return calibrated;
+    }
 
     /**
      * Analyze response to determine if it's test-only activity
@@ -75,6 +117,8 @@ export class TestLoopDetector {
             }
         }
 
+        this.recordLoopSignals(testMatches > 0 && featureMatches === 0, featureMatches > 0);
+
         // Determine if this is a test-only loop
         const isTestOnly = testMatches > 0 && featureMatches === 0;
         const confidence = testMatches / (testMatches + featureMatches + 1);
@@ -88,19 +132,21 @@ export class TestLoopDetector {
         }
 
         // Check if we should exit
-        const maxTestLoops = config.get<number>('maxConsecutiveTestLoops') || 3;
-        const shouldExit = this.consecutiveTestLoops >= maxTestLoops;
+        const configuredMaxTestLoops = config.get<number>('maxConsecutiveTestLoops') || 3;
+        const calibratedThreshold = this.getCalibratedThreshold(configuredMaxTestLoops);
+        const shouldExit = this.consecutiveTestLoops >= calibratedThreshold;
 
         if (shouldExit) {
-            log.info(`🔴 Exiting: ${this.consecutiveTestLoops} consecutive test-only loops`);
+            log.info(`🔴 Exiting: ${this.consecutiveTestLoops} consecutive test-only loops (threshold=${calibratedThreshold})`);
         }
 
         return {
             isTestOnly,
             confidence,
             shouldExit,
+            calibratedThreshold,
             reason: shouldExit
-                ? `${this.consecutiveTestLoops} consecutive test-only loops (feature likely complete)`
+                ? `${this.consecutiveTestLoops} consecutive test-only loops (feature likely complete; threshold=${calibratedThreshold})`
                 : undefined,
         };
     }
@@ -116,11 +162,13 @@ export class TestLoopDetector {
     /**
      * Get status for dashboard
      */
-    getStatus(): { consecutive: number; total: number; percentage: number } {
+    getStatus(): { consecutive: number; total: number; percentage: number; calibratedThreshold: number } {
+        const configuredMaxTestLoops = config.get<number>('maxConsecutiveTestLoops') || 3;
         return {
             consecutive: this.consecutiveTestLoops,
             total: this.testLoops,
             percentage: this.getTestPercentage(),
+            calibratedThreshold: this.getCalibratedThreshold(configuredMaxTestLoops),
         };
     }
 
@@ -131,6 +179,8 @@ export class TestLoopDetector {
         this.consecutiveTestLoops = 0;
         this.totalLoops = 0;
         this.testLoops = 0;
+        this.recentIsTestOnly = [];
+        this.recentIsFeatureWork = [];
         log.info('Test loop detector reset');
     }
 }
