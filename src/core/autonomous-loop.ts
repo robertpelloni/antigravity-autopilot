@@ -254,6 +254,13 @@ export class AutonomousLoop {
 
             const exitCheck = exitDetector.checkResponse(response);
             if (exitCheck.shouldExit) {
+                log.info(`Exit detector stop telemetry: ${JSON.stringify({
+                    source: 'exit-detector',
+                    reason: exitCheck.reason,
+                    confidence: exitCheck.confidence ?? null,
+                    reasons: exitCheck.reasons || []
+                })}`);
+
                 // Mark task as complete if successful exit
                 if (this.currentTask && !exitCheck.reason?.includes('fail')) {
                     const completed = projectTracker.completeTask(this.currentTask);
@@ -269,6 +276,11 @@ export class AutonomousLoop {
             // Check for test-only loops (Parity Feature)
             const testCheck = testLoopDetector.analyzeResponse(response);
             if (testCheck.shouldExit) {
+                log.info(`Test loop stop telemetry: ${JSON.stringify({
+                    source: 'test-loop-detector',
+                    reason: testCheck.reason,
+                    confidence: testCheck.confidence
+                })}`);
                 log.info(`Test loop exit: ${testCheck.reason}`);
                 this.stop(testCheck.reason || 'Feature likely complete (test loops detected)');
                 return true;

@@ -90,9 +90,9 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - **Definition of done:** scraper reproducibly returns live model list when available
 
 ### P1.5 Strengthen autonomous completion detection
-- [ ] Integrate richer response-state signals and avoid premature “complete” exits
+- [x] Integrate richer response-state signals and avoid premature “complete” exits
 - [ ] Calibrate `TestLoopDetector` thresholds using real historical runs
-- [ ] Add structured confidence + reason telemetry for loop stop causes
+- [x] Add structured confidence + reason telemetry for loop stop causes
 - **Definition of done:** significantly fewer false-complete stops in manual soak testing
 
 ### P1.6 Dependency security hardening (non-breaking first)

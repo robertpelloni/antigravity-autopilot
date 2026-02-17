@@ -66,14 +66,25 @@ const ExitDetector = exitDetectorModule.ExitDetector;
 describe('ExitDetector Logic', () => {
     it('should detect completion phrases', () => {
         const det = new ExitDetector();
-        assert.strictEqual(det.checkResponse('All tasks completed successfully').shouldExit, true);
-        assert.strictEqual(det.checkResponse('The goal achieved!').shouldExit, true);
+        const completed = det.checkResponse('All tasks completed successfully');
+        const achieved = det.checkResponse('The goal achieved!');
+        assert.strictEqual(completed.shouldExit, true);
+        assert.strictEqual(achieved.shouldExit, true);
+        assert.ok(completed.confidence >= 0.5);
+        assert.ok(Array.isArray(completed.reasons));
     });
 
     it('should not trigger on normal responses', () => {
         const det = new ExitDetector();
         assert.strictEqual(det.checkResponse('Working on task 3...').shouldExit, false);
         assert.strictEqual(det.checkResponse('Implemented the feature').shouldExit, false);
+    });
+
+    it('should avoid premature completion when active work is still mentioned', () => {
+        const det = new ExitDetector();
+        const result = det.checkResponse('All tasks completed, continuing with next task and running tests.');
+        assert.strictEqual(result.shouldExit, false);
+        assert.ok(result.confidence < 0.5);
     });
 
     it('should track consecutive failures', () => {
