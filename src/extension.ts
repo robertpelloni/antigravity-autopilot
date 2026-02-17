@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { DashboardPanel } from './ui/dashboard';
@@ -10,13 +9,15 @@ import { progressTracker } from './core/progress-tracker';
 import { mcpServer } from './modules/mcp/server';
 import { voiceControl } from './modules/voice/control';
 import { CDPHandler } from './services/cdp/cdp-handler';
+import { diagnoseCdp } from './commands/diagnose-cdp';
 
 import { StrategyManager } from './strategies/manager';
 import { testGenerator } from './core/test-generator';
 import { codeReviewer } from './core/code-reviewer';
 import { agentOrchestrator } from './core/agent-orchestrator';
 import { memoryManager } from './core/memory-manager';
-import { buildAutoResumeGuardReport, evaluateEscalationArming } from './core/runtime-auto-resume-guard';
+import { buildAutoResumeGuardReport, evaluateEscalationArming, evaluateCrossUiHealth } from './core/runtime-auto-resume-guard';
+import { runAutoResumeReadinessFix, sendAutoResumeMessage } from './core/runtime-auto-resume-guard-effects';
 import { projectManager } from './providers/project-manager';
 
 import { StatusBarManager } from './ui/status-bar';
@@ -24,7 +25,6 @@ import { CDPStrategy, CDPRuntimeState } from './strategies/cdp-strategy';
 
 const log = createLogger('Extension');
 let statusBar: StatusBarManager;
-
 export function activate(context: vscode.ExtensionContext) {
     vscode.window.showInformationMessage('Antigravity Unified: Activation Started!');
     console.log('Antigravity Unified: Activation Started!');
@@ -289,21 +289,21 @@ export function activate(context: vscode.ExtensionContext) {
         return decision === 'Confirm';
     };
 
+    context.subscriptions.push(
+        vscode.commands.registerCommand('antigravity.diagnoseCdp', diagnoseCdp)
+    );
+
     voiceControl.setIntentExecutor(async (command) => {
-        const confirmed = await confirmDestructiveVoiceIntent(command);
-        if (!confirmed) {
-            return { handled: false, detail: 'destructive intent cancelled by user confirmation gate' };
+        if (!await confirmDestructiveVoiceIntent(command)) {
+            return { handled: false, detail: 'user cancelled destructive action' };
         }
 
         switch (command.intent) {
-            case 'approve':
-                await vscode.commands.executeCommand('antigravity.clickAccept');
-                return { handled: true };
-            case 'bump':
-                await vscode.commands.executeCommand('antigravity.resumeFromWaitingState');
-                return { handled: true };
             case 'status':
                 await vscode.commands.executeCommand('antigravity.checkRuntimeState');
+                return { handled: true };
+            case 'diagnose':
+                await vscode.commands.executeCommand('antigravity.diagnoseCdp');
                 return { handled: true };
             case 'pause':
                 if (autonomousLoop.isRunning()) {
@@ -1602,24 +1602,25 @@ export function activate(context: vscode.ExtensionContext) {
     // 1. Strategy (Core Driver)
     if (isUnifiedAutoAcceptEnabled()) {
         strategyManager.start().catch(e => log.error(`Failed to start strategy: ${e.message}`));
-    }
 
-    refreshRuntimeState().catch(() => { });
 
-    // 2. Autonomous Loop
-    if (config.get('autonomousEnabled')) {
-        autonomousLoop.start().catch(e => log.error(`Failed to start autonomous loop: ${e.message}`));
-    }
+        refreshRuntimeState().catch(() => { });
 
-    // 3. Modules
-    if (config.get('mcpEnabled')) {
-        mcpServer.start().catch(e => log.error(`MCP start failed: ${e.message}`));
-    }
-    if (config.get('voiceControlEnabled')) {
-        voiceControl.start().catch(e => log.error(`Voice start failed: ${e.message}`));
-    }
+        // 2. Autonomous Loop
+        if (config.get('autonomousEnabled')) {
+            autonomousLoop.start().catch(e => log.error(`Failed to start autonomous loop: ${e.message}`));
+        }
 
-    log.info('Antigravity Autopilot activated!');
+        // 3. Modules
+        if (config.get('mcpEnabled')) {
+            mcpServer.start().catch(e => log.error(`MCP start failed: ${e.message}`));
+        }
+        if (config.get('voiceControlEnabled')) {
+            voiceControl.start().catch(e => log.error(`Voice start failed: ${e.message}`));
+        }
+
+        log.info('Antigravity Autopilot activated!');
+    }
 }
 
 export function deactivate() {

@@ -160,6 +160,10 @@
             {
                 "command": "antigravity.autoFixAutoResumeReadiness",
                 "title": "Antigravity: Auto-Fix Resume Readiness"
+            },
+            {
+                "command": "antigravity.diagnoseCdp",
+                "title": "Antigravity: Diagnose CDP Connection"
             }
         ],
         "keybindings": [

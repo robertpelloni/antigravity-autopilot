@@ -13,6 +13,10 @@ export class CDPClient {
         this.handler = new CDPHandler();
     }
 
+    getHandler(): CDPHandler {
+        return this.handler;
+    }
+
     async connect(): Promise<boolean> {
         return await this.handler.connect();
     }
@@ -26,8 +30,14 @@ export class CDPClient {
         const instances = await this.handler.scanForInstances();
         for (const instance of instances) {
             for (const page of instance.pages) {
+                // Check if page has focus first (if connected)
+                // Note: We might not be connected yet, so we can't easily check focus via CDP command *before* loop.
+                // We rely on the script to check document.hasFocus() or we assume user wants action on active window.
+
                 if (page.url.includes('editor') || page.title.includes('Cursor') || page.title.includes('Visual Studio Code')) {
                     const script = `(function() {
+                        if (!document.hasFocus()) return { skipped: true, reason: 'not focused' };
+
                         function findChatInput() {
                             // 1. Try common selectors
                             const selectors = [
@@ -111,8 +121,12 @@ export class CDPClient {
                                     sendBtn.click();
                                 } else {
                                     // Fallback: Enter key (and Shift+Enter just in case, but usually Enter sends)
-                                    const enter = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true });
-                                    input.dispatchEvent(enter);
+                                    // Fallback: Enter key sequence (keydown -> keypress -> keyup)
+                                    const opts = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, view: window };
+                                    input.dispatchEvent(new KeyboardEvent('keydown', opts));
+                                    input.dispatchEvent(new KeyboardEvent('keypress', opts));
+                                    input.dispatchEvent(new KeyboardEvent('keyup', opts));
+
                                 }
                             }, 200);
 
@@ -124,8 +138,13 @@ export class CDPClient {
                     try {
                         const result = await this.handler.sendCommand(page.id, 'Runtime.evaluate', { expression: script, returnByValue: true });
                         if (result && result.result && result.result.value) {
-                            log.info('Sent message: ' + text);
-                            return true;
+                            const val = result.result.value;
+                            if (val === true || (typeof val === 'object' && val.skipped !== true)) { // Backward compat + new format
+                                log.info('Sent message: ' + text);
+                                return true;
+                            } else if (val.skipped) {
+                                log.debug('Skipped page (not focused): ' + page.title);
+                            }
                         }
                     } catch (e: any) {
                         log.error('Failed to send message: ' + e.message);

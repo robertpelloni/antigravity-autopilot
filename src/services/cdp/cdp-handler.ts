@@ -25,7 +25,15 @@ export class CDPHandler extends EventEmitter {
 
     async scanForInstances(): Promise<{ port: number, pages: any[] }[]> {
         const instances = [];
-        for (let port = this.startPort; port <= this.endPort; port++) {
+        const additionalPorts = [9222, 9229];
+        const portsToCheck = new Set<number>();
+
+        // Add configured range
+        for (let p = this.startPort; p <= this.endPort; p++) portsToCheck.add(p);
+        // Add standard ports
+        additionalPorts.forEach(p => portsToCheck.add(p));
+
+        for (const port of portsToCheck) {
             try {
                 const pages = await this.getPages(port);
                 if (pages.length > 0) instances.push({ port, pages });
@@ -34,17 +42,53 @@ export class CDPHandler extends EventEmitter {
         return instances;
     }
 
+    async diagnose(): Promise<string> {
+        const instances = await this.scanForInstances();
+        let report = `CDP Diagnostic Report (${new Date().toISOString()})\n`;
+        report += `Scanning ports: ${this.startPort}-${this.endPort}, 9222, 9229\n\n`;
+
+        if (instances.length === 0) {
+            report += 'No active CDP instances found.\n';
+            report += 'Ensure VS Code is launched with --remote-debugging-port=9222 (or similar).\n';
+            return report;
+        }
+
+        for (const instance of instances) {
+            report += `Port ${instance.port}:\n`;
+            for (const page of instance.pages) {
+                let hasFocus = false;
+                try {
+                    // Try to check focus if we can connect briefly or if we are already connected
+                    const conn = this.connections.get(page.id);
+                    if (conn) {
+                        const result = await this.sendCommand(page.id, 'Runtime.evaluate', {
+                            expression: 'document.hasFocus()',
+                            returnByValue: true
+                        }, 1000);
+                        hasFocus = result?.result?.value === true;
+                    }
+                } catch (e) { }
+
+                report += `  - [${page.type}] ${page.title || 'No Title'}\n`;
+                report += `    URL: ${page.url}\n`;
+                report += `    WebSocket: ${page.webSocketDebuggerUrl}\n`;
+                report += `    Connected: ${this.connections.has(page.id) ? 'YES' : 'NO'}\n`;
+                report += `    Focused: ${hasFocus ? 'YES' : 'NO/Unknown'}\n`;
+                report += '\n';
+            }
+        }
+        return report;
+    }
+
     getPages(port: number): Promise<any[]> {
         return new Promise((resolve, reject) => {
-            const req = http.get({ hostname: '127.0.0.1', port, path: '/json/list', timeout: 1000 }, (res) => {
+            const req = http.get({ hostname: '127.0.0.1', port, path: '/json/list', timeout: 500 }, (res) => {
                 let data = '';
                 res.on('data', chunk => data += chunk);
                 res.on('end', () => {
                     try {
                         const pages = JSON.parse(data);
-                        // Phase 27: Intelligent Filter (Regression Fix)
-                        // v4.3.3 worked with "page". v4.6.x failed with "all".
-                        // We must exclude "node" and "service_worker" to prevent crashes.
+                        // Phase 27: Intelligent Filter
                         const allowedTypes = ['page', 'webview', 'iframe', 'background_page'];
                         resolve(pages.filter((p: any) =>
                             p.webSocketDebuggerUrl && allowedTypes.includes(p.type)
