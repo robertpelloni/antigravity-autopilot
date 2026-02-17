@@ -5,6 +5,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.78] - 2026-02-17
+
+### Added
+- **Shared Backoff Utility**: Added `src/core/backoff.ts` with exported `calculateAdaptiveBackoff(...)` for deterministic adaptive interval calculation.
+
+### Changed
+- **Real-Module Test Modernization (P3.1 progress)**: Replaced replica-style `tests/backoff-logic.test.js` with source-backed coverage against `src/core/backoff.ts`.
+- **Autonomous Loop Backoff Reuse**: `src/core/autonomous-loop.ts` now delegates adaptive interval math to the shared backoff utility.
+
+### Notes
+- P3.1 remains in progress; additional replica-style tests are still queued for migration.
+
 ## [4.10.77] - 2026-02-16
 
 ### Changed
