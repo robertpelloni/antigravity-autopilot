@@ -636,6 +636,7 @@
         "package": "vsce package",
         "lint": "eslint src --ext ts",
         "audit:policy": "node scripts/audit-policy.js",
+        "verify:release:secure": "npm run test:audit-policy && npm run audit:policy && npm run verify:release",
         "verify:release": "npm run compile && npm run lint && npm test && npm run package && node -e \"const fs=require('fs');const crypto=require('crypto');const pkg=require('./package.json');const f='antigravity-autopilot-'+pkg.version+'.vsix';const b=fs.readFileSync(f);console.log('VSIX',f);console.log('SHA256',crypto.createHash('sha256').update(b).digest('hex').toUpperCase());console.log('SIZE',b.length);\""
     },
     "dependencies": {

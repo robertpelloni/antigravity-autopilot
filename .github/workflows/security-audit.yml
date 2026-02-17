@@ -23,5 +23,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate audit policy logic
+        run: npm run test:audit-policy
+
       - name: Enforce audit policy (fail on high/critical)
         run: npm run audit:policy

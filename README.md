@@ -47,9 +47,11 @@ All settings are under `antigravity.*` in VS Code settings. Key ones:
 ```bash
 npm install
 npm run verify:release
+npm run verify:release:secure
 ```
 
 This one command compiles, lints, runs tests, packages the VSIX, and prints the artifact SHA256/size.
+Use `verify:release:secure` when you want policy-test + audit-gate enforcement before the release pipeline.
 
 ## Version
 
