@@ -202,6 +202,21 @@
                     "default": false,
                     "description": "Enable robust Auto-All (CDP) for edits and terminal commands."
                 },
+                "antigravity.autopilotAutoAcceptEnabled": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Unified control: enable automatic accept/action handling for autopilot."
+                },
+                "antigravity.autopilotAutoBumpEnabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Unified control: enable automatic bump/resume nudges when conversation is idle."
+                },
+                "antigravity.autopilotRunExpandContinueEnabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Unified control: allow autopilot to click Run/Expand/Continue style actions."
+                },
                 "antigravity.multiTabEnabled": {
                     "type": "boolean",
                     "default": false,
@@ -328,6 +343,20 @@
                     "type": "number",
                     "default": 30,
                     "description": "Seconds to wait before auto-approving changes."
+                },
+                "antigravity.autoAcceptPollIntervalMs": {
+                    "type": "number",
+                    "default": 1000,
+                    "minimum": 100,
+                    "maximum": 10000,
+                    "description": "Unified timing: polling interval in ms for auto-accept/action scanning."
+                },
+                "antigravity.autoBumpCooldownSec": {
+                    "type": "number",
+                    "default": 30,
+                    "minimum": 1,
+                    "maximum": 3600,
+                    "description": "Unified timing: minimum seconds between auto-bump attempts."
                 },
                 "antigravity.cdpTimeout": {
                     "type": "number",
