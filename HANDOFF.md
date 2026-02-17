@@ -240,3 +240,57 @@ Use this pass/fail gate:
 
 - This audit focused deeply on active root extension runtime (`src/` and root docs), while sampling linked-system docs/reports for intent and drift.
 - Submodule codebases are treated as references unless explicitly promoted into root runtime execution paths.
+
+---
+
+## Session continuation snapshot (2026-02-16, late run)
+
+After the initial audit write-up above, additional release-hardening work was executed end-to-end.
+
+### Validation outcomes (latest)
+
+- Root lint: `npm run lint` → **PASS**
+- Root test command: `npm test` → **PASS** (`371 pass / 0 fail`)
+- Focused middleware regressions:
+  - `antigravity-jules-orchestration/tests/unit/cache.test.js` → **PASS**
+  - `antigravity-jules-orchestration/tests/unit/middleware.test.js` → **PASS**
+
+### Packaging hardening
+
+- `.vscodeignore` was tightened to exclude non-runtime payload (subprojects, local/session artifacts, planning docs, tests/scripts/docs, markers).
+- VSIX package reduced from large dev-inclusive payload to runtime-focused payload:
+  - packaged tree reduced to core runtime files (`dist/`, `main_scripts/`, minimal metadata/docs)
+  - final package remains installable and verified in VS Code Insiders
+
+### Lint/tooling gap closed
+
+- Added root ESLint config: `.eslintrc.cjs`
+- Added TypeScript ESLint dependencies at root:
+  - `@typescript-eslint/parser`
+  - `@typescript-eslint/eslint-plugin`
+
+### Dependency/runtime compatibility fixes (test execution context)
+
+- Root dev dependencies added to satisfy root-driven test execution across submodule unit tests:
+  - `joi`
+  - `compression`
+  - `lru-cache@^10`
+
+### Submodule pointer integrity repair
+
+- A root commit temporarily referenced a submodule SHA that was not published on the submodule remote (would break fresh clone/submodule update).
+- Root pointer was corrected to a remote-published `antigravity-jules-orchestration` commit.
+- Root branch was pushed with this correction.
+
+### Final release artifact (latest in-session)
+
+- File: `antigravity-autopilot-4.10.77.vsix`
+- Size: `140,533` bytes
+- SHA256: `39BB93C7A0C9B0FD99D68BC4A245413FA6F05D9CE4CBDE8B0009264CF2B01B84`
+- Installed/verified in VS Code Insiders as:
+  - `ai-dev-2024.antigravity-autopilot@4.10.77`
+
+### Source-control note for implementors
+
+- Submodule remote push permissions for `Scarmonit/antigravity-jules-orchestration` were not available from this environment (HTTP 403).
+- Root repository push succeeded and includes the submodule-pointer repair commit.
