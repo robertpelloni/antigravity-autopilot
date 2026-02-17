@@ -1,5 +1,9 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+const Module = require('module');
+const ts = require('typescript');
 
 /**
  * CircuitBreaker Logic Tests
@@ -7,77 +11,67 @@ const assert = require('node:assert');
  * failure counting, threshold tripping, and recovery.
  */
 
-// ============ Replicate CircuitBreaker for testing ============
-
-const CircuitState = { CLOSED: 0, OPEN: 1, HALF_OPEN: 2 };
-
-class TestCircuitBreaker {
-    constructor(threshold = 5, resetTimeout = 30000) {
-        this.state = CircuitState.CLOSED;
-        this.failureCount = 0;
-        this.lastFailureTime = 0;
-        this.failureThreshold = threshold;
-        this.resetTimeout = resetTimeout;
+function loadTsModule(filePath, cache = new Map()) {
+    const absolutePath = path.resolve(filePath);
+    if (cache.has(absolutePath)) {
+        return cache.get(absolutePath).exports;
     }
 
-    async execute(action) {
-        if (this.state === CircuitState.OPEN) {
-            if (Date.now() - this.lastFailureTime > this.resetTimeout) {
-                this.state = CircuitState.HALF_OPEN;
-            } else {
-                return null; // Blocked
+    const source = fs.readFileSync(absolutePath, 'utf-8');
+    const transpiled = ts.transpileModule(source, {
+        compilerOptions: {
+            module: ts.ModuleKind.CommonJS,
+            target: ts.ScriptTarget.ES2020,
+            esModuleInterop: true
+        },
+        fileName: absolutePath
+    }).outputText;
+
+    const mod = new Module(absolutePath, module);
+    cache.set(absolutePath, mod);
+    mod.filename = absolutePath;
+    mod.paths = Module._nodeModulePaths(path.dirname(absolutePath));
+
+    const originalRequire = mod.require.bind(mod);
+    mod.require = (request) => {
+        if (request.startsWith('.')) {
+            const base = path.resolve(path.dirname(absolutePath), request);
+            const candidates = [`${base}.ts`, path.join(base, 'index.ts')];
+            for (const candidate of candidates) {
+                if (fs.existsSync(candidate)) {
+                    return loadTsModule(candidate, cache);
+                }
             }
         }
 
-        try {
-            const result = await action();
-            if (this.state === CircuitState.HALF_OPEN) {
-                this.reset();
-            }
-            return result;
-        } catch (error) {
-            this.recordFailure();
-            throw error;
-        }
-    }
+        return originalRequire(request);
+    };
 
-    recordFailure() {
-        this.failureCount++;
-        this.lastFailureTime = Date.now();
-        if (this.failureCount >= this.failureThreshold) {
-            this.trip();
-        }
-    }
-
-    trip() {
-        this.state = CircuitState.OPEN;
-    }
-
-    reset() {
-        this.state = CircuitState.CLOSED;
-        this.failureCount = 0;
-    }
-
-    getState() { return this.state; }
+    mod._compile(transpiled, absolutePath);
+    return mod.exports;
 }
+
+const circuitBreakerModule = loadTsModule(path.resolve(__dirname, '../src/core/circuit-breaker.ts'));
+const CircuitBreaker = circuitBreakerModule.CircuitBreaker;
+const CircuitState = circuitBreakerModule.CircuitState;
 
 // ============ Tests ============
 
 describe('CircuitBreaker', () => {
     it('should start in CLOSED state', () => {
-        const cb = new TestCircuitBreaker();
+        const cb = new CircuitBreaker();
         assert.strictEqual(cb.getState(), CircuitState.CLOSED);
     });
 
     it('should execute actions when CLOSED', async () => {
-        const cb = new TestCircuitBreaker();
+        const cb = new CircuitBreaker();
         const result = await cb.execute(() => Promise.resolve('hello'));
         assert.strictEqual(result, 'hello');
     });
 
     it('should count failures and trip at threshold', async () => {
-        const cb = new TestCircuitBreaker(3); // trip after 3 failures
-        for (let i = 0; i < 3; i++) {
+        const cb = new CircuitBreaker();
+        for (let i = 0; i < 5; i++) {
             try { await cb.execute(() => Promise.reject(new Error('fail'))); }
             catch { /* expected */ }
         }
@@ -85,7 +79,15 @@ describe('CircuitBreaker', () => {
     });
 
     it('should block actions when OPEN', async () => {
-        const cb = new TestCircuitBreaker(1, 60000); // trip after 1, long timeout
+        const cb = new CircuitBreaker();
+        try { await cb.execute(() => Promise.reject(new Error('fail'))); }
+        catch { /* expected */ }
+        try { await cb.execute(() => Promise.reject(new Error('fail'))); }
+        catch { /* expected */ }
+        try { await cb.execute(() => Promise.reject(new Error('fail'))); }
+        catch { /* expected */ }
+        try { await cb.execute(() => Promise.reject(new Error('fail'))); }
+        catch { /* expected */ }
         try { await cb.execute(() => Promise.reject(new Error('fail'))); }
         catch { /* expected */ }
         assert.strictEqual(cb.getState(), CircuitState.OPEN);
@@ -95,31 +97,36 @@ describe('CircuitBreaker', () => {
     });
 
     it('should transition to HALF_OPEN after timeout', async () => {
-        const cb = new TestCircuitBreaker(1, 100); // 100ms timeout
-        try { await cb.execute(() => Promise.reject(new Error('fail'))); }
-        catch { /* expected */ }
+        const cb = new CircuitBreaker();
+        for (let i = 0; i < 5; i++) {
+            try { await cb.execute(() => Promise.reject(new Error('fail'))); }
+            catch { /* expected */ }
+        }
         assert.strictEqual(cb.getState(), CircuitState.OPEN);
 
         // Force lastFailureTime into the past so timeout has elapsed
-        cb.lastFailureTime = Date.now() - 200;
+        cb.lastFailureTime = Date.now() - 35000;
         const result = await cb.execute(() => Promise.resolve('recovered'));
         assert.strictEqual(result, 'recovered');
         assert.strictEqual(cb.getState(), CircuitState.CLOSED);
     });
 
     it('should reset to CLOSED on success in HALF_OPEN', async () => {
-        const cb = new TestCircuitBreaker(1, 100);
-        try { await cb.execute(() => Promise.reject(new Error('fail'))); }
-        catch { /* expected */ }
+        const cb = new CircuitBreaker();
+        for (let i = 0; i < 5; i++) {
+            try { await cb.execute(() => Promise.reject(new Error('fail'))); }
+            catch { /* expected */ }
+        }
 
-        cb.lastFailureTime = Date.now() - 200; // Force timeout elapsed
+        cb.lastFailureTime = Date.now() - 35000; // Force timeout elapsed
         const result = await cb.execute(() => Promise.resolve('ok'));
+        assert.strictEqual(result, 'ok');
         assert.strictEqual(cb.getState(), CircuitState.CLOSED);
         assert.strictEqual(cb.failureCount, 0);
     });
 
     it('should not trip before reaching threshold', async () => {
-        const cb = new TestCircuitBreaker(5);
+        const cb = new CircuitBreaker();
         for (let i = 0; i < 4; i++) {
             try { await cb.execute(() => Promise.reject(new Error('fail'))); }
             catch { /* expected */ }
