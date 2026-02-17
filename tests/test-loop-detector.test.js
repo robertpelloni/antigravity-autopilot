@@ -1,79 +1,85 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+const Module = require('module');
+const ts = require('typescript');
 
 /**
  * TestLoopDetector Logic Tests
  * Tests detection of test-only vs feature-work loops and exit conditions.
  */
 
-// ============ Replicate patterns and logic ============
+let mockMaxConsecutiveTestLoops = 3;
 
-const TEST_PATTERNS = [
-    /running\s+(unit\s+)?tests?/i,
-    /npm\s+(run\s+)?test/i,
-    /jest|vitest|mocha|pytest|rspec/i,
-    /all\s+tests?\s+pass(ed|ing)?/i,
-    /\d+\s+tests?\s+(passed|passing)/i,
-    /test\s+suite/i,
-    /coverage\s+report/i,
-    /no\s+changes?\s+(needed|required)/i,
-    /everything\s+is\s+working/i,
-    /all\s+good|looks\s+good/i,
-];
-
-const FEATURE_WORK_PATTERNS = [
-    /creat(ed?|ing)\s+(new\s+)?file/i,
-    /modif(ied|ying)\s+\w+/i,
-    /implement(ed|ing)/i,
-    /add(ed|ing)\s+(new\s+)?/i,
-    /fix(ed|ing)\s+(bug|issue|error)/i,
-    /refactor(ed|ing)/i,
-    /updat(ed|ing)\s+\w+/i,
-];
-
-class TestLoopDetector {
-    constructor(maxTestLoops = 3) {
-        this.consecutiveTestLoops = 0;
-        this.totalLoops = 0;
-        this.testLoops = 0;
-        this.maxTestLoops = maxTestLoops;
+function loadTsModule(filePath, cache = new Map()) {
+    const absolutePath = path.resolve(filePath);
+    if (cache.has(absolutePath)) {
+        return cache.get(absolutePath).exports;
     }
 
-    analyzeResponse(response) {
-        if (!response || response.trim() === '') {
-            return { isTestOnly: false, confidence: 0, shouldExit: false };
+    const source = fs.readFileSync(absolutePath, 'utf-8');
+    const transpiled = ts.transpileModule(source, {
+        compilerOptions: {
+            module: ts.ModuleKind.CommonJS,
+            target: ts.ScriptTarget.ES2020,
+            esModuleInterop: true
+        },
+        fileName: absolutePath
+    }).outputText;
+
+    const mod = new Module(absolutePath, module);
+    cache.set(absolutePath, mod);
+    mod.filename = absolutePath;
+    mod.paths = Module._nodeModulePaths(path.dirname(absolutePath));
+
+    const originalRequire = mod.require.bind(mod);
+    mod.require = (request) => {
+        if (request === 'vscode') {
+            return {
+                window: {
+                    createOutputChannel: () => ({ appendLine: () => undefined })
+                },
+                workspace: {
+                    getConfiguration: () => ({
+                        get: (key, fallback) => {
+                            if (key === 'maxConsecutiveTestLoops') {
+                                return mockMaxConsecutiveTestLoops;
+                            }
+                            return fallback;
+                        },
+                        update: async () => undefined
+                    })
+                },
+                ConfigurationTarget: { Global: 1 }
+            };
         }
-        this.totalLoops++;
-        let testMatches = 0, featureMatches = 0;
-        for (const p of TEST_PATTERNS) if (p.test(response)) testMatches++;
-        for (const p of FEATURE_WORK_PATTERNS) if (p.test(response)) featureMatches++;
 
-        const isTestOnly = testMatches > 0 && featureMatches === 0;
-        const confidence = testMatches / (testMatches + featureMatches + 1);
+        if (request.startsWith('.')) {
+            const base = path.resolve(path.dirname(absolutePath), request);
+            const candidates = [`${base}.ts`, path.join(base, 'index.ts')];
+            for (const candidate of candidates) {
+                if (fs.existsSync(candidate)) {
+                    return loadTsModule(candidate, cache);
+                }
+            }
+        }
 
-        if (isTestOnly) { this.consecutiveTestLoops++; this.testLoops++; }
-        else { this.consecutiveTestLoops = 0; }
+        return originalRequire(request);
+    };
 
-        const shouldExit = this.consecutiveTestLoops >= this.maxTestLoops;
-        return { isTestOnly, confidence, shouldExit, reason: shouldExit ? `${this.consecutiveTestLoops} consecutive test loops` : undefined };
-    }
-
-    getTestPercentage() {
-        if (this.totalLoops === 0) return 0;
-        return (this.testLoops / this.totalLoops) * 100;
-    }
-
-    getStatus() {
-        return { consecutive: this.consecutiveTestLoops, total: this.testLoops, percentage: this.getTestPercentage() };
-    }
-
-    reset() { this.consecutiveTestLoops = 0; this.totalLoops = 0; this.testLoops = 0; }
+    mod._compile(transpiled, absolutePath);
+    return mod.exports;
 }
+
+const testLoopDetectorModule = loadTsModule(path.resolve(__dirname, '../src/core/test-loop-detector.ts'));
+const TestLoopDetector = testLoopDetectorModule.TestLoopDetector;
 
 // ============ Tests ============
 
 describe('TestLoopDetector', () => {
     it('should detect test-only responses', () => {
+        mockMaxConsecutiveTestLoops = 3;
         const d = new TestLoopDetector();
         const result = d.analyzeResponse('All tests passed. 45 tests passing.');
         assert.strictEqual(result.isTestOnly, true);
@@ -81,25 +87,29 @@ describe('TestLoopDetector', () => {
     });
 
     it('should detect feature work responses', () => {
+        mockMaxConsecutiveTestLoops = 3;
         const d = new TestLoopDetector();
         const result = d.analyzeResponse('Created new file utils.ts and implemented the handler');
         assert.strictEqual(result.isTestOnly, false);
     });
 
     it('should not flag mixed responses as test-only', () => {
+        mockMaxConsecutiveTestLoops = 3;
         const d = new TestLoopDetector();
         const result = d.analyzeResponse('Implemented new feature. Running tests now. All tests passed.');
         assert.strictEqual(result.isTestOnly, false);
     });
 
     it('should track consecutive test loops', () => {
-        const d = new TestLoopDetector(3);
+        mockMaxConsecutiveTestLoops = 3;
+        const d = new TestLoopDetector();
         d.analyzeResponse('All tests passed');
         d.analyzeResponse('Running test suite');
         assert.strictEqual(d.getStatus().consecutive, 2);
     });
 
     it('should reset consecutive on feature work', () => {
+        mockMaxConsecutiveTestLoops = 3;
         const d = new TestLoopDetector();
         d.analyzeResponse('All tests passed');
         d.analyzeResponse('All tests passed');
@@ -108,13 +118,16 @@ describe('TestLoopDetector', () => {
     });
 
     it('should trigger exit after max consecutive test loops', () => {
-        const d = new TestLoopDetector(2);
+        mockMaxConsecutiveTestLoops = 2;
+        const d = new TestLoopDetector();
         d.analyzeResponse('npm test');
         const result = d.analyzeResponse('All tests passed');
         assert.strictEqual(result.shouldExit, true);
+        assert.ok(String(result.reason || '').includes('consecutive test-only loops'));
     });
 
     it('should track test percentage', () => {
+        mockMaxConsecutiveTestLoops = 3;
         const d = new TestLoopDetector();
         d.analyzeResponse('All tests passed');
         d.analyzeResponse('Implementing feature');
@@ -122,6 +135,7 @@ describe('TestLoopDetector', () => {
     });
 
     it('should reset state', () => {
+        mockMaxConsecutiveTestLoops = 3;
         const d = new TestLoopDetector();
         d.analyzeResponse('All tests passed');
         d.reset();
@@ -130,6 +144,7 @@ describe('TestLoopDetector', () => {
     });
 
     it('should handle empty responses', () => {
+        mockMaxConsecutiveTestLoops = 3;
         const d = new TestLoopDetector();
         const result = d.analyzeResponse('');
         assert.strictEqual(result.isTestOnly, false);
