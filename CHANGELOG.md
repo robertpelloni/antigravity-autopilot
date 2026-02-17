@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.82] - 2026-02-17
+
+### Added
+- **Completion Stop Telemetry**: Autonomous loop now logs structured stop-cause payloads for both exit-detector and test-loop-detector paths, including confidence/reason details.
+
+### Changed
+- **Exit Detection Hardening (P1.5 progress)**: `src/core/exit-detector.ts` now evaluates richer response-state signals (completion vs active-work vs uncertainty) with confidence scoring to reduce premature complete exits.
+- **Exit Detector Test Coverage**: `tests/exit-detector.test.js` now validates confidence metadata and guards against false-positive completion when active work is still present.
+- **Backlog Sync**: Updated `TODO.md` + `task.md` to reflect partial P1.5 completion and remaining threshold calibration work.
+
 ## [4.10.81] - 2026-02-17
 
 ### Changed
