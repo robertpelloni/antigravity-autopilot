@@ -115,6 +115,7 @@ describe('AgentOrchestrator', () => {
 
     it('should submit tasks and return task IDs', async () => {
         const o = new AgentOrchestrator();
+        o.processQueue = async () => undefined;
         const id = await o.submitTask('Test task');
         assert.ok(id.startsWith('task_'));
         assert.strictEqual(o.tasks.size, 1);
@@ -122,6 +123,7 @@ describe('AgentOrchestrator', () => {
 
     it('should track task queue length', async () => {
         const o = new AgentOrchestrator();
+        o.processQueue = async () => undefined;
         await o.submitTask('Task 1', 'ctx');
         await o.submitTask('Task 2', 'ctx');
         const status = o.getSwarmStatus();
@@ -141,6 +143,20 @@ describe('AgentOrchestrator', () => {
 
     it('should execute swarm tasks', async () => {
         const o = new AgentOrchestrator();
+        let idx = 0;
+        const ids = ['sa', 'sb', 'sc'];
+        const start = Date.now();
+
+        o.submitTask = async () => ids[idx++];
+        o.waitForTask = async (taskId) => ({
+            id: taskId,
+            agentId: 'implementer',
+            status: 'completed',
+            result: `done:${taskId}`,
+            startedAt: start,
+            completedAt: start + 50
+        });
+
         const result = await o.swarmExecute(['Task A', 'Task B', 'Task C']);
         assert.strictEqual(result.totalTasks, 3);
         assert.strictEqual(result.completed, 3);
