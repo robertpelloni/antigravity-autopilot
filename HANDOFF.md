@@ -276,6 +276,15 @@ After the initial audit write-up above, additional release-hardening work was ex
   - `compression`
   - `lru-cache@^10`
 
+### Security triage continuation (important)
+
+- Ran root `npm audit --json` triage and confirmed remaining advisories were in the dev test toolchain (`vitest`/`vite` path).
+- Trialed major upgrade to `vitest@4.0.18`:
+  - Pros: `npm audit` reported **0 vulnerabilities**.
+  - Cons: introduced instability in `render-integration` test run (cancelled/pending promise at completion in this workspace run).
+- Rolled back to stable `vitest@^1.0.0` line to preserve deterministic green test matrix (`371/371 pass`).
+- Recommendation: perform dedicated branch migration for Vitest 4 with targeted fixes in render integration timing/teardown before adopting in mainline.
+
 ### Submodule pointer integrity repair
 
 - A root commit temporarily referenced a submodule SHA that was not published on the submodule remote (would break fresh clone/submodule update).
