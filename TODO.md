@@ -215,6 +215,6 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - [x] `npm run compile` passes
 - [x] Root tests pass and include real-module coverage for changed systems
 - [x] `npm run lint` passes
-- [ ] No placeholder/simulated behavior remains in active root runtime paths
-- [ ] Dashboard parity test passes for config + command surfaces
+- [x] No placeholder/simulated behavior remains in active root runtime paths
+- [x] Dashboard parity test passes for config + command surfaces
 - [ ] Docs updated with exact implementation status and version
