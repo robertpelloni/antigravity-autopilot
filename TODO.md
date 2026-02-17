@@ -152,7 +152,7 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - **Definition of done:** regressions in source modules are caught by tests automatically
 
 ### P3.2 Add CI quality gates
-- [ ] Compile + lint + test on PR
+- [x] Compile + lint + test on PR
 - [ ] Add schema parity test: `package.json` settings vs dashboard controls
 - [ ] Add command parity test: manifest vs registered handlers
 - [ ] Add placeholder/simulated-string policy check for active root modules
