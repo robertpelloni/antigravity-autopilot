@@ -261,6 +261,7 @@ After the initial audit write-up above, additional release-hardening work was ex
 - VSIX package reduced from large dev-inclusive payload to runtime-focused payload:
   - packaged tree reduced to core runtime files (`dist/`, `main_scripts/`, minimal metadata/docs)
   - final package remains installable and verified in VS Code Insiders
+- Added root automation script `npm run verify:release` that performs compile + lint + tests + package + VSIX SHA256/size output in one step.
 
 ### Lint/tooling gap closed
 
