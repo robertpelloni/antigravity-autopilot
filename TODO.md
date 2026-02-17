@@ -217,4 +217,4 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - [x] `npm run lint` passes
 - [x] No placeholder/simulated behavior remains in active root runtime paths
 - [x] Dashboard parity test passes for config + command surfaces
-- [ ] Docs updated with exact implementation status and version
+- [x] Docs updated with exact implementation status and version

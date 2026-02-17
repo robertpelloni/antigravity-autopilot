@@ -5,6 +5,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.79] - 2026-02-17
+
+### Added
+- **Voice Transcript Debug Command**: Added `antigravity.processVoiceTranscript` for manual transcript replay and runtime intent execution diagnostics.
+- **Runtime Auto-Resume Soak Harness**: Added deterministic replay coverage in `tests/runtime-auto-resume-soak.test.js` for guard scoring, strict-mode gating, and escalation cooldown/threshold anti-spam checks.
+- **Project Manager Integration Tests**: Added `tests/project-manager.test.js` coverage for GitHub + Jira pagination, rate-limit handling, and snapshot persistence semantics.
+
+### Changed
+- **Voice Control Bridge (P2.3 complete)**: `src/modules/voice/control.ts` now supports parser-to-runtime execution via `setIntentExecutor(...)`, execution outcome telemetry, command counts, and force-mode transcript processing for debug workflows.
+- **Destructive Voice Safety Gate**: `src/extension.ts` now requires explicit confirmation for destructive voice intents before executing mapped runtime actions.
+- **Project Manager Hardening (P2.4 complete)**: `src/providers/project-manager.ts` now implements robust GitHub and Jira issue sync with pagination, rate-limit metadata capture, and persisted sync snapshots at `.yoke/project-manager-sync.json`.
+- **Runtime Guard Extraction (P3.3 complete)**: Auto-resume guard/escalation decisions now use pure helper logic in `src/core/runtime-auto-resume-guard.ts`, improving deterministic testing and reducing inline state-machine complexity.
+
+### Notes
+- P2.3, P2.4, P3.1 (root scope), and P3.3 are now tracked as completed in `TODO.md` / `task.md`.
+
 ## [4.10.78] - 2026-02-17
 
 ### Added
