@@ -304,3 +304,33 @@ After the initial audit write-up above, additional release-hardening work was ex
 
 - Submodule remote push permissions for `Scarmonit/antigravity-jules-orchestration` were not available from this environment (HTTP 403).
 - Root repository push succeeded and includes the submodule-pointer repair commit.
+
+---
+
+## Session continuation snapshot (2026-02-16, final sync)
+
+### Additional operator/docs hardening completed
+
+- `README.md` build section now points to one-command release verification:
+  - `npm run verify:release`
+- `README.md` displayed version was aligned to `v4.10.77`.
+- `task.md` source-of-truth bridge now records release verification automation completion.
+
+### Fresh canonical verification (post-doc updates)
+
+- Command: `npm run verify:release --silent`
+- Result: **PASS**
+  - Compile: PASS
+  - Lint: PASS
+  - Tests: PASS (`371 pass / 0 fail`)
+  - Package: PASS
+- Artifact:
+  - File: `antigravity-autopilot-4.10.77.vsix`
+  - SHA256: `C03AF9770E30F5744D0BD2931776EC4D791C260188040B95C7577739EED5046D`
+  - Size: `140,792` bytes
+
+### Vulnerability triage refresh
+
+- `npm audit --json` still reports a **moderate dev-toolchain advisory** chain (`vitest` → `vite` → `esbuild`) tied to `GHSA-67mh-4wv8-2f99`.
+- Available fix remains a **SemVer-major** migration to `vitest@4.0.18`, previously trialed and deferred in this workspace due to render-integration instability.
+- Current recommendation remains unchanged: perform Vitest 4 migration in a dedicated branch with teardown/timing hardening, then merge.
