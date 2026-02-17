@@ -421,3 +421,36 @@ After the initial audit write-up above, additional release-hardening work was ex
   - File: `antigravity-autopilot-4.10.77.vsix`
   - SHA256: `257445B249CF05BA31F5C3A75362C10CCB17E62B1F688142D1152E3106AE4BDB`
   - Size: `141,370` bytes
+
+---
+
+## Session continuation snapshot (2026-02-16, root CI quality gate)
+
+### Added root CI workflow
+
+- New workflow: `.github/workflows/ci.yml`
+  - Trigger: push/PR on `master`
+  - Gates:
+    - `npm run compile`
+    - `npm run lint`
+    - `npm test`
+    - `npm run test:audit-policy`
+    - `npm run audit:policy`
+
+### Planning alignment
+
+- Updated `TODO.md`:
+  - Marked **P3.2 / Compile + lint + test on PR** as complete.
+- Updated `task.md`:
+  - Added `Ops.5 Add root CI workflow for compile + lint + tests + audit policy`.
+
+### Validation outcomes (latest)
+
+- `npm run verify:release:secure --silent` → **PASS**
+  - Audit policy tests: `9 pass / 0 fail`
+  - Audit policy gate: PASS (`high=0 critical=0`)
+  - Full release verify: PASS (`371 pass / 0 fail`)
+- Artifact:
+  - File: `antigravity-autopilot-4.10.77.vsix`
+  - SHA256: `EF0C40C5257A90893F7AAA77A8AE9031DAAD926FF701A3E94619B4178EC5AA99`
+  - Size: `141,834` bytes
