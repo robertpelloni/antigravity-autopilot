@@ -113,11 +113,11 @@ export class CDPHandler extends EventEmitter {
                     await this.sendCommand(page.id, 'Runtime.enable');
                     await this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' });
 
-                    // 3. Explicit Target Discovery (Belt & Suspenders)
+                    // 3. Explicit Target Discovery (Belt & Suspenders) - ALWAYS ENABLED (Safe)
                     const { targetInfos } = await this.sendCommand(page.id, 'Target.getTargets');
                     if (targetInfos) {
                         for (const info of targetInfos) {
-                            if (['webview', 'iframe', 'other'].includes(info.type)) {
+                            if (['webview', 'iframe'].includes(info.type)) {
                                 console.log(`[CDP] Explicitly attaching to existing target: ${info.type} ${info.url}`);
                                 this.sendCommand(page.id, 'Target.attachToTarget', { targetId: info.targetId, flatten: true })
                                     .catch(e => console.error(`[CDP] Failed to attach to ${info.targetId}:`, e));
@@ -125,9 +125,12 @@ export class CDPHandler extends EventEmitter {
                         }
                     }
 
-                    // 2. Enable Discovery (Phase 38: Aggressive)
-                    // We need this to find the OOP Chat Iframe
-                    await this.sendCommand(page.id, 'Target.setDiscoverTargets', { discover: true });
+                    // 2. Enable Discovery (Phase 38: Aggressive) - CONFIG GATED
+                    // We need this to find the OOP Chat Iframe (Optional, creates conflicts)
+                    const aggressive = config.get<boolean>('experimental.cdpAggressiveDiscovery') || false;
+                    if (aggressive) {
+                        await this.sendCommand(page.id, 'Target.setDiscoverTargets', { discover: true });
+                    }
                 } catch (e) {
                     console.log('[CDP] Setup failed', e);
                 }
@@ -138,14 +141,15 @@ export class CDPHandler extends EventEmitter {
                 try {
                     const msg = JSON.parse(data.toString());
 
-                    // Phase 38: Aggressive Attachment
-                    if (msg.method === 'Target.targetCreated') {
+                    // Phase 38: Aggressive Attachment (Config-Gated)
+                    const aggressive = config.get<boolean>('experimental.cdpAggressiveDiscovery') || false;
+                    if (aggressive && msg.method === 'Target.targetCreated') {
                         const info = msg.params.targetInfo;
                         // Log for diagnosis
                         // console.log(`[CDP] Target: ${info.type} - ${info.url}`);
 
-                        if (info.type === 'webview' || info.type === 'iframe' || info.type === 'other') {
-                            // Attach to everything that looks nested
+                        if (info.type === 'webview' || info.type === 'iframe') {
+                            // Attach to nested targets (skip 'other' to reduce noise)
                             this.sendCommand(page.id, 'Target.attachToTarget', { targetId: info.targetId, flatten: true })
                                 .catch(e => console.error(`[CDP] Failed to attach to new target ${info.targetId}:`, e));
                         }

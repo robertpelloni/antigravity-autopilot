@@ -5,6 +5,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.93]
+- Improved: Re-enabled explicit CDP target discovery to ensure automation works for existing chat panels.
+- Fixed: Maintained fix for blank side panel by keeping aggressive target discovery (Phase 38) disabled by default.
+
+## [4.10.92]
+- Fixed: Side chat panel blank screen issue by disabling aggressive CDP target discovery by default.
+- Added: `antigravity.experimental.cdpAggressiveDiscovery` configuration to opt-in to advanced target attachment.
+
+## [4.10.91] - 2026-02-17
+### Fixed
+- **Dashboard**: Fixed a regression where the settings page failed to open if certain configuration arrays (e.g., `bannedCommands`, interaction methods) were null or undefined in `settings.json`.
+
 ## [4.10.90] - 2026-02-17
 
 ### Changed

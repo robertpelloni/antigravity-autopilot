@@ -620,27 +620,27 @@ export class DashboardPanel {
                     <summary style="cursor:pointer;font-weight:600;margin-bottom:8px;">📝 Text Input Methods</summary>
                     <div class="setting">
                         <label>CDP Key Dispatch (cdp-keys):</label>
-                        <input type="checkbox" ${settings.interactionTextMethods.includes('cdp-keys') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'cdp-keys', this.checked)">
+                        <input type="checkbox" ${(settings.interactionTextMethods || []).includes('cdp-keys') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'cdp-keys', this.checked)">
                     </div>
                     <div class="setting">
                         <label>CDP Insert Text (cdp-insert-text):</label>
-                        <input type="checkbox" ${settings.interactionTextMethods.includes('cdp-insert-text') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'cdp-insert-text', this.checked)">
+                        <input type="checkbox" ${(settings.interactionTextMethods || []).includes('cdp-insert-text') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'cdp-insert-text', this.checked)">
                     </div>
                     <div class="setting">
                         <label>Clipboard Paste (clipboard-paste):</label>
-                        <input type="checkbox" ${settings.interactionTextMethods.includes('clipboard-paste') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'clipboard-paste', this.checked)">
+                        <input type="checkbox" ${(settings.interactionTextMethods || []).includes('clipboard-paste') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'clipboard-paste', this.checked)">
                     </div>
                     <div class="setting">
                         <label>DOM Value Injection (dom-inject):</label>
-                        <input type="checkbox" ${settings.interactionTextMethods.includes('dom-inject') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'dom-inject', this.checked)">
+                        <input type="checkbox" ${(settings.interactionTextMethods || []).includes('dom-inject') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'dom-inject', this.checked)">
                     </div>
                     <div class="setting">
                         <label>Bridge Type Injection (bridge-type):</label>
-                        <input type="checkbox" ${settings.interactionTextMethods.includes('bridge-type') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'bridge-type', this.checked)">
+                        <input type="checkbox" ${(settings.interactionTextMethods || []).includes('bridge-type') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'bridge-type', this.checked)">
                     </div>
                     <div class="setting">
                         <label>VS Code Type Command (vscode-type):</label>
-                        <input type="checkbox" ${settings.interactionTextMethods.includes('vscode-type') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'vscode-type', this.checked)">
+                        <input type="checkbox" ${(settings.interactionTextMethods || []).includes('vscode-type') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'vscode-type', this.checked)">
                     </div>
                 </details>
 
@@ -648,43 +648,43 @@ export class DashboardPanel {
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">🖱️ Click Methods</summary>
                     <div class="setting">
                         <label>DOM Scan + Click (dom-scan-click):</label>
-                        <input type="checkbox" ${settings.interactionClickMethods.includes('dom-scan-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'dom-scan-click', this.checked)">
+                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('dom-scan-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'dom-scan-click', this.checked)">
                     </div>
                     <div class="setting">
                         <label>DOM Selector Click (dom-click):</label>
-                        <input type="checkbox" ${settings.interactionClickMethods.includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'dom-click', this.checked)">
+                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'dom-click', this.checked)">
                     </div>
                     <div class="setting">
                         <label>Bridge Coordinate Click (bridge-click):</label>
-                        <input type="checkbox" ${settings.interactionClickMethods.includes('bridge-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'bridge-click', this.checked)">
+                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('bridge-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'bridge-click', this.checked)">
                     </div>
                     <div class="setting">
                         <label>CDP Mouse Event (cdp-mouse):</label>
-                        <input type="checkbox" ${settings.interactionClickMethods.includes('cdp-mouse') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'cdp-mouse', this.checked)">
+                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('cdp-mouse') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'cdp-mouse', this.checked)">
                     </div>
                     <div class="setting">
                         <label>Native Accept Commands (native-accept):</label>
-                        <input type="checkbox" ${settings.interactionClickMethods.includes('native-accept') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'native-accept', this.checked)">
+                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('native-accept') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'native-accept', this.checked)">
                     </div>
                     <div class="setting">
                         <label>VS Code Command (vscode-cmd):</label>
-                        <input type="checkbox" ${settings.interactionClickMethods.includes('vscode-cmd') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'vscode-cmd', this.checked)">
+                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('vscode-cmd') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'vscode-cmd', this.checked)">
                     </div>
                     <div class="setting">
                         <label>Script Force Click (script-force):</label>
-                        <input type="checkbox" ${settings.interactionClickMethods.includes('script-force') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'script-force', this.checked)">
+                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('script-force') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'script-force', this.checked)">
                     </div>
                     <div class="setting">
                         <label>Process Peek + Command (process-peek):</label>
-                        <input type="checkbox" ${settings.interactionClickMethods.includes('process-peek') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'process-peek', this.checked)">
+                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('process-peek') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'process-peek', this.checked)">
                     </div>
                     <div class="setting">
                         <label>Visual Verify Click (visual-verify-click):</label>
-                        <input type="checkbox" ${settings.interactionClickMethods.includes('visual-verify-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'visual-verify-click', this.checked)">
+                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('visual-verify-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'visual-verify-click', this.checked)">
                     </div>
                     <div class="setting">
                         <label>Coordinate Click (coord-click):</label>
-                        <input type="checkbox" ${settings.interactionClickMethods.includes('coord-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'coord-click', this.checked)">
+                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('coord-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'coord-click', this.checked)">
                     </div>
                 </details>
 
@@ -692,23 +692,23 @@ export class DashboardPanel {
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">🚀 Submit Methods</summary>
                     <div class="setting">
                         <label>VS Code Submit Commands (vscode-submit):</label>
-                        <input type="checkbox" ${settings.interactionSubmitMethods.includes('vscode-submit') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'vscode-submit', this.checked)">
+                        <input type="checkbox" ${(settings.interactionSubmitMethods || []).includes('vscode-submit') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'vscode-submit', this.checked)">
                     </div>
                     <div class="setting">
                         <label>CDP Enter Key (cdp-enter):</label>
-                        <input type="checkbox" ${settings.interactionSubmitMethods.includes('cdp-enter') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'cdp-enter', this.checked)">
+                        <input type="checkbox" ${(settings.interactionSubmitMethods || []).includes('cdp-enter') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'cdp-enter', this.checked)">
                     </div>
                     <div class="setting">
                         <label>Script Force Submit (script-submit):</label>
-                        <input type="checkbox" ${settings.interactionSubmitMethods.includes('script-submit') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'script-submit', this.checked)">
+                        <input type="checkbox" ${(settings.interactionSubmitMethods || []).includes('script-submit') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'script-submit', this.checked)">
                     </div>
                     <div class="setting">
                         <label>Alt+Enter Shortcut (alt-enter):</label>
-                        <input type="checkbox" ${settings.interactionSubmitMethods.includes('alt-enter') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'alt-enter', this.checked)">
+                        <input type="checkbox" ${(settings.interactionSubmitMethods || []).includes('alt-enter') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'alt-enter', this.checked)">
                     </div>
                     <div class="setting">
                         <label>Ctrl+Enter Shortcut (ctrl-enter):</label>
-                        <input type="checkbox" ${settings.interactionSubmitMethods.includes('ctrl-enter') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'ctrl-enter', this.checked)">
+                        <input type="checkbox" ${(settings.interactionSubmitMethods || []).includes('ctrl-enter') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'ctrl-enter', this.checked)">
                     </div>
                 </details>
 
@@ -768,15 +768,15 @@ export class DashboardPanel {
                 <h2>Safety & Patterns</h2>
                 <div class="setting vertical">
                     <label>Banned Commands (one per line):</label>
-                    <textarea onchange="updateConfig('bannedCommands', this.value.split('\n'))">${settings.bannedCommands.join('\n')}</textarea>
+                    <textarea onchange="updateConfig('bannedCommands', this.value.split('\n'))">${(settings.bannedCommands || []).join('\n')}</textarea>
                 </div>
                 <div class="setting vertical">
                     <label>Accept Patterns (one per line):</label>
-                    <textarea onchange="updateConfig('acceptPatterns', this.value.split('\n'))">${settings.acceptPatterns.join('\n')}</textarea>
+                    <textarea onchange="updateConfig('acceptPatterns', this.value.split('\n'))">${(settings.acceptPatterns || []).join('\n')}</textarea>
                 </div>
                  <div class="setting vertical">
                     <label>Reject Patterns (one per line):</label>
-                    <textarea onchange="updateConfig('rejectPatterns', this.value.split('\n'))">${settings.rejectPatterns.join('\n')}</textarea>
+                    <textarea onchange="updateConfig('rejectPatterns', this.value.split('\n'))">${(settings.rejectPatterns || []).join('\n')}</textarea>
                 </div>
             </div>
 
