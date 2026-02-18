@@ -173,7 +173,11 @@ export class ConfigManager {
             interactionTextMethods: config.get('interactionTextMethods', ['cdp-keys', 'cdp-insert-text', 'clipboard-paste', 'dom-inject', 'bridge-type']),
             interactionClickMethods: config.get('interactionClickMethods', ['dom-scan-click', 'dom-click', 'bridge-click', 'cdp-mouse', 'native-accept', 'vscode-cmd', 'script-force', 'process-peek']),
             interactionSubmitMethods: config.get('interactionSubmitMethods', ['vscode-submit', 'cdp-enter', 'script-submit', 'ctrl-enter', 'alt-enter']),
-            interactionTimings: config.get('interactionTimings', {}),
+            interactionTimings: config.get('interactionTimings', {
+                'vscode-cmd': 100,
+                'native-accept': 60,
+                'vscode-submit': 50
+            }),
             interactionRetryCount: config.get('interactionRetryCount', 3),
             interactionParallel: config.get('interactionParallel', false),
             interactionVisualDiffThreshold: config.get('interactionVisualDiffThreshold', 0.001),

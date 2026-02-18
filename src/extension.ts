@@ -1618,8 +1618,44 @@ export function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('antigravity.writeAndSubmitBump', async () => {
             const message = config.get<string>('bumpMessage') || 'bump';
-            await sendAutoResumeMessage('manual', null, { messageOverride: message });
+            await sendAutoResumeMessage('manual', null, { messageOverride: message } as any);
             vscode.window.showInformationMessage(`Antigravity: Bump message "${message}" submitted.`);
+        }),
+        vscode.commands.registerCommand('antigravity.clickAccept', async () => {
+            const commands = [
+                'interactive.acceptChanges',
+                'workbench.action.terminal.chat.accept',
+                'inlineChat.accept',
+                'workbench.action.chat.submit', // Fallback
+                'workbench.action.chat.send',
+                'notifications.acceptAction',
+                'workbench.action.acceptSelectedQuickOpenItem'
+            ];
+            for (const cmd of commands) {
+                try { await vscode.commands.executeCommand(cmd); } catch { }
+            }
+        }),
+        vscode.commands.registerCommand('antigravity.clickRun', async () => {
+            const commands = [
+                'workbench.action.debug.start',
+                'workbench.action.debug.run',
+                'code-runner.run'
+            ];
+            for (const cmd of commands) {
+                try { await vscode.commands.executeCommand(cmd); } catch { }
+            }
+        }),
+        vscode.commands.registerCommand('antigravity.clickExpand', async () => {
+            // Expand often implies showing more context or opening a view
+            // For now, we try opening chat or focusing sidebar as a proxy for "expanding" interaction area
+            const commands = [
+                'workbench.action.chat.openInSideBar',
+                'workbench.action.chat.open',
+                'workbench.panel.chat.view.copilot.focus'
+            ];
+            for (const cmd of commands) {
+                try { await vscode.commands.executeCommand(cmd); } catch { }
+            }
         })
     );
 

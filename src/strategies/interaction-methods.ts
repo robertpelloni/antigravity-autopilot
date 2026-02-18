@@ -433,7 +433,7 @@ export class VSCodeCommandClick implements IInteractionMethod {
     description = 'Executes a registered VS Code command by ID';
     category = 'click' as const;
     enabled = true;
-    priority = 3;
+    priority = 0;
     timingMs = 100;
     requiresCDP = false;
 

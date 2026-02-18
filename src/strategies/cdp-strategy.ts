@@ -163,7 +163,7 @@ export class CDPStrategy implements IStrategy {
                     acceptPatterns: config.get<string[]>('acceptPatterns') || [],
                     rejectPatterns: config.get<string[]>('rejectPatterns') || [],
                     visualDiffThreshold: config.get<number>('interactionVisualDiffThreshold') || 0.001,
-                    commandId: 'antigravity.agent.acceptAgentStep'
+                    commandId: 'antigravity.clickAccept'
                 });
                 break;
             case 'submit':
