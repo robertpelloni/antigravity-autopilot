@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.90] - 2026-02-17
+
+### Changed
+- **Configuration Logic**: `CDPHandler` now respects granular timing controls (`actions.bump.typingDelayMs`, `actions.bump.submitDelayMs`) for hybrid bump interactions, replacing hardcoded delays.
+- **Configuration Schema**: Updated `package.json` and `config.ts` to support the new `antigravity.actions.*` structure for bump, auto-accept, run, and expand actions.
+
 ## [4.10.89] - 2026-02-17
 ### Fixed
 - **Interaction Logic:** `DOMScanClick` strategy now correctly identifies and clicks icon-only "Run" and "Expand" buttons (e.g. `.codicon-play`, `.monaco-tl-twistie`) that lack text labels.

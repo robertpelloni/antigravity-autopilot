@@ -355,17 +355,22 @@ export class CDPHandler extends EventEmitter {
                 console.log(`[Bridge] Hybrid Bump Triggered: "${bumpText}"`);
                 const vscode = require('vscode');
 
+                // Read configuration for delays
+                const bumpConfig = config.get<{ typingDelayMs: number; submitDelayMs: number }>('actions.bump') || {};
+                const typingDelay = bumpConfig.typingDelayMs || 50;
+                const submitDelay = bumpConfig.submitDelayMs || 800;
+
                 if (bumpText) {
                     await vscode.env.clipboard.writeText(bumpText);
                     await vscode.commands.executeCommand('workbench.action.chat.open');
-                    await new Promise((r: any) => setTimeout(r, 300));
+                    await new Promise((r: any) => setTimeout(r, Math.max(100, typingDelay * 6))); // Open -> Focus delay
                     await vscode.commands.executeCommand('workbench.action.chat.focusInput');
-                    await new Promise((r: any) => setTimeout(r, 200));
+                    await new Promise((r: any) => setTimeout(r, Math.max(100, typingDelay * 4))); // Focus -> Paste delay
                     await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
                 }
 
                 // 2. Submit (Multi-Strategy)
-                await new Promise((r: any) => setTimeout(r, 800));
+                await new Promise((r: any) => setTimeout(r, submitDelay));
                 const commands = [
                     'workbench.action.chat.submit',
                     'workbench.action.chat.send',
@@ -378,7 +383,7 @@ export class CDPHandler extends EventEmitter {
                 }
 
                 // 3. Fallback: Physical Enter Key (CDP)
-                await new Promise(r => setTimeout(r, 200));
+                await new Promise(r => setTimeout(r, Math.max(100, submitDelay / 2)));
                 await this.dispatchKeyEventToAll({
                     type: 'keyDown', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
                     windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
