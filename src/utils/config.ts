@@ -5,11 +5,40 @@ export const CONFIG_SECTION = 'antigravity';
 export interface AntigravityConfig {
     strategy: 'simple' | 'cdp';
     interactionUiProfile: 'auto' | 'vscode' | 'antigravity' | 'cursor';
+    // Action Groups
+    actions: {
+        bump: {
+            enabled: boolean;
+            text: string;
+            cooldown: number;
+            typingDelayMs: number;
+            submitDelayMs: number;
+        };
+        autoAccept: {
+            enabled: boolean;
+            pollIntervalMs: number;
+            delayMs: number;
+        };
+        run: {
+            enabled: boolean;
+            delayMs: number;
+        };
+        expand: {
+            enabled: boolean;
+            delayMs: number;
+        };
+    };
+
+    // Deprecated / Legacy (kept for internal compat if needed, but actions.* preferred)
     autoAcceptEnabled: boolean;
     autoAllEnabled: boolean;
     autopilotAutoAcceptEnabled: boolean;
     autopilotAutoBumpEnabled: boolean;
     autopilotRunExpandContinueEnabled: boolean;
+    autoAcceptPollIntervalMs: number;
+    autoBumpCooldownSec: number;
+    bumpMessage: string;
+
     multiTabEnabled: boolean;
     autonomousEnabled: boolean;
     mcpEnabled: boolean;
@@ -20,16 +49,13 @@ export interface AntigravityConfig {
     bannedCommands: string[];
     loopInterval: number;
     maxLoopsPerSession: number;
-    executionTimeout: number; // in minutes
+    executionTimeout: number;
     maxCallsPerHour: number;
     voiceMode: 'push-to-talk' | 'always-listening';
     enableMemory: boolean;
-    // User Requested Settings
-    threadWaitInterval: number; // Seconds to wait between steps/threads
-    autoApproveDelay: number;   // Seconds to wait before auto-approving
-    autoAcceptPollIntervalMs: number; // Polling interval for auto accept/action scanning
-    autoBumpCooldownSec: number; // Cooldown between auto-bump attempts
-    bumpMessage: string;        // Message to post to bump thread
+    threadWaitInterval: number;
+    autoApproveDelay: number;
+
     runtimeWaitingReminderEnabled: boolean;
     runtimeWaitingReminderDelaySec: number;
     runtimeWaitingReminderCooldownSec: number;
@@ -70,14 +96,14 @@ export interface AntigravityConfig {
     acceptPatterns: string[];
     rejectPatterns: string[];
 
-    // Interaction Methods (user-selectable)
-    interactionTextMethods: string[];   // Enabled text input method IDs
-    interactionClickMethods: string[];  // Enabled click method IDs
-    interactionSubmitMethods: string[]; // Enabled submit method IDs
-    interactionTimings: Record<string, number>; // Per-method timing overrides (ms)
-    interactionRetryCount: number;      // How many methods to try before giving up
-    interactionParallel: boolean;       // Try methods simultaneously vs sequentially
-    interactionVisualDiffThreshold: number; // Screenshot diff threshold for visual-verify methods
+    // Interaction Methods
+    interactionTextMethods: string[];
+    interactionClickMethods: string[];
+    interactionSubmitMethods: string[];
+    interactionTimings: Record<string, number>;
+    interactionRetryCount: number;
+    interactionParallel: boolean;
+    interactionVisualDiffThreshold: number;
     interactionClickMethodsVSCode: string[];
     interactionClickMethodsAntigravity: string[];
     interactionClickMethodsCursor: string[];
@@ -98,26 +124,66 @@ export class ConfigManager {
         return ConfigManager.instance;
     }
 
-    get<T>(key: keyof AntigravityConfig): T {
+    get<T>(key: string): T {
         const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
         return config.get<T>(key) as T;
     }
 
-    async update(key: keyof AntigravityConfig, value: any, target: vscode.ConfigurationTarget = vscode.ConfigurationTarget.Global): Promise<void> {
+    async update(key: string, value: any, target: vscode.ConfigurationTarget = vscode.ConfigurationTarget.Global): Promise<void> {
         const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
         await config.update(key, value, target);
     }
 
     getAll(): AntigravityConfig {
         const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+
+        // Backward compatibility migration logic for runtime values
+        const legacyBumpMessage = config.get<string>('bumpMessage', 'bump');
+        const legacyAutoBumpEnabled = config.get<boolean>('autopilotAutoBumpEnabled', true);
+        const legacyAutoAcceptEnabled = config.get<boolean>('autoAcceptEnabled', false);
+        const legacyAutoAllEnabled = config.get<boolean>('autoAllEnabled', false);
+        const legacyAutopilotAutoAccept = config.get<boolean>('autopilotAutoAcceptEnabled', legacyAutoAllEnabled || legacyAutoAcceptEnabled);
+        const legacyRunExpand = config.get<boolean>('autopilotRunExpandContinueEnabled', true);
+        const legacyPoll = config.get<number>('autoAcceptPollIntervalMs', 1000);
+
         return {
             strategy: config.get('strategy', 'cdp'),
             interactionUiProfile: config.get('interactionUiProfile', 'auto'),
-            autoAcceptEnabled: config.get('autoAcceptEnabled', false),
-            autoAllEnabled: config.get('autoAllEnabled', false),
-            autopilotAutoAcceptEnabled: config.get('autopilotAutoAcceptEnabled', config.get('autoAllEnabled', false) || config.get('autoAcceptEnabled', false)),
-            autopilotAutoBumpEnabled: config.get('autopilotAutoBumpEnabled', true),
-            autopilotRunExpandContinueEnabled: config.get('autopilotRunExpandContinueEnabled', true),
+
+            // New Actions Logic
+            actions: {
+                bump: {
+                    enabled: config.get('actions.bump.enabled', legacyAutoBumpEnabled),
+                    text: config.get('actions.bump.text', legacyBumpMessage),
+                    cooldown: config.get('actions.bump.cooldown', config.get('autoBumpCooldownSec', 30)),
+                    typingDelayMs: config.get('actions.bump.typingDelayMs', 50),
+                    submitDelayMs: config.get('actions.bump.submitDelayMs', 100)
+                },
+                autoAccept: {
+                    enabled: config.get('actions.autoAccept.enabled', legacyAutopilotAutoAccept),
+                    pollIntervalMs: config.get('actions.autoAccept.pollIntervalMs', legacyPoll),
+                    delayMs: config.get('actions.autoAccept.delayMs', 100)
+                },
+                run: {
+                    enabled: config.get('actions.run.enabled', legacyRunExpand),
+                    delayMs: config.get('actions.run.delayMs', 100)
+                },
+                expand: {
+                    enabled: config.get('actions.expand.enabled', legacyRunExpand),
+                    delayMs: config.get('actions.expand.delayMs', 50)
+                }
+            },
+
+            // Legacy Fields (Mapped for compatibility)
+            autoAcceptEnabled: legacyAutoAcceptEnabled,
+            autoAllEnabled: legacyAutoAllEnabled,
+            autopilotAutoAcceptEnabled: legacyAutopilotAutoAccept,
+            autopilotAutoBumpEnabled: legacyAutoBumpEnabled,
+            autopilotRunExpandContinueEnabled: legacyRunExpand,
+            autoAcceptPollIntervalMs: legacyPoll,
+            autoBumpCooldownSec: config.get('autoBumpCooldownSec', 30),
+            bumpMessage: legacyBumpMessage,
+
             multiTabEnabled: config.get('multiTabEnabled', false),
             autonomousEnabled: config.get('autonomousEnabled', false),
             mcpEnabled: config.get('mcpEnabled', false),
@@ -134,9 +200,6 @@ export class ConfigManager {
             enableMemory: config.get('enableMemory', true),
             threadWaitInterval: config.get('threadWaitInterval', 5),
             autoApproveDelay: config.get('autoApproveDelay', 30),
-            autoAcceptPollIntervalMs: config.get('autoAcceptPollIntervalMs', config.get('pollFrequency', 1000)),
-            autoBumpCooldownSec: config.get('autoBumpCooldownSec', config.get('autoApproveDelay', 30)),
-            bumpMessage: config.get('bumpMessage', 'bump'),
             runtimeWaitingReminderEnabled: config.get('runtimeWaitingReminderEnabled', true),
             runtimeWaitingReminderDelaySec: config.get('runtimeWaitingReminderDelaySec', 60),
             runtimeWaitingReminderCooldownSec: config.get('runtimeWaitingReminderCooldownSec', 180),

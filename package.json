@@ -402,7 +402,68 @@
                 "antigravity.bumpMessage": {
                     "type": "string",
                     "default": "bump",
-                    "description": "Message to post to bump the thread."
+                    "deprecationMessage": "Use antigravity.actions.bump.text instead.",
+                    "description": "Deprecated: Message to post to bump the thread."
+                },
+                "antigravity.actions.bump.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable automatic bump/resume nudges."
+                },
+                "antigravity.actions.bump.text": {
+                    "type": "string",
+                    "default": "bump",
+                    "description": "Text to type when bumping the thread."
+                },
+                "antigravity.actions.bump.cooldown": {
+                    "type": "number",
+                    "default": 30,
+                    "description": "Minimum seconds between bump attempts."
+                },
+                "antigravity.actions.bump.typingDelayMs": {
+                    "type": "number",
+                    "default": 50,
+                    "description": "Delay (ms) between keystrokes when typing bump message."
+                },
+                "antigravity.actions.bump.submitDelayMs": {
+                    "type": "number",
+                    "default": 100,
+                    "description": "Delay (ms) before submitting the bump message."
+                },
+                "antigravity.actions.autoAccept.enabled": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Enable automatic clicking of 'Accept', 'Allow', 'OK' buttons."
+                },
+                "antigravity.actions.autoAccept.pollIntervalMs": {
+                    "type": "number",
+                    "default": 1000,
+                    "description": "How often to scan for accept buttons (ms)."
+                },
+                "antigravity.actions.autoAccept.delayMs": {
+                    "type": "number",
+                    "default": 100,
+                    "description": "Delay (ms) before clicking an accept button after finding it."
+                },
+                "antigravity.actions.run.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable clicking 'Run', 'Debug', or 'Play' buttons."
+                },
+                "antigravity.actions.run.delayMs": {
+                    "type": "number",
+                    "default": 100,
+                    "description": "Delay (ms) before clicking a run button."
+                },
+                "antigravity.actions.expand.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable clicking expand/collapse chevrons."
+                },
+                "antigravity.actions.expand.delayMs": {
+                    "type": "number",
+                    "default": 50,
+                    "description": "Delay (ms) before clicking expand elements."
                 },
                 "antigravity.runtimeWaitingReminderEnabled": {
                     "type": "boolean",
