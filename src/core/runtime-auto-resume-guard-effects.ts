@@ -30,15 +30,19 @@ export async function sendAutoResumeMessage(
 
     const message = options?.messageOverride || "continue"; // Simple continue for now, can be enhanced based on state/options
 
-    // Use the robust sendMessage from CDPClient
-    // We might want to try multiple times or specific strategies if the first fails
-    const sent = await cdpClient.sendMessage(message);
-
-    if (sent) {
-        log.info('Auto-resume message sent successfully.');
+    // Use the robust sendHybridBump from CDPHandler (via Client)
+    // This uses a bridge loopback to execute VS Code commands (e.g. workbench.action.chat.submit)
+    // which is much more reliable than DOM interaction alone.
+    if (cdpClient.isConnected()) {
+        const sent = await cdpClient.sendHybridBump(message);
+        if (sent) {
+            log.info('Auto-resume (hybrid) message sent successfully.');
+        } else {
+            log.warn('Failed to send auto-resume (hybrid) message.');
+        }
+        return sent;
     } else {
-        log.warn('Failed to send auto-resume message.');
+        log.warn('Cannot send auto-resume: CDP not connected.');
+        return false;
     }
-
-    return sent;
 }
