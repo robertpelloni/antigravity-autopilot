@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { EventEmitter } from 'events';
 import { config } from '../../utils/config';
+import { AUTO_CONTINUE_SCRIPT } from '../../scripts/auto-continue';
 
 export class CDPHandler extends EventEmitter {
     private startPort: number;
@@ -112,6 +113,20 @@ export class CDPHandler extends EventEmitter {
                     // 1. Enable Runtime on Main Page
                     await this.sendCommand(page.id, 'Runtime.enable');
                     await this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' });
+
+                    // 1b. Inject Auto-Continue Script (if enabled)
+                    if (config.get<boolean>('autoContinueScriptEnabled') !== false) {
+                        try {
+                            await this.sendCommand(page.id, 'Runtime.evaluate', {
+                                expression: AUTO_CONTINUE_SCRIPT,
+                                userGesture: true,
+                                awaitPromise: false
+                            });
+                            console.log(`[CDP] Injected Auto-Continue Script into ${page.id}`);
+                        } catch (e) {
+                            console.error(`[CDP] Failed to inject Auto-Continue Script into ${page.id}`, e);
+                        }
+                    }
 
                     // 3. Explicit Target Discovery (Belt & Suspenders) - ALWAYS ENABLED (Safe)
                     const { targetInfos } = await this.sendCommand(page.id, 'Target.getTargets');

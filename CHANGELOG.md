@@ -5,6 +5,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.94] - 2026-02-17
+### Added
+- **Copilot Auto-Continue**: Integrated `copilot-auto-continue` submodule logic to automatically click "Continue" and "Keep" buttons in Copilot Chat via CDP injection.
+- **Configurable Auto-Continue**: Added `antigravity.autoContinueScriptEnabled` setting (default: `true`) to control script injection.
+
 ## [4.10.93]
 - Improved: Re-enabled explicit CDP target discovery to ensure automation works for existing chat panels.
 - Fixed: Maintained fix for blank side panel by keeping aggressive target discovery (Phase 38) disabled by default.
