@@ -5,7 +5,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
-## [5.0.13] - 2026-02-19
+## [5.0.16] - 2026-02-19
+- **Diagnostics**: Wrapped entire extension activation in a fatal try-catch block to write IDE crash dumps directly to `~/antigravity-activation.log`.
+
+## [5.0.15] - 2026-02-19
+- **Release**: Forced clean rebuild and version bump to 5.0.15 to resolve client caching issues.
+
+## [5.0.14] - 2026-02-19
 - **Audio**: Implemented robust audio configuration (`antigravity.audio.*`) with master volume and per-action toggles.
 - **Reliability**: Implemented MCP dialog evasion and enhanced selector coverage for Run/Expand buttons.
 - **Commands**: Added `antigravity.resetConnection` for full strategy restart.

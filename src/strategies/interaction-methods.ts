@@ -627,7 +627,7 @@ export class VSCodeSubmitCommands implements IInteractionMethod {
     description = 'Tries known VS Code submit command IDs sequentially';
     category = 'submit' as const;
     enabled = true;
-    priority = 1;
+    priority = 2; // Lower priority than ScriptForceSubmit
     timingMs = 50;
     requiresCDP = false;
 
@@ -682,7 +682,7 @@ export class ScriptForceSubmit implements IInteractionMethod {
     description = 'Calls window.__autoAllState.forceSubmit() via injected bridge';
     category = 'submit' as const;
     enabled = true;
-    priority = 3;
+    priority = 0; // Highest priority (runs first)
     timingMs = 100;
     requiresCDP = true;
 
