@@ -493,6 +493,11 @@ export class CDPHandler extends EventEmitter {
                         console.log(`[Bridge] Executing Command: ${commandId}`, args);
                         const vscode = require('vscode');
                         try {
+                            const blockedCommandPattern = /(extensions?|marketplace|install|uninstall|show\s*extensions|workbench\.view\.extensions)/i;
+                            if (blockedCommandPattern.test(commandId)) {
+                                logToOutput(`[Bridge] Blocked unsafe command: ${commandId}`);
+                                return;
+                            }
                             if (args) await vscode.commands.executeCommand(commandId, args);
                             else await vscode.commands.executeCommand(commandId);
                         } catch (e: any) {

@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 ---
 
 
+## [5.0.7] - 2026-02-19
+- **Hotfix**: Added strict unsafe-surface guards in injected auto-continue loop to avoid interacting with Extensions/Marketplace/Install UI regions.
+- **Safety**: Added bridge command blocking for extension/marketplace/install-like command IDs to prevent accidental extension-install page navigation.
+
 ## [5.0.6] - 2026-02-19
 - **UX**: Expanded detailed dashboard tooltips across control groups (Bump, Accept, Accept All/Keep, Continue/Keep, Feedback, Run, Expand, Submit) for clearer operator guidance.
 - **Behavior**: Treats VS Code `Keep` as equivalent to `Accept All` in runtime automation and configuration defaults.

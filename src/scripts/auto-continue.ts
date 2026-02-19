@@ -127,6 +127,23 @@ export const AUTO_CONTINUE_SCRIPT = `
     } catch(e) {}
   }
 
+  function hasUnsafeLabel(el) {
+      try {
+          const text = ((el?.textContent || '') + ' ' + (el?.getAttribute?.('aria-label') || '') + ' ' + (el?.getAttribute?.('title') || '')).toLowerCase();
+          return /(extension|extensions|marketplace|plugin|install|uninstall|enable|disable)/i.test(text);
+      } catch {
+          return false;
+      }
+  }
+
+  function isUnsafeContext(el) {
+      if (!el || !el.closest) return false;
+      const unsafe = el.closest(
+          '.extensions-viewlet, [id*="workbench.view.extensions"], [class*="extensions"], [id*="extensions"], [class*="marketplace"], [id*="marketplace"], [data-view-id*="extensions"], .quick-input-widget, .monaco-quick-input-container, .settings-editor'
+      );
+      return !!unsafe;
+  }
+
   // --- Analysis Helpers ---
 
   function analyzeChatState() {
@@ -166,6 +183,7 @@ export const AUTO_CONTINUE_SCRIPT = `
   function tryClick(selector, name) {
       const els = Array.from(document.querySelectorAll(selector));
       for (const el of els) {
+          if (isUnsafeContext(el) || hasUnsafeLabel(el)) continue;
           if (el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0) {
              if (el.hasAttribute('disabled') || el.classList.contains('disabled')) continue;
              
@@ -282,6 +300,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           const contSel = 'a.monaco-button, button.monaco-button, .action-label';
           const els = Array.from(document.querySelectorAll(contSel));
           const target = els.find(el => {
+              if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
               const t = (el.textContent || '').trim().toLowerCase();
               const l = (el.getAttribute('aria-label') || '').toLowerCase();
               const continueMatch = hasMethod(continueControl.actionMethods, 'continue-button') && (/continue/i.test(t) || /continue/i.test(l));
@@ -334,7 +353,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
 
           if (!actionTaken && hasMethod(runControl.actionMethods, 'native-click')) {
-              const candidate = Array.from(document.querySelectorAll(runSelectors)).find(el => el && (el.offsetParent || el.clientWidth > 0));
+              const candidate = Array.from(document.querySelectorAll(runSelectors)).find(el => el && !isUnsafeContext(el) && !hasUnsafeLabel(el) && (el.offsetParent || el.clientWidth > 0));
               if (candidate) {
                   highlight(candidate);
                   candidate.click();
@@ -376,7 +395,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
 
           if (!actionTaken && hasMethod(expandControl.actionMethods, 'native-click')) {
-              const candidate = Array.from(document.querySelectorAll(expandSelectors)).find(el => el && (el.offsetParent || el.clientWidth > 0));
+              const candidate = Array.from(document.querySelectorAll(expandSelectors)).find(el => el && !isUnsafeContext(el) && !hasUnsafeLabel(el) && (el.offsetParent || el.clientWidth > 0));
               if (candidate) {
                   highlight(candidate);
                   candidate.click();
@@ -417,7 +436,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           if (hasMethod(feedbackControl.actionMethods, 'dom-click')) selectors.push('[title*="Helpful"]', '[aria-label*="Helpful"]', '.codicon-thumbsup');
           const selector = selectors.join(',');
           const els = selector ? Array.from(document.querySelectorAll(selector)) : [];
-          const target = els.find(el => !el.classList.contains('checked') && !el.classList.contains('selected') && (el.offsetParent || el.clientWidth>0));
+          const target = els.find(el => !isUnsafeContext(el) && !hasUnsafeLabel(el) && !el.classList.contains('checked') && !el.classList.contains('selected') && (el.offsetParent || el.clientWidth>0));
           if (target) {
                highlight(target);
                target.click();
