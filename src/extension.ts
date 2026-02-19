@@ -1005,9 +1005,7 @@ export function activate(context: vscode.ExtensionContext) {
                 const fallbackPort = config.get<number>('cdpPort') || 9000;
                 return `ws://127.0.0.1:${fallbackPort}`;
             }),
-            vscode.commands.registerCommand('antigravity.clickRun', () => resolveCDPStrategy()?.executeAction('run')),
             vscode.commands.registerCommand('antigravity.clickExpand', () => resolveCDPStrategy()?.executeAction('expand')),
-            vscode.commands.registerCommand('antigravity.clickAccept', () => resolveCDPStrategy()?.executeAction('accept')),
             vscode.commands.registerCommand('antigravity.resetConnection', async () => {
                 const cdpStrategy = resolveCDPStrategy();
                 if (cdpStrategy) {
@@ -1827,6 +1825,9 @@ export function activate(context: vscode.ExtensionContext) {
                 vscode.window.showInformationMessage(`Antigravity: Bump message "${message}" submitted.`);
             }),
             vscode.commands.registerCommand('antigravity.clickAccept', async () => {
+                const cdp = resolveCDPStrategy();
+                if (cdp && await cdp.executeAction('accept')) return;
+
                 const commands = [
                     'interactive.acceptChanges',
                     'workbench.action.terminal.chat.accept',
@@ -1841,6 +1842,9 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             }),
             vscode.commands.registerCommand('antigravity.clickRun', async () => {
+                const cdp = resolveCDPStrategy();
+                if (cdp && await cdp.executeAction('run')) return;
+
                 const commands = [
                     'workbench.action.debug.start',
                     'workbench.action.debug.run',
@@ -1851,6 +1855,9 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             }),
             vscode.commands.registerCommand('antigravity.clickExpand', async () => {
+                const cdp = resolveCDPStrategy();
+                if (cdp && await cdp.executeAction('expand')) return;
+
                 // Expand often implies showing more context or opening a view
                 // For now, we try opening chat or focusing sidebar as a proxy for "expanding" interaction area
                 const commands = [

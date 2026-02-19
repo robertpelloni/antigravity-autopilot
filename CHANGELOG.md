@@ -5,6 +5,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [5.0.17] - 2026-02-19
+- **Fix**: Removed duplicate registrations of `antigravity.clickAccept`, `clickRun`, and `clickExpand` that caused the extension to fatal-crash on IDE restarts due to leaked context subscriptions. Consolidated their execution paths into a unified fallback model.
+
 ## [5.0.16] - 2026-02-19
 - **Diagnostics**: Wrapped entire extension activation in a fatal try-catch block to write IDE crash dumps directly to `~/antigravity-activation.log`.
 
