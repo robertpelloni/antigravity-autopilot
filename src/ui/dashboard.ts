@@ -294,6 +294,18 @@ export class DashboardPanel {
             <h1>⚡ Antigravity Autopilot</h1>
 
             <div class="card">
+                <h2>Master Control</h2>
+                <div class="setting" title="Universal ON/OFF for core autonomy (CDP strategy, auto actions, autonomous loop, and injected automation script). Hotkey: Ctrl+Alt+Shift+M.">
+                    <label>Universal Master Toggle:</label>
+                    <input type="checkbox" ${(settings.autonomousEnabled || settings.autopilotAutoAcceptEnabled || settings.autoAllEnabled || settings.autoContinueScriptEnabled) ? 'checked' : ''} onchange="runCommand('antigravity.toggleMasterControl')">
+                </div>
+                <div class="setting" title="Immediate hard stop for all autonomy systems. Hotkey: Ctrl+Alt+Shift+Backspace.">
+                    <label>Emergency Stop:</label>
+                    <button onclick="runCommand('antigravity.panicStop')">Disable Everything Now</button>
+                </div>
+            </div>
+
+            <div class="card">
                 <h2>Runtime State</h2>
                 <div class="setting">
                     <label>Status:</label>
@@ -461,6 +473,52 @@ export class DashboardPanel {
                 </div>
             </div>
 
+            <div class="card">
+                <h2>Control Group: Bump</h2>
+                <p class="muted">Bump fires only when selected detection components match, then selected typing + submit components run.</p>
+
+                <div class="setting" title="Enable/disable bump behavior globally.">
+                    <label>Bump Enabled:</label>
+                    <input type="checkbox" ${settings.actions.bump.enabled ? 'checked' : ''} onchange="updateConfig('actions.bump.enabled', this.checked); updateConfig('autopilotAutoBumpEnabled', this.checked)">
+                </div>
+
+                <div class="setting vertical" title="The text string that will be typed when bump triggers.">
+                    <label>Bump Text:</label>
+                    <input type="text" value="${settings.actions.bump.text || 'continue'}" onchange="updateConfig('actions.bump.text', this.value); updateConfig('automation.actions.autoReplyText', this.value); updateConfig('bumpMessage', this.value)">
+                </div>
+
+                <details open>
+                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components (checkboxes)</summary>
+                    <div class="setting"><label>Feedback Visible (Good/Bad/Helpful):</label><input type="checkbox" ${(config.get('automation.bump.detectMethods') || []).includes('feedback-visible') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'feedback-visible', this.checked)"></div>
+                    <div class="setting"><label>Not Generating Signal:</label><input type="checkbox" ${(config.get('automation.bump.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'not-generating', this.checked)"></div>
+                    <div class="setting"><label>Last Sender = User:</label><input type="checkbox" ${(config.get('automation.bump.detectMethods') || []).includes('last-sender-user') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'last-sender-user', this.checked)"></div>
+                    <div class="setting"><label>Network Error Retry Detection:</label><input type="checkbox" ${(config.get('automation.bump.detectMethods') || []).includes('network-error-retry') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'network-error-retry', this.checked)"></div>
+                    <div class="setting"><label>Skip if AI Ends with Question:</label><input type="checkbox" ${(config.get('automation.bump.detectMethods') || []).includes('skip-ai-question') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'skip-ai-question', this.checked)"></div>
+                </details>
+
+                <details open>
+                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Typing Components (checkboxes)</summary>
+                    <div class="setting"><label>execCommand insertText:</label><input type="checkbox" ${(config.get('automation.bump.typeMethods') || []).includes('exec-command') ? 'checked' : ''} onchange="toggleMethod('automation.bump.typeMethods', 'exec-command', this.checked)"></div>
+                    <div class="setting"><label>Native Value Setter:</label><input type="checkbox" ${(config.get('automation.bump.typeMethods') || []).includes('native-setter') ? 'checked' : ''} onchange="toggleMethod('automation.bump.typeMethods', 'native-setter', this.checked)"></div>
+                    <div class="setting"><label>Dispatch Input/Change Events:</label><input type="checkbox" ${(config.get('automation.bump.typeMethods') || []).includes('dispatch-events') ? 'checked' : ''} onchange="toggleMethod('automation.bump.typeMethods', 'dispatch-events', this.checked)"></div>
+                </details>
+
+                <details open>
+                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Submit Components (checkboxes)</summary>
+                    <div class="setting"><label>Click Send Button:</label><input type="checkbox" ${(config.get('automation.bump.submitMethods') || []).includes('click-send') ? 'checked' : ''} onchange="toggleMethod('automation.bump.submitMethods', 'click-send', this.checked)"></div>
+                    <div class="setting"><label>Enter Key Submit:</label><input type="checkbox" ${(config.get('automation.bump.submitMethods') || []).includes('enter-key') ? 'checked' : ''} onchange="toggleMethod('automation.bump.submitMethods', 'enter-key', this.checked)"></div>
+                </details>
+
+                <details open>
+                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Timing</summary>
+                    <div class="setting"><label>Base Idle Delay (ms):</label><input type="number" value="${config.get('automation.timing.autoReplyDelayMs') ?? 7000}" min="250" onchange="updateConfig('automation.timing.autoReplyDelayMs', parseInt(this.value))"></div>
+                    <div class="setting"><label>User-Wait Delay (ms):</label><input type="number" value="${config.get('automation.bump.userDelayMs') ?? 3000}" min="250" onchange="updateConfig('automation.bump.userDelayMs', parseInt(this.value))"></div>
+                    <div class="setting"><label>Retry Delay (ms):</label><input type="number" value="${config.get('automation.bump.retryDelayMs') ?? 2000}" min="250" onchange="updateConfig('automation.bump.retryDelayMs', parseInt(this.value))"></div>
+                    <div class="setting"><label>Typing Delay (ms):</label><input type="number" value="${settings.actions.bump.typingDelayMs ?? 50}" min="0" onchange="updateConfig('actions.bump.typingDelayMs', parseInt(this.value))"></div>
+                    <div class="setting"><label>Submit Delay (ms):</label><input type="number" value="${settings.actions.bump.submitDelayMs ?? 100}" min="0" onchange="updateConfig('actions.bump.submitDelayMs', parseInt(this.value))"></div>
+                </details>
+            </div>
+
             <!-- MODULES -->
             <!-- MODULES -->
              <div class="card">
@@ -483,6 +541,10 @@ export class DashboardPanel {
                         <option value="push-to-talk" ${settings.voiceMode === 'push-to-talk' ? 'selected' : ''}>Push to Talk</option>
                         <option value="always-listening" ${settings.voiceMode === 'always-listening' ? 'selected' : ''}>Always Listening</option>
                     </select>
+                </div>
+                <div class="setting" title="Enable audible action feedback. When OFF, Antigravity will not emit Windows console beeps.">
+                    <label>Sound Effects:</label>
+                    <input type="checkbox" ${settings.soundEffectsEnabled ? 'checked' : ''} onchange="updateConfig('soundEffectsEnabled', this.checked)">
                 </div>
                  <div class="setting" title="When enabled, Antigravity will automatically stage, commit, and push changes to the repository after significant autonomous milestones.">
                     <label>Auto Git Commit:</label>

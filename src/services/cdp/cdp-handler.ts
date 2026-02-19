@@ -138,6 +138,15 @@ export class CDPHandler extends EventEmitter {
                             // Auto-Reply
                             autoReply: config.get<boolean>('automation.actions.autoReply') ?? false,
                             autoReplyText: config.get<string>('automation.actions.autoReplyText') ?? 'continue',
+                            bump: {
+                                detectMethods: config.get<string[]>('automation.bump.detectMethods') ?? ['feedback-visible', 'not-generating', 'last-sender-user', 'network-error-retry'],
+                                typeMethods: config.get<string[]>('automation.bump.typeMethods') ?? ['exec-command', 'native-setter', 'dispatch-events'],
+                                submitMethods: config.get<string[]>('automation.bump.submitMethods') ?? ['click-send', 'enter-key'],
+                                userDelayMs: config.get<number>('automation.bump.userDelayMs') ?? 3000,
+                                retryDelayMs: config.get<number>('automation.bump.retryDelayMs') ?? 2000,
+                                typingDelayMs: config.get<number>('actions.bump.typingDelayMs') ?? 50,
+                                submitDelayMs: config.get<number>('actions.bump.submitDelayMs') ?? 100
+                            },
                             debug: {
                                 highlightClicks: config.get<boolean>('automation.debug.highlightClicks') ?? false,
                                 verboseLogging: config.get<boolean>('automation.debug.verboseLogging') ?? false

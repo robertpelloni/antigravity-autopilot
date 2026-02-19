@@ -6,6 +6,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 ---
 
 
+## [5.0.5] - 2026-02-18
+- **Hotfix**: Hardened automation safety filters to avoid interacting with Extensions/Marketplace/MCP plugin-management surfaces.
+- **Fix**: Reduced UI thrashing by restricting tab-rotation logic to chat-session targets and excluding marketplace/plugin-like tabs.
+- **Fix**: Prevented duplicate bump text insertion fallback that could leave typed bump messages unsent.
+- **Added**: New emergency command `antigravity.panicStop` + shortcut (`Ctrl+Alt+Shift+Backspace`) to immediately disable all autonomy systems.
+
 ## [5.0.4] - 2026-02-18
 - **Architecture**: Removed all git submodules and reference implementations to simplify the codebase.
 - **Cleanup**: Updated documentation and removed `SUBMODULES.md`.

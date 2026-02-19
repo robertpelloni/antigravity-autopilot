@@ -44,6 +44,7 @@ export interface AntigravityConfig {
     continuousMode: boolean;
     mcpEnabled: boolean;
     voiceControlEnabled: boolean;
+    soundEffectsEnabled: boolean;
     autoSwitchModels: boolean;
     autoGitCommit: boolean;
     autoContinueScriptEnabled: boolean;
@@ -200,6 +201,7 @@ export class ConfigManager {
             autonomousEnabled: config.get('autonomousEnabled', false),
             mcpEnabled: config.get('mcpEnabled', false),
             voiceControlEnabled: config.get('voiceControlEnabled', false),
+            soundEffectsEnabled: config.get('soundEffectsEnabled', false),
             autoSwitchModels: config.get('autoSwitchModels', true),
             autoGitCommit: config.get('autoGitCommit', false),
             autoContinueScriptEnabled: config.get('autoContinueScriptEnabled', true),

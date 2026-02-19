@@ -265,6 +265,100 @@ export function activate(context: vscode.ExtensionContext) {
         }
     };
 
+    const emergencyDisableAllAutonomy = async (source: string = 'manual panic stop') => {
+        try {
+            autonomousLoop.stop(`Emergency stop: ${source}`);
+        } catch { }
+
+        try {
+            await strategyManager.stop();
+        } catch { }
+
+        try {
+            await mcpServer.stop();
+        } catch { }
+
+        try {
+            await voiceControl.stop();
+        } catch { }
+
+        // Persist hard-off state across all known autonomy controls.
+        const updates: Array<[string, any]> = [
+            ['autonomousEnabled', false],
+            ['autopilotAutoAcceptEnabled', false],
+            ['autoAcceptEnabled', false],
+            ['autoAllEnabled', false],
+            ['actions.autoAccept.enabled', false],
+            ['actions.bump.enabled', false],
+            ['actions.run.enabled', false],
+            ['actions.expand.enabled', false],
+            ['mcpEnabled', false],
+            ['voiceControlEnabled', false],
+            ['autoContinueScriptEnabled', false]
+        ];
+
+        for (const [key, value] of updates) {
+            try {
+                await config.update(key, value);
+            } catch { }
+        }
+
+        await refreshRuntimeState().catch(() => { });
+        log.warn(`[EmergencyStop] All autonomy disabled (${source}).`);
+        vscode.window.showWarningMessage('Antigravity Emergency Stop: all autonomy systems disabled. Re-enable manually from Dashboard/commands when ready.');
+    };
+
+    const enableAllAutonomy = async (source: string = 'master toggle on') => {
+        const updates: Array<[string, any]> = [
+            ['strategy', 'cdp'],
+            ['autonomousEnabled', true],
+            ['autopilotAutoAcceptEnabled', true],
+            ['autoAcceptEnabled', true],
+            ['autoAllEnabled', true],
+            ['actions.autoAccept.enabled', true],
+            ['actions.bump.enabled', true],
+            ['actions.run.enabled', true],
+            ['actions.expand.enabled', true],
+            ['autoContinueScriptEnabled', true]
+        ];
+
+        for (const [key, value] of updates) {
+            try {
+                await config.update(key, value);
+            } catch { }
+        }
+
+        try {
+            await strategyManager.start();
+        } catch { }
+
+        if (!autonomousLoop.isRunning()) {
+            try {
+                await autonomousLoop.start();
+            } catch { }
+        }
+
+        await refreshRuntimeState().catch(() => { });
+        log.info(`[MasterToggle] All core autonomy enabled (${source}).`);
+        vscode.window.showInformationMessage('Antigravity Master Toggle: core autonomy enabled (CDP + Auto-All + Autonomous Loop).');
+    };
+
+    const toggleMasterControl = async () => {
+        const isEnabled = !!config.get<boolean>('autonomousEnabled')
+            || !!config.get<boolean>('autopilotAutoAcceptEnabled')
+            || !!config.get<boolean>('autoAllEnabled')
+            || !!config.get<boolean>('actions.autoAccept.enabled')
+            || !!config.get<boolean>('actions.bump.enabled')
+            || !!config.get<boolean>('autoContinueScriptEnabled');
+
+        if (isEnabled) {
+            await emergencyDisableAllAutonomy('master toggle off');
+            return;
+        }
+
+        await enableAllAutonomy('master toggle on');
+    };
+
     const runtimeSummary = (state: CDPRuntimeState | null): string => {
         if (!state) return 'state unavailable';
         const status = state.status || 'unknown';
@@ -415,7 +509,7 @@ export function activate(context: vscode.ExtensionContext) {
     const sendAutoResumeMessage = async (
         reason: 'automatic' | 'manual',
         runtimeState?: any,
-        options?: { forceFull?: boolean; escalationReason?: string }
+        options?: { forceFull?: boolean; escalationReason?: string; messageOverride?: string }
     ) => {
         const fullMessage = (config.get<string>('runtimeAutoResumeMessage') || '').trim();
         const minimalMessage = (config.get<string>('runtimeAutoResumeMinimalMessage') || '').trim();
@@ -433,7 +527,7 @@ export function activate(context: vscode.ExtensionContext) {
         const useMinimal = !options?.forceFull
             && !!config.get<boolean>('runtimeAutoResumeUseMinimalContinue')
             && !!runtimeState?.completionWaiting?.readyToResume;
-        const message = (useMinimal ? (profileMinimalMessage || minimalMessage || fullMessage) : fullMessage).trim();
+        const message = (options?.messageOverride || (useMinimal ? (profileMinimalMessage || minimalMessage || fullMessage) : fullMessage)).trim();
         const messageKind: 'full' | 'minimal' = useMinimal ? 'minimal' : 'full';
         const messageProfile: 'unknown' | 'vscode' | 'antigravity' | 'cursor' = activeMode === 'vscode'
             ? 'vscode'
@@ -875,6 +969,12 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('antigravity.toggleExtension', async () => {
             await strategyManager.toggle();
             // Status bar update triggered by config listener or loop callback
+        }),
+        vscode.commands.registerCommand('antigravity.toggleMasterControl', async () => {
+            await toggleMasterControl();
+        }),
+        vscode.commands.registerCommand('antigravity.panicStop', async () => {
+            await emergencyDisableAllAutonomy('panic command');
         }),
         vscode.commands.registerCommand('antigravity.toggleAutoAccept', async () => {
             const next = !isUnifiedAutoAcceptEnabled();
@@ -1660,7 +1760,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
         vscode.commands.registerCommand('antigravity.writeAndSubmitBump', async () => {
-            const message = config.get<string>('bumpMessage') || 'bump';
+            const message = config.get<string>('actions.bump.text') || config.get<string>('bumpMessage') || 'bump';
             await sendAutoResumeMessage('manual', null, { messageOverride: message } as any);
             vscode.window.showInformationMessage(`Antigravity: Bump message "${message}" submitted.`);
         }),

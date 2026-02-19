@@ -1140,24 +1140,40 @@
             text = (el.getAttribute('title') || "").trim().toLowerCase();
         }
 
-        if (text.length === 0 || text.length > 50) return false;
+        if (text.length === 0 || text.length > 120) return false;
+
+        // Safety: Never interact with marketplace / extension management / plugin surfaces
+        // These are frequent sources of destructive misclicks and UI thrashing.
+        if (el.closest) {
+            const unsafeContainer = el.closest(
+                '.extensions-viewlet, [id*="workbench.view.extensions"], [class*="extensions"], [id*="extensions"], [class*="marketplace"], [id*="marketplace"], [data-view-id*="extensions"]'
+            );
+            if (unsafeContainer) {
+                log(`[SAFETY] Skipping button in Extensions/Marketplace context: "${text}"`);
+                return false;
+            }
+        }
 
         // Use configured patterns from state if available, otherwise use defaults
         const state = window.__autoAllState || {};
         const defaultPatterns = ['accept', 'accept all', 'run', 'run command', 'retry', 'apply', 'execute', 'confirm', 'allow once', 'allow', 'proceed', 'continue', 'yes', 'ok', 'save', 'approve', 'overwrite'];
 
-        // Safety: Do not click buttons in the Extensions view or Source Control (unless specific)
-        if (el.closest && (el.closest('.extensions-viewlet') || el.closest('[id="workbench.view.extensions"]'))) {
-            log(`[SAFETY] Skipping button in Extensions view: "${text}"`);
-            return false;
-        }
         const patterns = state.acceptPatterns || defaultPatterns;
 
-        const defaultRejects = ['skip', 'reject', 'cancel', 'close', 'refine', 'deny', 'no', 'dismiss', 'abort', 'ask every time', 'always run', 'always allow', 'stop', 'pause', 'disconnect'];
+        const defaultRejects = ['skip', 'reject', 'cancel', 'close', 'refine', 'deny', 'no', 'dismiss', 'abort', 'ask every time', 'always run', 'always allow', 'stop', 'pause', 'disconnect', 'install', 'uninstall', 'enable', 'disable', 'marketplace', 'extension', 'plugin'];
         const rejects = state.rejectPatterns ? [...defaultRejects, ...state.rejectPatterns] : defaultRejects;
 
         if (rejects.some(r => text.includes(r))) return false;
         if (!patterns.some(p => text.includes(p))) return false;
+
+        if (text.includes('accept all')) {
+            if (el.closest('[id*="scm"], [class*="scm"], [data-view-id*="scm"]')) {
+                log('Detected SCM Accept All -> Sending git.stageAll');
+                sendCommandToBridge('git.stageAll');
+                return true;
+            }
+            return true;
+        }
 
         const isCommandButton = text.includes('run') || text.includes('execute') || text.includes('accept');
 
@@ -1445,8 +1461,8 @@
         // Method C: CDP Bridge (Ultimate Fallback)
         log('[Chat] Falling back to hybrid CDP bridge strategy');
         console.log('__ANTIGRAVITY_HYBRID_BUMP__:' + text);
-        // Also try legacy type command just in case
-        console.log('__ANTIGRAVITY_TYPE__:' + text);
+        // IMPORTANT: do not also send __ANTIGRAVITY_TYPE__ here;
+        // it causes duplicate bump text with no guaranteed submit.
         return true; // We assume bridge handles it
     }
 
@@ -1508,7 +1524,11 @@
         if (found.length === 0) {
             const expanded = await expandCollapsedSections();
             if (expanded) {
-                selectors.forEach(s => queryAll(s).forEach(el => found.push(el)));
+                selectors.forEach(s => queryAll(s).forEach(el => {
+                    if (isValidInteractionTarget(el)) {
+                        found.push({ el, selector: s, source: 'Expanded-Primary' });
+                    }
+                }));
 
                 if (found.length === 0) {
                     const fallbackSelectors = [
@@ -1768,10 +1788,11 @@
                 await workerDelay(pollInterval);
 
                 const tabSelectors = [
-                    '#workbench\\.parts\\.auxiliarybar ul[role="tablist"] li[role="tab"]',
-                    '.monaco-pane-view .monaco-list-row[role="listitem"]',
-                    'div[role="tablist"] div[role="tab"]',
-                    '.chat-session-item'
+                    '.chat-session-item',
+                    '.chat-session-item [role="tab"]',
+                    '[class*="chat-session"] [role="tab"]',
+                    '[data-testid*="chat"] [role="tab"]',
+                    '[aria-label*="chat" i][role="tab"]'
                 ];
 
                 let tabs = [];
@@ -1786,6 +1807,14 @@
                 if (tabs.length === 0) {
                     log(`[Loop] Cycle ${cycle}: No tabs found in any known locations.`);
                 }
+
+                const blockedTabTerms = ['extension', 'extensions', 'marketplace', 'plugin', 'mcp', 'source control', 'search', 'explorer', 'run and debug'];
+                tabs = tabs.filter(tab => {
+                    const label = (tab.getAttribute('aria-label') || tab.textContent || '').trim().toLowerCase();
+                    if (!label) return false;
+                    if (blockedTabTerms.some(term => label.includes(term))) return false;
+                    return label.includes('chat') || tab.className.toLowerCase().includes('chat-session');
+                });
 
                 updateTabNames(tabs);
 

@@ -2,7 +2,7 @@
   "name": "antigravity-autopilot",
   "displayName": "Antigravity Autopilot (Unified)",
   "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-  "version": "5.0.4",
+  "version": "5.0.5",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -44,6 +44,14 @@
       {
         "command": "antigravity.toggleExtension",
         "title": "Antigravity: Toggle ON/OFF"
+      },
+      {
+        "command": "antigravity.toggleMasterControl",
+        "title": "Antigravity: Toggle MASTER Control (All Core Autonomy)"
+      },
+      {
+        "command": "antigravity.panicStop",
+        "title": "Antigravity: EMERGENCY STOP (Disable All Autonomy)"
       },
       {
         "command": "antigravity.toggleAutoAccept",
@@ -202,6 +210,16 @@
         "command": "antigravity.writeAndSubmitBump",
         "key": "ctrl+alt+shift+b",
         "mac": "cmd+alt+shift+b"
+      },
+      {
+        "command": "antigravity.panicStop",
+        "key": "ctrl+alt+shift+backspace",
+        "mac": "cmd+alt+shift+backspace"
+      },
+      {
+        "command": "antigravity.toggleMasterControl",
+        "key": "ctrl+alt+shift+m",
+        "mac": "cmd+alt+shift+m"
       }
     ],
     "configuration": {
@@ -299,6 +317,11 @@
           "type": "boolean",
           "default": false,
           "description": "Enable Voice Control."
+        },
+        "antigravity.soundEffectsEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable audible action feedback beeps (Windows console beep)."
         },
         "antigravity.watchdogEnabled": {
           "type": "boolean",
@@ -403,6 +426,43 @@
           "type": "string",
           "default": "continue",
           "description": "The text to type when auto-replying (e.g. 'continue', 'next', 'review')."
+        },
+        "antigravity.automation.bump.detectMethods": {
+          "type": "array",
+          "default": [
+            "feedback-visible",
+            "not-generating",
+            "last-sender-user",
+            "network-error-retry"
+          ],
+          "description": "Detection components used to decide when bump should fire. Multiple methods can be enabled."
+        },
+        "antigravity.automation.bump.typeMethods": {
+          "type": "array",
+          "default": [
+            "exec-command",
+            "native-setter",
+            "dispatch-events"
+          ],
+          "description": "Typing components used to enter bump text. Multiple methods can be enabled."
+        },
+        "antigravity.automation.bump.submitMethods": {
+          "type": "array",
+          "default": [
+            "click-send",
+            "enter-key"
+          ],
+          "description": "Submit components used after bump text is entered. Multiple methods can be enabled."
+        },
+        "antigravity.automation.bump.userDelayMs": {
+          "type": "number",
+          "default": 3000,
+          "description": "Delay before bump when the last sender appears to be the user."
+        },
+        "antigravity.automation.bump.retryDelayMs": {
+          "type": "number",
+          "default": 2000,
+          "description": "Delay before bump when retry-like error text is detected."
         },
         "antigravity.automation.timing.autoReplyDelayMs": {
           "type": "number",

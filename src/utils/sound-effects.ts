@@ -1,5 +1,6 @@
 import * as cp from 'child_process';
 import * as os from 'os';
+import { config } from './config';
 
 export type SoundEffect = 'submit' | 'bump' | 'type' | 'run' | 'expand' | 'alt-enter' | 'click' | 'success' | 'error';
 
@@ -12,6 +13,7 @@ export class SoundEffects {
 
     static play(effect: SoundEffect) {
         if (!this.isWindows) return;
+        if (!config.get<boolean>('soundEffectsEnabled')) return;
 
         let command = '';
         switch (effect) {
