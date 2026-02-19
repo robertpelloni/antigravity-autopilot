@@ -21,7 +21,7 @@ test('Command manifest parity', async (t) => {
     );
 
     const extensionSource = fs.readFileSync(EXTENSION_TS_PATH, 'utf-8');
-    const registerRegex = /registerCommand\(\s*['\"]([^'\"]+)['\"]/g;
+    const registerRegex = /(?:vscode\.commands\.registerCommand|safeRegisterCommand)\(\s*['"]([^'"]+)['"]/g;
     const registeredCommands = new Set();
 
     let match;

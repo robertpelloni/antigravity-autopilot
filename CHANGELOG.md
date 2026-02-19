@@ -5,6 +5,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [5.0.18] - 2026-02-19
+- **Fix**: Wrapped all 43 native VS Code command registrations in a `safeRegisterCommand` try-catch block. This prevents the Extension Host from fatal-crashing when activated in multiple Cursor IDE windows sharing the same process.
+
 ## [5.0.17] - 2026-02-19
 - **Fix**: Removed duplicate registrations of `antigravity.clickAccept`, `clickRun`, and `clickExpand` that caused the extension to fatal-crash on IDE restarts due to leaked context subscriptions. Consolidated their execution paths into a unified fallback model.
 

@@ -2135,7 +2135,7 @@
             const isBG = config.isBackgroundMode === true;
 
             // Visual confirmation of injection
-            window.showAutoAllToast('Antigravity v5.0.17 Active 🚀');
+            window.showAutoAllToast('Antigravity v5.0.18 Active 🚀');
 
             if (config.bannedCommands) {
                 window.__autoAllUpdateBannedCommands(config.bannedCommands);

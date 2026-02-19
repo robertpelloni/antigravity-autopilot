@@ -31,6 +31,15 @@ import * as os from 'os';
 const log = createLogger('Extension');
 let statusBar: StatusBarManager;
 
+function safeRegisterCommand(commandId: string, callback: (...args: any[]) => any): vscode.Disposable {
+    try {
+        return safeRegisterCommand(commandId, callback);
+    } catch (error: any) {
+        log.warn(`[SafeRegister] Ignored duplicate command: ${commandId}`);
+        return { dispose: () => { } };
+    }
+}
+
 export function activate(context: vscode.ExtensionContext) {
     try {
         const debugDumpPath = path.join(os.homedir() || os.tmpdir(), 'antigravity-activation.log');
@@ -445,8 +454,8 @@ export function activate(context: vscode.ExtensionContext) {
         };
 
         context.subscriptions.push(
-            vscode.commands.registerCommand('antigravity.diagnoseCdp', diagnoseCdp),
-            vscode.commands.registerCommand('antigravity.testMethod', async (methodId: string, text: string) => {
+            safeRegisterCommand('antigravity.diagnoseCdp', diagnoseCdp),
+            safeRegisterCommand('antigravity.testMethod', async (methodId: string, text: string) => {
                 const cdp = resolveCDPStrategy();
                 if (!cdp) {
                     vscode.window.showErrorMessage('Antigravity: CDP Strategy is not active.');
@@ -988,7 +997,7 @@ export function activate(context: vscode.ExtensionContext) {
         // For now, it's left as potentially undefined, which TypeScript will flag.
         // Assuming `cdpStrategy` refers to an instance of CDPHandler or similar.
         context.subscriptions.push(
-            vscode.commands.registerCommand('antigravity.getChromeDevtoolsMcpUrl', async () => {
+            safeRegisterCommand('antigravity.getChromeDevtoolsMcpUrl', async () => {
                 try {
                     const probe = new CDPHandler();
                     const instances = await probe.scanForInstances();
@@ -1005,8 +1014,8 @@ export function activate(context: vscode.ExtensionContext) {
                 const fallbackPort = config.get<number>('cdpPort') || 9000;
                 return `ws://127.0.0.1:${fallbackPort}`;
             }),
-            vscode.commands.registerCommand('antigravity.clickExpand', () => resolveCDPStrategy()?.executeAction('expand')),
-            vscode.commands.registerCommand('antigravity.resetConnection', async () => {
+            safeRegisterCommand('antigravity.clickExpand', () => resolveCDPStrategy()?.executeAction('expand')),
+            safeRegisterCommand('antigravity.resetConnection', async () => {
                 const cdpStrategy = resolveCDPStrategy();
                 if (cdpStrategy) {
                     vscode.window.showInformationMessage('Restoring Anti-Gravity...');
@@ -1023,20 +1032,20 @@ export function activate(context: vscode.ExtensionContext) {
         // Internal-only commands are intentionally not contributed in package.json.
         // Current internal command policy allowlist: antigravity.getChromeDevtoolsMcpUrl
         context.subscriptions.push(
-            vscode.commands.registerCommand('antigravity.toggleExtension', async () => {
+            safeRegisterCommand('antigravity.toggleExtension', async () => {
                 await strategyManager.toggle();
                 // Status bar update triggered by config listener or loop callback
             }),
-            vscode.commands.registerCommand('antigravity.toggleMasterControl', async () => {
+            safeRegisterCommand('antigravity.toggleMasterControl', async () => {
                 await toggleMasterControl();
             }),
-            vscode.commands.registerCommand('antigravity.enableMaximumAutopilot', async () => {
+            safeRegisterCommand('antigravity.enableMaximumAutopilot', async () => {
                 await enableMaximumAutopilot('dashboard/command');
             }),
-            vscode.commands.registerCommand('antigravity.panicStop', async () => {
+            safeRegisterCommand('antigravity.panicStop', async () => {
                 await emergencyDisableAllAutonomy('panic command');
             }),
-            vscode.commands.registerCommand('antigravity.toggleAutoAccept', async () => {
+            safeRegisterCommand('antigravity.toggleAutoAccept', async () => {
                 const next = !isUnifiedAutoAcceptEnabled();
                 // Update Legacy
                 await config.update('autopilotAutoAcceptEnabled', next);
@@ -1049,7 +1058,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                 await strategyManager.start();
             }),
-            vscode.commands.registerCommand('antigravity.toggleAutoAll', async () => {
+            safeRegisterCommand('antigravity.toggleAutoAll', async () => {
                 const next = !isUnifiedAutoAcceptEnabled();
                 // Update Legacy
                 await config.update('autopilotAutoAcceptEnabled', next);
@@ -1068,7 +1077,7 @@ export function activate(context: vscode.ExtensionContext) {
                 await strategyManager.start();
                 await refreshRuntimeState();
             }),
-            vscode.commands.registerCommand('antigravity.clearAutoAll', async () => {
+            safeRegisterCommand('antigravity.clearAutoAll', async () => {
                 // Clear Legacy
                 await config.update('autopilotAutoAcceptEnabled', false);
                 await config.update('autoAcceptEnabled', false);
@@ -1084,7 +1093,7 @@ export function activate(context: vscode.ExtensionContext) {
                 await refreshRuntimeState();
                 vscode.window.showInformationMessage('Antigravity: Accept-All CLEARED (Disabled).');
             }),
-            vscode.commands.registerCommand('antigravity.toggleAutonomous', async () => {
+            safeRegisterCommand('antigravity.toggleAutonomous', async () => {
                 const isRunning = autonomousLoop.isRunning();
                 if (isRunning) {
                     autonomousLoop.stop('User toggled off');
@@ -1094,10 +1103,10 @@ export function activate(context: vscode.ExtensionContext) {
                     await config.update('autonomousEnabled', true);
                 }
             }),
-            vscode.commands.registerCommand('antigravity.openSettings', () => {
+            safeRegisterCommand('antigravity.openSettings', () => {
                 DashboardPanel.createOrShow(context.extensionUri);
             }),
-            vscode.commands.registerCommand('antigravity.toggleMcp', async () => {
+            safeRegisterCommand('antigravity.toggleMcp', async () => {
                 const current = config.get<boolean>('mcpEnabled');
                 if (current) {
                     await mcpServer.stop();
@@ -1106,7 +1115,7 @@ export function activate(context: vscode.ExtensionContext) {
                 }
                 await config.update('mcpEnabled', !current);
             }),
-            vscode.commands.registerCommand('antigravity.toggleVoice', async () => {
+            safeRegisterCommand('antigravity.toggleVoice', async () => {
                 const current = config.get<boolean>('voiceControlEnabled');
                 if (current) {
                     await voiceControl.stop();
@@ -1115,7 +1124,7 @@ export function activate(context: vscode.ExtensionContext) {
                 }
                 await config.update('voiceControlEnabled', !current);
             }),
-            vscode.commands.registerCommand('antigravity.processVoiceTranscript', async () => {
+            safeRegisterCommand('antigravity.processVoiceTranscript', async () => {
                 const transcript = await vscode.window.showInputBox({
                     prompt: 'Voice Transcript Debug',
                     placeHolder: 'Type the transcribed voice command, e.g. "open dashboard" or "resume"'
@@ -1139,7 +1148,7 @@ export function activate(context: vscode.ExtensionContext) {
                 const reason = outcome.error ? ` (${outcome.error})` : '';
                 vscode.window.showWarningMessage(`Voice Debug: intent "${outcome.command.intent}" not executed${reason}.`);
             }),
-            vscode.commands.registerCommand('antigravity.generateTests', async () => {
+            safeRegisterCommand('antigravity.generateTests', async () => {
                 const editor = vscode.window.activeTextEditor;
                 if (editor) {
                     await testGenerator.generateTestsForFile(editor.document.fileName);
@@ -1147,7 +1156,7 @@ export function activate(context: vscode.ExtensionContext) {
                     vscode.window.showErrorMessage('No active file to generate tests for');
                 }
             }),
-            vscode.commands.registerCommand('antigravity.runCodeReview', async () => {
+            safeRegisterCommand('antigravity.runCodeReview', async () => {
                 const editor = vscode.window.activeTextEditor;
                 if (editor) {
                     const code = editor.document.getText();
@@ -1167,13 +1176,13 @@ export function activate(context: vscode.ExtensionContext) {
                     vscode.window.showErrorMessage('No active file to review');
                 }
             }),
-            vscode.commands.registerCommand('antigravity.startMultiAgent', async () => {
+            safeRegisterCommand('antigravity.startMultiAgent', async () => {
                 const task = await vscode.window.showInputBox({ prompt: 'Enter task for Multi-Agent System' });
                 if (task) {
                     await agentOrchestrator.coordinateAgents(task);
                 }
             }),
-            vscode.commands.registerCommand('antigravity.showMemory', async () => {
+            safeRegisterCommand('antigravity.showMemory', async () => {
                 const memories = memoryManager.getRecentMemories(20);
                 const items = memories.map(m => {
                     const lines = m.content.split('\n');
@@ -1191,7 +1200,7 @@ export function activate(context: vscode.ExtensionContext) {
                     await vscode.window.showTextDocument(doc);
                 }
             }),
-            vscode.commands.registerCommand('antigravity.showStatusMenu', async () => {
+            safeRegisterCommand('antigravity.showStatusMenu', async () => {
                 await refreshRuntimeState();
                 const statusGuard = latestRuntimeState ? getAutoResumeGuardReport(latestRuntimeState) : null;
                 const statusTiming = latestRuntimeState
@@ -1340,11 +1349,11 @@ export function activate(context: vscode.ExtensionContext) {
                     vscode.commands.executeCommand(selection.action);
                 }
             }),
-            vscode.commands.registerCommand('antigravity.syncProjectTasks', async () => {
+            safeRegisterCommand('antigravity.syncProjectTasks', async () => {
                 await projectManager.syncFromFixPlan();
                 vscode.window.showInformationMessage('Project tasks synced from planner files (task.md → TODO.md → @fix_plan.md → ROADMAP.md).');
             }),
-            vscode.commands.registerCommand('antigravity.checkRuntimeState', async () => {
+            safeRegisterCommand('antigravity.checkRuntimeState', async () => {
                 const cdp = resolveCDPStrategy();
                 if (!cdp) {
                     vscode.window.showWarningMessage('Antigravity: CDP strategy is not active.');
@@ -1376,7 +1385,7 @@ export function activate(context: vscode.ExtensionContext) {
                 log.info(`[RuntimeState] status=${status} tabs=${done}/${total} pending=${pending} waitingForChatMessage=${waiting} readyToResume=${completionReady} confidence=${completionConfidence}(${completionConfidenceLabel}) streak=${readyToResumeStreak}/${stablePollsRequired} guard=${guard.allowed ? 'allow' : 'block'} reason=${guard.reason} next=${nextIn}`);
                 vscode.window.showInformationMessage(`Antigravity Runtime: ${status} | tabs ${done}/${total} | pending ${pending} | waiting chat: ${waiting} | ready=${completionReady ? 'yes' : 'no'} (${completionConfidenceLabel}) | streak: ${readyToResumeStreak}/${stablePollsRequired} | guard: ${guard.allowed ? 'allow' : 'block'} | next eligible: ${nextIn}`);
             }),
-            vscode.commands.registerCommand('antigravity.detectCompletionWaitingState', async () => {
+            safeRegisterCommand('antigravity.detectCompletionWaitingState', async () => {
                 const cdp = resolveCDPStrategy();
                 if (!cdp) {
                     vscode.window.showWarningMessage('Antigravity: CDP strategy is not active.');
@@ -1425,7 +1434,7 @@ export function activate(context: vscode.ExtensionContext) {
                 log.info(`[CompletionWaiting] ${summary} | action=${verdict.recommendedAction || 'n/a'}`);
                 vscode.window.showInformationMessage(summary + ' Report copied to clipboard.');
             }),
-            vscode.commands.registerCommand('antigravity.copyRuntimeStateJson', async () => {
+            safeRegisterCommand('antigravity.copyRuntimeStateJson', async () => {
                 const cdp = resolveCDPStrategy();
                 if (!cdp) {
                     vscode.window.showWarningMessage('Antigravity: CDP strategy is not active.');
@@ -1442,7 +1451,7 @@ export function activate(context: vscode.ExtensionContext) {
                 await vscode.env.clipboard.writeText(JSON.stringify(state, null, 2));
                 vscode.window.showInformationMessage('Antigravity runtime state JSON copied to clipboard.');
             }),
-            vscode.commands.registerCommand('antigravity.refreshRuntimeAndReopenStatusMenu', async () => {
+            safeRegisterCommand('antigravity.refreshRuntimeAndReopenStatusMenu', async () => {
                 const now = Date.now();
                 const debounceMs = Math.max(100, Math.min(5000, config.get<number>('runtimeStatusMenuRefreshDebounceMs') || 800));
                 const debugLogsEnabled = !!config.get<boolean>('runtimeStatusMenuRefreshDebugLogs');
@@ -1480,14 +1489,14 @@ export function activate(context: vscode.ExtensionContext) {
                     refreshStatusMenuInFlight = false;
                 }
             }),
-            vscode.commands.registerCommand('antigravity.resetStatusRefreshCounters', async () => {
+            safeRegisterCommand('antigravity.resetStatusRefreshCounters', async () => {
                 refreshStatusMenuDroppedTotal = 0;
                 refreshStatusMenuDroppedInFlight = 0;
                 refreshStatusMenuDroppedDebounce = 0;
                 log.info('[StatusRefresh] Guard drop counters reset.');
                 vscode.window.showInformationMessage('Antigravity: status refresh counters reset.');
             }),
-            vscode.commands.registerCommand('antigravity.copyLastResumePayloadReport', async () => {
+            safeRegisterCommand('antigravity.copyLastResumePayloadReport', async () => {
                 const cdp = resolveCDPStrategy();
                 const state = cdp ? await cdp.getRuntimeState() : latestRuntimeState;
                 if (state) {
@@ -1506,7 +1515,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                 vscode.window.showInformationMessage('Antigravity: last resume payload report copied to clipboard.');
             }),
-            vscode.commands.registerCommand('antigravity.copyEscalationDiagnosticsReport', async () => {
+            safeRegisterCommand('antigravity.copyEscalationDiagnosticsReport', async () => {
                 const cdp = resolveCDPStrategy();
                 const state = cdp ? await cdp.getRuntimeState() : latestRuntimeState;
                 if (state) {
@@ -1525,7 +1534,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                 vscode.window.showInformationMessage('Antigravity: escalation diagnostics report copied to clipboard.');
             }),
-            vscode.commands.registerCommand('antigravity.copyEscalationHealthSummary', async () => {
+            safeRegisterCommand('antigravity.copyEscalationHealthSummary', async () => {
                 await refreshRuntimeState().catch(() => { });
                 const summary = buildEscalationHealthSummaryLine();
                 await vscode.env.clipboard.writeText(summary);
@@ -1538,7 +1547,7 @@ export function activate(context: vscode.ExtensionContext) {
 
                 vscode.window.showInformationMessage('Antigravity: escalation health summary copied to clipboard.');
             }),
-            vscode.commands.registerCommand('antigravity.showEscalationMenu', async () => {
+            safeRegisterCommand('antigravity.showEscalationMenu', async () => {
                 const items = [
                     {
                         label: '$(pulse) Copy Escalation Diagnostics',
@@ -1579,7 +1588,7 @@ export function activate(context: vscode.ExtensionContext) {
                     await vscode.commands.executeCommand(selection.action);
                 }
             }),
-            vscode.commands.registerCommand('antigravity.clearEscalationTimeline', async () => {
+            safeRegisterCommand('antigravity.clearEscalationTimeline', async () => {
                 const requireConfirm = config.get<boolean>('runtimeEscalationClearRequireConfirm');
                 if (requireConfirm) {
                     const choice = await vscode.window.showWarningMessage(
@@ -1596,14 +1605,14 @@ export function activate(context: vscode.ExtensionContext) {
                 await clearEscalationTimelineState('confirmed-command');
                 vscode.window.showInformationMessage('Antigravity: escalation timeline cleared.');
             }),
-            vscode.commands.registerCommand('antigravity.clearEscalationTimelineNow', async () => {
+            safeRegisterCommand('antigravity.clearEscalationTimelineNow', async () => {
                 await clearEscalationTimelineState('no-prompt-command');
                 vscode.window.showInformationMessage('Antigravity: escalation timeline cleared (no prompt).');
             }),
-            vscode.commands.registerCommand('antigravity.resumeFromWaitingState', async () => {
+            safeRegisterCommand('antigravity.resumeFromWaitingState', async () => {
                 await sendAutoResumeMessage('manual', latestRuntimeState);
             }),
-            vscode.commands.registerCommand('antigravity.validateCrossUiCoverage', async () => {
+            safeRegisterCommand('antigravity.validateCrossUiCoverage', async () => {
                 const cdp = resolveCDPStrategy();
                 if (!cdp) {
                     vscode.window.showWarningMessage('Antigravity: CDP strategy is not active.');
@@ -1626,7 +1635,7 @@ export function activate(context: vscode.ExtensionContext) {
                 log.info(`[CrossUI] ${summary}`);
                 vscode.window.showInformationMessage(summary);
             }),
-            vscode.commands.registerCommand('antigravity.runCrossUiSelfTest', async () => {
+            safeRegisterCommand('antigravity.runCrossUiSelfTest', async () => {
                 const cdp = resolveCDPStrategy();
                 if (!cdp) {
                     vscode.window.showWarningMessage('Antigravity: CDP strategy is not active.');
@@ -1719,7 +1728,7 @@ export function activate(context: vscode.ExtensionContext) {
                 log.info(`[CrossUI SelfTest] ${summary}`);
                 vscode.window.showInformationMessage(summary + ' Report copied to clipboard.');
             }),
-            vscode.commands.registerCommand('antigravity.explainAutoResumeGuard', async () => {
+            safeRegisterCommand('antigravity.explainAutoResumeGuard', async () => {
                 const cdp = resolveCDPStrategy();
                 if (!cdp) {
                     vscode.window.showWarningMessage('Antigravity: CDP strategy is not active.');
@@ -1786,7 +1795,7 @@ export function activate(context: vscode.ExtensionContext) {
                 log.info(`[AutoResume Guard] ${summary}`);
                 vscode.window.showInformationMessage(summary + ' Report copied to clipboard.');
             }),
-            vscode.commands.registerCommand('antigravity.autoFixAutoResumeReadiness', async () => {
+            safeRegisterCommand('antigravity.autoFixAutoResumeReadiness', async () => {
                 const report = await runAutoResumeReadinessFix();
                 const serialized = JSON.stringify(report, null, 2);
                 await vscode.env.clipboard.writeText(serialized);
@@ -1804,7 +1813,7 @@ export function activate(context: vscode.ExtensionContext) {
                 const actionHint = report.after?.recommendedNextAction || report.before?.recommendedNextAction || 'See report for details.';
                 vscode.window.showInformationMessage(summary + ` Next: ${actionHint} Report copied to clipboard.`);
             }),
-            vscode.commands.registerCommand('antigravity.testAudio', async () => {
+            safeRegisterCommand('antigravity.testAudio', async () => {
                 const items = SOUND_EFFECTS.map(effect => ({
                     label: `$(symbol-event) Play Sound: ${effect}`,
                     description: `Trigger the "${effect}" sound effect`,
@@ -1819,12 +1828,12 @@ export function activate(context: vscode.ExtensionContext) {
                     SoundEffects.play(selection.effect);
                 }
             }),
-            vscode.commands.registerCommand('antigravity.writeAndSubmitBump', async () => {
+            safeRegisterCommand('antigravity.writeAndSubmitBump', async () => {
                 const message = config.get<string>('actions.bump.text') || config.get<string>('bumpMessage') || 'bump';
                 await sendAutoResumeMessage('manual', null, { messageOverride: message } as any);
                 vscode.window.showInformationMessage(`Antigravity: Bump message "${message}" submitted.`);
             }),
-            vscode.commands.registerCommand('antigravity.clickAccept', async () => {
+            safeRegisterCommand('antigravity.clickAccept', async () => {
                 const cdp = resolveCDPStrategy();
                 if (cdp && await cdp.executeAction('accept')) return;
 
@@ -1841,7 +1850,7 @@ export function activate(context: vscode.ExtensionContext) {
                     try { await vscode.commands.executeCommand(cmd); } catch { }
                 }
             }),
-            vscode.commands.registerCommand('antigravity.clickRun', async () => {
+            safeRegisterCommand('antigravity.clickRun', async () => {
                 const cdp = resolveCDPStrategy();
                 if (cdp && await cdp.executeAction('run')) return;
 
@@ -1854,7 +1863,7 @@ export function activate(context: vscode.ExtensionContext) {
                     try { await vscode.commands.executeCommand(cmd); } catch { }
                 }
             }),
-            vscode.commands.registerCommand('antigravity.clickExpand', async () => {
+            safeRegisterCommand('antigravity.clickExpand', async () => {
                 const cdp = resolveCDPStrategy();
                 if (cdp && await cdp.executeAction('expand')) return;
 
