@@ -1,33 +1,44 @@
-# Agent Instructions
+# Active Agents & Modules
 
-> **MASTER PROTOCOL**: Refer to [docs/LLM_INSTRUCTIONS.md](./docs/LLM_INSTRUCTIONS.md) for the complete protocol. **Read that file first.**
+## 1. The Core Extension (Antigravity)
+- **Role**: The Host / Orchestrator.
+- **Responsibilities**:
+  - Manages the lifecycle of all other strategies.
+  - Hosting the Dashboard UI (`dashboard.ts`).
+  - Managing Configuration (`config.ts`).
+  - Connecting to the CDP Port (`cdp-handler.ts`).
 
-## Universal Rules (All Agents)
+## 2. The CDP Strategist (`cdp-strategy.ts`)
+- **Role**: The Browser Automation Expert.
+- **Capabilities**:
+  - Connects to `localhost:9xxx` to control the VS Code Window.
+  - Injects `auto-continue.ts` into the renderer process.
+  - Polling DOM state for "Accept", "Run", "Chat Input" elements.
+  - Executing "Hybrid Bumps" (typing + clicking submit).
 
-1. **Version Control**: Every build gets a new version number. Sync `package.json`, `src/utils/constants.ts`, and `CHANGELOG.md`.
-2. **Commit Protocol**: `feat: vX.Y.Z - description`. Push after every commit.
-3. **Compilation**: Run `npm run compile` after significant changes.
-4. **CDP Script Safety**: Run `node -c main_scripts/full_cdp_script.js` after edits. No Node.js APIs allowed in browser context.
-5. **Task Tracking**: use `task.md` as the single source of truth. Mark tasks as `[x]` when done.
-6. **Autonomous Ops**: Use `ProjectTracker` service for task discovery in autonomous mode.
+## 3. The Auto-Continue Agent (`auto-continue.ts`)
+- **Role**: The Injected Field Agent.
+- **Location**: Runs *inside* the VS Code renderer process (browser context).
+- **Behavior**:
+  - Extremely fast polling (800ms) for UI elements.
+  - Aggressive clicking of "Run in Terminal" and "Accept" buttons.
+  - "Auto-Reply" functionality to keep the conversation going.
+  - **Self-Preservation**: It detects if it has been disconnected and attempts to re-hook.
 
-## Agent Roles
+## 4. The Voice Module (`modules/voice/`)
+- **Role**: The Auditory Interface.
+- **Status**: *Under Construction / Stubbed*.
+- **Plan**: Implement local whisper integration or browser-based Speech API for seamless voice commands.
 
-### 1. The Director (Autonomous Loop)
-- **Goal**: End-to-end task completion.
-- **Mechanism**: Queries `ProjectTracker` -> Selects Model -> Injects Prompt via CDP.
-- **File**: `src/core/autonomous-loop.ts`
+## 5. The Interaction Registry (`interaction-methods.ts`)
+- **Role**: The Tool Belt.
+- **Function**: A library of atomic actions (click, type, submit) that can be swapped out based on the user's "UiProfile" (VS Code vs Cursor vs Antigravity).
 
-### 2. The Orchestrator (Multi-Agent)
-- **Goal**: Complex task decomposition.
-- **Mechanism**: Breaks tasks into JSON subtasks -> Delegates to specific agents.
-- **File**: `src/core/agent-orchestrator.ts`
+## 6. The Watchdogs
+- **Role**: Reliability Engineers.
+- **Logic**: 
+  - `BlindBumpHandler`: Dumb interval-based keep-alive.
+  - *Planned*: `SmartResumeHandler`: State-aware keep-alive based on DOM text analysis.
 
-### 3. The Coding Agent (Gemini/Claude)
-- **Goal**: Implementation and Refactoring.
-- **Mechanism**: Reads `task.md`, edits files, runs tests.
-
-## Documentation Standards
-- Update `CHANGELOG.md` for every version.
-- Update `DASHBOARD.md` if UI changes.
-- Update `VISION.md` if roadmap changes.
+---
+*Maintained by Antigravity System*

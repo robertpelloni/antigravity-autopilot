@@ -20,15 +20,10 @@ export async function diagnoseCdp() {
     `;
 
     try {
-        // Access the handler through the client (we need to cast or expose it, 
-        // but for now let's assume we can add a method to Client or cast it)
-        // Since we didn't expose diagnose on Client, let's add it or cast.
-        // Actually, let's add it to CDPClient as well to keep it clean.
+        // Use the shared client instance to get the active handler
+        // This ensures diagnostics reflect the actual state used by the automation strategy
+        const handler = cdpClient.getHandler();
 
-        // Wait, I didn't add diagnose to CDPClient in the plan, I added it to CDPHandler.
-        // I need to update CDPClient to expose it.
-
-        const handler = (cdpClient as any).handler;
         if (!handler || typeof handler.diagnose !== 'function') {
             panel.webview.html = `<html><body><h2>Error</h2><p>CDP Client handler not accessible.</p></body></html>`;
             return;

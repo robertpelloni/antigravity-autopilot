@@ -2,7 +2,7 @@
     "name": "antigravity-autopilot",
     "displayName": "Antigravity Autopilot (Unified)",
     "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-    "version": "4.10.94",
+    "version": "4.10.115",
     "repository": {
         "type": "git",
         "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -210,7 +210,8 @@
                         "cdp"
                     ],
                     "default": "cdp",
-                    "description": "Driver Strategy: 'simple' uses VS Code commands (no restart), 'cdp' uses Browser Protocol (robust, multi-tab, requires restart)."
+                    "description": "Driver Strategy: 'simple' uses VS Code commands (no restart), 'cdp' uses Browser Protocol (robust, multi-tab, requires restart).",
+                    "markdownDescription": "**Driver Strategy**: \n- `simple`: Uses standard VS Code commands. Good for basic usage but limited.\n- `cdp`: Uses Chrome DevTools Protocol. **Required for Multi-Tab Orchestration, background automation, and robust selector handling.**"
                 },
                 "antigravity.interactionUiProfile": {
                     "type": "string",
@@ -221,42 +222,54 @@
                         "cursor"
                     ],
                     "default": "auto",
-                    "description": "Select UI targeting profile for element selectors and click method bundle."
+                    "description": "Select UI targeting profile for element selectors and click method bundle.",
+                    "markdownDescription": "**UI Targeting Profile**:\nDefines which set of CSS selectors to use for locating Chat Inputs, Send Buttons, and Run/Accept actions.\n- `auto`: Automatically detects the environment.\n- `vscode`: standard VS Code Chat.\n- `antigravity`: Antigravity Webview.\n- `cursor`: Cursor AI Pane."
                 },
                 "antigravity.autoAcceptEnabled": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Enable basic Auto-Accept of pending edits."
+                    "description": "Deprecated: Enable basic Auto-Accept of pending edits.",
+                    "deprecationMessage": "Use 'antigravity.actions.autoAccept.enabled' instead."
                 },
                 "antigravity.autoAllEnabled": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Enable robust Auto-All (CDP) for edits and terminal commands."
+                    "description": "Deprecated: Enable robust Auto-All (CDP/Multi-Tab) for edits and terminal commands.",
+                    "deprecationMessage": "Use 'antigravity.strategy' and 'antigravity.autoContinueScriptEnabled' instead."
                 },
                 "antigravity.autopilotAutoAcceptEnabled": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Unified control: enable automatic accept/action handling for autopilot."
+                    "description": "Deprecated: Unified control: enable automatic accept/action handling for autopilot.",
+                    "deprecationMessage": "Use 'antigravity.actions.autoAccept.enabled' instead."
                 },
                 "antigravity.autopilotAutoBumpEnabled": {
                     "type": "boolean",
                     "default": true,
-                    "description": "Unified control: enable automatic bump/resume nudges when conversation is idle."
+                    "description": "Deprecated: Unified control: enable automatic bump/resume nudges when conversation is idle.",
+                    "deprecationMessage": "Use 'antigravity.actions.bump.enabled' instead."
                 },
                 "antigravity.autopilotRunExpandContinueEnabled": {
                     "type": "boolean",
                     "default": true,
-                    "description": "Unified control: allow autopilot to click Run/Expand/Continue style actions."
+                    "description": "Deprecated: Unified control: allow autopilot to click Run/Expand/Continue style actions.",
+                    "deprecationMessage": "Use 'antigravity.actions.run.enabled' and 'antigravity.actions.expand.enabled' instead."
                 },
                 "antigravity.multiTabEnabled": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Enable Multi-Tab processing (requires CDP)."
+                    "description": "Enable Multi-Tab processing (requires CDP).",
+                    "markdownDescription": "**Multi-Tab Orchestration**: If enabled, Antigravity will connect to and control **ALL** compatible tabs (pages, iframes, webviews) found on the CDP port, not just the first one. Essential for complex multi-root workspaces."
                 },
                 "antigravity.autonomousEnabled": {
                     "type": "boolean",
                     "default": false,
                     "description": "Enable Autonomous Agent Loop (Yoke)."
+                },
+                "antigravity.continuousMode": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable continuous task execution in Autonomous Mode (proceed to next task automatically)."
                 },
                 "antigravity.mcpEnabled": {
                     "type": "boolean",
@@ -268,10 +281,114 @@
                     "default": false,
                     "description": "Enable Voice Control."
                 },
+                "antigravity.watchdogEnabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable Self-Healing Watchdog.",
+                    "markdownDescription": "**Self-Healing Watchdog**: Monitors the browser automation script. If the script stops sending heartbeats (e.g., due to a crash or page reload), the watchdog will automatically re-inject it."
+                },
+                "antigravity.watchdogTimeoutMs": {
+                    "type": "number",
+                    "default": 15000,
+                    "description": "Watchdog timeout in milliseconds.",
+                    "markdownDescription": "Time in milliseconds to wait for a heartbeat before considering the script 'dead' and triggering re-injection."
+                },
                 "antigravity.autoContinueScriptEnabled": {
                     "type": "boolean",
                     "default": true,
-                    "description": "Enable automatic clicking of 'Continue' buttons in Copilot Chat (CDP only)."
+                    "description": "Master Switch: Enable the injected automation script.",
+                    "markdownDescription": "**Master Switch**: Specific to the Browser/CDP automation. If disabled, **NO** automation scripts will be injected into the browser. This overrides all other `automation.*` settings."
+                },
+                "antigravity.automation.actions.clickRun": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically click 'Run in Terminal' icons.",
+                    "markdownDescription": "**Auto-Run**:\nAutomatically clicks 'Run in Terminal' icons (play buttons) in code blocks. \n\n*Useful for quickly executing suggested commands.*"
+                },
+                "antigravity.automation.actions.clickExpand": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically click 'Expand' twisties.",
+                    "markdownDescription": "**Auto-Expand**:\nAutomatically clicks 'Expand' twisties and file references to show hidden context or code blocks."
+                },
+                "antigravity.automation.actions.clickAccept": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically click 'Accept' buttons.",
+                    "markdownDescription": "**Auto-Accept**:\nAutomatically clicks 'Accept', 'Apply', or 'Insert' buttons for inline code suggestions."
+                },
+                "antigravity.automation.actions.clickContinue": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically click 'Continue' generation buttons.",
+                    "markdownDescription": "**Auto-Continue**:\nAutomatically clicks 'Continue' (generation) and 'Keep' (pre-computation) buttons to keep the agent moving."
+                },
+                "antigravity.automation.actions.clickSubmit": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Auto-click 'Submit/Send' buttons.",
+                    "markdownDescription": "**Auto-Submit**:\nAutomatically clicks 'Send' or 'Submit' buttons if text has been entered into the chat input.\n\n*Ensures your prompts are actually sent.*"
+                },
+                "antigravity.automation.actions.clickFeedback": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Automatically click positive feedback buttons.",
+                    "markdownDescription": "**Auto-Feedback**: Automatically clicks positive feedback buttons (Thumbs Up) to reinforce successful steps. (Default: false)"
+                },
+                "antigravity.automation.timing.pollIntervalMs": {
+                    "type": "number",
+                    "default": 800,
+                    "description": "How often (in milliseconds) the automation script scans the DOM for interactable elements. Lower values are more responsive but use more CPU."
+                },
+                "antigravity.automation.timing.actionThrottleMs": {
+                    "type": "number",
+                    "default": 1000,
+                    "description": "Minimum time (in milliseconds) between consecutive automated clicks to prevents rapid-fire misclicks."
+                },
+                "antigravity.automation.timing.cooldownMs": {
+                    "type": "number",
+                    "default": 2500,
+                    "description": "Global cooldown (in milliseconds) applied after certain heavy actions to allow the UI to settle."
+                },
+                "antigravity.automation.timing.randomness": {
+                    "type": "number",
+                    "default": 100,
+                    "description": "Random jitter (in milliseconds) added to actions to simulate human-like variability. Set to 0 for machine precision."
+                },
+                "antigravity.automation.debug.highlightClicks": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Visually flash a red border on elements when they are automatically clicked. Useful for verifying what the script is doing."
+                },
+                "antigravity.automation.debug.verboseLogging": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Enable detailed console logs in the browser DevTools for the automation script."
+                },
+                "antigravity.automation.actions.autoScroll": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically scroll the chat view to the bottom to keep the latest content visible."
+                },
+                "antigravity.automation.actions.clickAcceptAll": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically click 'Accept All' buttons if present (e.g. for batch edits)."
+                },
+                "antigravity.automation.actions.autoReply": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically type and send a reply (e.g. 'continue') if the chat is idle. Useful for keeping the agent working."
+                },
+                "antigravity.automation.actions.autoReplyText": {
+                    "type": "string",
+                    "default": "continue",
+                    "description": "The text to type when auto-replying (e.g. 'continue', 'next', 'review')."
+                },
+                "antigravity.automation.timing.autoReplyDelayMs": {
+                    "type": "number",
+                    "default": 7000,
+                    "description": "Time (in milliseconds) to wait before triggering an auto-reply if no other actions occur."
                 },
                 "antigravity.autoSwitchModels": {
                     "type": "boolean",
@@ -331,6 +448,32 @@
                         "del /f /s /q"
                     ],
                     "description": "Commands to hard-block from execution."
+                },
+                "antigravity.automation.timing": {
+                    "type": "object",
+                    "default": {
+                        "actionThrottleMs": 100,
+                        "cooldownMs": 3000,
+                        "pollIntervalMs": 800
+                    },
+                    "properties": {
+                        "actionThrottleMs": {
+                            "type": "number",
+                            "default": 100,
+                            "description": "Delay (ms) between click actions to prevent flooding."
+                        },
+                        "cooldownMs": {
+                            "type": "number",
+                            "default": 3000,
+                            "description": "Cooldown (ms) after a successful auto-bump before retrying."
+                        },
+                        "pollIntervalMs": {
+                            "type": "number",
+                            "default": 800,
+                            "description": "Interval (ms) for the automation loop (overrides pollFrequency)."
+                        }
+                    },
+                    "description": "Granular timing controls for automation actions."
                 },
                 "antigravity.loopInterval": {
                     "type": "number",
@@ -754,6 +897,12 @@
                         ".monaco-button"
                     ],
                     "description": "CSS selector list used for Cursor UI element discovery."
+                },
+                "antigravity.experimental.cdpExplicitDiscovery": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "If true, explicitly queries for existing webviews/iframes and attaches to them on startup. Disable if experiencing blank screen issues.",
+                    "scope": "window"
                 },
                 "antigravity.experimental.cdpAggressiveDiscovery": {
                     "type": "boolean",

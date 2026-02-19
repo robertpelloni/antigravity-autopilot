@@ -50,8 +50,9 @@ export class CDPStrategy implements IStrategy {
     }
 
     private shouldRunBlindBump(): boolean {
-        const bumpMessage = (config.get<string>('bumpMessage') || '').trim();
-        return this.isUnifiedAutoBumpEnabled() && this.isUnifiedAutoAcceptEnabled() && bumpMessage.length > 0;
+        const cfg = config.getAll();
+        const bumpText = (cfg.actions.bump.text || '').trim();
+        return cfg.actions.bump.enabled && this.isUnifiedAutoAcceptEnabled() && bumpText.length > 0;
     }
 
     private syncBlindBumpHandlerState(): void {
@@ -71,7 +72,10 @@ export class CDPStrategy implements IStrategy {
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
         this.appName = vscode.env.appName || 'Visual Studio Code';
-        this.cdpHandler = new CDPHandler();
+        // Use the singleton client handler to ensure state is shared with commands
+        const { cdpClient } = require('../providers/cdp-client');
+        this.cdpHandler = cdpClient.getHandler();
+
         this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 9999);
         this.statusBarItem.command = 'antigravity.toggleAutoAccept';
 
@@ -92,7 +96,9 @@ export class CDPStrategy implements IStrategy {
         this.updateStatusBar();
 
         // Connect to CDP
-        const connected = await this.cdpHandler.connect();
+        const workspaceName = vscode.workspace.name;
+        // console.log(`[CDPStrategy] Connecting with filter: "${workspaceName}"`);
+        const connected = await this.cdpHandler.connect(workspaceName);
         if (!connected) {
             vscode.window.showWarningMessage('Antigravity: CDP connection failed. Retrying in background...');
         }
@@ -108,7 +114,7 @@ export class CDPStrategy implements IStrategy {
 
             // Reconnect if disconnected
             if (!this.cdpHandler.isConnected()) {
-                await this.cdpHandler.connect();
+                await this.cdpHandler.connect(workspaceName);
             }
 
             // Execute configured click interactions (auto-accept buttons)
@@ -311,9 +317,22 @@ export class CDPStrategy implements IStrategy {
      */
     async getRuntimeState(): Promise<CDPRuntimeState | null> {
         const state = await this.cdpHandler.getAutomationRuntimeState();
+        const tracked = this.cdpHandler.getTrackedSessions();
+
         if (!state || typeof state !== 'object') {
+            // Even if no script state, return structure if we have connections
+            if (tracked.length > 0) {
+                return {
+                    status: 'connected',
+                    timestamp: Date.now(),
+                    trackedSessions: tracked
+                } as any;
+            }
             return null;
         }
+
+        // Merge tracked sessions into state
+        (state as any).trackedSessions = tracked;
         return state as CDPRuntimeState;
     }
 

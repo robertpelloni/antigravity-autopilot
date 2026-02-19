@@ -13,6 +13,7 @@ export class CDPHandler extends EventEmitter {
     private messageId: number;
     private pendingMessages: Map<number, { resolve: Function, reject: Function }>;
     private timeoutMs: number;
+    private watchdogInterval: NodeJS.Timeout | null = null;
 
     constructor(startPort = 9000, endPort = 9030) {
         super();
@@ -22,6 +23,7 @@ export class CDPHandler extends EventEmitter {
         this.messageId = 1;
         this.pendingMessages = new Map();
         this.timeoutMs = config.get<number>('cdpTimeout') || 10000;
+        this.startWatchdogLoop();
     }
 
     async scanForInstances(): Promise<{ port: number, pages: any[] }[]> {
@@ -107,7 +109,14 @@ export class CDPHandler extends EventEmitter {
         return new Promise((resolve) => {
             const ws = new WebSocket(page.webSocketDebuggerUrl);
             ws.on('open', async () => {
-                this.connections.set(page.id, { ws, injected: false, sessions: new Set() });
+                this.connections.set(page.id, {
+                    ws,
+                    injected: false,
+                    sessions: new Set(),
+                    url: page.url,
+                    title: page.title,
+                    type: page.type
+                });
 
                 try {
                     // 1. Enable Runtime on Main Page
@@ -116,27 +125,68 @@ export class CDPHandler extends EventEmitter {
 
                     // 1b. Inject Auto-Continue Script (if enabled)
                     if (config.get<boolean>('autoContinueScriptEnabled') !== false) {
+                        const automationConfig = {
+                            clickRun: config.get<boolean>('automation.actions.clickRun') ?? true,
+                            clickExpand: config.get<boolean>('automation.actions.clickExpand') ?? true,
+                            clickAccept: config.get<boolean>('automation.actions.clickAccept') ?? true,
+                            clickAcceptAll: config.get<boolean>('automation.actions.clickAcceptAll') ?? true,
+                            clickContinue: config.get<boolean>('automation.actions.clickContinue') ?? true,
+                            clickSubmit: config.get<boolean>('automation.actions.clickSubmit') ?? true,
+                            clickFeedback: config.get<boolean>('automation.actions.clickFeedback') ?? false,
+                            autoScroll: config.get<boolean>('automation.actions.autoScroll') ?? true,
+                            // Auto-Reply
+                            autoReply: config.get<boolean>('automation.actions.autoReply') ?? false,
+                            autoReplyText: config.get<string>('automation.actions.autoReplyText') ?? 'continue',
+                            debug: {
+                                highlightClicks: config.get<boolean>('automation.debug.highlightClicks') ?? false,
+                                verboseLogging: config.get<boolean>('automation.debug.verboseLogging') ?? false
+                            },
+                            timing: {
+                                pollIntervalMs: config.get<number>('automation.timing.pollIntervalMs') ?? 1500,
+                                actionThrottleMs: config.get<number>('automation.timing.actionThrottleMs') ?? 1000,
+                                cooldownMs: config.get<number>('automation.timing.cooldownMs') ?? 2500,
+                                randomness: config.get<number>('automation.timing.randomness') ?? 100,
+                                autoReplyDelayMs: config.get<number>('automation.timing.autoReplyDelayMs') ?? 10000
+                            }
+                        };
+
                         try {
+                            // Inject config first
                             await this.sendCommand(page.id, 'Runtime.evaluate', {
-                                expression: AUTO_CONTINUE_SCRIPT,
-                                userGesture: true,
+                                expression: `window.__antigravityConfig = ${JSON.stringify(automationConfig)};`,
                                 awaitPromise: false
                             });
-                            console.log(`[CDP] Injected Auto-Continue Script into ${page.id}`);
+
+                            // Inject script
+                            await this.sendCommand(page.id, 'Runtime.evaluate', {
+                                expression: AUTO_CONTINUE_SCRIPT,
+                                awaitPromise: false
+                            });
+                            console.log(`[CDP] Injected Auto-Continue Script into ${page.id} with config`, automationConfig);
                         } catch (e) {
                             console.error(`[CDP] Failed to inject Auto-Continue Script into ${page.id}`, e);
                         }
                     }
 
-                    // 3. Explicit Target Discovery (Belt & Suspenders) - ALWAYS ENABLED (Safe)
-                    const { targetInfos } = await this.sendCommand(page.id, 'Target.getTargets');
-                    if (targetInfos) {
-                        for (const info of targetInfos) {
-                            if (['webview', 'iframe'].includes(info.type)) {
-                                console.log(`[CDP] Explicitly attaching to existing target: ${info.type} ${info.url}`);
-                                this.sendCommand(page.id, 'Target.attachToTarget', { targetId: info.targetId, flatten: true })
-                                    .catch(e => console.error(`[CDP] Failed to attach to ${info.targetId}:`, e));
+                    // 3. Explicit Target Discovery (Belt & Suspenders) - CONFIG GATED (Default: True)
+                    const explicitDiscovery = config.get<boolean>('experimental.cdpExplicitDiscovery') ?? true;
+                    if (explicitDiscovery) {
+                        try {
+                            const { targetInfos } = await this.sendCommand(page.id, 'Target.getTargets');
+                            if (targetInfos) {
+                                for (const info of targetInfos) {
+                                    if (['webview', 'iframe'].includes(info.type)) {
+                                        console.log(`[CDP] Explicitly attaching to existing target: ${info.type} ${info.url}`);
+                                        // Wait briefly for webview stabilization (prevent blank screen race)
+                                        await new Promise(r => setTimeout(r, 500));
+
+                                        this.sendCommand(page.id, 'Target.attachToTarget', { targetId: info.targetId, flatten: true })
+                                            .catch(e => console.error(`[CDP] Failed to attach to ${info.targetId}:`, e));
+                                    }
+                                }
                             }
+                        } catch (e) {
+                            console.error('[CDP] Explicit discovery failed', e);
                         }
                     }
 
@@ -286,20 +336,43 @@ export class CDPHandler extends EventEmitter {
         return this.connections.size > 0;
     }
 
-    async connect(): Promise<boolean> {
+    async connect(targetFilter?: string): Promise<boolean> {
         const instances = await this.scanForInstances();
         let connectedCount = 0;
+        const multiTabEnabled = config.get<boolean>('multiTabEnabled') ?? false;
+
+        console.log(`[CDP] Connect requested. Filter: "${targetFilter || 'NONE'}"`);
 
         for (const instance of instances) {
             for (const page of instance.pages) {
                 if (this.connections.has(page.id)) {
                     connectedCount++;
+                    if (!multiTabEnabled) return true;
                     continue;
+                }
+
+                // Smart Target Filtering
+                if (targetFilter) {
+                    const title = (page.title || '').toLowerCase();
+                    const filter = targetFilter.toLowerCase();
+                    // Match if title includes filter 
+                    // OR if it's a shared resource we might want? No, strict is better for now.
+                    if (!title.includes(filter)) {
+                        // console.log(`[CDP] Skipping target "${page.title}" (Mismatch filter "${filter}")`);
+                        continue;
+                    }
+                }
+
+                // If not multi-tab and we already have a connection, skip/return
+                // Note: We return true if we have at least one connection.
+                if (!multiTabEnabled && this.connections.size > 0) {
+                    return true;
                 }
 
                 const ok = await this.connectToPage(page);
                 if (ok) {
                     connectedCount++;
+                    if (!multiTabEnabled) return true;
                 }
             }
         }
@@ -505,6 +578,19 @@ export class CDPHandler extends EventEmitter {
         return Array.from(this.connections.keys());
     }
 
+    getTrackedSessions(): { id: string, url: string, title: string, type: string }[] {
+        const sessions: { id: string, url: string, title: string, type: string }[] = [];
+        for (const [id, conn] of this.connections) {
+            sessions.push({
+                id,
+                url: conn.url || 'Unknown URL',
+                title: conn.title || 'Untitled',
+                type: conn.type || 'page'
+            });
+        }
+        return sessions;
+    }
+
     /**
      * Retrieves automation runtime state from injected Auto-All script.
      * Returns the first non-null state snapshot discovered across sessions.
@@ -552,6 +638,57 @@ export class CDPHandler extends EventEmitter {
         const results = await this.executeInAllSessions(expression, true);
         if (!Array.isArray(results)) return false;
         return results.some(r => r === true);
+    }
+    // --- Watchdog ---
+    startWatchdogLoop() {
+        if (this.watchdogInterval) clearInterval(this.watchdogInterval);
+
+        this.watchdogInterval = setInterval(async () => {
+            const enabled = config.get<boolean>('watchdogEnabled') ?? true;
+            if (!enabled) return;
+
+            const timeoutMs = config.get<number>('watchdogTimeoutMs') || 15000;
+            const now = Date.now();
+
+            for (const [pageId, conn] of this.connections) {
+                try {
+                    // Check heartbeat
+                    const result = await this.sendCommand(pageId, 'Runtime.evaluate', {
+                        expression: 'window.__antigravityHeartbeat',
+                        returnByValue: true,
+                        awaitPromise: false
+                    }, 2000);
+
+                    const lastHeartbeat = result?.result?.value;
+
+                    if (typeof lastHeartbeat === 'number') {
+                        const diff = now - lastHeartbeat;
+                        if (diff > timeoutMs) {
+                            console.log(`[Watchdog] Script dead on ${pageId} (Last heartbeat: ${diff}ms ago). Re-injecting...`);
+                            // Force re-injection
+                            await this.injectScript(pageId, require('fs').readFileSync(require('path').join(__dirname, '../../../main_scripts/full_cdp_script.js'), 'utf8'), true);
+                        }
+                    } else {
+                        // No heartbeat found (maybe page reloaded?)
+                        // If we tracked injection, we could be smarter. For now, assume if connection is open but no heartbeat var, we need to inject.
+                        // But we don't want to spam inject on pages that don't need it or are loading.
+                        // Check readyState first?
+                        const readyState = await this.sendCommand(pageId, 'Runtime.evaluate', { expression: 'document.readyState', returnByValue: true });
+                        if (readyState?.result?.value === 'complete') {
+                            console.log(`[Watchdog] No heartbeat on ready page ${pageId}. Injecting...`);
+                            await this.injectScript(pageId, require('fs').readFileSync(require('path').join(__dirname, '../../../main_scripts/full_cdp_script.js'), 'utf8'), true);
+                        }
+                    }
+                } catch (e) {
+                    // Connection might be dead, handled by 'close' event
+                }
+            }
+
+        }, 5000); // Check every 5s
+    }
+
+    stopWatchdogLoop() {
+        if (this.watchdogInterval) clearInterval(this.watchdogInterval);
     }
 }
 

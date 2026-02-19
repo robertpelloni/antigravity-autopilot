@@ -41,10 +41,12 @@ export interface AntigravityConfig {
 
     multiTabEnabled: boolean;
     autonomousEnabled: boolean;
+    continuousMode: boolean;
     mcpEnabled: boolean;
     voiceControlEnabled: boolean;
     autoSwitchModels: boolean;
     autoGitCommit: boolean;
+    autoContinueScriptEnabled: boolean;
     pollFrequency: number;
     bannedCommands: string[];
     loopInterval: number;
@@ -82,6 +84,10 @@ export interface AntigravityConfig {
     runtimeAutoResumeMinScore: number;
     runtimeAutoResumeRequireStrictPrimary: boolean;
 
+    // Watchdog Settings
+    watchdogEnabled: boolean;
+    watchdogTimeoutMs: number;
+
     // CDP Settings
     cdpPort: number;
     cdpTimeout: number;
@@ -110,6 +116,11 @@ export interface AntigravityConfig {
     interactionClickSelectorsVSCode: string[];
     interactionClickSelectorsAntigravity: string[];
     interactionClickSelectorsCursor: string[];
+    // Experimental
+    experimental: {
+        cdpAggressiveDiscovery: boolean;
+        cdpExplicitDiscovery: boolean;
+    };
 }
 
 export class ConfigManager {
@@ -149,6 +160,7 @@ export class ConfigManager {
         return {
             strategy: config.get('strategy', 'cdp'),
             interactionUiProfile: config.get('interactionUiProfile', 'auto'),
+            continuousMode: config.get('continuousMode', true),
 
             // New Actions Logic
             actions: {
@@ -190,6 +202,7 @@ export class ConfigManager {
             voiceControlEnabled: config.get('voiceControlEnabled', false),
             autoSwitchModels: config.get('autoSwitchModels', true),
             autoGitCommit: config.get('autoGitCommit', false),
+            autoContinueScriptEnabled: config.get('autoContinueScriptEnabled', true),
             pollFrequency: config.get('pollFrequency', 1000),
             bannedCommands: config.get('bannedCommands', []),
             loopInterval: config.get('loopInterval', 30),
@@ -225,6 +238,11 @@ export class ConfigManager {
             runtimeStatusMenuRefreshDebugLogs: config.get('runtimeStatusMenuRefreshDebugLogs', false),
             runtimeAutoResumeMinScore: config.get('runtimeAutoResumeMinScore', 70),
             runtimeAutoResumeRequireStrictPrimary: config.get('runtimeAutoResumeRequireStrictPrimary', true),
+
+            // Watchdog Settings
+            watchdogEnabled: config.get('watchdogEnabled', true),
+            watchdogTimeoutMs: config.get('watchdogTimeoutMs', 15000),
+
             cdpPort: config.get('cdpPort', 9000),
             cdpTimeout: config.get('cdpTimeout', 10000),
             preferredModelForReasoning: config.get('preferredModelForReasoning', 'claude-opus-4.5-thinking'),
@@ -267,7 +285,11 @@ export class ConfigManager {
                 '#workbench\\.parts\\.auxiliarybar [role="button"]',
                 '.chat-session-item [role="button"]',
                 '.monaco-button'
-            ])
+            ]),
+            experimental: {
+                cdpAggressiveDiscovery: config.get('experimental.cdpAggressiveDiscovery', false),
+                cdpExplicitDiscovery: config.get('experimental.cdpExplicitDiscovery', true)
+            }
         };
     }
 }

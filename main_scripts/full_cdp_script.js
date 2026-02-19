@@ -322,7 +322,16 @@
                 'button',
                 '[role="button"]',
                 '.monaco-button',
-                '[class*="button"]'
+                '[class*="button"]',
+                '.codicon-play',
+                '.codicon-debug-start',
+                '.codicon-run',
+                '[aria-label*="Run"]',
+                '[title*="Run"]',
+                '[aria-label*="Accept"]',
+                '[title*="Accept"]',
+                '[aria-label*="Allow"]',
+                '[title*="Allow"]'
             ],
             sendButtons: [
                 'button[aria-label*="Send"]',
@@ -336,9 +345,14 @@
                 'textarea[aria-label*="Chat"]',
                 'textarea[placeholder*="message" i]',
                 'textarea[placeholder*="chat" i]',
-                'textarea',
-                '[contenteditable="true"][role="textbox"]',
-                '[contenteditable="true"]'
+                'textarea[placeholder*="Ask" i]',
+                '[contenteditable="true"][role="textbox"]'
+            ],
+            feedback: [
+                '.codicon-thumbsup',
+                'button[title*="Helpful"]',
+                'button[aria-label*="Helpful"]',
+                '.vote-up'
             ]
         },
         antigravity: {
@@ -419,11 +433,35 @@
         return mergeSelectorSets(mode, 'textInputs');
     }
 
+    function getUnifiedFeedbackSelectors(mode = getCurrentMode()) {
+        return mergeSelectorSets(mode, 'feedback');
+    }
+
+    function isValidInteractionTarget(el) {
+        if (!el) return false;
+
+        // EXCLUSION: Never interact with Command Palette / Quick Pick
+        if (el.closest('.quick-input-widget') ||
+            el.closest('.monaco-quick-input-container') ||
+            el.closest('.suggest-widget') ||
+            el.closest('.rename-box')) {
+            // log(`[Safety] Ignoring element in Quick Input/Suggest widget: ${el.tagName}`);
+            return false;
+        }
+
+        // EXCLUSION: Never interact with Settings editor inputs (too dangerous)
+        if (el.closest('.settings-editor')) {
+            return false;
+        }
+
+        return true;
+    }
+
     function findVisibleElementBySelectors(selectors) {
         for (const selector of selectors) {
             const nodes = queryAll(selector);
             for (const node of nodes) {
-                if (isElementVisible(node) && !node.disabled) {
+                if (isElementVisible(node) && !node.disabled && isValidInteractionTarget(node)) {
                     return node;
                 }
             }
@@ -688,7 +726,9 @@
         // Also fire standard click for immediate UI feedback (hover states etc)
         try { el.click(); } catch (e) { }
 
-        await workerDelay(100);
+        const timing = window.__antigravityConfig?.timing || {};
+        const throttle = timing.actionThrottleMs || 100;
+        await workerDelay(throttle);
         return true;
     }
 
@@ -1086,7 +1126,16 @@
     }
 
     function isAcceptButton(el) {
-        const text = (el.textContent || "").trim().toLowerCase();
+        let text = (el.textContent || "").trim().toLowerCase();
+
+        // Fallback: If text is empty, check aria-label or title (common for icon-only buttons like "Run")
+        if (text.length === 0) {
+            text = (el.getAttribute('aria-label') || "").trim().toLowerCase();
+        }
+        if (text.length === 0) {
+            text = (el.getAttribute('title') || "").trim().toLowerCase();
+        }
+
         if (text.length === 0 || text.length > 50) return false;
 
         // Use configured patterns from state if available, otherwise use defaults
@@ -1250,13 +1299,34 @@
         }
 
         // 2. Explicit "Show" / "Expand" buttons
-        const explicitButtons = queryAll('button, [role="button"], .clickable');
+        const explicitButtons = queryAll('button, [role="button"], .clickable, .codicon-bell, .codicon-chevron-right, .codicon-chevron-down');
         for (const el of explicitButtons) {
             if (!isElementVisible(el)) continue;
+
+            // EXCLUSION: Skip known non-interactive zones (already handled by isValidInteractionTarget but good to be safe)
+            if (!isValidInteractionTarget(el)) continue;
+
             const text = (el.textContent || '').trim().toLowerCase();
             const label = (el.getAttribute('aria-label') || '').toLowerCase();
+            const title = (el.getAttribute('title') || '').toLowerCase();
+            const className = (el.className || '').toLowerCase();
 
-            if ((text === 'show' || text === 'expand' || label.includes('show') || label.includes('expand')) &&
+            // Gold Standard: "1 Step Requires Input" / "Expand <"
+            if (text.includes('requires input') ||
+                text.includes('step') && text.includes('input') ||
+                text.includes('expand') ||
+                label.includes('expand') ||
+                title.includes('expand') ||
+                className.includes('codicon-bell')) { // The bell icon usually indicates "Requires Input"
+
+                // Safety: Don't click file explorer expansion
+                if (!text.includes('explorer') && !label.includes('explorer')) {
+                    expandTargets.push(el);
+                    continue;
+                }
+            }
+
+            if ((text === 'show' || label.includes('show')) &&
                 !text.includes('explorer') && !label.includes('explorer')) {
                 expandTargets.push(el);
             }
@@ -1282,23 +1352,44 @@
 
     // --- Auto-Bump Logic ---
 
+
     function isConversationIdle() {
-        const badges = queryAll('span, button, [role="button"], [class*="badge"], [class*="feedback"], [data-testid*="feedback"]');
-        const feedbackTextPattern = /^(good|bad|helpful|not helpful)$/i;
-        const feedbackLabelPattern = /(good|bad|helpful|not helpful|thumbs up|thumbs down|positive feedback|negative feedback)/i;
+        // Gold Standard Idle Detection:
+        // 1. Explicit Good/Bad/Feedback buttons are a clear "Done" signal
+        const badges = queryAll('button, [role="button"], span, div, [class*="feedback"], [class*="rating"]');
+        const feedbackTextPattern = /^(good|bad|helpful|not helpful|thumbs up|thumbs down)$/i;
+        const feedbackLabelPattern = /(good|bad|helpful|not helpful|thumbs up|thumbs down|positive feedback|negative feedback|rate response)/i;
 
         for (const b of badges) {
+            // Must be visible
+            if (!isElementVisible(b)) continue;
+
             const text = (b.textContent || '').trim().replace(/\s+/g, ' ');
             const label = `${b.getAttribute('aria-label') || ''} ${b.getAttribute('title') || ''}`.trim();
-            if ((feedbackTextPattern.test(text) || feedbackLabelPattern.test(label)) && isElementVisible(b)) {
+            const className = (b.className || '').toLowerCase();
+
+            // Check patterns
+            if (feedbackTextPattern.test(text) || feedbackLabelPattern.test(label) ||
+                (className.includes('thumbs') && (className.includes('up') || className.includes('down')))) {
                 return true;
             }
         }
 
-        const thumbIcons = queryAll('.codicon-thumbsup, .codicon-thumbsdown, [aria-label*="thumb"], [aria-label*="feedback"], [title*="thumb"], [title*="feedback"]');
+        // 2. Specific Codicons for ratings
+        const thumbIcons = queryAll('.codicon-thumbsup, .codicon-thumbsdown, .codicon-star, [class*="codicon-feedback"]');
         for (const icon of thumbIcons) {
             if (isElementVisible(icon)) return true;
         }
+
+        // 3. Check for specific "Regenerate" button which implies done
+        const regenerateBtns = queryAll('[aria-label*="Regenerate"], [title*="Regenerate"], button:contains("Regenerate")');
+        for (const btn of regenerateBtns) {
+            if (isElementVisible(btn)) return true;
+        }
+
+        // 4. Check for input field visibility (if input is ready, it's likely idle)
+        // But input might be visible while generating? Usually disabled.
+        // We will rely on feedback buttons as primary strong signal.
 
         return false;
     }
@@ -1306,36 +1397,53 @@
     async function sendMessage(text) {
         if (!text) return false;
         if (window.showAutoAllToast) {
-            window.showAutoAllToast(`Bump: "${text}"`, 2000, 'rgba(0,100,200,0.8)');
+            window.showAutoAllToast(`Auto-Reply: "${text}"`, 2000, 'rgba(0,100,200,0.8)');
         }
         const mode = getCurrentMode();
         log(`[Chat] Sending message (mode=${mode}): "${text}"`);
 
+        // GOLD STANDARD: Try EVERY method sequentially until one works
         const profileOrder = [mode, 'vscode', 'antigravity', 'cursor'].filter((v, i, arr) => arr.indexOf(v) === i);
 
         for (const profile of profileOrder) {
             try {
+                // Method A: DOM Input + Click Send
                 const inputEl = findVisibleElementBySelectors(getUnifiedTextInputSelectors(profile));
-                if (inputEl && setInputValue(inputEl, text)) {
-                    const sendEl = findVisibleElementBySelectors(getUnifiedSendButtonSelectors(profile));
-                    if (sendEl) {
-                        await remoteClick(sendEl);
-                        log(`[Chat] Message sent via visible send button (profile=${profile})`);
-                        return true;
-                    }
+                if (inputEl) {
+                    log(`[Chat] Found input element (${profile})`);
+                    if (setInputValue(inputEl, text)) {
+                        await workerDelay(100); // Wait for UI debounce
 
-                    await submitWithKeys();
-                    log(`[Chat] Message submitted via keyboard fallback (profile=${profile})`);
-                    return true;
+                        // Try finding send button
+                        const sendEl = findVisibleElementBySelectors(getUnifiedSendButtonSelectors(profile));
+                        if (sendEl) {
+                            log(`[Chat] Found send button, clicking...`);
+                            await remoteClick(sendEl);
+                            await workerDelay(500); // Wait for reaction
+                            return true;
+                        } else {
+                            log(`[Chat] Send button not found, trying Enter key...`);
+                        }
+
+                        // Method B: Keyboard Submit (Enter)
+                        const success = await submitWithKeys();
+                        if (success) {
+                            log(`[Chat] Message submitted via keyboard`);
+                            return true;
+                        }
+                    }
                 }
             } catch (e) {
-                log(`[Chat] DOM send strategy failed for profile=${profile}: ${e.message}`);
+                log(`[Chat] DOM strategy failed for profile=${profile}: ${e.message}`);
             }
         }
 
-        log('[Chat] Falling back to hybrid bump bridge strategy');
+        // Method C: CDP Bridge (Ultimate Fallback)
+        log('[Chat] Falling back to hybrid CDP bridge strategy');
         console.log('__ANTIGRAVITY_HYBRID_BUMP__:' + text);
-        return true;
+        // Also try legacy type command just in case
+        console.log('__ANTIGRAVITY_TYPE__:' + text);
+        return true; // We assume bridge handles it
     }
 
     let lastBumpTime = 0;
@@ -1369,15 +1477,25 @@
         await expandCollapsedSections();
 
         let found = [];
-        selectors.forEach(s => queryAll(s).forEach(el => found.push(el)));
+        selectors.forEach(s => queryAll(s).forEach(el => {
+            if (isValidInteractionTarget(el)) found.push(el);
+        }));
 
         if (found.length === 0) {
             const fallbackSelectors = [
                 ...getUnifiedClickSelectors('vscode'),
                 ...getUnifiedClickSelectors('antigravity'),
-                ...getUnifiedClickSelectors('cursor')
+                ...getUnifiedClickSelectors('cursor'),
+                // User Requested "Gold Standard" coverage:
+                '[aria-label*="Allow"]', '[title*="Allow"]', 'button:contains("Allow")',
+                '[aria-label*="Accept All"]', '[title*="Accept All"]', 'button:contains("Accept All")',
+                '[aria-label*="Yes"]', '[title*="Yes"]',
+                '.monaco-button:contains("Allow")',
+                '.monaco-button:contains("Accept")'
             ];
-            [...new Set(fallbackSelectors)].forEach(s => queryAll(s).forEach(el => found.push(el)));
+            [...new Set(fallbackSelectors)].forEach(s => queryAll(s).forEach(el => {
+                if (isValidInteractionTarget(el)) found.push(el);
+            }));
         }
 
         // If nothing found, try expanding ONE MORE TIME aggressively, then search again
@@ -1392,7 +1510,9 @@
                         ...getUnifiedClickSelectors('antigravity'),
                         ...getUnifiedClickSelectors('cursor')
                     ];
-                    [...new Set(fallbackSelectors)].forEach(s => queryAll(s).forEach(el => found.push(el)));
+                    [...new Set(fallbackSelectors)].forEach(s => queryAll(s).forEach(el => {
+                        if (isValidInteractionTarget(el)) found.push(el);
+                    }));
                 }
             }
         }
@@ -1499,6 +1619,12 @@
 
                 if (state.clickHistory.signature === sig) {
                     state.clickHistory.count++;
+
+                    if (state.clickHistory.count === 2) {
+                        log(`[StuckGuard] Button stubborn (2nd attempt). Trying Keypress Fallback...`);
+                        triggerKeypressFallback(el);
+                    }
+
                     if (state.clickHistory.count > 3) {
                         log(`[StuckGuard] Ignoring stuck button: "${buttonText}" (clicked ${state.clickHistory.count} times)`);
                         continue; // SKIP THIS CLICK
@@ -1537,13 +1663,39 @@
             lastClickTime = Date.now();
         }
         return verified; // We return verified count. But caller checks 'clicked > 0' usually?
-        // Wait, caller uses `clicked` from `performClick` return? 
-        // No, caller logic is: `const clicked = await performClick(...)`. 
-        // `performClick` returns `verified` count.
         // So if we SKIP via stuck guard, `verified` will be 0.
         // And caller sees 0.
         // And `autoBump` triggers.
         // PERFECT.
+    }
+
+    function updateProfileCoverage() {
+        const state = window.__autoAllState;
+        if (!state) return;
+
+        const evaluateProfile = (profileName) => {
+            const selectors = UI_SELECTORS[profileName];
+            if (!selectors) return null;
+
+            const hasVisibleInput = selectors.textInputs.some(s => queryAll(s).some(isElementVisible));
+            const hasVisibleSendButton = selectors.sendButtons.some(s => queryAll(s).some(isElementVisible));
+
+            // For pending accept buttons, we use the unified selectors for that profile
+            // This is a rough heuristic
+            const clickSelectors = selectors.click || [];
+            const pendingAcceptButtons = clickSelectors.reduce((acc, s) => {
+                const elements = queryAll(s);
+                return acc + elements.filter(el => isElementVisible(el) && isAcceptButton(el)).length;
+            }, 0);
+
+            return { hasVisibleInput, hasVisibleSendButton, pendingAcceptButtons };
+        };
+
+        state.profileCoverage = {
+            vscode: evaluateProfile('vscode'),
+            antigravity: evaluateProfile('antigravity'),
+            cursor: evaluateProfile('cursor')
+        };
     }
 
     async function cursorLoop(sid) {
@@ -1552,8 +1704,18 @@
         let cycle = 0;
         while (window.__autoAllState.isRunning && window.__autoAllState.sessionID === sid) {
             try {
-                cycle++;
-                log(`[Loop] Cycle ${cycle}: Starting...`);
+                const timing = window.__antigravityConfig?.timing || {};
+                const pollInterval = timing.pollIntervalMs || 800;
+                const throttle = timing.actionThrottleMs || 100;
+                const cooldown = timing.cooldownMs || 3000;
+
+                // Gold Standard: Update Coverage Metrics for Self-Test
+                updateProfileCoverage();
+
+                // 2. Click Feedback Buttons (if enabled)
+                if (window.__antigravityConfig && window.__antigravityConfig.clickFeedback) {
+                    await performClick(getUnifiedFeedbackSelectors('cursor'), { skipAcceptCheck: true });
+                }
 
                 const clicked = await performClick(getUnifiedClickSelectors('cursor'));
                 if (clicked > 0) {
@@ -1562,11 +1724,11 @@
                     const bumped = await autoBump();
                     if (bumped) {
                         log(`[Loop] Cycle ${cycle}: Auto-bumped conversation`);
-                        await workerDelay(3000);
+                        await workerDelay(cooldown);
                     }
                 }
 
-                await workerDelay(800);
+                await workerDelay(pollInterval);
 
                 const tabSelectors = [
                     '#workbench\\.parts\\.auxiliarybar ul[role="tablist"] li[role="tab"]',
@@ -1626,6 +1788,11 @@
 
                 // Expand any collapsed sections (e.g. "Step Requires Input")
                 await expandCollapsedSections();
+
+                // 2. Click Feedback Buttons (if enabled)
+                if (window.__antigravityConfig && window.__antigravityConfig.clickFeedback) {
+                    await performClick(getUnifiedFeedbackSelectors('antigravity'), { skipAcceptCheck: true });
+                }
 
                 // Just click accept buttons directly - no dropdown interaction needed
                 // Added selectors for Diff Editor actions and SCM titles
@@ -1854,6 +2021,21 @@
         hideOverlay();
         log("Agent Stopped.");
     };
+
+    // --- Heartbeat Loop (Watchdog) ---
+    (function heartbeatLoop() {
+        if (window.__autoAllState?.isRunning) {
+            const timestamp = Date.now();
+            window.__antigravityHeartbeat = timestamp;
+
+            // Send heartbeat via bridge if available
+            if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
+                // Too noisy for console, just update global var or send specific heartbeat msg if needed.
+                // For now, we'll rely on CDP Runtime.evaluate of window.__antigravityHeartbeat
+            }
+        }
+        setTimeout(heartbeatLoop, 2000); // Pulse every 2s
+    })();
 
     log("Core Bundle Initialized.", true);
 })();

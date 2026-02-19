@@ -68,6 +68,15 @@ export class DashboardPanel {
                         }
                         return;
                     }
+                    case 'voice-transcription': {
+                        if (message.text) {
+                            // Dynamic import to avoid circular dependency issues if any
+                            const { voiceControl } = require('../modules/voice/control');
+                            await voiceControl.processAndExecuteTranscription(message.text, { force: true });
+                            vscode.window.setStatusBarMessage(`🎤 Recognized: "${message.text}"`, 3000);
+                        }
+                        return;
+                    }
                 }
             },
             null,
@@ -340,60 +349,121 @@ export class DashboardPanel {
             </div>
             
             <!-- STRATEGIES -->
+            <!-- STRATEGIES -->
             <div class="card">
                 <h2>Unified Autopilot Controls</h2>
-                <div class="setting">
+                <div class="setting" title="Select the core operating mode for the autopilot. 'Simple' uses basic VS Code commands. 'CDP' uses the Chrome DevTools Protocol for advanced browser automation and deeper integration.">
                     <label>Current Strategy:</label>
                     <select onchange="updateConfig('strategy', this.value)">
                         <option value="simple" ${settings.strategy === 'simple' ? 'selected' : ''}>Simple (Commands)</option>
                         <option value="cdp" ${settings.strategy === 'cdp' ? 'selected' : ''}>CDP (Browser Protocol)</option>
                     </select>
                 </div>
-                <div class="setting">
+                <div class="setting" title="Master switch for the Auto-Accept loop. When enabled, Antigravity will continuously poll for suggestions and attempt to accept them based on the active strategy.">
                     <label>Auto Accept:</label>
                     <input type="checkbox" ${settings.autopilotAutoAcceptEnabled ? 'checked' : ''} onchange="updateUnifiedAutoAccept(this.checked)">
                 </div>
-                <div class="setting">
+                <div class="setting" title="When enabled, if the AI stops generating without completing the task (e.g. network error, lazy response), Antigravity will automatically send a 'continue' message to prompt it to finish.">
                     <label>Auto Bump:</label>
                     <input type="checkbox" ${settings.autopilotAutoBumpEnabled ? 'checked' : ''} onchange="updateConfig('autopilotAutoBumpEnabled', this.checked)">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Enables strict 'Run', 'Expand', and 'Continue' button clicking logic in the browser. This ensures that code blocks are run, expanded, and the conversation is kept alive.">
                     <label>Run / Expand / Continue:</label>
                     <input type="checkbox" ${settings.autopilotRunExpandContinueEnabled ? 'checked' : ''} onchange="updateConfig('autopilotRunExpandContinueEnabled', this.checked)">
                 </div>
-                <div class="setting">
+                <div class="setting" title="EXPERIMENTAL: Allows Antigravity to attach to and control multiple browser tabs simultaneously. Useful for complex, multi-step workflows involving multiple windows.">
                     <label>Multi-Tab Mode:</label>
                     <input type="checkbox" ${settings.multiTabEnabled ? 'checked' : ''} onchange="updateConfig('multiTabEnabled', this.checked)">
                 </div>
             </div>
 
+            <!-- BROWSER AUTOMATION (INJECTED SCRIPT) -->
+            <!-- BROWSER AUTOMATION (INJECTED SCRIPT) -->
+            <div class="card">
+                <h2>Browser Automation (Injected Script)</h2>
+                <div class="setting" title="Global toggle for the injected JavaScript automation script. If disabled, no in-browser automation (clicking, scrolling, typing) will occur, regardless of other settings.">
+                    <label>Master Switch:</label>
+                    <input type="checkbox" ${settings.autoContinueScriptEnabled !== false ? 'checked' : ''} onchange="updateConfig('autoContinueScriptEnabled', this.checked)">
+                </div>
+                 <div class="setting" title="Automatically click 'Run' buttons in code blocks (e.g., in Jupyter notebooks or interactive terminals).">
+                    <label>Click Run (Play):</label>
+                    <input type="checkbox" ${config.get('automation.actions.clickRun') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickRun', this.checked)">
+                </div>
+                <div class="setting" title="Automatically click to expand truncated code blocks or long output sections.">
+                    <label>Click Expand:</label>
+                    <input type="checkbox" ${config.get('automation.actions.clickExpand') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickExpand', this.checked)">
+                </div>
+                <div class="setting" title="Automatically click 'Accept' or checkmark buttons to apply code suggestions.">
+                    <label>Click Accept (Check):</label>
+                    <input type="checkbox" ${config.get('automation.actions.clickAccept') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickAccept', this.checked)">
+                </div>
+                <div class="setting" title="Automatically click 'Accept All' buttons to apply bulk changes or multiple suggestions at once.">
+                    <label>Click Accept All:</label>
+                    <input type="checkbox" ${config.get('automation.actions.clickAcceptAll') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickAcceptAll', this.checked)">
+                </div>
+                <div class="setting" title="Automatically click 'Continue', 'Keep', or 'Next' buttons to proceed through multi-step generation flows.">
+                    <label>Click Continue/Keep:</label>
+                    <input type="checkbox" ${config.get('automation.actions.clickContinue') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickContinue', this.checked)">
+                </div>
+                <div class="setting" title="Automatically click the submit/send button in the chat input area to send your message.">
+                    <label>Click Submit (Send):</label>
+                    <input type="checkbox" ${config.get('automation.actions.clickSubmit') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickSubmit', this.checked)">
+                </div>
+                <div class="setting" title="Automatically scroll the chat view to keep the latest content visible.">
+                    <label>Auto Scroll:</label>
+                    <input type="checkbox" ${config.get('automation.actions.autoScroll') ? 'checked' : ''} onchange="updateConfig('automation.actions.autoScroll', this.checked)">
+                </div>
+                <!-- Auto-Reply Options -->
+                <div class="setting" title="Enable the 'Smart Resume' feature. The script will analyze if the AI has stopped generating and automatically send a bump message to keep it going.">
+                    <label>Auto Reply (Bump):</label>
+                    <input type="checkbox" ${config.get('automation.actions.autoReply') ? 'checked' : ''} onchange="updateConfig('automation.actions.autoReply', this.checked)">
+                </div>
+                <div class="setting" title="The specific text message to send when bumping the AI (e.g., 'continue', 'next', 'go on').">
+                    <label>Auto Reply Text:</label>
+                    <input type="text" value="${config.get('automation.actions.autoReplyText') ?? 'continue'}" onchange="updateConfig('automation.actions.autoReplyText', this.value)">
+                </div>
+                <div class="setting" title="The delay in milliseconds to wait after the AI stops generating before sending the auto-reply bump. Prevents spamming the chat.">
+                    <label>Auto Reply Delay (ms):</label>
+                    <input type="number" value="${config.get('automation.timing.autoReplyDelayMs') ?? 7000}" onchange="updateConfig('automation.timing.autoReplyDelayMs', parseInt(this.value))">
+                </div>
+                 <div class="setting" title="How frequently (in milliseconds) the script checks the page state for buttons, generation status, and new elements. Lower values are more responsive but use more CPU.">
+                    <label>Poll Interval (ms):</label>
+                    <input type="number" value="${config.get('automation.timing.pollIntervalMs') ?? 800}" min="100" onchange="updateConfig('automation.timing.pollIntervalMs', parseInt(this.value))">
+                </div>
+                 <div class="setting" title="Draws a visual border or highlight around elements that the automation script is interacting with. Useful for debugging and verifying behavior.">
+                    <label>Debug Highlight:</label>
+                    <input type="checkbox" ${config.get('automation.debug.highlightClicks') ? 'checked' : ''} onchange="updateConfig('automation.debug.highlightClicks', this.checked)">
+                </div>
+            </div>
+
+            <!-- MODULES -->
             <!-- MODULES -->
              <div class="card">
                 <h2>Modules</h2>
-                <div class="setting">
+                <div class="setting" title="Main enable/disable switch for the autonomous loop. When checked, the system actively processes the queue, runs checks, and executes actions.">
                     <label>Autonomous Mode:</label>
                     <input type="checkbox" ${settings.autonomousEnabled ? 'checked' : ''} onchange="updateConfig('autonomousEnabled', this.checked)">
                 </div>
-                 <div class="setting">
+                 <div class="setting" title="Enables the Model Context Protocol (MCP) server integration. Allows Antigravity to act as an MCP server or client, facilitating tool usage and memory sharing.">
                     <label>MCP Server:</label>
                     <input type="checkbox" ${settings.mcpEnabled ? 'checked' : ''} onchange="updateConfig('mcpEnabled', this.checked)">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Enables voice command processing. Shows the microphone button and processes spoken intents like 'approve', 'bump', 'pause'.">
                     <label>Voice Control:</label>
                     <input type="checkbox" ${settings.voiceControlEnabled ? 'checked' : ''} onchange="updateConfig('voiceControlEnabled', this.checked)">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Select how voice commands are triggered. 'Push to Talk' requires clicking the mic button. 'Always Listening' keeps the mic open (requires browser permission persistence).">
                     <label>Voice Mode:</label>
                     <select onchange="updateConfig('voiceMode', this.value)">
                         <option value="push-to-talk" ${settings.voiceMode === 'push-to-talk' ? 'selected' : ''}>Push to Talk</option>
                         <option value="always-listening" ${settings.voiceMode === 'always-listening' ? 'selected' : ''}>Always Listening</option>
                     </select>
                 </div>
-                 <div class="setting">
+                 <div class="setting" title="When enabled, Antigravity will automatically stage, commit, and push changes to the repository after significant autonomous milestones.">
                     <label>Auto Git Commit:</label>
                     <input type="checkbox" ${settings.autoGitCommit ? 'checked' : ''} onchange="updateConfig('autoGitCommit', this.checked)">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Safety limit for the number of tool calls or API requests allowed per hour. Prevents runaway loops or excessive API usage.">
                     <label>Max Calls/Hour:</label>
                     <input type="number" value="${settings.maxCallsPerHour}" min="1" onchange="updateConfig('maxCallsPerHour', parseInt(this.value))">
                 </div>
@@ -402,155 +472,166 @@ export class DashboardPanel {
             <!-- CDP & TIMING -->
             <div class="card">
                 <h2>CDP & Automation</h2>
-                <div class="setting">
+                <div class="setting" title="Maximum time (in ms) to wait for a CDP command (like DOM query or click) to complete before throwing a timeout error.">
                     <label>CDP Timeout (ms):</label>
                     <input type="number" value="${settings.cdpTimeout}" onchange="updateConfig('cdpTimeout', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="The localhost port to connect to the Chrome DevTools Protocol. Must match the port Chrome was started with (usually 9222 or 9000-9005).">
                     <label>CDP Port:</label>
                     <input type="number" value="${settings.cdpPort}" onchange="updateConfig('cdpPort', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="The default message sent when manually or automatically bumping the AI to continue generation.">
                     <label>Bump Message:</label>
                     <input type="text" value="${settings.bumpMessage}" onchange="updateConfig('bumpMessage', this.value)">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Frequency (in ms) for checking if the 'Accept' button is available and visible in the UI.">
                     <label>Auto-Accept Poll (ms):</label>
                     <input type="number" value="${settings.autoAcceptPollIntervalMs}" min="100" max="10000" onchange="updateUnifiedPollInterval(parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Minimum time (in seconds) that must pass between consecutive auto-bump messages. prevents spamming the context window.">
                     <label>Auto-Bump Cooldown (s):</label>
                     <input type="number" value="${settings.autoBumpCooldownSec}" min="1" max="3600" onchange="updateUnifiedBumpCooldown(parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="The interval (in seconds) at which the main autonomous loop runs its cycle of checks and actions.">
                     <label>Loop Interval (s):</label>
                     <input type="number" value="${settings.loopInterval}" onchange="updateConfig('loopInterval', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Time (in seconds) to pause execution when a thread or process explicitly requests a wait (e.g., after issuing a long-running terminal command).">
                     <label>Thread Wait (s):</label>
                     <input type="number" value="${settings.threadWaitInterval}" onchange="updateConfig('threadWaitInterval', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Backwards compatibility: Frequency (in ms) for legacy poll-based triggers.">
                     <label>Legacy Poll Frequency (ms):</label>
                     <input type="number" value="${settings.pollFrequency}" onchange="updateConfig('pollFrequency', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Backwards compatibility: Delay (in seconds) before auto-approving a legacy action.">
                     <label>Legacy Auto-Approve Delay (s):</label>
                     <input type="number" value="${settings.autoApproveDelay}" onchange="updateConfig('autoApproveDelay', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="If enabled, shows a VS Code notification when the extension detects the AI is waiting for user input for an extended period.">
                     <label>Waiting Reminder:</label>
                     <input type="checkbox" ${settings.runtimeWaitingReminderEnabled ? 'checked' : ''} onchange="updateConfig('runtimeWaitingReminderEnabled', this.checked)">
                 </div>
-                <div class="setting">
+                <div class="setting" title="How long the AI must be waiting (in seconds) before the first reminder is shown.">
                     <label>Reminder Delay (s):</label>
                     <input type="number" value="${settings.runtimeWaitingReminderDelaySec}" min="5" max="3600" onchange="updateConfig('runtimeWaitingReminderDelaySec', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Minimum time (in seconds) between consecutive waiting reminders.">
                     <label>Reminder Cooldown (s):</label>
                     <input type="number" value="${settings.runtimeWaitingReminderCooldownSec}" min="5" max="7200" onchange="updateConfig('runtimeWaitingReminderCooldownSec', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="If enabled, automatically sends a resume message when the AI is waiting for input, provided safety checks (guards) pass.">
                     <label>Auto Resume:</label>
                     <input type="checkbox" ${settings.runtimeAutoResumeEnabled ? 'checked' : ''} onchange="updateConfig('runtimeAutoResumeEnabled', this.checked)">
                 </div>
-                <div class="setting">
+                <div class="setting" title="If enabled, sends a shorter/minimal message for auto-resume instead of the full prompt, to save tokens and reduce noise.">
                     <label>Use Minimal Continue:</label>
                     <input type="checkbox" ${settings.runtimeAutoResumeUseMinimalContinue ? 'checked' : ''} onchange="updateConfig('runtimeAutoResumeUseMinimalContinue', this.checked)">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Minimum time (in seconds) between auto-resume actions.">
                     <label>Auto Resume Cooldown (s):</label>
                     <input type="number" value="${settings.runtimeAutoResumeCooldownSec}" min="5" max="7200" onchange="updateConfig('runtimeAutoResumeCooldownSec', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Number of consecutive stable polling checks required confirming the 'waiting' state before auto-resume triggers.">
                     <label>Auto Resume Stability Polls:</label>
                     <input type="number" value="${settings.runtimeAutoResumeStabilityPolls}" min="1" max="10" onchange="updateConfig('runtimeAutoResumeStabilityPolls', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Enable the self-healing watchdog. If the system stays in 'waiting' state too long despite checks, it attempts to fix the UI state or re-trigger checks.">
                     <label>Waiting Watchdog:</label>
                     <input type="checkbox" ${settings.runtimeAutoFixWaitingEnabled ? 'checked' : ''} onchange="updateConfig('runtimeAutoFixWaitingEnabled', this.checked)">
                 </div>
-                <div class="setting">
+                <div class="setting" title="How long (in seconds) to wait before the watchdog attempts a fix.">
                     <label>Watchdog Delay (s):</label>
                     <input type="number" value="${settings.runtimeAutoFixWaitingDelaySec}" min="5" max="7200" onchange="updateConfig('runtimeAutoFixWaitingDelaySec', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Cooldown (in seconds) between watchdog interventions.">
                     <label>Watchdog Cooldown (s):</label>
                     <input type="number" value="${settings.runtimeAutoFixWaitingCooldownSec}" min="5" max="7200" onchange="updateConfig('runtimeAutoFixWaitingCooldownSec', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="If the watchdog fails repeatedly, enable escalation (e.g., forcing a full prompt instead of minimal, or doing a deeper UI refresh).">
                     <label>Watchdog Escalation:</label>
                     <input type="checkbox" ${settings.runtimeAutoFixWaitingEscalationEnabled ? 'checked' : ''} onchange="updateConfig('runtimeAutoFixWaitingEscalationEnabled', this.checked)">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Number of consecutive failures before escalation triggers.">
                     <label>Escalation Threshold:</label>
                     <input type="number" value="${settings.runtimeAutoFixWaitingEscalationThreshold}" min="1" max="10" onchange="updateConfig('runtimeAutoFixWaitingEscalationThreshold', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Cooldown (in seconds) for the escalation state.">
                     <label>Escalation Cooldown (s):</label>
                     <input type="number" value="${settings.runtimeAutoFixWaitingEscalationCooldownSec}" min="5" max="14400" onchange="updateConfig('runtimeAutoFixWaitingEscalationCooldownSec', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Maximum number of escalation events to keep in the history log.">
                     <label>Escalation Max Events:</label>
                     <input type="number" value="${settings.runtimeAutoFixWaitingEscalationMaxEvents}" min="3" max="100" onchange="updateConfig('runtimeAutoFixWaitingEscalationMaxEvents', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Require user confirmation before manually clearing the escalation timeline/history.">
                     <label>Confirm Timeline Clear:</label>
                     <input type="checkbox" ${settings.runtimeEscalationClearRequireConfirm ? 'checked' : ''} onchange="updateConfig('runtimeEscalationClearRequireConfirm', this.checked)">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Time (in seconds) before telemetry data is considered 'stale' and potentially unreliable.">
                     <label>Telemetry Stale Threshold (s):</label>
                     <input type="number" value="${settings.runtimeTelemetryStaleSec}" min="3" max="300" onchange="updateConfig('runtimeTelemetryStaleSec', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Debounce time (in ms) for refreshing the status menu to avoid flickering or excessive updates.">
                     <label>Status Refresh Debounce (ms):</label>
                     <input type="number" value="${settings.runtimeStatusMenuRefreshDebounceMs}" min="100" max="5000" onchange="updateConfig('runtimeStatusMenuRefreshDebounceMs', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Enable detailed debug logs for status menu refresh operations.">
                     <label>Status Refresh Debug Logs:</label>
                     <input type="checkbox" ${settings.runtimeStatusMenuRefreshDebugLogs ? 'checked' : ''} onchange="updateConfig('runtimeStatusMenuRefreshDebugLogs', this.checked)">
                 </div>
                 <p class="muted" style="margin-top:-6px;">Stale logic: <code>telemetryAgeSec &gt; runtimeTelemetryStaleSec</code> using runtime state <code>timestamp</code>.</p>
-                <div class="setting">
+                <div class="setting" title="Minimum health score (0-100) required for the auto-resume guard to allow an action.">
                     <label>Auto Resume Min Score:</label>
                     <input type="number" value="${settings.runtimeAutoResumeMinScore}" min="0" max="100" onchange="updateConfig('runtimeAutoResumeMinScore', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Are primary indicators (like specific button presence) strictly required? If checked, heuristic scores alone are not enough.">
                     <label>Require Strict Primary:</label>
                     <input type="checkbox" ${settings.runtimeAutoResumeRequireStrictPrimary ? 'checked' : ''} onchange="updateConfig('runtimeAutoResumeRequireStrictPrimary', this.checked)">
                 </div>
-                <div class="setting vertical">
+                <div class="setting vertical" title="The full message text to send for auto-resume or auto-bump actions.">
                     <label>Auto Resume Message:</label>
                     <textarea onchange="updateConfig('runtimeAutoResumeMessage', this.value)">${settings.runtimeAutoResumeMessage || ''}</textarea>
                 </div>
-                <div class="setting vertical">
+                <div class="setting vertical" title="The shorter backup message to use for 'Minimal Continue' logic.">
                     <label>Minimal Continue Message:</label>
                     <textarea onchange="updateConfig('runtimeAutoResumeMinimalMessage', this.value)">${settings.runtimeAutoResumeMinimalMessage || ''}</textarea>
                 </div>
-                <div class="setting vertical">
+                <div class="setting vertical" title="Minimal continue message override specifically for VS Code profile.">
                     <label>Minimal Continue (VS Code):</label>
                     <textarea onchange="updateConfig('runtimeAutoResumeMinimalMessageVSCode', this.value)">${settings.runtimeAutoResumeMinimalMessageVSCode || ''}</textarea>
                 </div>
-                <div class="setting vertical">
+                <div class="setting vertical" title="Minimal continue message override specifically for Antigravity profile.">
                     <label>Minimal Continue (Antigravity):</label>
                     <textarea onchange="updateConfig('runtimeAutoResumeMinimalMessageAntigravity', this.value)">${settings.runtimeAutoResumeMinimalMessageAntigravity || ''}</textarea>
                 </div>
-                <div class="setting vertical">
+                <div class="setting vertical" title="Minimal continue message override specifically for Cursor profile.">
                     <label>Minimal Continue (Cursor):</label>
                     <textarea onchange="updateConfig('runtimeAutoResumeMinimalMessageCursor', this.value)">${settings.runtimeAutoResumeMinimalMessageCursor || ''}</textarea>
                 </div>
-                 <div class="setting">
+                 <div class="setting" title="Maximum number of loop iterations allowed per session. Safety stop for the autonomous loop.">
                      <label>Max Loops/Session:</label>
                      <input type="number" value="${settings.maxLoopsPerSession}" onchange="updateConfig('maxLoopsPerSession', parseInt(this.value))">
                 </div>
-                 <div class="setting">
+                 <div class="setting" title="Global timeout (in minutes) for the entire execution session.">
                      <label>Execution Timeout (min):</label>
                      <input type="number" value="${settings.executionTimeout}" onchange="updateConfig('executionTimeout', parseInt(this.value))">
                 </div>
-                <div class="setting">
+                <div class="setting" title="Maximum number of consecutive loops allowed in 'Test Validation' mode without user intervention.">
                     <label>Max Consecutive Test Loops:</label>
                     <input type="number" value="${settings.maxConsecutiveTestLoops}" min="1" max="10" onchange="updateConfig('maxConsecutiveTestLoops', parseInt(this.value))">
                 </div>
+            </div>
+
+            <!-- ACTIVE SESSIONS -->
+            <div class="card">
+                <h2>Active CDP Sessions</h2>
+                <div id="cdpSessionsList" class="runtime-history" style="max-height:200px;">
+                    <div class="runtime-history-item">Loading...</div>
+                </div>
+                <!-- <div style="margin-top:10px;">
+                     <button onclick="runCommand('antigravity.reconnectCDP')">Force Reconnect</button>
+                </div> -->
             </div>
 
             <!-- INTERACTION METHODS -->
@@ -1043,6 +1124,22 @@ export class DashboardPanel {
                         watchdogEscalationLast.textContent = '-';
                         watchdogEscalationReason.textContent = '-';
                         watchdogEscalationEvents.textContent = '-';
+                        watchdogEscalationEvents.textContent = '-';
+                        
+                        const sessionsList = document.getElementById('cdpSessionsList');
+                        if (sessionsList) {
+                            if (state && state.trackedSessions && state.trackedSessions.length > 0) {
+                                sessionsList.innerHTML = state.trackedSessions.map(s => 
+                                    '<div class="runtime-history-item" title="' + (s.url || '') + '">' +
+                                    '<strong>' + (s.type || 'page') + '</strong>: ' + (s.title || 'Untitled') + '<br/>' +
+                                    '<span class="muted">' + (s.url ? s.url.substring(0, 80) + (s.url.length > 80 ? '...' : '') : 'No URL') + '</span>' +
+                                    '</div>'
+                                ).join('');
+                            } else {
+                                sessionsList.innerHTML = '<div class="runtime-history-item">No active sessions tracked.</div>';
+                            }
+                        }
+
                         renderRuntimeHistory();
                         return;
                     }
@@ -1136,6 +1233,21 @@ export class DashboardPanel {
                             .map(e => (new Date(e.at).toLocaleTimeString() + ' ' + String(e.event || 'event') + ': ' + String(e.detail || '')))
                             .join(' | ')
                         : '-';
+                    
+                    const sessionsList = document.getElementById('cdpSessionsList');
+                    if (sessionsList) {
+                        if (state.trackedSessions && state.trackedSessions.length > 0) {
+                            sessionsList.innerHTML = state.trackedSessions.map(s => 
+                                '<div class="runtime-history-item" title="' + (s.url || '') + '">' +
+                                '<strong>' + (s.type || 'page') + '</strong>: ' + (s.title || 'Untitled') + '<br/>' +
+                                '<span class="muted">' + (s.url ? s.url.substring(0, 80) + (s.url.length > 80 ? '...' : '') : 'No URL') + '</span>' +
+                                '</div>'
+                            ).join('');
+                        } else {
+                            sessionsList.innerHTML = '<div class="runtime-history-item">No active sessions tracked.</div>';
+                        }
+                    }
+
                     renderRuntimeHistory();
                 }
 

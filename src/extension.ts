@@ -336,6 +336,18 @@ export function activate(context: vscode.ExtensionContext) {
                     return { handled: true };
                 }
                 return { handled: false, detail: 'missing model parameter' };
+            case 'approve':
+                // Check if we have an active chat session to accept
+                await vscode.commands.executeCommand('interactive.acceptChanges');
+                return { handled: true };
+            case 'bump':
+                // Attempt to send a bump via CDP
+                const cdp = resolveCDPStrategy() as any;
+                if (cdp && typeof cdp.sendHybridBump === 'function') {
+                    await cdp.sendHybridBump('continue');
+                    return { handled: true };
+                }
+                return { handled: false, detail: 'CDP strategy not active' };
             case 'reject':
                 return { handled: false, detail: 'reject intent not mapped to a safe runtime action' };
             case 'deploy':
@@ -857,16 +869,30 @@ export function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('antigravity.toggleAutoAccept', async () => {
             const next = !isUnifiedAutoAcceptEnabled();
+            // Update Legacy
             await config.update('autopilotAutoAcceptEnabled', next);
             await config.update('autoAcceptEnabled', next);
             await config.update('autoAllEnabled', next);
+
+            // Update New Actions
+            await config.update('actions.autoAccept.enabled', next);
+            await config.update('actions.bump.enabled', next); // Usually coupled
+
             await strategyManager.start();
         }),
         vscode.commands.registerCommand('antigravity.toggleAutoAll', async () => {
             const next = !isUnifiedAutoAcceptEnabled();
+            // Update Legacy
             await config.update('autopilotAutoAcceptEnabled', next);
             await config.update('autoAcceptEnabled', next);
             await config.update('autoAllEnabled', next);
+
+            // Update New Actions
+            await config.update('actions.autoAccept.enabled', next);
+            await config.update('actions.bump.enabled', next);
+            await config.update('actions.run.enabled', next);
+            await config.update('actions.expand.enabled', next);
+
             if (next) {
                 await config.update('strategy', 'cdp');
             }
@@ -874,9 +900,17 @@ export function activate(context: vscode.ExtensionContext) {
             await refreshRuntimeState();
         }),
         vscode.commands.registerCommand('antigravity.clearAutoAll', async () => {
+            // Clear Legacy
             await config.update('autopilotAutoAcceptEnabled', false);
             await config.update('autoAcceptEnabled', false);
             await config.update('autoAllEnabled', false);
+
+            // Clear New Actions
+            await config.update('actions.autoAccept.enabled', false);
+            await config.update('actions.bump.enabled', false);
+            await config.update('actions.run.enabled', false);
+            await config.update('actions.expand.enabled', false);
+
             await strategyManager.stop();
             await refreshRuntimeState();
             vscode.window.showInformationMessage('Antigravity: Accept-All CLEARED (Disabled).');

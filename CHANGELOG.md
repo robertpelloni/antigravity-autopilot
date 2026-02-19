@@ -5,10 +5,126 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [4.10.115] - 2024-02-18
+- **Continuous Autonomous Mode**: Agent automatically proceeds to the next task in `task.md` / `TODO.md` upon completion.
+- Added `antigravity.continuousMode` configuration (default: `true`).
+- **Fix**: Resolved issue where icon-only "Run" buttons were ignored by automation.
+
+## [4.10.114]
+- **Feat**: Implemented "Continuous Autonomous Mode" (enabled by default). The agent now automatically proceeds to the next task in `task.md` / `TODO.md` upon completion.
+- **Feat**: Added `antigravity.continuousMode` configuration setting.
+- **Fix**: Resolved variable redeclaration issues in Autonomous Loop logic.
+
+## [4.10.113]
+- **Fix**: Intermittent blank screen issue via defensive CDP attachment strategy (try-catch + stabilization delay).
+- **Feat**: Added `antigravity.experimental.cdpExplicitDiscovery` (default: true) to gate explicit attachment logic.
+- **Feat**: Implemented "Bump on Completion" to ensure thread restart even after task success.
+- **Refactor**: Configuration migrated to `antigravity.actions.*` schema.
+
+## [4.10.112] - 2026-02-18
+- **Feedback Automation**: Added support for auto-clicking "Helpful" / "Thumbs Up" buttons (configurable via `antigravity.automation.actions.clickFeedback`).
+- **Dynamic Mode**: Fixed an issue where the `vscode` profile might be ignored in favor of `antigravity` defaults in some loops.
+
+## [4.10.111] - 2026-02-18
+- **Stuck Button Fallback**: Implemented "Keypress Fallback" (Enter, Alt+Enter, Space) for buttons that fail to disappear after clicking (e.g., specific "Run" actions).
+- **UX**: Automation now mimics keyboard interaction for higher compatibility.
+
+## [4.10.110] - 2026-02-18
+- **Expanded Automation**: Now automatically clicks "1 Step Requires Input" (bell icon) and "Expand <" buttons to reveal hidden "Run" actions.
+- **Safety**: Selector exclusions (Command Palette) remain in force.
+
+## [4.10.109] - 2026-02-18
+- **Hardened Selectors**: Explicitly excluded Quick Pick, Command Palette, and Settings Editor from automation targets to prevent accidental interaction.
+- **Enhanced Self-Test**: Verification report now respects exclusion rules.
+
+## [4.10.108] - 2026-02-18
+- **Smart Target Filtering**: Resolved multi-window automation collisions by filtering CDP targets based on the VS Code Workspace Name.
+- **Diagnostics Fix**: Fixed `Antigravity: Diagnose CDP` command to report the correct active connection state.
+- **Refactor**: Unified `CDPStrategy` and `diagnoseCdp` to use the shared `SharedCDPClient`.
+- **Selector Hardening**: Added explicit support for "Allow" and "Accept All" buttons to ensure 100% detection reliability.
+
+## [4.10.107] - 2026-02-18
+### Added
+- **Multi-Tab Orchestration**: Added `multiTabEnabled` setting and dashboard visibility for active CDP sessions.
+- **Dashboard**: Added "Active CDP Sessions" card to monitor browser connections.
+
+## [4.10.106] - 2026-02-18
+### Changed
+- **Dashboard Polish**: Added extremely detailed tooltips to all configuration settings to explain their function and impact.
+
+## [4.10.105] - 2026-02-18
+### Added
+- **Voice Control**: Added microphone button to Dashboard.
+    - **Commands**: "Approve" (Accept Changes), "Bump" (Continue), "Pause/Resume".
+    - **Feedback**: Visual listening state and transcript feedback in Dashboard.
+
+## [4.10.104] - 2026-02-18
+### Added
+- **Smart Resume**: The automation script now analyzes chat context.
+    - **Smart Wait**: Pauses auto-reply if the AI ends with a question (?).
+    - **Fast Retry**: Bumps quickly (3s) if the user spoke but the AI stalled.
+    - **Network Recovery**: Detects "network error" text and auto-retries.
+
+## [4.10.103] - 2026-02-18
+### Added
+- **Dashboard Controls**: Added a dedicated "Browser Automation" card to the dashboard with checkboxes for all granular settings (Run, Expand, Accept, Auto-Reply, etc.) and timing controls.
+- **Unified Config**: Dashboard toggles now directly update the `antigravity.automation.*` settings used by the injected script.
+
+## [4.10.102] - 2026-02-18
+### Changed
+- **Aggressive Automation**: Reduced default poll interval to 800ms.
+- **Improved Selectors**: Added support for generic `.codicon-play` (Run) and `.codicon-chevron-right` (Expand) to catch more button variations.
+- **Selector Precision**: Switched to a unified `tryClick` utility that aggressively finds visible interactive elements.
+
+## [4.10.101] - 2026-02-18
+### Changed
+- **Auto-Reply Default**: Enabled `autoReply` by default (true).
+- **Auto-Reply Delay**: Reduced default delay from 10s to 7s for faster response.
+- **Auto-Reply Logic**: Improved text insertion simulation (fallback to `value` setter + dispatch events) and added 'Enter' key fallback if 'Send' button click fails.
+
+## [4.10.100] - 2026-02-18
+### Added
+- **Auto-Reply (Bump)**: New feature to automatically keep the conversation going.
+    - `antigravity.automation.actions.autoReply`: Enable auto-typing a message when idle (default: false).
+    - `antigravity.automation.actions.autoReplyText`: Custom text to type (default: "continue").
+    - `antigravity.automation.timing.autoReplyDelayMs`: Time to wait before bumping (default: 10000ms).
+
+## [4.10.99] - 2026-02-18
+### Added
+- **Visual Debugging**: Added `antigravity.automation.debug.highlightClicks` to flash a red border on auto-clicked elements.
+- **Timing Randomness**: Added `antigravity.automation.timing.randomness` to add human-like jitter to interaction delays.
+- **Auto-Scroll**: Added `antigravity.automation.actions.autoScroll` to keep chat view fresh.
+- **Accept All**: Added specific support for "Accept All" buttons via `antigravity.automation.actions.clickAcceptAll`.
+
+## [4.10.98] - 2026-02-18
+### Added
+- **Detailed Automation Settings**: Expanded `antigravity.automation.actions` with detailed descriptions for Run, Expand, Accept, Continue, Submit, and new `clickFeedback` toggle.
+- **Timing Configuration**: Added `antigravity.automation.timing` settings (`pollIntervalMs`, `actionThrottleMs`, `cooldownMs`) for fine-grained performance tuning.
+
+## [4.10.97] - 2026-02-18
+### Added
+- **Granular Automation Settings**: Added configurable toggles for `clickRun`, `clickExpand`, `clickAccept`, `clickContinue`, and `clickSubmit` in `antigravity.automation.actions.*`.
+- **Script Configuration Injection**: `CDPHandler` now injects user preferences directly into the automation script context.
+
+## [4.10.96] - 2026-02-18
+### Fixed
+- **Stability**: Removed `MutationObserver` and `userGesture` injection from `auto-continue` script to prevent chat panel blanking and improve performance.
+- **Auto-Interaction**: Refined `auto-continue.ts` to use safer polling (~1.5s) for Continue, Keep, Run, Accept, and Expand actions.
+
+## [4.10.95] - 2026-02-18
+### Changed
+- **Enhanced Auto-Continue**: `auto-continue.ts` now aggressively auto-clicks "Run in Terminal", "Expand", "Accept"/"Apply", and "Send" buttons to reduce manual toil.
+
 ## [4.10.94] - 2026-02-17
 ### Added
 - **Copilot Auto-Continue**: Integrated `copilot-auto-continue` submodule logic to automatically click "Continue" and "Keep" buttons in Copilot Chat via CDP injection.
 - **Configurable Auto-Continue**: Added `antigravity.autoContinueScriptEnabled` setting (default: `true`) to control script injection.
+
+## [4.10.94]
+- **Fix**: Intermittent blank screen issue via defensive CDP attachment strategy (try-catch + stabilization delay).
+- **Feat**: Added `antigravity.experimental.cdpExplicitDiscovery` (default: true) to gate explicit attachment logic.
+- **Feat**: Implemented "Bump on Completion" to ensure thread restart even after task success.
+- **Refactor**: Configuration migrated to `antigravity.actions.*` schema.
 
 ## [4.10.93]
 - Improved: Re-enabled explicit CDP target discovery to ensure automation works for existing chat panels.

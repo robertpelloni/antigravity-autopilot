@@ -261,12 +261,40 @@ export class AutonomousLoop {
                     reasons: exitCheck.reasons || []
                 })}`);
 
+                const cfg = config.getAll();
+
                 // Mark task as complete if successful exit
                 if (this.currentTask && !exitCheck.reason?.includes('fail')) {
                     const completed = projectTracker.completeTask(this.currentTask);
                     if (completed) {
                         log.info(`Task completed and marked in project file: ${this.currentTask}`);
                     }
+                }
+
+                // CONTINUOUS MODE LOGIC
+                // Check if we should continue to the next task immediately
+                // Check if we should continue to the next task immediately
+                if (cfg.continuousMode) {
+                    const nextTask = await this.getCurrentTask();
+                    if (nextTask && nextTask !== this.currentTask) {
+                        log.info(`Continuous Mode: Found next task "${nextTask}". Continuing loop...`);
+
+                        // Send a small bump just to refresh UI state if needed, but NOT to halt
+                        // In continuous mode, we just loop around. The next iteration will pick up `nextTask`.
+                        // We do NOT stop here.
+                        return true;
+                    } else {
+                        log.info('Continuous Mode: No further tasks found.');
+                    }
+                }
+
+                // Bump on Completion (ensure buttons are revealed even on exit)
+                // Only do this if we are definitively STOPPING.
+                const completionBumpText = cfg.actions.bump.text || 'bump';
+                if (cfg.actions.bump.enabled && completionBumpText) {
+                    log.info(`Auto-Bump (Completion): Sending "${completionBumpText}" to restart thread...`);
+                    // Fire and forget bump on exit to not block stop logic too long
+                    await cdpClient.sendMessage(completionBumpText).catch(e => log.warn(`Bump on completion failed: ${e.message}`));
                 }
 
                 this.stop(exitCheck.reason || 'Task completed');
@@ -292,10 +320,11 @@ export class AutonomousLoop {
             memoryManager.rememberConversation(this.currentTask || 'Unknown Task', response);
 
             // Auto-Bump: Send a message to reveal the feedback buttons for the next loop
-            const bumpMessage = config.get<string>('bumpMessage') || 'bump';
-            if (bumpMessage) {
-                log.info(`Auto-Bump: Sending "${bumpMessage}" to reveal feedback buttons...`);
-                await cdpClient.sendMessage(bumpMessage);
+            const cfg = config.getAll(); // Refresh config
+            const bumpText = cfg.actions.bump.text || 'bump';
+            if (cfg.actions.bump.enabled && bumpText) {
+                log.info(`Auto-Bump: Sending "${bumpText}" to reveal feedback buttons...`);
+                await cdpClient.sendMessage(bumpText);
             }
 
             return true;
