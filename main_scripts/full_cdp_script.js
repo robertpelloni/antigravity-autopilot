@@ -1882,8 +1882,17 @@
 
                 await workerDelay(1500);
 
-                const tabs = queryAll('button.grow');
+                let tabs = queryAll('button.grow');
                 log(`[Loop] Cycle ${cycle}: Found ${tabs.length} tabs`);
+
+                const blockedTabTerms = ['extension', 'extensions', 'marketplace', 'plugin', 'mcp', 'source control', 'search', 'explorer', 'run and debug'];
+                tabs = tabs.filter(tab => {
+                    const label = (tab.getAttribute('aria-label') || tab.textContent || '').trim().toLowerCase();
+                    if (!label) return false;
+                    if (blockedTabTerms.some(term => label.includes(term))) return false;
+                    return label.includes('chat') || tab.className.toLowerCase().includes('chat-session') || tab.className.toLowerCase().includes('grow');
+                });
+
                 updateTabNames(tabs);
 
                 if (tabs.length > 1) {

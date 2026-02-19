@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 ---
 
 
+## [5.0.8] - 2026-02-19
+- **Hotfix**: Added blocked-term tab filtering to `antigravityLoop` tab rotation path to prevent switching into Extensions/Marketplace/plugin surfaces.
+- **Stability**: Reduced risk of unintended extension-install page activation caused by broad `button.grow` tab cycling.
+
 ## [5.0.7] - 2026-02-19
 - **Hotfix**: Added strict unsafe-surface guards in injected auto-continue loop to avoid interacting with Extensions/Marketplace/Install UI regions.
 - **Safety**: Added bridge command blocking for extension/marketplace/install-like command IDs to prevent accidental extension-install page navigation.
