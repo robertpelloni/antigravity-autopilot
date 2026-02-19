@@ -105,7 +105,8 @@ export class BlindBumpHandler {
         };
         const typeResults = await this.registry.executeCategory('text', typeCtx);
         allResults.push(...typeResults);
-        await new Promise(r => setTimeout(r, 100));
+        // Wait longer for UI to register input/enable submit button
+        await new Promise(r => setTimeout(r, 800));
 
         // Step 3: Submit (submit method)
         const submitCtx: InteractionContext = {

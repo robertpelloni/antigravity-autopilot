@@ -2106,6 +2106,20 @@
     };
 
     // Helper for visual feedback
+    window.__autoAllState.forceSubmit = async function () {
+        const selectors = getUnifiedSendButtonSelectors(getCurrentMode());
+        const button = findVisibleElementBySelectors(selectors);
+
+        if (button) {
+            log(`[forceSubmit] Found send button: ${button.className} (aria=${button.getAttribute('aria-label')})`);
+            button.click();
+            return true;
+        }
+
+        log(`[forceSubmit] No send button found. Trying Enter key fallback.`);
+        return await submitWithKeys();
+    };
+
     window.showAutoAllToast = function (text, duration = 3000, color = 'rgba(0,100,0,0.8)') {
         const toast = document.createElement('div');
         toast.style.cssText = `position:fixed;top:10px;right:10px;z-index:99999;background:${color};color:white;padding:10px;border-radius:5px;font-family:sans-serif;pointer-events:none;transition:opacity 1s;`;
@@ -2121,7 +2135,7 @@
             const isBG = config.isBackgroundMode === true;
 
             // Visual confirmation of injection
-            window.showAutoAllToast('Antigravity v4.2.6 Active 🚀');
+            window.showAutoAllToast('Antigravity v5.0.14 Active 🚀');
 
             if (config.bannedCommands) {
                 window.__autoAllUpdateBannedCommands(config.bannedCommands);
