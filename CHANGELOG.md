@@ -6,6 +6,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 ---
 
 
+## [5.0.10] - 2026-02-19
+- **Dashboard**: Added missing grouped action checkboxes for `Allow-All` (Accept All group) and `Alt+Enter` fallback toggles in both Run and Expand groups.
+- **Config Sync**: Aligned injected runtime bump detect defaults with schema to include `skip-ai-question` consistently across script and CDP config injection.
+- **UX**: Clarified module label to `Autonomous Mode (Yoke)` for easier mode mapping.
+
+
 ## [5.0.9] - 2026-02-19
 - **Hotfix**: Improved auto-bump submission reliability by requiring real composer-state change after submit attempts instead of treating key dispatch as implicit success.
 - **Fix**: If Send click / Enter variants do not actually submit, runtime now escalates to bridge-driven hybrid bump submission path.

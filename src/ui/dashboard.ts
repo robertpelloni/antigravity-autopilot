@@ -550,6 +550,7 @@ export class DashboardPanel {
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
                     <div class="setting" title="Targets explicit Accept All controls (title/aria-label/codicon-check-all) for bulk acceptance flows."><label>Accept-All Button:</label><input type="checkbox" ${(config.get('automation.controls.acceptAll.actionMethods') || []).includes('accept-all-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'accept-all-button', this.checked)"></div>
                     <div class="setting" title="Treats VS Code 'Keep' button as semantic equivalent of Accept All. Enable this to capture Keep-first UX variants."><label>Keep Button (VS Code):</label><input type="checkbox" ${(config.get('automation.controls.acceptAll.actionMethods') || []).includes('keep-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'keep-button', this.checked)"></div>
+                    <div class="setting" title="Targets 'Allow/Allow All' style approvals that appear in some flows instead of Accept All."><label>Allow-All Button:</label><input type="checkbox" ${(config.get('automation.controls.acceptAll.actionMethods') || []).includes('allow-all-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'allow-all-button', this.checked)"></div>
                     <div class="setting" title="Generic fallback click mode. Useful when labels/icons drift, but keep it ON with safety filters enabled."><label>DOM Click:</label><input type="checkbox" ${(config.get('automation.controls.acceptAll.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'dom-click', this.checked)"></div>
                 </details>
                 <div class="setting" title="Per-action cooldown window for Accept All/Keep. Higher values reduce misfires; lower values improve responsiveness."><label>Accept All Delay (ms):</label><input type="number" value="${config.get('automation.controls.acceptAll.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.acceptAll.delayMs', parseInt(this.value))"></div>
@@ -604,6 +605,7 @@ export class DashboardPanel {
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
                     <div class="setting" title="Primary selector-driven click strategy for run controls."><label>DOM Click:</label><input type="checkbox" ${(config.get('automation.controls.run.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.actionMethods', 'dom-click', this.checked)"></div>
                     <div class="setting" title="Direct click path on resolved candidate element when DOM strategy needs a fallback."><label>Native Click:</label><input type="checkbox" ${(config.get('automation.controls.run.actionMethods') || []).includes('native-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.actionMethods', 'native-click', this.checked)"></div>
+                    <div class="setting" title="Keyboard fallback for Run flows that bind execution to Alt+Enter."><label>Alt+Enter:</label><input type="checkbox" ${(config.get('automation.controls.run.actionMethods') || []).includes('alt-enter') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.actionMethods', 'alt-enter', this.checked)"></div>
                 </details>
                 <div class="setting"><label>Run Delay (ms):</label><input type="number" value="${config.get('automation.controls.run.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.run.delayMs', parseInt(this.value))"></div>
             </div>
@@ -621,6 +623,7 @@ export class DashboardPanel {
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
                     <div class="setting" title="Primary selector-based click strategy for expansion toggles."><label>DOM Click:</label><input type="checkbox" ${(config.get('automation.controls.expand.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.actionMethods', 'dom-click', this.checked)"></div>
                     <div class="setting" title="Element-level fallback click when DOM strategy cannot settle a stable selector path."><label>Native Click:</label><input type="checkbox" ${(config.get('automation.controls.expand.actionMethods') || []).includes('native-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.actionMethods', 'native-click', this.checked)"></div>
+                    <div class="setting" title="Keyboard fallback for expansion flows that are bound to Alt+Enter in chat/editor contexts."><label>Alt+Enter:</label><input type="checkbox" ${(config.get('automation.controls.expand.actionMethods') || []).includes('alt-enter') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.actionMethods', 'alt-enter', this.checked)"></div>
                 </details>
                 <div class="setting"><label>Expand Delay (ms):</label><input type="number" value="${config.get('automation.controls.expand.delayMs') ?? 50}" min="0" onchange="updateConfig('automation.controls.expand.delayMs', parseInt(this.value))"></div>
             </div>
@@ -646,7 +649,7 @@ export class DashboardPanel {
              <div class="card">
                 <h2>Modules</h2>
                 <div class="setting" title="Main enable/disable switch for the autonomous loop. When checked, the system actively processes the queue, runs checks, and executes actions.">
-                    <label>Autonomous Mode:</label>
+                    <label>Autonomous Mode (Yoke):</label>
                     <input type="checkbox" ${settings.autonomousEnabled ? 'checked' : ''} onchange="updateConfig('autonomousEnabled', this.checked)">
                 </div>
                  <div class="setting" title="Enables the Model Context Protocol (MCP) server integration. Allows Antigravity to act as an MCP server or client, facilitating tool usage and memory sharing.">

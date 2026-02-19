@@ -16,16 +16,16 @@ export const AUTO_CONTINUE_SCRIPT = `
      autoReply: true,
      autoReplyText: 'continue',
      controls: {
-         acceptAll: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-button', 'keep-button', 'dom-click'], delayMs: 100 },
+         acceptAll: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-button', 'keep-button', 'allow-all-button', 'dom-click'], delayMs: 100 },
          continue: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['continue-button', 'keep-button', 'dom-click'], delayMs: 100 },
-         run: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 100 },
-         expand: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 50 },
+         run: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click', 'alt-enter'], delayMs: 100 },
+         expand: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click', 'alt-enter'], delayMs: 50 },
          accept: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-first', 'accept-single', 'dom-click'], delayMs: 100 },
          submit: { detectMethods: ['enabled-flag', 'not-generating'], actionMethods: ['click-send', 'enter-key'], delayMs: 100 },
          feedback: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['thumbs-up', 'helpful-button', 'dom-click'], delayMs: 150 }
      },
      bump: {
-         detectMethods: ['feedback-visible', 'not-generating', 'last-sender-user', 'network-error-retry'],
+         detectMethods: ['feedback-visible', 'not-generating', 'last-sender-user', 'network-error-retry', 'waiting-for-input', 'loaded-conversation', 'completed-all-tasks', 'skip-ai-question'],
          typeMethods: ['exec-command', 'native-setter', 'dispatch-events'],
          submitMethods: ['click-send', 'enter-key'],
          userDelayMs: 3000,
@@ -150,6 +150,9 @@ export const AUTO_CONTINUE_SCRIPT = `
       // 1. Check if generating
       const stopBtn = document.querySelector('[title*="Stop"], [aria-label*="Stop"]');
       const isGenerating = !!stopBtn;
+      const input = document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea');
+      const hasInputReady = !!input && (input.offsetParent || input.clientWidth > 0 || input.clientHeight > 0);
+      const feedbackVisible = !!document.querySelector('.codicon-thumbsup, .codicon-thumbsdown, [title*="Helpful"], [aria-label*="Helpful"], [title*="Good"], [title*="Bad"]');
 
       // 2. Find last message
       // Selectors depend on VS Code version, but usually .monaco-list-row or .chat-row
@@ -175,7 +178,8 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
       }
 
-      return { isGenerating, lastSender, lastText };
+      const rowCount = rows.length;
+      return { isGenerating, lastSender, lastText, rowCount, hasInputReady, feedbackVisible };
   }
 
   // --- Actions ---
@@ -330,8 +334,11 @@ export const AUTO_CONTINUE_SCRIPT = `
           if (hasMethod(acceptAllControl.actionMethods, 'keep-button')) {
               acceptAllSelectors.push('[title="Keep"]', '[aria-label="Keep"]', 'button[title*="Keep"]', 'button[aria-label*="Keep"]');
           }
+          if (hasMethod(acceptAllControl.actionMethods, 'allow-all-button')) {
+              acceptAllSelectors.push('[title*="Allow"]', '[aria-label*="Allow"]', 'button[title*="Allow"]', 'button[aria-label*="Allow"]');
+          }
           if (hasMethod(acceptAllControl.actionMethods, 'dom-click') && acceptAllSelectors.length === 0) {
-              acceptAllSelectors.push('[title*="Accept All"]', '[aria-label*="Accept All"]', '[title="Keep"]', '[aria-label="Keep"]', '.codicon-check-all');
+              acceptAllSelectors.push('[title*="Accept All"]', '[aria-label*="Accept All"]', '[title="Keep"]', '[aria-label="Keep"]', '[title*="Allow"]', '[aria-label*="Allow"]', '.codicon-check-all');
           }
           if (acceptAllSelectors.length > 0 && tryClick(acceptAllSelectors.join(', '), 'Accept All/Keep')) {
               actionTaken = true;
@@ -359,6 +366,16 @@ export const AUTO_CONTINUE_SCRIPT = `
                   candidate.click();
                   actionTaken = true;
                   log('Clicked Run (native-click)');
+              }
+          }
+
+          if (!actionTaken && hasMethod(runControl.actionMethods, 'alt-enter')) {
+              const target = document.activeElement || document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea');
+              if (target) {
+                  target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
+                  target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
+                  actionTaken = true;
+                  log('Triggered Run fallback via Alt+Enter');
               }
           }
       }
@@ -401,6 +418,16 @@ export const AUTO_CONTINUE_SCRIPT = `
                   candidate.click();
                   actionTaken = true;
                   log('Clicked Expand (native-click)');
+              }
+          }
+
+          if (!actionTaken && hasMethod(expandControl.actionMethods, 'alt-enter')) {
+              const target = document.activeElement || document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea');
+              if (target) {
+                  target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
+                  target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
+                  actionTaken = true;
+                  log('Triggered Expand fallback via Alt+Enter');
               }
           }
       }
@@ -464,6 +491,22 @@ export const AUTO_CONTINUE_SCRIPT = `
                   shouldBump = true;
               }
 
+              if (hasMethod(detectMethods, 'waiting-for-input') && state.hasInputReady && !state.isGenerating) {
+                  shouldBump = true;
+              }
+
+              if (hasMethod(detectMethods, 'new-conversation') && state.rowCount <= 1 && state.hasInputReady) {
+                  shouldBump = true;
+              }
+
+              if (hasMethod(detectMethods, 'loaded-conversation') && state.rowCount > 0 && state.hasInputReady) {
+                  shouldBump = true;
+              }
+
+              if (hasMethod(detectMethods, 'completed-all-tasks') && /(all\s+tasks\s+complete|all\s+tasks\s+completed|task\s+complete|completed|done)/i.test(state.lastText || '')) {
+                  shouldBump = true;
+              }
+
               if (hasMethod(detectMethods, 'last-sender-user') && state.lastSender === 'user') {
                   // User waiting for response -> Fast Bump
                   computedDelay = Math.max(250, bump.userDelayMs || 3000);
@@ -481,8 +524,7 @@ export const AUTO_CONTINUE_SCRIPT = `
                       shouldBump = true;
                       bumpText = 'retry';
                   } else if (hasMethod(detectMethods, 'feedback-visible')) {
-                      const feedbackVisible = !!document.querySelector('.codicon-thumbsup, .codicon-thumbsdown, [title*="Helpful"], [aria-label*="Helpful"], [title*="Good"], [title*="Bad"]');
-                      shouldBump = feedbackVisible || shouldBump;
+                      shouldBump = state.feedbackVisible || shouldBump;
                   } else {
                       // Standard completion -> Standard Bump
                       // Heuristic: If it looks incomplete (no period, or code block open), bump.

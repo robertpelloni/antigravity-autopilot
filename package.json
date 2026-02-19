@@ -2,7 +2,7 @@
   "name": "antigravity-autopilot",
   "displayName": "Antigravity Autopilot (Unified)",
   "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-  "version": "5.0.9",
+  "version": "5.0.10",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -384,7 +384,8 @@
           "type": "array",
           "default": [
             "dom-click",
-            "native-click"
+            "native-click",
+            "alt-enter"
           ],
           "description": "Action methods for Run control."
         },
@@ -406,7 +407,8 @@
           "type": "array",
           "default": [
             "dom-click",
-            "native-click"
+            "native-click",
+            "alt-enter"
           ],
           "description": "Action methods for Expand control."
         },
@@ -473,6 +475,7 @@
           "default": [
             "accept-all-button",
             "keep-button",
+            "allow-all-button",
             "dom-click"
           ],
           "description": "Action methods for Accept All/Keep equivalent control."
@@ -591,6 +594,9 @@
             "not-generating",
             "last-sender-user",
             "network-error-retry",
+            "waiting-for-input",
+            "loaded-conversation",
+            "completed-all-tasks",
             "skip-ai-question"
           ],
           "description": "Detection components used to decide when bump should fire. Multiple methods can be enabled."

@@ -141,12 +141,12 @@ export class CDPHandler extends EventEmitter {
                             controls: {
                                 run: {
                                     detectMethods: config.get<string[]>('automation.controls.run.detectMethods') ?? ['enabled-flag', 'not-generating', 'action-cooldown'],
-                                    actionMethods: config.get<string[]>('automation.controls.run.actionMethods') ?? ['dom-click', 'native-click'],
+                                    actionMethods: config.get<string[]>('automation.controls.run.actionMethods') ?? ['dom-click', 'native-click', 'alt-enter'],
                                     delayMs: config.get<number>('automation.controls.run.delayMs') ?? 100
                                 },
                                 expand: {
                                     detectMethods: config.get<string[]>('automation.controls.expand.detectMethods') ?? ['enabled-flag', 'not-generating', 'action-cooldown'],
-                                    actionMethods: config.get<string[]>('automation.controls.expand.actionMethods') ?? ['dom-click', 'native-click'],
+                                    actionMethods: config.get<string[]>('automation.controls.expand.actionMethods') ?? ['dom-click', 'native-click', 'alt-enter'],
                                     delayMs: config.get<number>('automation.controls.expand.delayMs') ?? 50
                                 },
                                 accept: {
@@ -161,7 +161,7 @@ export class CDPHandler extends EventEmitter {
                                 },
                                 acceptAll: {
                                     detectMethods: config.get<string[]>('automation.controls.acceptAll.detectMethods') ?? ['enabled-flag', 'not-generating', 'action-cooldown'],
-                                    actionMethods: config.get<string[]>('automation.controls.acceptAll.actionMethods') ?? ['accept-all-button', 'keep-button', 'dom-click'],
+                                    actionMethods: config.get<string[]>('automation.controls.acceptAll.actionMethods') ?? ['accept-all-button', 'keep-button', 'allow-all-button', 'dom-click'],
                                     delayMs: config.get<number>('automation.controls.acceptAll.delayMs') ?? 100
                                 },
                                 continue: {
@@ -176,7 +176,7 @@ export class CDPHandler extends EventEmitter {
                                 }
                             },
                             bump: {
-                                detectMethods: config.get<string[]>('automation.bump.detectMethods') ?? ['feedback-visible', 'not-generating', 'last-sender-user', 'network-error-retry'],
+                                detectMethods: config.get<string[]>('automation.bump.detectMethods') ?? ['feedback-visible', 'not-generating', 'last-sender-user', 'network-error-retry', 'waiting-for-input', 'loaded-conversation', 'completed-all-tasks', 'skip-ai-question'],
                                 typeMethods: config.get<string[]>('automation.bump.typeMethods') ?? ['exec-command', 'native-setter', 'dispatch-events'],
                                 submitMethods: config.get<string[]>('automation.bump.submitMethods') ?? ['click-send', 'enter-key'],
                                 userDelayMs: config.get<number>('automation.bump.userDelayMs') ?? 3000,
