@@ -1,4 +1,4 @@
-bumpbumpbumpbumpbumpbump# Memory & Development Context
+# Memory & Development Context
 
 This file serves as a persistent brain for autonomous agents working on **Antigravity Autopilot**. It contains critical architectural gotchas, hard-learned lessons, and design preferences. Review this before attempting deep refactors.
 
