@@ -98,6 +98,31 @@ export class DashboardPanel {
                         });
                         return;
                     }
+                    case 'runTest': {
+                        const methodId = String(message.testId || '').trim();
+                        const text = String(message.label || message.text || 'Test Input String');
+                        if (!methodId) {
+                            vscode.window.showErrorMessage('No test method id provided.');
+                            return;
+                        }
+                        vscode.window.withProgress({
+                            location: vscode.ProgressLocation.Notification,
+                            title: `Testing Method: ${methodId}`,
+                            cancellable: false
+                        }, async (progress) => {
+                            progress.report({ message: 'Waiting 3s for you to focus target...' });
+                            await new Promise(r => setTimeout(r, 3000));
+                            progress.report({ message: 'Executing...' });
+
+                            const success = await vscode.commands.executeCommand('antigravity.testMethod', methodId, text);
+                            if (success) {
+                                vscode.window.showInformationMessage(`✅ Method '${methodId}' executed successfully.`);
+                            } else {
+                                vscode.window.showErrorMessage(`❌ Method '${methodId}' failed or returned false.`);
+                            }
+                        });
+                        return;
+                    }
                 }
             },
             null,
@@ -299,6 +324,10 @@ export class DashboardPanel {
                     <label>Universal Master Toggle:</label>
                     <input type="checkbox" ${(settings.autonomousEnabled || settings.autopilotAutoAcceptEnabled || settings.autoAllEnabled || settings.autoContinueScriptEnabled) ? 'checked' : ''} onchange="runCommand('antigravity.toggleMasterControl')">
                 </div>
+                <div class="setting" title="One-click preset that enables CDP, injected automation, run/expand/accept/continue/submit/bump, and autonomous loop defaults for maximum autopilot coverage.">
+                    <label>Maximum Autopilot:</label>
+                    <button onclick="runCommand('antigravity.enableMaximumAutopilot')">Enable Maximum Mode</button>
+                </div>
                 <div class="setting" title="Immediate hard stop for all autonomy systems. Hotkey: Ctrl+Alt+Shift+Backspace.">
                     <label>Emergency Stop:</label>
                     <button onclick="runCommand('antigravity.panicStop')">Disable Everything Now</button>
@@ -467,9 +496,33 @@ export class DashboardPanel {
                     <label>Poll Interval (ms):</label>
                     <input type="number" value="${config.get('automation.timing.pollIntervalMs') ?? 800}" min="100" onchange="updateConfig('automation.timing.pollIntervalMs', parseInt(this.value))">
                 </div>
+                <div class="setting" title="Minimum delay between automation actions. Increase if actions feel too aggressive; decrease for faster response.">
+                    <label>Action Throttle (ms):</label>
+                    <input type="number" value="${config.get('automation.timing.actionThrottleMs') ?? 1000}" min="0" onchange="updateConfig('automation.timing.actionThrottleMs', parseInt(this.value))">
+                </div>
+                <div class="setting" title="Global settle cooldown applied after heavier actions (like bump/submit) before the next cycle can execute.">
+                    <label>Global Cooldown (ms):</label>
+                    <input type="number" value="${config.get('automation.timing.cooldownMs') ?? 2500}" min="0" onchange="updateConfig('automation.timing.cooldownMs', parseInt(this.value))">
+                </div>
+                <div class="setting" title="Random jitter added to action scheduling to reduce deterministic cadence. Set 0 for strict machine timing.">
+                    <label>Timing Randomness (ms):</label>
+                    <input type="number" value="${config.get('automation.timing.randomness') ?? 100}" min="0" onchange="updateConfig('automation.timing.randomness', parseInt(this.value))">
+                </div>
                  <div class="setting" title="Draws a visual border or highlight around elements that the automation script is interacting with. Useful for debugging and verifying behavior.">
                     <label>Debug Highlight:</label>
                     <input type="checkbox" ${config.get('automation.debug.highlightClicks') ? 'checked' : ''} onchange="updateConfig('automation.debug.highlightClicks', this.checked)">
+                </div>
+                <div class="setting" title="Enable verbose browser-side runtime logging. Recommended ON while troubleshooting detection/click decisions.">
+                    <label>Verbose Runtime Logs:</label>
+                    <input type="checkbox" ${config.get('automation.debug.verboseLogging') ? 'checked' : ''} onchange="updateConfig('automation.debug.verboseLogging', this.checked)">
+                </div>
+                <div class="setting" title="Log every noteworthy detection/action transition from the injected script.">
+                    <label>Log All Actions:</label>
+                    <input type="checkbox" ${config.get('automation.debug.logAllActions') !== false ? 'checked' : ''} onchange="updateConfig('automation.debug.logAllActions', this.checked)">
+                </div>
+                <div class="setting" title="Forward browser automation logs into the Antigravity Debug output channel.">
+                    <label>Forward Logs To Debug:</label>
+                    <input type="checkbox" ${config.get('automation.debug.logToExtension') !== false ? 'checked' : ''} onchange="updateConfig('automation.debug.logToExtension', this.checked)">
                 </div>
             </div>
 
@@ -670,6 +723,29 @@ export class DashboardPanel {
                 <div class="setting" title="Enable audible action feedback. When OFF, Antigravity will not emit Windows console beeps.">
                     <label>Sound Effects:</label>
                     <input type="checkbox" ${settings.soundEffectsEnabled ? 'checked' : ''} onchange="updateConfig('soundEffectsEnabled', this.checked)">
+                </div>
+                <div class="setting" title="When enabled, each action group can play its own distinct sound pattern (run/expand/submit/bump/etc).">
+                    <label>Per-Action Sounds:</label>
+                    <input type="checkbox" ${settings.soundEffectsPerActionEnabled !== false ? 'checked' : ''} onchange="updateConfig('soundEffectsPerActionEnabled', this.checked)">
+                </div>
+                <div class="setting vertical" title="JSON map from action group -> sound effect id. Example: {\"run\":\"run\",\"accept\":\"click\"}.">
+                    <label>Action Sound Map (JSON):</label>
+                    <textarea onchange="updateConfig('soundEffectsActionMap', parseInteractionTimings(this.value))">${JSON.stringify(settings.soundEffectsActionMap || {
+            submit: 'submit',
+            bump: 'bump',
+            resume: 'bump',
+            type: 'type',
+            run: 'run',
+            expand: 'expand',
+            'alt-enter': 'alt-enter',
+            accept: 'click',
+            'accept-all': 'success',
+            allow: 'click',
+            continue: 'submit',
+            click: 'click',
+            success: 'success',
+            error: 'error'
+        }, null, 2)}</textarea>
                 </div>
                  <div class="setting" title="When enabled, Antigravity will automatically stage, commit, and push changes to the repository after significant autonomous milestones.">
                     <label>Auto Git Commit:</label>
@@ -1131,12 +1207,18 @@ export class DashboardPanel {
                     updateConfig('autopilotAutoAcceptEnabled', enabled);
                     updateConfig('autoAcceptEnabled', enabled);
                     updateConfig('autoAllEnabled', enabled);
+                    updateConfig('actions.autoAccept.enabled', enabled);
+                    updateConfig('actions.run.enabled', enabled);
+                    updateConfig('actions.expand.enabled', enabled);
+                    updateConfig('actions.bump.enabled', enabled);
+                    updateConfig('autoContinueScriptEnabled', enabled);
                 }
 
                 function updateUnifiedPollInterval(value) {
                     const sanitized = Number.isFinite(value) ? Math.max(100, Math.min(10000, value)) : 1000;
                     updateConfig('autoAcceptPollIntervalMs', sanitized);
                     updateConfig('pollFrequency', sanitized);
+                    updateConfig('automation.timing.pollIntervalMs', sanitized);
                 }
 
                 function updateUnifiedBumpCooldown(value) {
@@ -1326,6 +1408,8 @@ export class DashboardPanel {
                     const watchdogEscalationLast = document.getElementById('runtimeWatchdogEscalationLast');
                     const watchdogEscalationReason = document.getElementById('runtimeWatchdogEscalationReason');
                     const watchdogEscalationEvents = document.getElementById('runtimeWatchdogEscalationEvents');
+                    const btnStatus = document.getElementById('btn-status');
+                    const btnMatches = document.getElementById('btn-matches');
 
                     function coverageText(cov) {
                         if (!cov) return '-';
@@ -1380,6 +1464,8 @@ export class DashboardPanel {
                         watchdogEscalationLast.textContent = '-';
                         watchdogEscalationReason.textContent = '-';
                         watchdogEscalationEvents.textContent = '-';
+                        if (btnStatus) btnStatus.textContent = 'Runtime unavailable';
+                        if (btnMatches) btnMatches.textContent = '-';
                         watchdogEscalationEvents.textContent = '-';
                         
                         const sessionsList = document.getElementById('cdpSessionsList');
@@ -1489,6 +1575,22 @@ export class DashboardPanel {
                             .map(e => (new Date(e.at).toLocaleTimeString() + ' ' + String(e.event || 'event') + ': ' + String(e.detail || '')))
                             .join(' | ')
                         : '-';
+
+                    const buttonSignals = state.buttonSignals || null;
+                    if (btnStatus) {
+                        if (!buttonSignals) {
+                            btnStatus.textContent = 'No button signal telemetry';
+                        } else {
+                            const active = Object.entries(buttonSignals).filter(([_, v]) => Number(v) > 0).map(([k, v]) => k + ':' + v);
+                            btnStatus.textContent = active.length > 0 ? ('Detected: ' + active.join(', ')) : 'No target buttons detected';
+                        }
+                    }
+                    if (btnMatches) {
+                        const pollMs = Number(state.hostTelemetry?.timing?.pollIntervalMs || state.pollIntervalMs || ${config.get('automation.timing.pollIntervalMs') ?? 800});
+                        btnMatches.textContent = buttonSignals
+                            ? (JSON.stringify(buttonSignals) + ' | poll=' + pollMs + 'ms')
+                            : ('poll=' + pollMs + 'ms');
+                    }
                     
                     const sessionsList = document.getElementById('cdpSessionsList');
                     if (sessionsList) {

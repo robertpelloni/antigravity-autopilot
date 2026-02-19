@@ -8,6 +8,7 @@
 
 import * as vscode from 'vscode';
 import { SoundEffects } from '../utils/sound-effects';
+import { logToOutput } from '../utils/output-channel';
 
 // ============ Interfaces ============
 
@@ -836,18 +837,22 @@ export class InteractionMethodRegistry {
     ): Promise<InteractionResult[]> {
         const methods = this.getMethodsByCategory(category);
         const results: InteractionResult[] = [];
-        let successCount = 0;
+
+        logToOutput(`[Interaction] Category=${category} | methods=${methods.map(m => m.id).join(', ') || 'none'} | parallel=${this.config.parallelExecution}`);
 
         if (this.config.parallelExecution) {
             // Fire all methods simultaneously
             const settled = await Promise.allSettled(
                 methods.map(async m => {
                     const start = Date.now();
+                    logToOutput(`[Interaction] START ${category}:${m.id}`);
                     try {
                         const ok = await m.execute(ctx);
                         await delay(m.timingMs);
+                        logToOutput(`[Interaction] END ${category}:${m.id} | ok=${ok} | duration=${Date.now() - start}ms | postDelay=${m.timingMs}ms`);
                         return { methodId: m.id, success: ok, durationMs: Date.now() - start };
                     } catch (e: any) {
+                        logToOutput(`[Interaction] FAIL ${category}:${m.id} | duration=${Date.now() - start}ms | error=${String(e?.message || e || 'unknown')}`);
                         return { methodId: m.id, success: false, durationMs: Date.now() - start, error: e.message };
                     }
                 })
@@ -864,17 +869,19 @@ export class InteractionMethodRegistry {
 
                 const start = Date.now();
                 try {
+                    logToOutput(`[Interaction] START ${category}:${m.id}`);
                     const ok = await m.execute(ctx);
                     results.push({ methodId: m.id, success: ok, durationMs: Date.now() - start });
-                    if (ok) {
-                        successCount++;
-                    }
+                    logToOutput(`[Interaction] END ${category}:${m.id} | ok=${ok} | duration=${Date.now() - start}ms | postDelay=${m.timingMs}ms`);
                     if (m.timingMs > 0) await delay(m.timingMs);
                 } catch (e: any) {
+                    logToOutput(`[Interaction] FAIL ${category}:${m.id} | duration=${Date.now() - start}ms | error=${String(e?.message || e || 'unknown')}`);
                     results.push({ methodId: m.id, success: false, durationMs: Date.now() - start, error: e.message });
                 }
             }
         }
+
+        logToOutput(`[Interaction] Category complete=${category} | attempts=${results.length} | successes=${results.filter(r => r.success).length}`);
 
         return results;
     }
@@ -885,14 +892,18 @@ export class InteractionMethodRegistry {
     async executeMethod(methodId: string, ctx: InteractionContext): Promise<InteractionResult> {
         const method = this.getMethod(methodId);
         if (!method) {
+            logToOutput(`[Interaction] Method not found: ${methodId}`);
             return { methodId, success: false, durationMs: 0, error: 'Method not found' };
         }
 
         const start = Date.now();
         try {
+            logToOutput(`[Interaction] START single:${methodId}`);
             const success = await method.execute(ctx);
+            logToOutput(`[Interaction] END single:${methodId} | ok=${success} | duration=${Date.now() - start}ms | postDelay=${method.timingMs}ms`);
             return { methodId, success, durationMs: Date.now() - start };
         } catch (e: any) {
+            logToOutput(`[Interaction] FAIL single:${methodId} | duration=${Date.now() - start}ms | error=${String(e?.message || e || 'unknown')}`);
             return { methodId, success: false, durationMs: Date.now() - start, error: e.message };
         }
     }

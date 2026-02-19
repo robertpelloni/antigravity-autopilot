@@ -106,7 +106,10 @@ export class CDPStrategy implements IStrategy {
         this.syncBlindBumpHandlerState();
 
         // Poll for CDP connection status
-        const frequency = config.get<number>('autoAcceptPollIntervalMs') || config.get<number>('pollFrequency') || 1000;
+        const frequency = config.get<number>('automation.timing.pollIntervalMs')
+            || config.get<number>('autoAcceptPollIntervalMs')
+            || config.get<number>('pollFrequency')
+            || 1000;
         this.pollTimer = setInterval(async () => {
             if (!this.isActive) return;
 
@@ -173,15 +176,15 @@ export class CDPStrategy implements IStrategy {
                 });
                 break;
             case 'submit':
-                SoundEffects.play('submit');
+                SoundEffects.playActionGroup('submit');
                 await this.registry.executeCategory('submit', ctx);
                 break;
             case 'type':
-                SoundEffects.play('type');
+                SoundEffects.playActionGroup('type');
                 await this.registry.executeCategory('text', ctx);
                 break;
             case 'run':
-                SoundEffects.play('run');
+                SoundEffects.playActionGroup('run');
                 await clickRegistry.executeCategory('click', {
                     ...ctx,
                     selector,
@@ -189,7 +192,7 @@ export class CDPStrategy implements IStrategy {
                 });
                 break;
             case 'expand':
-                SoundEffects.play('expand');
+                SoundEffects.playActionGroup('expand');
                 await clickRegistry.executeCategory('click', {
                     ...ctx,
                     selector,
@@ -240,7 +243,7 @@ export class CDPStrategy implements IStrategy {
 
         const success = await clickRegistry.executeCategory('click', ctx);
         if (success) {
-            SoundEffects.play('click');
+            SoundEffects.playActionGroup('click');
         }
     }
 
@@ -347,7 +350,7 @@ export class CDPStrategy implements IStrategy {
      * Sends a single hybrid bump/resume message to chat.
      */
     async sendHybridBump(message: string): Promise<boolean> {
-        SoundEffects.play('bump');
+        SoundEffects.playActionGroup('bump');
         return this.cdpHandler.sendHybridBump(message);
     }
 

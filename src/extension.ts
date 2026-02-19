@@ -343,6 +343,56 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage('Antigravity Master Toggle: core autonomy enabled (CDP + Auto-All + Autonomous Loop).');
     };
 
+    const enableMaximumAutopilot = async (source: string = 'maximum autopilot') => {
+        const updates: Array<[string, any]> = [
+            ['strategy', 'cdp'],
+            ['autonomousEnabled', true],
+            ['autopilotAutoAcceptEnabled', true],
+            ['autopilotAutoBumpEnabled', true],
+            ['autopilotRunExpandContinueEnabled', true],
+            ['autoAcceptEnabled', true],
+            ['autoAllEnabled', true],
+            ['actions.autoAccept.enabled', true],
+            ['actions.bump.enabled', true],
+            ['actions.run.enabled', true],
+            ['actions.expand.enabled', true],
+            ['autoContinueScriptEnabled', true],
+            ['automation.actions.clickRun', true],
+            ['automation.actions.clickExpand', true],
+            ['automation.actions.clickAccept', true],
+            ['automation.actions.clickAcceptAll', true],
+            ['automation.actions.clickContinue', true],
+            ['automation.actions.clickSubmit', true],
+            ['automation.actions.autoReply', true],
+            ['automation.debug.logAllActions', true],
+            ['automation.debug.logToExtension', true],
+            ['automation.debug.verboseLogging', true],
+            ['automation.timing.pollIntervalMs', Math.max(100, config.get<number>('automation.timing.pollIntervalMs') || 800)],
+            ['experimental.cdpAggressiveDiscovery', false],
+            ['experimental.cdpExplicitDiscovery', false]
+        ];
+
+        for (const [key, value] of updates) {
+            try {
+                await config.update(key, value);
+            } catch { }
+        }
+
+        try {
+            await strategyManager.start();
+        } catch { }
+
+        if (!autonomousLoop.isRunning()) {
+            try {
+                await autonomousLoop.start();
+            } catch { }
+        }
+
+        await refreshRuntimeState().catch(() => { });
+        log.info(`[MaxAutopilot] Maximum autopilot preset enabled (${source}).`);
+        vscode.window.showInformationMessage('Antigravity: Maximum Autopilot enabled (CDP + Run/Expand/Accept/Continue/Submit + Bump + verbose debug telemetry).');
+    };
+
     const toggleMasterControl = async () => {
         const isEnabled = !!config.get<boolean>('autonomousEnabled')
             || !!config.get<boolean>('autopilotAutoAcceptEnabled')
@@ -972,6 +1022,9 @@ export function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('antigravity.toggleMasterControl', async () => {
             await toggleMasterControl();
+        }),
+        vscode.commands.registerCommand('antigravity.enableMaximumAutopilot', async () => {
+            await enableMaximumAutopilot('dashboard/command');
         }),
         vscode.commands.registerCommand('antigravity.panicStop', async () => {
             await emergencyDisableAllAutonomy('panic command');

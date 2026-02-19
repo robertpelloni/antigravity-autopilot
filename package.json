@@ -2,7 +2,7 @@
   "name": "antigravity-autopilot",
   "displayName": "Antigravity Autopilot (Unified)",
   "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-  "version": "5.0.10",
+  "version": "5.0.11",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -48,6 +48,10 @@
       {
         "command": "antigravity.toggleMasterControl",
         "title": "Antigravity: Toggle MASTER Control (All Core Autonomy)"
+      },
+      {
+        "command": "antigravity.enableMaximumAutopilot",
+        "title": "Antigravity: Enable Maximum Autopilot"
       },
       {
         "command": "antigravity.panicStop",
@@ -323,6 +327,31 @@
           "default": false,
           "description": "Enable audible action feedback beeps (Windows console beep)."
         },
+        "antigravity.soundEffectsPerActionEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "When enabled, play action-group-specific sounds (run, expand, submit, bump, etc.)."
+        },
+        "antigravity.soundEffectsActionMap": {
+          "type": "object",
+          "default": {
+            "submit": "submit",
+            "bump": "bump",
+            "resume": "bump",
+            "type": "type",
+            "run": "run",
+            "expand": "expand",
+            "alt-enter": "alt-enter",
+            "accept": "click",
+            "accept-all": "success",
+            "allow": "click",
+            "continue": "submit",
+            "click": "click",
+            "success": "success",
+            "error": "error"
+          },
+          "description": "Map action groups to sound effect IDs. Example: { \"run\": \"run\", \"accept\": \"click\" }."
+        },
         "antigravity.watchdogEnabled": {
           "type": "boolean",
           "default": true,
@@ -566,6 +595,16 @@
           "type": "boolean",
           "default": false,
           "description": "Enable detailed console logs in the browser DevTools for the automation script."
+        },
+        "antigravity.automation.debug.logAllActions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Emit detailed action/detection logs for each noteworthy automation event."
+        },
+        "antigravity.automation.debug.logToExtension": {
+          "type": "boolean",
+          "default": true,
+          "description": "Forward automation logs/events from injected scripts into Antigravity Debug output channel."
         },
         "antigravity.automation.actions.autoScroll": {
           "type": "boolean",
@@ -1149,7 +1188,7 @@
         },
         "antigravity.experimental.cdpExplicitDiscovery": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "If true, explicitly queries for existing webviews/iframes and attaches to them on startup. Disable if experiencing blank screen issues.",
           "scope": "window"
         },

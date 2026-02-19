@@ -565,6 +565,32 @@
         };
     }
 
+    function collectButtonSignals() {
+        const countVisible = (selectors) => {
+            const arr = Array.isArray(selectors) ? selectors : [selectors];
+            let count = 0;
+            for (const sel of arr) {
+                const nodes = queryAll(sel);
+                for (const n of nodes) {
+                    if (isElementVisible(n)) count += 1;
+                }
+            }
+            return count;
+        };
+
+        return {
+            acceptAll: countVisible(['[title*="Accept All"]', '[aria-label*="Accept All"]']),
+            allow: countVisible(['[title*="Allow"]', '[aria-label*="Allow"]']),
+            keep: countVisible(['[title="Keep"]', '[aria-label="Keep"]', 'button[title*="Keep"]', 'button[aria-label*="Keep"]']),
+            run: countVisible(['[title*="Run in Terminal"]', '[aria-label*="Run in Terminal"]', '.codicon-play', '.codicon-run']),
+            expand: countVisible(['[title*="Expand"]', '[aria-label*="Expand"]', '.codicon-chevron-right', '.monaco-tl-twistie.collapsed']),
+            continue: countVisible(['button[title*="Continue"]', 'button[aria-label*="Continue"]', '.action-label']),
+            feedback: countVisible(['.codicon-thumbsup', '.codicon-thumbsdown', '[title*="Helpful"]', '[aria-label*="Helpful"]', '[title*="Good"]', '[title*="Bad"]']),
+            send: countVisible(getUnifiedSendButtonSelectors(getCurrentMode())),
+            input: countVisible(getUnifiedTextInputSelectors(getCurrentMode()))
+        };
+    }
+
     function getRuntimeStateSnapshot() {
         const state = window.__autoAllState || {};
         const mode = getCurrentMode();
@@ -574,6 +600,7 @@
             cursor: getProfileCoverage('cursor')
         };
         const activeCoverage = profileCoverage[mode] || getProfileCoverage(mode);
+        const buttonSignals = collectButtonSignals();
 
         const pendingAcceptButtons = activeCoverage.pendingAcceptButtons;
         const hasVisibleSendButton = activeCoverage.hasVisibleSendButton;
@@ -667,6 +694,7 @@
                     allTasksCompleteBySignals
                 }
             },
+            buttonSignals,
             profileCoverage,
             lastClickTime,
             lastBumpTime,

@@ -33,7 +33,7 @@ export const AUTO_CONTINUE_SCRIPT = `
          typingDelayMs: 50,
          submitDelayMs: 100
      },
-     debug: { highlightClicks: false, verboseLogging: false },
+     debug: { highlightClicks: false, verboseLogging: false, logAllActions: true, logToExtension: true },
      timing: { 
          pollIntervalMs: 800, 
          actionThrottleMs: 500, 
@@ -44,6 +44,8 @@ export const AUTO_CONTINUE_SCRIPT = `
   };
 
   let lastAction = Date.now(); 
+    const lastActionByControl = { run: 0, expand: 0, accept: 0, acceptAll: 0, continue: 0, submit: 0, feedback: 0, bump: 0 };
+    let lastStateSignature = '';
   let pollTimer = null;
 
   function getConfig() {
@@ -55,6 +57,31 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (cfg.debug?.verboseLogging) {
       console.log('[auto-continue] ' + msg);
     }
+  }
+
+  function emitBridge(payload) {
+      try {
+          if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
+              window.__ANTIGRAVITY_BRIDGE__(payload);
+          } else {
+              console.log(payload);
+          }
+      } catch {}
+  }
+
+  function logAction(msg) {
+      const cfg = getConfig();
+      if (cfg.debug?.verboseLogging || cfg.debug?.logAllActions) {
+          console.log('[auto-continue] ' + msg);
+      }
+      if (cfg.debug?.logToExtension !== false) {
+          emitBridge('__ANTIGRAVITY_LOG__:' + msg);
+      }
+  }
+
+  function emitAction(group, detail) {
+      logAction('action=' + group + ' detail=' + detail);
+      emitBridge('__ANTIGRAVITY_ACTION__:' + String(group || 'click') + '|' + String(detail || 'triggered'));
   }
 
   function hasMethod(methods, id) {
@@ -85,7 +112,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       };
   }
 
-  function controlGatePass(controlName, cfg, state, now, lastActionTime) {
+    function controlGatePass(controlName, cfg, state, now, controlLastActionTime) {
       const control = getControlConfig(cfg, controlName);
       const detect = control.detectMethods || [];
       if (!Array.isArray(detect) || detect.length === 0) return false;
@@ -108,7 +135,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       if (hasMethod(detect, 'enabled-flag') && !enabledByFlag) return false;
       if (hasMethod(detect, 'not-generating') && state.isGenerating) return false;
-      if (hasMethod(detect, 'action-cooldown') && (now - lastActionTime < Math.max(0, control.delayMs || 0))) return false;
+      if (hasMethod(detect, 'action-cooldown') && (now - controlLastActionTime < Math.max(0, control.delayMs || 0))) return false;
       if (hasMethod(detect, 'idle-only') && state.lastSender !== 'ai') return false;
       return true;
   }
@@ -179,12 +206,22 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
 
       const rowCount = rows.length;
-      return { isGenerating, lastSender, lastText, rowCount, hasInputReady, feedbackVisible };
+      const buttonSignals = {
+          acceptAll: document.querySelectorAll('[title*="Accept All"], [aria-label*="Accept All"]').length,
+          keep: document.querySelectorAll('[title="Keep"], [aria-label="Keep"], button[title*="Keep"], button[aria-label*="Keep"]').length,
+          allow: document.querySelectorAll('[title*="Allow"], [aria-label*="Allow"], button[title*="Allow"], button[aria-label*="Allow"]').length,
+          run: document.querySelectorAll('[title*="Run in Terminal"], [aria-label*="Run in Terminal"], .codicon-play, .codicon-run').length,
+          expand: document.querySelectorAll('[title*="Expand"], [aria-label*="Expand"], .monaco-tl-twistie.collapsed, .codicon-chevron-right').length,
+          continue: document.querySelectorAll('a.monaco-button, button.monaco-button, .action-label').length,
+          submit: document.querySelectorAll('[title="Send"], [aria-label="Send"], [title*="Submit"], [aria-label*="Submit"], .codicon-send').length,
+          feedback: document.querySelectorAll('.codicon-thumbsup, .codicon-thumbsdown, [title*="Helpful"], [aria-label*="Helpful"], [title*="Good"], [title*="Bad"]').length
+      };
+      return { isGenerating, lastSender, lastText, rowCount, hasInputReady, feedbackVisible, buttonSignals };
   }
 
   // --- Actions ---
 
-  function tryClick(selector, name) {
+    function tryClick(selector, name, group) {
       const els = Array.from(document.querySelectorAll(selector));
       for (const el of els) {
           if (isUnsafeContext(el) || hasUnsafeLabel(el)) continue;
@@ -194,6 +231,7 @@ export const AUTO_CONTINUE_SCRIPT = `
              highlight(el);
              el.click();
              log('Clicked ' + name);
+             emitAction(group || 'click', name);
              return true; 
           }
       }
@@ -252,6 +290,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
 
           log('Auto-Replied (Typed): ' + text);
+          emitAction('type', 'typed bump text');
       }
 
       const submitDelay = Math.max(0, bump.submitDelayMs || 0);
@@ -260,17 +299,19 @@ export const AUTO_CONTINUE_SCRIPT = `
           let submitted = false;
 
           if (hasMethod(bump.submitMethods, 'click-send')) {
-              submitted = tryClick(sendSelectors, 'Submit (Auto-Reply)');
+              submitted = tryClick(sendSelectors, 'Submit (Auto-Reply)', 'submit');
           }
 
           if (!submitted && hasMethod(bump.submitMethods, 'enter-key')) {
               input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+              emitAction('submit', 'enter-key submit');
               submitted = true;
           }
 
           if (!submitted) {
-              if (!tryClick(sendSelectors, 'Submit (Auto-Reply fallback)')) {
+              if (!tryClick(sendSelectors, 'Submit (Auto-Reply fallback)', 'submit')) {
                   input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+                  emitAction('submit', 'fallback enter-key submit');
               }
           }
       }, submitDelay);
@@ -282,6 +323,23 @@ export const AUTO_CONTINUE_SCRIPT = `
       const cfg = getConfig();
       const now = Date.now();
     const state = analyzeChatState();
+      const stateSignature = [
+          state.isGenerating ? '1' : '0',
+          state.hasInputReady ? '1' : '0',
+          state.feedbackVisible ? '1' : '0',
+          state.lastSender,
+          state.rowCount,
+          state.buttonSignals?.acceptAll || 0,
+          state.buttonSignals?.keep || 0,
+          state.buttonSignals?.allow || 0,
+          state.buttonSignals?.run || 0,
+          state.buttonSignals?.expand || 0,
+          state.buttonSignals?.submit || 0
+      ].join('|');
+      if (stateSignature !== lastStateSignature) {
+          lastStateSignature = stateSignature;
+          logAction('state changed generating=' + state.isGenerating + ' sender=' + state.lastSender + ' rows=' + state.rowCount + ' input=' + state.hasInputReady + ' signals=' + JSON.stringify(state.buttonSignals || {}));
+      }
       const baseThrottle = cfg.timing?.actionThrottleMs ?? 500;
       const jitter = cfg.timing?.randomness ?? 50;
       if (now - lastAction < (baseThrottle + Math.random() * jitter)) return;
@@ -299,7 +357,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
 
       // 1. Continue / Keep (Priority)
-      if (controlGatePass('continue', cfg, state, now, lastAction)) {
+    if (controlGatePass('continue', cfg, state, now, lastActionByControl.continue)) {
           const continueControl = getControlConfig(cfg, 'continue');
           const contSel = 'a.monaco-button, button.monaco-button, .action-label';
           const els = Array.from(document.querySelectorAll(contSel));
@@ -319,13 +377,15 @@ export const AUTO_CONTINUE_SCRIPT = `
                     highlight(target);
                     target.click();
                     actionTaken = true;
+                    lastActionByControl.continue = now;
                     log('Clicked Continue/Keep');
+                    emitAction('continue', 'clicked continue/keep');
                }
           }
       }
 
       // 2.5 Auto-Accept-All
-      if (!actionTaken && controlGatePass('acceptAll', cfg, state, now, lastAction)) {
+    if (!actionTaken && controlGatePass('acceptAll', cfg, state, now, lastActionByControl.acceptAll)) {
           const acceptAllControl = getControlConfig(cfg, 'acceptAll');
           const acceptAllSelectors = [];
           if (hasMethod(acceptAllControl.actionMethods, 'accept-all-button')) {
@@ -340,13 +400,14 @@ export const AUTO_CONTINUE_SCRIPT = `
           if (hasMethod(acceptAllControl.actionMethods, 'dom-click') && acceptAllSelectors.length === 0) {
               acceptAllSelectors.push('[title*="Accept All"]', '[aria-label*="Accept All"]', '[title="Keep"]', '[aria-label="Keep"]', '[title*="Allow"]', '[aria-label*="Allow"]', '.codicon-check-all');
           }
-          if (acceptAllSelectors.length > 0 && tryClick(acceptAllSelectors.join(', '), 'Accept All/Keep')) {
+          if (acceptAllSelectors.length > 0 && tryClick(acceptAllSelectors.join(', '), 'Accept All/Keep', 'accept-all')) {
               actionTaken = true;
+              lastActionByControl.acceptAll = now;
           }
       }
 
       // 2. Auto-Run
-      if (!actionTaken && controlGatePass('run', cfg, state, now, lastAction)) {
+    if (!actionTaken && controlGatePass('run', cfg, state, now, lastActionByControl.run)) {
           const runControl = getControlConfig(cfg, 'run');
           const runSelectors = [
               '[title*="Run in Terminal"]',
@@ -355,8 +416,9 @@ export const AUTO_CONTINUE_SCRIPT = `
               '.codicon-run' 
           ].join(',');
 
-          if (hasMethod(runControl.actionMethods, 'dom-click') && tryClick(runSelectors, 'Run')) {
+          if (hasMethod(runControl.actionMethods, 'dom-click') && tryClick(runSelectors, 'Run', 'run')) {
               actionTaken = true;
+              lastActionByControl.run = now;
           }
 
           if (!actionTaken && hasMethod(runControl.actionMethods, 'native-click')) {
@@ -365,7 +427,9 @@ export const AUTO_CONTINUE_SCRIPT = `
                   highlight(candidate);
                   candidate.click();
                   actionTaken = true;
+                  lastActionByControl.run = now;
                   log('Clicked Run (native-click)');
+                  emitAction('run', 'native-click run');
               }
           }
 
@@ -375,30 +439,34 @@ export const AUTO_CONTINUE_SCRIPT = `
                   target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
                   target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
                   actionTaken = true;
+                  lastActionByControl.run = now;
                   log('Triggered Run fallback via Alt+Enter');
+                  emitAction('alt-enter', 'run fallback alt-enter');
               }
           }
       }
 
       // 3. Auto-Accept
-      if (!actionTaken && controlGatePass('accept', cfg, state, now, lastAction)) {
+    if (!actionTaken && controlGatePass('accept', cfg, state, now, lastActionByControl.accept)) {
           const acceptControl = getControlConfig(cfg, 'accept');
 
           if (!actionTaken && hasMethod(acceptControl.actionMethods, 'accept-single')) {
-              if (tryClick('[title="Accept"], [aria-label="Accept"], [title="Apply"], .codicon-check', 'Accept')) {
+              if (tryClick('[title="Accept"], [aria-label="Accept"], [title="Apply"], .codicon-check', 'Accept', 'accept')) {
                   actionTaken = true;
+                  lastActionByControl.accept = now;
               }
           }
 
           if (!actionTaken && hasMethod(acceptControl.actionMethods, 'dom-click')) {
-              if (tryClick('[title*="Accept"], [aria-label*="Accept"], [title*="Apply"], [aria-label*="Apply"]', 'Accept (DOM)')) {
+              if (tryClick('[title*="Accept"], [aria-label*="Accept"], [title*="Apply"], [aria-label*="Apply"]', 'Accept (DOM)', 'accept')) {
                   actionTaken = true;
+                  lastActionByControl.accept = now;
               }
           }
       }
 
       // 4. Auto-Expand
-      if (!actionTaken && controlGatePass('expand', cfg, state, now, lastAction)) {
+    if (!actionTaken && controlGatePass('expand', cfg, state, now, lastActionByControl.expand)) {
           const expandControl = getControlConfig(cfg, 'expand');
           const expandSelectors = [
               '[title*="Expand"]',
@@ -407,8 +475,9 @@ export const AUTO_CONTINUE_SCRIPT = `
               '.codicon-chevron-right'
           ].join(',');
 
-          if (hasMethod(expandControl.actionMethods, 'dom-click') && tryClick(expandSelectors, 'Expand')) {
+          if (hasMethod(expandControl.actionMethods, 'dom-click') && tryClick(expandSelectors, 'Expand', 'expand')) {
               actionTaken = true;
+              lastActionByControl.expand = now;
           }
 
           if (!actionTaken && hasMethod(expandControl.actionMethods, 'native-click')) {
@@ -417,7 +486,9 @@ export const AUTO_CONTINUE_SCRIPT = `
                   highlight(candidate);
                   candidate.click();
                   actionTaken = true;
+                  lastActionByControl.expand = now;
                   log('Clicked Expand (native-click)');
+                  emitAction('expand', 'native-click expand');
               }
           }
 
@@ -427,19 +498,22 @@ export const AUTO_CONTINUE_SCRIPT = `
                   target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
                   target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
                   actionTaken = true;
+                  lastActionByControl.expand = now;
                   log('Triggered Expand fallback via Alt+Enter');
+                  emitAction('alt-enter', 'expand fallback alt-enter');
               }
           }
       }
       
       // 5. Auto-Submit
-      if (!actionTaken && controlGatePass('submit', cfg, state, now, lastAction)) {
+    if (!actionTaken && controlGatePass('submit', cfg, state, now, lastActionByControl.submit)) {
           const submitControl = getControlConfig(cfg, 'submit');
           const submitDelay = Math.max(0, submitControl.delayMs || 0);
           const sendSelectors = '[title="Send"], [aria-label="Send"], [title*="Submit"], [aria-label*="Submit"], .codicon-send';
 
-          if (hasMethod(submitControl.actionMethods, 'click-send') && tryClick(sendSelectors, 'Submit')) {
+          if (hasMethod(submitControl.actionMethods, 'click-send') && tryClick(sendSelectors, 'Submit', 'submit')) {
               actionTaken = true;
+              lastActionByControl.submit = now;
           }
 
           if (!actionTaken && hasMethod(submitControl.actionMethods, 'enter-key')) {
@@ -449,13 +523,15 @@ export const AUTO_CONTINUE_SCRIPT = `
                       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
                   }, submitDelay);
                   actionTaken = true;
+                  lastActionByControl.submit = now;
                   log('Submitted via Enter key');
+                  emitAction('submit', 'submit enter-key');
               }
           }
       }
 
       // 6. Feedback
-      if (!actionTaken && controlGatePass('feedback', cfg, state, now, lastAction)) {
+    if (!actionTaken && controlGatePass('feedback', cfg, state, now, lastActionByControl.feedback)) {
           const feedbackControl = getControlConfig(cfg, 'feedback');
           const selectors = [];
           if (hasMethod(feedbackControl.actionMethods, 'helpful-button')) selectors.push('[title*="Helpful"]', '[aria-label*="Helpful"]');
@@ -468,7 +544,9 @@ export const AUTO_CONTINUE_SCRIPT = `
                highlight(target);
                target.click();
                actionTaken = true;
+               lastActionByControl.feedback = now;
                log('Clicked Feedback');
+               emitAction('success', 'clicked positive feedback');
           }
       }
 
@@ -539,7 +617,9 @@ export const AUTO_CONTINUE_SCRIPT = `
               if (shouldBump && (now - lastAction > computedDelay)) {
                   if (typeAndSubmit(bumpText)) {
                        actionTaken = true;
+                       lastActionByControl.bump = now;
                        log('Smart Resume: Bumped with "' + bumpText + '" (Delay: ' + computedDelay + 'ms)');
+                       emitAction('bump', 'smart resume bump text=' + bumpText);
                   }
               }
           }

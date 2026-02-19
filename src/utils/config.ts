@@ -45,6 +45,8 @@ export interface AntigravityConfig {
     mcpEnabled: boolean;
     voiceControlEnabled: boolean;
     soundEffectsEnabled: boolean;
+    soundEffectsPerActionEnabled: boolean;
+    soundEffectsActionMap: Record<string, string>;
     autoSwitchModels: boolean;
     autoGitCommit: boolean;
     autoContinueScriptEnabled: boolean;
@@ -202,6 +204,23 @@ export class ConfigManager {
             mcpEnabled: config.get('mcpEnabled', false),
             voiceControlEnabled: config.get('voiceControlEnabled', false),
             soundEffectsEnabled: config.get('soundEffectsEnabled', false),
+            soundEffectsPerActionEnabled: config.get('soundEffectsPerActionEnabled', true),
+            soundEffectsActionMap: config.get('soundEffectsActionMap', {
+                submit: 'submit',
+                bump: 'bump',
+                resume: 'bump',
+                type: 'type',
+                run: 'run',
+                expand: 'expand',
+                'alt-enter': 'alt-enter',
+                accept: 'click',
+                'accept-all': 'success',
+                allow: 'click',
+                continue: 'submit',
+                click: 'click',
+                success: 'success',
+                error: 'error'
+            }),
             autoSwitchModels: config.get('autoSwitchModels', true),
             autoGitCommit: config.get('autoGitCommit', false),
             autoContinueScriptEnabled: config.get('autoContinueScriptEnabled', true),

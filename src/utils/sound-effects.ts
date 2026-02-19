@@ -3,10 +3,42 @@ import * as os from 'os';
 import { config } from './config';
 
 export type SoundEffect = 'submit' | 'bump' | 'type' | 'run' | 'expand' | 'alt-enter' | 'click' | 'success' | 'error';
+export type ActionSoundGroup =
+    | 'submit'
+    | 'bump'
+    | 'resume'
+    | 'type'
+    | 'run'
+    | 'expand'
+    | 'alt-enter'
+    | 'accept'
+    | 'accept-all'
+    | 'allow'
+    | 'continue'
+    | 'click'
+    | 'success'
+    | 'error';
 
 export const SOUND_EFFECTS: SoundEffect[] = [
     'submit', 'bump', 'type', 'run', 'expand', 'alt-enter', 'click', 'success', 'error'
 ];
+
+const DEFAULT_ACTION_SOUND_MAP: Record<ActionSoundGroup, SoundEffect> = {
+    submit: 'submit',
+    bump: 'bump',
+    resume: 'bump',
+    type: 'type',
+    run: 'run',
+    expand: 'expand',
+    'alt-enter': 'alt-enter',
+    accept: 'click',
+    'accept-all': 'success',
+    allow: 'click',
+    continue: 'submit',
+    click: 'click',
+    success: 'success',
+    error: 'error'
+};
 
 export class SoundEffects {
     private static isWindows = os.platform() === 'win32';
@@ -65,5 +97,19 @@ export class SoundEffects {
                 }
             });
         }
+    }
+
+    static playActionGroup(group: ActionSoundGroup) {
+        if (!config.get<boolean>('soundEffectsEnabled')) return;
+
+        const perActionEnabled = config.get<boolean>('soundEffectsPerActionEnabled');
+        if (perActionEnabled === false) {
+            this.play('click');
+            return;
+        }
+
+        const configured = config.get<Record<string, SoundEffect>>('soundEffectsActionMap') || {};
+        const mapped = configured[group] || DEFAULT_ACTION_SOUND_MAP[group] || 'click';
+        this.play(mapped);
     }
 }

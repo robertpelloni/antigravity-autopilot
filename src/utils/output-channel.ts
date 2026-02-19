@@ -4,7 +4,21 @@ let outputChannel: vscode.OutputChannel | undefined;
 
 export function getOutputChannel(): vscode.OutputChannel {
     if (!outputChannel) {
-        outputChannel = vscode.window.createOutputChannel('Antigravity Debug');
+        const canCreate = !!(vscode as any)?.window?.createOutputChannel;
+        if (canCreate) {
+            outputChannel = vscode.window.createOutputChannel('Antigravity Debug');
+        } else {
+            outputChannel = {
+                appendLine: (value: string) => console.log(value),
+                append: (value: string) => console.log(value),
+                clear: () => { },
+                show: () => { },
+                hide: () => { },
+                dispose: () => { },
+                replace: (value: string) => console.log(value),
+                name: 'Antigravity Debug'
+            } as unknown as vscode.OutputChannel;
+        }
     }
     return outputChannel;
 }

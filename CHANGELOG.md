@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [5.0.11] - 2026-02-19
+- **Maximum Mode**: Added one-click `Enable Maximum Autopilot` command and dashboard control to activate CDP + injected automation + run/expand/accept/continue/submit/bump with debug telemetry.
+- **Reliability**: Auto-continue timing now tracks per-control cooldown windows (run/expand/accept/continue/submit/etc.) so configured delays are honored more predictably.
+- **Diagnostics**: Added rich action/detection logging from injected automation to `Antigravity Debug`, plus action-group events for troubleshooting missed clicks.
+- **Audio**: Added configurable per-action sound routing (`soundEffectsPerActionEnabled`, `soundEffectsActionMap`) for distinct audible feedback by action group.
+- **Dashboard**: Fixed method test button wiring, added runtime button-signal visibility, expanded timing/debug controls, and synchronized unified poll controls to `automation.timing.pollIntervalMs`.
+- **Stability**: Set `experimental.cdpExplicitDiscovery` default to `false` to reduce intermittent post-restart blank chat panel behavior.
+
 
 ## [5.0.10] - 2026-02-19
 - **Dashboard**: Added missing grouped action checkboxes for `Allow-All` (Accept All group) and `Alt+Enter` fallback toggles in both Run and Expand groups.

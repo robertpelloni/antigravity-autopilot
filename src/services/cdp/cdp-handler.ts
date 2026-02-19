@@ -6,6 +6,7 @@ import { EventEmitter } from 'events';
 import { config } from '../../utils/config';
 import { AUTO_CONTINUE_SCRIPT } from '../../scripts/auto-continue';
 import { logToOutput } from '../../utils/output-channel';
+import { SoundEffects, ActionSoundGroup } from '../../utils/sound-effects';
 
 export class CDPHandler extends EventEmitter {
     private startPort: number;
@@ -136,8 +137,8 @@ export class CDPHandler extends EventEmitter {
                             clickFeedback: config.get<boolean>('automation.actions.clickFeedback') ?? false,
                             autoScroll: config.get<boolean>('automation.actions.autoScroll') ?? true,
                             // Auto-Reply
-                            autoReply: config.get<boolean>('automation.actions.autoReply') ?? false,
-                            autoReplyText: config.get<string>('automation.actions.autoReplyText') ?? 'continue',
+                            autoReply: config.get<boolean>('automation.actions.autoReply') ?? true,
+                            autoReplyText: config.get<string>('automation.actions.autoReplyText') ?? config.get<string>('actions.bump.text') ?? 'continue',
                             controls: {
                                 run: {
                                     detectMethods: config.get<string[]>('automation.controls.run.detectMethods') ?? ['enabled-flag', 'not-generating', 'action-cooldown'],
@@ -186,7 +187,9 @@ export class CDPHandler extends EventEmitter {
                             },
                             debug: {
                                 highlightClicks: config.get<boolean>('automation.debug.highlightClicks') ?? false,
-                                verboseLogging: config.get<boolean>('automation.debug.verboseLogging') ?? false
+                                verboseLogging: config.get<boolean>('automation.debug.verboseLogging') ?? false,
+                                logAllActions: config.get<boolean>('automation.debug.logAllActions') ?? true,
+                                logToExtension: config.get<boolean>('automation.debug.logToExtension') ?? true
                             },
                             timing: {
                                 pollIntervalMs: config.get<number>('automation.timing.pollIntervalMs') ?? 1500,
@@ -578,6 +581,16 @@ export class CDPHandler extends EventEmitter {
                     text: '\r', unmodifiedText: '\r'
                 });
                 logToOutput(`[Bump-End] Hybrid Bump Sequence Complete`);
+            } else if (text.startsWith('__ANTIGRAVITY_ACTION__:')) {
+                const raw = text.substring('__ANTIGRAVITY_ACTION__:'.length);
+                const [groupRaw, detailRaw] = raw.split('|');
+                const group = (groupRaw || 'click').trim() as ActionSoundGroup;
+                const detail = (detailRaw || '').trim();
+                logToOutput(`[AutoAction:${group}] ${detail || 'triggered'}`);
+                SoundEffects.playActionGroup(group);
+            } else if (text.startsWith('__ANTIGRAVITY_LOG__:')) {
+                const raw = text.substring('__ANTIGRAVITY_LOG__:'.length);
+                logToOutput(`[AutoContinue] ${raw}`);
             }
         } catch (e) {
             console.error('Bridge Message Handler Error', e);
