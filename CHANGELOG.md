@@ -5,6 +5,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [5.0.12] - 2026-02-19
+- **Release**: Version synchronization across manifest/constants with routine patch bump.
+
 ## [5.0.11] - 2026-02-19
 - **Maximum Mode**: Added one-click `Enable Maximum Autopilot` command and dashboard control to activate CDP + injected automation + run/expand/accept/continue/submit/bump with debug telemetry.
 - **Reliability**: Auto-continue timing now tracks per-control cooldown windows (run/expand/accept/continue/submit/etc.) so configured delays are honored more predictably.
