@@ -138,6 +138,28 @@ export class CDPHandler extends EventEmitter {
                             // Auto-Reply
                             autoReply: config.get<boolean>('automation.actions.autoReply') ?? false,
                             autoReplyText: config.get<string>('automation.actions.autoReplyText') ?? 'continue',
+                            controls: {
+                                run: {
+                                    detectMethods: config.get<string[]>('automation.controls.run.detectMethods') ?? ['enabled-flag', 'not-generating', 'action-cooldown'],
+                                    actionMethods: config.get<string[]>('automation.controls.run.actionMethods') ?? ['dom-click', 'native-click'],
+                                    delayMs: config.get<number>('automation.controls.run.delayMs') ?? 100
+                                },
+                                expand: {
+                                    detectMethods: config.get<string[]>('automation.controls.expand.detectMethods') ?? ['enabled-flag', 'not-generating', 'action-cooldown'],
+                                    actionMethods: config.get<string[]>('automation.controls.expand.actionMethods') ?? ['dom-click', 'native-click'],
+                                    delayMs: config.get<number>('automation.controls.expand.delayMs') ?? 50
+                                },
+                                accept: {
+                                    detectMethods: config.get<string[]>('automation.controls.accept.detectMethods') ?? ['enabled-flag', 'not-generating', 'action-cooldown'],
+                                    actionMethods: config.get<string[]>('automation.controls.accept.actionMethods') ?? ['accept-all-first', 'accept-single', 'dom-click'],
+                                    delayMs: config.get<number>('automation.controls.accept.delayMs') ?? 100
+                                },
+                                submit: {
+                                    detectMethods: config.get<string[]>('automation.controls.submit.detectMethods') ?? ['enabled-flag', 'not-generating'],
+                                    actionMethods: config.get<string[]>('automation.controls.submit.actionMethods') ?? ['click-send', 'enter-key'],
+                                    delayMs: config.get<number>('automation.controls.submit.delayMs') ?? 100
+                                }
+                            },
                             bump: {
                                 detectMethods: config.get<string[]>('automation.bump.detectMethods') ?? ['feedback-visible', 'not-generating', 'last-sender-user', 'network-error-retry'],
                                 typeMethods: config.get<string[]>('automation.bump.typeMethods') ?? ['exec-command', 'native-setter', 'dispatch-events'],

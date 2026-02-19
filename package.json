@@ -371,6 +371,94 @@
           "description": "Auto-click 'Submit/Send' buttons.",
           "markdownDescription": "**Auto-Submit**:\nAutomatically clicks 'Send' or 'Submit' buttons if text has been entered into the chat input.\n\n*Ensures your prompts are actually sent.*"
         },
+        "antigravity.automation.controls.run.detectMethods": {
+          "type": "array",
+          "default": [
+            "enabled-flag",
+            "not-generating",
+            "action-cooldown"
+          ],
+          "description": "Detection components for Run control firing."
+        },
+        "antigravity.automation.controls.run.actionMethods": {
+          "type": "array",
+          "default": [
+            "dom-click",
+            "native-click"
+          ],
+          "description": "Action methods for Run control."
+        },
+        "antigravity.automation.controls.run.delayMs": {
+          "type": "number",
+          "default": 100,
+          "description": "Run control delay threshold in milliseconds."
+        },
+        "antigravity.automation.controls.expand.detectMethods": {
+          "type": "array",
+          "default": [
+            "enabled-flag",
+            "not-generating",
+            "action-cooldown"
+          ],
+          "description": "Detection components for Expand control firing."
+        },
+        "antigravity.automation.controls.expand.actionMethods": {
+          "type": "array",
+          "default": [
+            "dom-click",
+            "native-click"
+          ],
+          "description": "Action methods for Expand control."
+        },
+        "antigravity.automation.controls.expand.delayMs": {
+          "type": "number",
+          "default": 50,
+          "description": "Expand control delay threshold in milliseconds."
+        },
+        "antigravity.automation.controls.accept.detectMethods": {
+          "type": "array",
+          "default": [
+            "enabled-flag",
+            "not-generating",
+            "action-cooldown"
+          ],
+          "description": "Detection components for Accept control firing."
+        },
+        "antigravity.automation.controls.accept.actionMethods": {
+          "type": "array",
+          "default": [
+            "accept-all-first",
+            "accept-single",
+            "dom-click"
+          ],
+          "description": "Action methods for Accept control."
+        },
+        "antigravity.automation.controls.accept.delayMs": {
+          "type": "number",
+          "default": 100,
+          "description": "Accept control delay threshold in milliseconds."
+        },
+        "antigravity.automation.controls.submit.detectMethods": {
+          "type": "array",
+          "default": [
+            "enabled-flag",
+            "not-generating"
+          ],
+          "description": "Detection components for Submit control firing."
+        },
+        "antigravity.automation.controls.submit.actionMethods": {
+          "type": "array",
+          "default": [
+            "click-send",
+            "enter-key"
+          ],
+          "description": "Action methods for Submit control."
+        },
+        "antigravity.automation.controls.submit.delayMs": {
+          "type": "number",
+          "default": 100,
+          "description": "Submit control delay threshold in milliseconds."
+        },
         "antigravity.automation.actions.clickFeedback": {
           "type": "boolean",
           "default": false,

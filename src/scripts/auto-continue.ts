@@ -15,6 +15,12 @@ export const AUTO_CONTINUE_SCRIPT = `
      autoScroll: true,
      autoReply: true,
      autoReplyText: 'continue',
+     controls: {
+         run: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 100 },
+         expand: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 50 },
+         accept: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-first', 'accept-single', 'dom-click'], delayMs: 100 },
+         submit: { detectMethods: ['enabled-flag', 'not-generating'], actionMethods: ['click-send', 'enter-key'], delayMs: 100 }
+     },
      bump: {
          detectMethods: ['feedback-visible', 'not-generating', 'last-sender-user', 'network-error-retry'],
          typeMethods: ['exec-command', 'native-setter', 'dispatch-events'],
@@ -63,6 +69,39 @@ export const AUTO_CONTINUE_SCRIPT = `
           typingDelayMs: Number.isFinite(bump.typingDelayMs) ? bump.typingDelayMs : defaults.bump.typingDelayMs,
           submitDelayMs: Number.isFinite(bump.submitDelayMs) ? bump.submitDelayMs : defaults.bump.submitDelayMs
       };
+  }
+
+  function getControlConfig(cfg, controlName) {
+      const controls = cfg.controls || {};
+      const fallback = defaults.controls[controlName] || { detectMethods: [], actionMethods: [], delayMs: 0 };
+      const current = controls[controlName] || {};
+      return {
+          detectMethods: Array.isArray(current.detectMethods) ? current.detectMethods : fallback.detectMethods,
+          actionMethods: Array.isArray(current.actionMethods) ? current.actionMethods : fallback.actionMethods,
+          delayMs: Number.isFinite(current.delayMs) ? current.delayMs : fallback.delayMs
+      };
+  }
+
+  function controlGatePass(controlName, cfg, state, now, lastActionTime) {
+      const control = getControlConfig(cfg, controlName);
+      const detect = control.detectMethods || [];
+      if (!Array.isArray(detect) || detect.length === 0) return false;
+
+      const enabledByFlag = controlName === 'run'
+          ? !!cfg.clickRun
+          : controlName === 'expand'
+              ? !!cfg.clickExpand
+              : controlName === 'accept'
+                  ? !!cfg.clickAccept
+                  : controlName === 'submit'
+                      ? !!cfg.clickSubmit
+                      : true;
+
+      if (hasMethod(detect, 'enabled-flag') && !enabledByFlag) return false;
+      if (hasMethod(detect, 'not-generating') && state.isGenerating) return false;
+      if (hasMethod(detect, 'action-cooldown') && (now - lastActionTime < Math.max(0, control.delayMs || 0))) return false;
+      if (hasMethod(detect, 'idle-only') && state.lastSender !== 'ai') return false;
+      return true;
   }
 
   function highlight(el) {
@@ -211,6 +250,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     try {
       const cfg = getConfig();
       const now = Date.now();
+    const state = analyzeChatState();
       const baseThrottle = cfg.timing?.actionThrottleMs ?? 500;
       const jitter = cfg.timing?.randomness ?? 50;
       if (now - lastAction < (baseThrottle + Math.random() * jitter)) return;
@@ -248,41 +288,98 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
 
       // 2. Auto-Run
-      if (!actionTaken && cfg.clickRun) {
+      if (!actionTaken && controlGatePass('run', cfg, state, now, lastAction)) {
+          const runControl = getControlConfig(cfg, 'run');
           const runSelectors = [
               '[title*="Run in Terminal"]',
               '[aria-label*="Run in Terminal"]',
               '.codicon-play',
               '.codicon-run' 
           ].join(',');
-          if (tryClick(runSelectors, 'Run')) actionTaken = true;
+
+          if (hasMethod(runControl.actionMethods, 'dom-click') && tryClick(runSelectors, 'Run')) {
+              actionTaken = true;
+          }
+
+          if (!actionTaken && hasMethod(runControl.actionMethods, 'native-click')) {
+              const candidate = Array.from(document.querySelectorAll(runSelectors)).find(el => el && (el.offsetParent || el.clientWidth > 0));
+              if (candidate) {
+                  highlight(candidate);
+                  candidate.click();
+                  actionTaken = true;
+                  log('Clicked Run (native-click)');
+              }
+          }
       }
 
       // 3. Auto-Accept
-      if (!actionTaken && cfg.clickAccept) {
-          if (cfg.clickAcceptAll) {
-              if (tryClick('[title*="Accept All"], [aria-label*="Accept All"], .codicon-check-all', 'Accept All')) actionTaken = true;
+      if (!actionTaken && controlGatePass('accept', cfg, state, now, lastAction)) {
+          const acceptControl = getControlConfig(cfg, 'accept');
+
+          if (!actionTaken && cfg.clickAcceptAll && hasMethod(acceptControl.actionMethods, 'accept-all-first')) {
+              if (tryClick('[title*="Accept All"], [aria-label*="Accept All"], .codicon-check-all', 'Accept All')) {
+                  actionTaken = true;
+              }
           }
-          if (!actionTaken) {
-              if (tryClick('[title="Accept"], [aria-label="Accept"], [title="Apply"], .codicon-check', 'Accept')) actionTaken = true;
+
+          if (!actionTaken && hasMethod(acceptControl.actionMethods, 'accept-single')) {
+              if (tryClick('[title="Accept"], [aria-label="Accept"], [title="Apply"], .codicon-check', 'Accept')) {
+                  actionTaken = true;
+              }
+          }
+
+          if (!actionTaken && hasMethod(acceptControl.actionMethods, 'dom-click')) {
+              if (tryClick('[title*="Accept"], [aria-label*="Accept"], [title*="Apply"], [aria-label*="Apply"]', 'Accept (DOM)')) {
+                  actionTaken = true;
+              }
           }
       }
 
       // 4. Auto-Expand
-      if (!actionTaken && cfg.clickExpand) {
+      if (!actionTaken && controlGatePass('expand', cfg, state, now, lastAction)) {
+          const expandControl = getControlConfig(cfg, 'expand');
           const expandSelectors = [
               '[title*="Expand"]',
               '[aria-label*="Expand"]',
               '.monaco-tl-twistie.collapsed',
               '.codicon-chevron-right'
           ].join(',');
-          if (tryClick(expandSelectors, 'Expand')) actionTaken = true;
+
+          if (hasMethod(expandControl.actionMethods, 'dom-click') && tryClick(expandSelectors, 'Expand')) {
+              actionTaken = true;
+          }
+
+          if (!actionTaken && hasMethod(expandControl.actionMethods, 'native-click')) {
+              const candidate = Array.from(document.querySelectorAll(expandSelectors)).find(el => el && (el.offsetParent || el.clientWidth > 0));
+              if (candidate) {
+                  highlight(candidate);
+                  candidate.click();
+                  actionTaken = true;
+                  log('Clicked Expand (native-click)');
+              }
+          }
       }
       
       // 5. Auto-Submit
-      if (!actionTaken && cfg.clickSubmit) {
+      if (!actionTaken && controlGatePass('submit', cfg, state, now, lastAction)) {
+          const submitControl = getControlConfig(cfg, 'submit');
+          const submitDelay = Math.max(0, submitControl.delayMs || 0);
           const sendSelectors = '[title="Send"], [aria-label="Send"], [title*="Submit"], [aria-label*="Submit"], .codicon-send';
-          if (tryClick(sendSelectors, 'Submit')) actionTaken = true;
+
+          if (hasMethod(submitControl.actionMethods, 'click-send') && tryClick(sendSelectors, 'Submit')) {
+              actionTaken = true;
+          }
+
+          if (!actionTaken && hasMethod(submitControl.actionMethods, 'enter-key')) {
+              const input = document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea');
+              if (input) {
+                  setTimeout(() => {
+                      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+                  }, submitDelay);
+                  actionTaken = true;
+                  log('Submitted via Enter key');
+              }
+          }
       }
 
       // 6. Feedback
