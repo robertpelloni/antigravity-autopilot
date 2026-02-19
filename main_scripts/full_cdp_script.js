@@ -1156,7 +1156,7 @@
 
         // Use configured patterns from state if available, otherwise use defaults
         const state = window.__autoAllState || {};
-        const defaultPatterns = ['accept', 'accept all', 'run', 'run command', 'retry', 'apply', 'execute', 'confirm', 'allow once', 'allow', 'proceed', 'continue', 'yes', 'ok', 'save', 'approve', 'overwrite'];
+        const defaultPatterns = ['accept', 'accept all', 'keep', 'run', 'run command', 'retry', 'apply', 'execute', 'confirm', 'allow once', 'allow', 'proceed', 'continue', 'yes', 'ok', 'save', 'approve', 'overwrite'];
 
         const patterns = state.acceptPatterns || defaultPatterns;
 
@@ -1765,7 +1765,7 @@
 
                 // 1.5 Click Accept All (if enabled)
                 if (window.__antigravityConfig && window.__antigravityConfig.clickAcceptAll) {
-                    const acceptAllSelectors = ['[title*="Accept All"]', '[aria-label*="Accept All"]'];
+                    const acceptAllSelectors = ['[title*="Accept All"]', '[aria-label*="Accept All"]', '[title="Keep"]', '[aria-label="Keep"]'];
                     await performClick(acceptAllSelectors, { skipAcceptCheck: true });
                 }
 
@@ -1857,7 +1857,7 @@
 
                 // 1.5 Click Accept All (if enabled)
                 if (window.__antigravityConfig && window.__antigravityConfig.clickAcceptAll) {
-                    const acceptAllSelectors = ['[title*="Accept All"]', '[aria-label*="Accept All"]'];
+                    const acceptAllSelectors = ['[title*="Accept All"]', '[aria-label*="Accept All"]', '[title="Keep"]', '[aria-label="Keep"]'];
                     await performClick(acceptAllSelectors, { skipAcceptCheck: true });
                 }
 

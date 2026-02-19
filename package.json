@@ -472,9 +472,10 @@
           "type": "array",
           "default": [
             "accept-all-button",
+            "keep-button",
             "dom-click"
           ],
-          "description": "Action methods for Accept All control."
+          "description": "Action methods for Accept All/Keep equivalent control."
         },
         "antigravity.automation.controls.acceptAll.delayMs": {
           "type": "number",
@@ -529,9 +530,9 @@
         },
         "antigravity.automation.actions.clickFeedback": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Automatically click positive feedback buttons.",
-          "markdownDescription": "**Auto-Feedback**: Automatically clicks positive feedback buttons (Thumbs Up) to reinforce successful steps. (Default: false)"
+          "markdownDescription": "**Auto-Feedback**: Automatically clicks positive feedback buttons (Thumbs Up) to reinforce successful steps. (Default: true)"
         },
         "antigravity.automation.timing.pollIntervalMs": {
           "type": "number",
@@ -589,7 +590,8 @@
             "feedback-visible",
             "not-generating",
             "last-sender-user",
-            "network-error-retry"
+            "network-error-retry",
+            "skip-ai-question"
           ],
           "description": "Detection components used to decide when bump should fire. Multiple methods can be enabled."
         },

@@ -16,7 +16,7 @@ export const AUTO_CONTINUE_SCRIPT = `
      autoReply: true,
      autoReplyText: 'continue',
      controls: {
-         acceptAll: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-button', 'dom-click'], delayMs: 100 },
+         acceptAll: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-button', 'keep-button', 'dom-click'], delayMs: 100 },
          continue: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['continue-button', 'keep-button', 'dom-click'], delayMs: 100 },
          run: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 100 },
          expand: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 50 },
@@ -304,10 +304,18 @@ export const AUTO_CONTINUE_SCRIPT = `
       // 2.5 Auto-Accept-All
       if (!actionTaken && controlGatePass('acceptAll', cfg, state, now, lastAction)) {
           const acceptAllControl = getControlConfig(cfg, 'acceptAll');
-          if (hasMethod(acceptAllControl.actionMethods, 'accept-all-button') || hasMethod(acceptAllControl.actionMethods, 'dom-click')) {
-              if (tryClick('[title*="Accept All"], [aria-label*="Accept All"], .codicon-check-all', 'Accept All')) {
-                  actionTaken = true;
-              }
+          const acceptAllSelectors = [];
+          if (hasMethod(acceptAllControl.actionMethods, 'accept-all-button')) {
+              acceptAllSelectors.push('[title*="Accept All"]', '[aria-label*="Accept All"]', '.codicon-check-all');
+          }
+          if (hasMethod(acceptAllControl.actionMethods, 'keep-button')) {
+              acceptAllSelectors.push('[title="Keep"]', '[aria-label="Keep"]', 'button[title*="Keep"]', 'button[aria-label*="Keep"]');
+          }
+          if (hasMethod(acceptAllControl.actionMethods, 'dom-click') && acceptAllSelectors.length === 0) {
+              acceptAllSelectors.push('[title*="Accept All"]', '[aria-label*="Accept All"]', '[title="Keep"]', '[aria-label="Keep"]', '.codicon-check-all');
+          }
+          if (acceptAllSelectors.length > 0 && tryClick(acceptAllSelectors.join(', '), 'Accept All/Keep')) {
+              actionTaken = true;
           }
       }
 

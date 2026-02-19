@@ -161,7 +161,7 @@ export class CDPHandler extends EventEmitter {
                                 },
                                 acceptAll: {
                                     detectMethods: config.get<string[]>('automation.controls.acceptAll.detectMethods') ?? ['enabled-flag', 'not-generating', 'action-cooldown'],
-                                    actionMethods: config.get<string[]>('automation.controls.acceptAll.actionMethods') ?? ['accept-all-button', 'dom-click'],
+                                    actionMethods: config.get<string[]>('automation.controls.acceptAll.actionMethods') ?? ['accept-all-button', 'keep-button', 'dom-click'],
                                     delayMs: config.get<number>('automation.controls.acceptAll.delayMs') ?? 100
                                 },
                                 continue: {
