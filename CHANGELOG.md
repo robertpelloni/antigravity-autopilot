@@ -6,6 +6,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 ---
 
 
+## [5.0.6] - 2026-02-19
+- **UX**: Expanded detailed dashboard tooltips across control groups (Bump, Accept, Accept All/Keep, Continue/Keep, Feedback, Run, Expand, Submit) for clearer operator guidance.
+- **Behavior**: Treats VS Code `Keep` as equivalent to `Accept All` in runtime automation and configuration defaults.
+- **Release**: Version synchronization across manifest/constants with fresh VSIX build.
+
 ## [5.0.5] - 2026-02-18
 - **Hotfix**: Hardened automation safety filters to avoid interacting with Extensions/Marketplace/MCP plugin-management surfaces.
 - **Fix**: Reduced UI thrashing by restricting tab-rotation logic to chat-session targets and excluding marketplace/plugin-like tabs.
