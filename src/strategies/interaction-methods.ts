@@ -10,9 +10,6 @@ import * as vscode from 'vscode';
 import { SoundEffects } from '../utils/sound-effects';
 
 // ============ Interfaces ============
-// ... (start of file)
-
-
 
 export interface InteractionContext {
     cdpHandler?: any;       // CDPHandler instance (optional - not all methods need it)
@@ -861,22 +858,43 @@ export class InteractionMethodRegistry {
                 }
             }
         } else {
-            // Sequential: try each until retryCount successes
-            for (const method of methods) {
-                if (successCount >= this.config.retryCount) break;
+            // Sequential execution
+            for (const m of methods) {
+                if (ctx.visualDiffThreshold && m.id === 'visual-verify-click') continue; // specialized use only
+
                 const start = Date.now();
                 try {
-                    const ok = await method.execute(ctx);
-                    await delay(method.timingMs);
-                    results.push({ methodId: method.id, success: ok, durationMs: Date.now() - start });
-                    if (ok) successCount++;
+                    const ok = await m.execute(ctx);
+                    results.push({ methodId: m.id, success: ok, durationMs: Date.now() - start });
+                    if (ok) {
+                        successCount++;
+                    }
+                    if (m.timingMs > 0) await delay(m.timingMs);
                 } catch (e: any) {
-                    results.push({ methodId: method.id, success: false, durationMs: Date.now() - start, error: e.message });
+                    results.push({ methodId: m.id, success: false, durationMs: Date.now() - start, error: e.message });
                 }
             }
         }
 
         return results;
+    }
+
+    /**
+     * Executes a single specific method by ID.
+     */
+    async executeMethod(methodId: string, ctx: InteractionContext): Promise<InteractionResult> {
+        const method = this.getMethod(methodId);
+        if (!method) {
+            return { methodId, success: false, durationMs: 0, error: 'Method not found' };
+        }
+
+        const start = Date.now();
+        try {
+            const success = await method.execute(ctx);
+            return { methodId, success, durationMs: Date.now() - start };
+        } catch (e: any) {
+            return { methodId, success: false, durationMs: Date.now() - start, error: e.message };
+        }
     }
 
     /**
@@ -896,10 +914,10 @@ export class InteractionMethodRegistry {
     }
 
     private isEnabled(method: IInteractionMethod): boolean {
-        const list = method.category === 'text' ? this.config.textInput
+        const enabledIds = method.category === 'text' ? this.config.textInput
             : method.category === 'click' ? this.config.click
                 : this.config.submit;
-        return list.includes(method.id);
+        return enabledIds.includes(method.id);
     }
 
     /**

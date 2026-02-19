@@ -5,6 +5,7 @@ import * as path from 'path';
 import { EventEmitter } from 'events';
 import { config } from '../../utils/config';
 import { AUTO_CONTINUE_SCRIPT } from '../../scripts/auto-continue';
+import { logToOutput } from '../../utils/output-channel';
 
 export class CDPHandler extends EventEmitter {
     private startPort: number;
@@ -250,7 +251,19 @@ export class CDPHandler extends EventEmitter {
                         // Fallback Console Bridge
                         const text = msg.params.args[0]?.value || '';
                         const originSessionId = msg.sessionId;
-                        this.handleBridgeMessage(page.id, text, originSessionId);
+
+                        // Check if it's a bridge message
+                        if (text.startsWith('__ANTIGRAVITY')) {
+                            this.handleBridgeMessage(page.id, text, originSessionId);
+                        } else {
+                            // Forward interesting logs to OutputChannel
+                            const lowerText = text.toLowerCase();
+                            if (lowerText.includes('[autoall]') || lowerText.includes('[cdp]') || lowerText.includes('antigravity')) {
+                                logToOutput(`[Browser] ${text}`);
+                            } else if (config.get('automation.debug.verboseLogging')) {
+                                logToOutput(`[Browser-Verbose] ${text}`);
+                            }
+                        }
                     }
                 } catch (e) {
                     console.error('[CDP Bridge Error]', e);
@@ -444,21 +457,41 @@ export class CDPHandler extends EventEmitter {
             } else if (text.startsWith('__ANTIGRAVITY_HYBRID_BUMP__:')) {
                 // Phase 52: Hybrid Bump Strategy
                 const bumpText = text.substring('__ANTIGRAVITY_HYBRID_BUMP__:'.length);
-                console.log(`[Bridge] Hybrid Bump Triggered: "${bumpText}"`);
                 const vscode = require('vscode');
 
+                if (bumpText) {
+                    logToOutput(`[Bump-Start] Initiating Hybrid Bump: "${bumpText}"`);
+                }
+
                 // Read configuration for delays
-                const bumpConfig = config.get<{ typingDelayMs: number; submitDelayMs: number }>('actions.bump') || {};
+                const bumpConfig = config.get<{ typingDelayMs: number; submitDelayMs: number; openChat?: boolean }>('actions.bump') || {};
                 const typingDelay = bumpConfig.typingDelayMs || 50;
                 const submitDelay = bumpConfig.submitDelayMs || 800;
+                const shouldOpenChat = bumpConfig.openChat !== false; // Default true, but user can disable
 
                 if (bumpText) {
-                    await vscode.env.clipboard.writeText(bumpText);
-                    await vscode.commands.executeCommand('workbench.action.chat.open');
-                    await new Promise((r: any) => setTimeout(r, Math.max(100, typingDelay * 6))); // Open -> Focus delay
-                    await vscode.commands.executeCommand('workbench.action.chat.focusInput');
-                    await new Promise((r: any) => setTimeout(r, Math.max(100, typingDelay * 4))); // Focus -> Paste delay
-                    await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
+                    try {
+                        logToOutput(`[Bump-Step] 1. Writing to Clipboard`);
+                        await vscode.env.clipboard.writeText(bumpText);
+
+                        if (shouldOpenChat) {
+                            logToOutput(`[Bump-Step] 2. Executing 'workbench.action.chat.open'`);
+                            await vscode.commands.executeCommand('workbench.action.chat.open');
+                            await new Promise((r: any) => setTimeout(r, Math.max(100, typingDelay * 6))); // Open -> Focus delay
+                        } else {
+                            logToOutput(`[Bump-Step] 2. Skipping 'workbench.action.chat.open' (Configured)`);
+                        }
+
+                        // Try specific focus command for GitHub Copilot Chat if available, or fallback to generic
+                        logToOutput(`[Bump-Step] 3. Focusing Input ('workbench.action.chat.focusInput')`);
+                        await vscode.commands.executeCommand('workbench.action.chat.focusInput');
+                        await new Promise((r: any) => setTimeout(r, Math.max(100, typingDelay * 4))); // Focus -> Paste delay
+
+                        logToOutput(`[Bump-Step] 4. Pasting Clipboard`);
+                        await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
+                    } catch (e: any) {
+                        logToOutput(`[Bump-Error] Text Entry Failed: ${e.message}`);
+                    }
                 }
 
                 // 2. Submit (Multi-Strategy)
@@ -470,12 +503,18 @@ export class CDPHandler extends EventEmitter {
                     'workbench.action.terminal.chat.accept',
                     'inlineChat.accept'
                 ];
+
+                logToOutput(`[Bump-Step] 5. Submitting via Commands`);
                 for (const cmd of commands) {
-                    try { await vscode.commands.executeCommand(cmd); } catch (e) { }
+                    try {
+                        // logToOutput(`[Bump-Trace] Trying submit command: ${cmd}`);
+                        await vscode.commands.executeCommand(cmd);
+                    } catch (e) { }
                 }
 
                 // 3. Fallback: Physical Enter Key (CDP)
                 await new Promise(r => setTimeout(r, Math.max(100, submitDelay / 2)));
+                logToOutput(`[Bump-Step] 6. Fallback CDP Enter Key`);
                 await this.dispatchKeyEventToAll({
                     type: 'keyDown', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
                     windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
@@ -487,9 +526,11 @@ export class CDPHandler extends EventEmitter {
                     windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
                     text: '\r', unmodifiedText: '\r'
                 });
+                logToOutput(`[Bump-End] Hybrid Bump Sequence Complete`);
             }
         } catch (e) {
             console.error('Bridge Message Handler Error', e);
+            logToOutput(`[Bridge-Error] ${e}`);
         }
     }
 

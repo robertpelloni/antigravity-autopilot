@@ -77,6 +77,27 @@ export class DashboardPanel {
                         }
                         return;
                     }
+                    case 'testInteractionMethod': {
+                        const { methodId, text } = message;
+                        vscode.window.withProgress({
+                            location: vscode.ProgressLocation.Notification,
+                            title: `Testing Method: ${methodId}`,
+                            cancellable: false
+                        }, async (progress) => {
+                            progress.report({ message: 'Waiting 3s for you to focus target...' });
+                            await new Promise(r => setTimeout(r, 3000));
+                            progress.report({ message: 'Executing...' });
+
+                            const success = await vscode.commands.executeCommand('antigravity.testMethod', methodId, text);
+
+                            if (success) {
+                                vscode.window.showInformationMessage(`✅ Method '${methodId}' executed successfully.`);
+                            } else {
+                                vscode.window.showErrorMessage(`❌ Method '${methodId}' failed or returned false.`);
+                            }
+                        });
+                        return;
+                    }
                 }
             },
             null,
@@ -413,6 +434,10 @@ export class DashboardPanel {
                     <label>Auto Scroll:</label>
                     <input type="checkbox" ${config.get('automation.actions.autoScroll') ? 'checked' : ''} onchange="updateConfig('automation.actions.autoScroll', this.checked)">
                 </div>
+                <div class="setting" title="Automatically click positive feedback / thumbs up buttons to reinforce good AI responses.">
+                    <label>Auto Feedback:</label>
+                    <input type="checkbox" ${config.get('automation.actions.clickFeedback') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickFeedback', this.checked)">
+                </div>
                 <!-- Auto-Reply Options -->
                 <div class="setting" title="Enable the 'Smart Resume' feature. The script will analyze if the AI has stopped generating and automatically send a bump message to keep it going.">
                     <label>Auto Reply (Bump):</label>
@@ -466,6 +491,48 @@ export class DashboardPanel {
                 <div class="setting" title="Safety limit for the number of tool calls or API requests allowed per hour. Prevents runaway loops or excessive API usage.">
                     <label>Max Calls/Hour:</label>
                     <input type="number" value="${settings.maxCallsPerHour}" min="1" onchange="updateConfig('maxCallsPerHour', parseInt(this.value))">
+                </div>
+            </div>
+
+            <!-- DIAGNOSTICS & TEST HARNESS -->
+            <div class="card">
+                <h2>Diagnostics & Test Harness</h2>
+                <div class="info-box">
+                    <strong>Instructions:</strong> Click a button below to test a specific interaction method. 
+                    Has a <b>3-second delay</b> so you can focus the target input/button.
+                </div>
+                
+                <h3>Text Input Methods</h3>
+                <div class="test-controls">
+                    <button class="secondary" onclick="runTest('cdp-keys', 'Test Input Strings')">Test CDP Keys</button>
+                    <button class="secondary" onclick="runTest('cdp-insert-text', 'Test Input Strings')">Test CDP Insert</button>
+                    <button class="secondary" onclick="runTest('clipboard-paste', 'Test Input Strings')">Test Clipboard Paste</button>
+                    <button class="secondary" onclick="runTest('dom-inject', 'Test Input Strings')">Test DOM Inject</button>
+                </div>
+
+                <h3>Click Methods</h3>
+                <div class="test-controls">
+                    <button class="secondary" onclick="runTest('native-accept')">Test Native Accept</button>
+                    <button class="secondary" onclick="runTest('dom-scan-click')">Test DOM Scan Click</button>
+                    <button class="secondary" onclick="runTest('bridge-click')">Test Bridge Click</button>
+                    <button class="secondary" onclick="runTest('visual-verify-click')">Test Visual Verify Click</button>
+                </div>
+
+                <h3>Submit Methods</h3>
+                <div class="test-controls">
+                    <button class="secondary" onclick="runTest('vscode-submit')">Test VS Code Submit</button>
+                    <button class="secondary" onclick="runTest('cdp-enter')">Test CDP Enter</button>
+                    <button class="secondary" onclick="runTest('ctrl-enter')">Test Ctrl+Enter</button>
+                </div>
+                
+                <h3>Live Diagnostics</h3>
+                <div class="setting" title="Frequency (in ms) to poll for buttons. Lower is more responsive.">
+                    <label>Poll Interval (ms):</label>
+                    <input type="number" value="${settings.autoAcceptPollIntervalMs}" min="100" max="10000" onchange="updateUnifiedPollInterval(parseInt(this.value))">
+                </div>
+                <div class="info-box status-box">
+                    <strong>Button Status:</strong> <span id="btn-status">Waiting...</span>
+                    <div>Matches: <span id="btn-matches">-</span></div>
                 </div>
             </div>
 
@@ -633,6 +700,8 @@ export class DashboardPanel {
                      <button onclick="runCommand('antigravity.reconnectCDP')">Force Reconnect</button>
                 </div> -->
             </div>
+
+
 
             <!-- INTERACTION METHODS -->
             <div class="card">
@@ -1257,6 +1326,14 @@ export class DashboardPanel {
 
                 function runCommand(id) {
                     vscode.postMessage({ command: 'runCommand', id });
+                }
+
+                function runTest(testId, label) {
+                    vscode.postMessage({
+                        command: 'runTest',
+                        testId: testId,
+                        label: label
+                    });
                 }
 
                 window.addEventListener('message', event => {

@@ -5,21 +5,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
-## [4.10.115] - 2024-02-18
-- **Continuous Autonomous Mode**: Agent automatically proceeds to the next task in `task.md` / `TODO.md` upon completion.
-- Added `antigravity.continuousMode` configuration (default: `true`).
-- **Fix**: Resolved issue where icon-only "Run" buttons were ignored by automation.
 
-## [4.10.114]
-- **Feat**: Implemented "Continuous Autonomous Mode" (enabled by default). The agent now automatically proceeds to the next task in `task.md` / `TODO.md` upon completion.
-- **Feat**: Added `antigravity.continuousMode` configuration setting.
-- **Fix**: Resolved variable redeclaration issues in Autonomous Loop logic.
+## [5.0.4] - 2026-02-18
+- **Architecture**: Removed all git submodules and reference implementations to simplify the codebase.
+- **Cleanup**: Updated documentation and removed `SUBMODULES.md`.
 
-## [4.10.113]
-- **Fix**: Intermittent blank screen issue via defensive CDP attachment strategy (try-catch + stabilization delay).
-- **Feat**: Added `antigravity.experimental.cdpExplicitDiscovery` (default: true) to gate explicit attachment logic.
-- **Feat**: Implemented "Bump on Completion" to ensure thread restart even after task success.
-- **Refactor**: Configuration migrated to `antigravity.actions.*` schema.
+## [5.0.3] - 2026-02-18
+- **Fixed**: Dashboard "Test" buttons now correctly invoke the backend `antigravity.testMethod` command.
+- **Fixed**: Registered missing `antigravity.testMethod` in `package.json`.
+- **Refined**: Improved interactions method testing logic in `CDPStrategy`.
+
+## [5.0.2] - 2026-02-19
+- **Maximum Autopilot**: Enabled "Auto Feedback" (Good/Bad) and "Accept All" logic in the main automation loop.
+- **Dashboard**: Added "Auto Feedback" toggle to the Browser Automation card.
+- **Fix**: Resolved issue where "Accept All" button was detected but not clicked.
+
+## [5.0.1] - 2026-02-19
+- **Fix**: Resolved critical compilation errors in `InteractionMethodRegistry`.
+- **Diagnostics Matrix**: Implemented comprehensive UI element detection (Accept, Run, Expand, Feedback) in `full_cdp_script.js` for "Button Detection" dashboard feature.
+- **Reliability**: Enhanced element broadcasting for the diagnostics heartbeat.
+
+## [5.0.0] - 2026-02-18
+- **Major Release**: "Gold Standard" Stability achieved.
+- **Continuous Mode**: Native support for continuous task execution (formerly 4.10.115).
+- **Unified Automation**: Full support for Auto-Run, Auto-Accept, Auto-Expand, Auto-Submit, and Auto-Feedback across VS Code, Cursor, and Antigravity screens.
+- **Reliability**: Implemented Smart Target Filtering (multi-window fix), Selector Hardening (no QuickPick interference), and Keypress Fallbacks (for stubborn buttons).
+- **Configuration**: Exposed granular timing, throttling, and action toggles.
+
+
 
 ## [4.10.112] - 2026-02-18
 - **Feedback Automation**: Added support for auto-clicking "Helpful" / "Thumbs Up" buttons (configurable via `antigravity.automation.actions.clickFeedback`).

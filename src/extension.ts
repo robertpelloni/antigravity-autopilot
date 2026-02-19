@@ -292,8 +292,17 @@ export function activate(context: vscode.ExtensionContext) {
     };
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('antigravity.diagnoseCdp', diagnoseCdp)
+        vscode.commands.registerCommand('antigravity.diagnoseCdp', diagnoseCdp),
+        vscode.commands.registerCommand('antigravity.testMethod', async (methodId: string, text: string) => {
+            const cdp = resolveCDPStrategy();
+            if (!cdp) {
+                vscode.window.showErrorMessage('Antigravity: CDP Strategy is not active.');
+                return false;
+            }
+            return cdp.testMethod(methodId, text);
+        })
     );
+
 
     voiceControl.setIntentExecutor(async (command) => {
         if (!await confirmDestructiveVoiceIntent(command)) {

@@ -1,945 +1,970 @@
 {
-    "name": "antigravity-autopilot",
-    "displayName": "Antigravity Autopilot (Unified)",
-    "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-    "version": "4.10.115",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/hyper/antigravity-autopilot.git"
-    },
-    "publisher": "ai-dev-2024",
-    "engines": {
-        "vscode": "^1.75.0"
-    },
-    "categories": [
-        "Machine Learning",
-        "Other"
+  "name": "antigravity-autopilot",
+  "displayName": "Antigravity Autopilot (Unified)",
+  "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
+  "version": "5.0.4",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hyper/antigravity-autopilot.git"
+  },
+  "publisher": "ai-dev-2024",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "antigravity.clickRun",
+        "title": "AG: Click Run",
+        "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.clickExpand",
+        "title": "AG: Click Expand",
+        "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.clickAccept",
+        "title": "AG: Click Accept",
+        "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.resetConnection",
+        "title": "AG: Reset Connection",
+        "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.toggleExtension",
+        "title": "Antigravity: Toggle ON/OFF"
+      },
+      {
+        "command": "antigravity.toggleAutoAccept",
+        "title": "Antigravity: Toggle Auto-Accept (Simple)"
+      },
+      {
+        "command": "antigravity.toggleAutoAll",
+        "title": "Antigravity: Toggle Auto-All (CDP/Multi-Tab)"
+      },
+      {
+        "command": "antigravity.toggleAutonomous",
+        "title": "Antigravity: Toggle Autonomous Mode (Yoke)"
+      },
+      {
+        "command": "antigravity.openSettings",
+        "title": "Antigravity: Open Dashboard"
+      },
+      {
+        "command": "antigravity.showStatusMenu",
+        "title": "Antigravity: Show Status Menu"
+      },
+      {
+        "command": "antigravity.toggleMcp",
+        "title": "Antigravity: Toggle MCP Server"
+      },
+      {
+        "command": "antigravity.toggleVoice",
+        "title": "Antigravity: Toggle Voice Control"
+      },
+      {
+        "command": "antigravity.processVoiceTranscript",
+        "title": "Antigravity: Process Voice Transcript (Debug)"
+      },
+      {
+        "command": "antigravity.generateTests",
+        "title": "Antigravity: Generate Tests"
+      },
+      {
+        "command": "antigravity.runCodeReview",
+        "title": "Antigravity: Run Code Review"
+      },
+      {
+        "command": "antigravity.startMultiAgent",
+        "title": "Antigravity: Start Multi-Agent Task"
+      },
+      {
+        "command": "antigravity.showMemory",
+        "title": "Antigravity: Show Session Memory"
+      },
+      {
+        "command": "antigravity.syncProjectTasks",
+        "title": "Antigravity: Sync Tasks (Jira/GitHub)"
+      },
+      {
+        "command": "antigravity.checkRuntimeState",
+        "title": "Antigravity: Check Runtime State"
+      },
+      {
+        "command": "antigravity.detectCompletionWaitingState",
+        "title": "Antigravity: Detect Completion + Waiting State"
+      },
+      {
+        "command": "antigravity.copyRuntimeStateJson",
+        "title": "Antigravity: Copy Runtime State JSON"
+      },
+      {
+        "command": "antigravity.refreshRuntimeAndReopenStatusMenu",
+        "title": "Antigravity: Refresh Runtime + Reopen Status Menu"
+      },
+      {
+        "command": "antigravity.resetStatusRefreshCounters",
+        "title": "Antigravity: Reset Status Refresh Counters"
+      },
+      {
+        "command": "antigravity.copyLastResumePayloadReport",
+        "title": "Antigravity: Copy Last Resume Payload Report"
+      },
+      {
+        "command": "antigravity.copyEscalationDiagnosticsReport",
+        "title": "Antigravity: Copy Escalation Diagnostics Report"
+      },
+      {
+        "command": "antigravity.copyEscalationHealthSummary",
+        "title": "Antigravity: Copy Escalation Health Summary"
+      },
+      {
+        "command": "antigravity.showEscalationMenu",
+        "title": "Antigravity: Show Escalation Controls"
+      },
+      {
+        "command": "antigravity.clearEscalationTimeline",
+        "title": "Antigravity: Clear Escalation Timeline"
+      },
+      {
+        "command": "antigravity.clearEscalationTimelineNow",
+        "title": "Antigravity: Clear Escalation Timeline (No Prompt)"
+      },
+      {
+        "command": "antigravity.resumeFromWaitingState",
+        "title": "Antigravity: Resume From Waiting State"
+      },
+      {
+        "command": "antigravity.validateCrossUiCoverage",
+        "title": "Antigravity: Validate Cross-UI Coverage"
+      },
+      {
+        "command": "antigravity.runCrossUiSelfTest",
+        "title": "Antigravity: Run Cross-UI Self-Test"
+      },
+      {
+        "command": "antigravity.explainAutoResumeGuard",
+        "title": "Antigravity: Explain Auto-Resume Guard"
+      },
+      {
+        "command": "antigravity.autoFixAutoResumeReadiness",
+        "title": "Antigravity: Auto-Fix Resume Readiness"
+      },
+      {
+        "command": "antigravity.diagnoseCdp",
+        "title": "Antigravity: Diagnose CDP Connection"
+      },
+      {
+        "command": "antigravity.testMethod",
+        "title": "Antigravity: Test Method (Internal)"
+      },
+      {
+        "command": "antigravity.testAudio",
+        "title": "Antigravity: Test Audio Feedback"
+      },
+      {
+        "command": "antigravity.clearAutoAll",
+        "title": "Antigravity: Clear Accept All"
+      },
+      {
+        "command": "antigravity.writeAndSubmitBump",
+        "title": "Antigravity: Write and Submit Bump"
+      }
     ],
-    "activationEvents": [
-        "onStartupFinished"
+    "keybindings": [
+      {
+        "command": "antigravity.toggleAutoAccept",
+        "key": "ctrl+alt+shift+u",
+        "mac": "cmd+alt+shift+u"
+      },
+      {
+        "command": "antigravity.testAudio",
+        "key": "ctrl+alt+shift+t",
+        "mac": "cmd+alt+shift+t"
+      },
+      {
+        "command": "antigravity.clearAutoAll",
+        "key": "ctrl+alt+shift+k",
+        "mac": "cmd+alt+shift+k"
+      },
+      {
+        "command": "antigravity.writeAndSubmitBump",
+        "key": "ctrl+alt+shift+b",
+        "mac": "cmd+alt+shift+b"
+      }
     ],
-    "main": "./dist/extension.js",
-    "contributes": {
-        "commands": [
-            {
-                "command": "antigravity.clickRun",
-                "title": "AG: Click Run",
-                "category": "Antigravity"
+    "configuration": {
+      "title": "Antigravity Autopilot",
+      "properties": {
+        "antigravity.jules.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Jules Orchestration integration."
+        },
+        "antigravity.jules.url": {
+          "type": "string",
+          "default": "http://localhost:3323",
+          "description": "URL of the Jules Orchestration server."
+        },
+        "antigravity.jules.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API Key for Jules Orchestration server."
+        },
+        "antigravity.strategy": {
+          "type": "string",
+          "enum": [
+            "simple",
+            "cdp"
+          ],
+          "default": "cdp",
+          "description": "Driver Strategy: 'simple' uses VS Code commands (no restart), 'cdp' uses Browser Protocol (robust, multi-tab, requires restart).",
+          "markdownDescription": "**Driver Strategy**: \n- `simple`: Uses standard VS Code commands. Good for basic usage but limited.\n- `cdp`: Uses Chrome DevTools Protocol. **Required for Multi-Tab Orchestration, background automation, and robust selector handling.**"
+        },
+        "antigravity.interactionUiProfile": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "vscode",
+            "antigravity",
+            "cursor"
+          ],
+          "default": "auto",
+          "description": "Select UI targeting profile for element selectors and click method bundle.",
+          "markdownDescription": "**UI Targeting Profile**:\nDefines which set of CSS selectors to use for locating Chat Inputs, Send Buttons, and Run/Accept actions.\n- `auto`: Automatically detects the environment.\n- `vscode`: standard VS Code Chat.\n- `antigravity`: Antigravity Webview.\n- `cursor`: Cursor AI Pane."
+        },
+        "antigravity.autoAcceptEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Deprecated: Enable basic Auto-Accept of pending edits.",
+          "deprecationMessage": "Use 'antigravity.actions.autoAccept.enabled' instead."
+        },
+        "antigravity.autoAllEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Deprecated: Enable robust Auto-All (CDP/Multi-Tab) for edits and terminal commands.",
+          "deprecationMessage": "Use 'antigravity.strategy' and 'antigravity.autoContinueScriptEnabled' instead."
+        },
+        "antigravity.autopilotAutoAcceptEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Deprecated: Unified control: enable automatic accept/action handling for autopilot.",
+          "deprecationMessage": "Use 'antigravity.actions.autoAccept.enabled' instead."
+        },
+        "antigravity.autopilotAutoBumpEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Deprecated: Unified control: enable automatic bump/resume nudges when conversation is idle.",
+          "deprecationMessage": "Use 'antigravity.actions.bump.enabled' instead."
+        },
+        "antigravity.autopilotRunExpandContinueEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Deprecated: Unified control: allow autopilot to click Run/Expand/Continue style actions.",
+          "deprecationMessage": "Use 'antigravity.actions.run.enabled' and 'antigravity.actions.expand.enabled' instead."
+        },
+        "antigravity.multiTabEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Multi-Tab processing (requires CDP).",
+          "markdownDescription": "**Multi-Tab Orchestration**: If enabled, Antigravity will connect to and control **ALL** compatible tabs (pages, iframes, webviews) found on the CDP port, not just the first one. Essential for complex multi-root workspaces."
+        },
+        "antigravity.autonomousEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Autonomous Agent Loop (Yoke)."
+        },
+        "antigravity.continuousMode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable continuous task execution in Autonomous Mode (proceed to next task automatically)."
+        },
+        "antigravity.mcpEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable MCP Server integration."
+        },
+        "antigravity.voiceControlEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Voice Control."
+        },
+        "antigravity.watchdogEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Self-Healing Watchdog.",
+          "markdownDescription": "**Self-Healing Watchdog**: Monitors the browser automation script. If the script stops sending heartbeats (e.g., due to a crash or page reload), the watchdog will automatically re-inject it."
+        },
+        "antigravity.watchdogTimeoutMs": {
+          "type": "number",
+          "default": 15000,
+          "description": "Watchdog timeout in milliseconds.",
+          "markdownDescription": "Time in milliseconds to wait for a heartbeat before considering the script 'dead' and triggering re-injection."
+        },
+        "antigravity.autoContinueScriptEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Master Switch: Enable the injected automation script.",
+          "markdownDescription": "**Master Switch**: Specific to the Browser/CDP automation. If disabled, **NO** automation scripts will be injected into the browser. This overrides all other `automation.*` settings."
+        },
+        "antigravity.automation.actions.clickRun": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically click 'Run in Terminal' icons.",
+          "markdownDescription": "**Auto-Run**:\nAutomatically clicks 'Run in Terminal' icons (play buttons) in code blocks. \n\n*Useful for quickly executing suggested commands.*"
+        },
+        "antigravity.automation.actions.clickExpand": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically click 'Expand' twisties.",
+          "markdownDescription": "**Auto-Expand**:\nAutomatically clicks 'Expand' twisties and file references to show hidden context or code blocks."
+        },
+        "antigravity.automation.actions.clickAccept": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically click 'Accept' buttons.",
+          "markdownDescription": "**Auto-Accept**:\nAutomatically clicks 'Accept', 'Apply', or 'Insert' buttons for inline code suggestions."
+        },
+        "antigravity.automation.actions.clickContinue": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically click 'Continue' generation buttons.",
+          "markdownDescription": "**Auto-Continue**:\nAutomatically clicks 'Continue' (generation) and 'Keep' (pre-computation) buttons to keep the agent moving."
+        },
+        "antigravity.automation.actions.clickSubmit": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-click 'Submit/Send' buttons.",
+          "markdownDescription": "**Auto-Submit**:\nAutomatically clicks 'Send' or 'Submit' buttons if text has been entered into the chat input.\n\n*Ensures your prompts are actually sent.*"
+        },
+        "antigravity.automation.actions.clickFeedback": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically click positive feedback buttons.",
+          "markdownDescription": "**Auto-Feedback**: Automatically clicks positive feedback buttons (Thumbs Up) to reinforce successful steps. (Default: false)"
+        },
+        "antigravity.automation.timing.pollIntervalMs": {
+          "type": "number",
+          "default": 800,
+          "description": "How often (in milliseconds) the automation script scans the DOM for interactable elements. Lower values are more responsive but use more CPU."
+        },
+        "antigravity.automation.timing.actionThrottleMs": {
+          "type": "number",
+          "default": 1000,
+          "description": "Minimum time (in milliseconds) between consecutive automated clicks to prevents rapid-fire misclicks."
+        },
+        "antigravity.automation.timing.cooldownMs": {
+          "type": "number",
+          "default": 2500,
+          "description": "Global cooldown (in milliseconds) applied after certain heavy actions to allow the UI to settle."
+        },
+        "antigravity.automation.timing.randomness": {
+          "type": "number",
+          "default": 100,
+          "description": "Random jitter (in milliseconds) added to actions to simulate human-like variability. Set to 0 for machine precision."
+        },
+        "antigravity.automation.debug.highlightClicks": {
+          "type": "boolean",
+          "default": false,
+          "description": "Visually flash a red border on elements when they are automatically clicked. Useful for verifying what the script is doing."
+        },
+        "antigravity.automation.debug.verboseLogging": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable detailed console logs in the browser DevTools for the automation script."
+        },
+        "antigravity.automation.actions.autoScroll": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically scroll the chat view to the bottom to keep the latest content visible."
+        },
+        "antigravity.automation.actions.clickAcceptAll": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically click 'Accept All' buttons if present (e.g. for batch edits)."
+        },
+        "antigravity.automation.actions.autoReply": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically type and send a reply (e.g. 'continue') if the chat is idle. Useful for keeping the agent working."
+        },
+        "antigravity.automation.actions.autoReplyText": {
+          "type": "string",
+          "default": "continue",
+          "description": "The text to type when auto-replying (e.g. 'continue', 'next', 'review')."
+        },
+        "antigravity.automation.timing.autoReplyDelayMs": {
+          "type": "number",
+          "default": 7000,
+          "description": "Time (in milliseconds) to wait before triggering an auto-reply if no other actions occur."
+        },
+        "antigravity.autoSwitchModels": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically switch models based on task type (in Autonomous Mode)."
+        },
+        "antigravity.preferredModelForReasoning": {
+          "type": "string",
+          "default": "claude-opus-4.5-thinking",
+          "enum": [
+            "claude-opus-4.5-thinking",
+            "claude-sonnet-4.5-thinking",
+            "claude-sonnet-3.5",
+            "claude-sonnet-3.7"
+          ],
+          "description": "Model for complex reasoning tasks"
+        },
+        "antigravity.preferredModelForFrontend": {
+          "type": "string",
+          "default": "gemini-3-pro-high",
+          "enum": [
+            "gemini-3-pro-high",
+            "gemini-3-pro-low",
+            "gemini-3-flash",
+            "gpt-4o"
+          ],
+          "description": "Model for frontend/UI tasks"
+        },
+        "antigravity.preferredModelForQuick": {
+          "type": "string",
+          "default": "gemini-3-flash",
+          "enum": [
+            "gemini-3-flash",
+            "gemini-3-pro-low",
+            "gpt-4o-mini"
+          ],
+          "description": "Model for quick tasks"
+        },
+        "antigravity.autoGitCommit": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-commit progress every 10 loops."
+        },
+        "antigravity.pollFrequency": {
+          "type": "number",
+          "default": 500,
+          "minimum": 100,
+          "maximum": 5000,
+          "description": "Polling frequency in ms."
+        },
+        "antigravity.bannedCommands": {
+          "type": "array",
+          "default": [
+            "rm -rf /",
+            "rm -rf ~",
+            "format c:",
+            "del /f /s /q"
+          ],
+          "description": "Commands to hard-block from execution."
+        },
+        "antigravity.automation.timing": {
+          "type": "object",
+          "default": {
+            "actionThrottleMs": 100,
+            "cooldownMs": 3000,
+            "pollIntervalMs": 800
+          },
+          "properties": {
+            "actionThrottleMs": {
+              "type": "number",
+              "default": 100,
+              "description": "Delay (ms) between click actions to prevent flooding."
             },
-            {
-                "command": "antigravity.clickExpand",
-                "title": "AG: Click Expand",
-                "category": "Antigravity"
+            "cooldownMs": {
+              "type": "number",
+              "default": 3000,
+              "description": "Cooldown (ms) after a successful auto-bump before retrying."
             },
-            {
-                "command": "antigravity.clickAccept",
-                "title": "AG: Click Accept",
-                "category": "Antigravity"
-            },
-            {
-                "command": "antigravity.resetConnection",
-                "title": "AG: Reset Connection",
-                "category": "Antigravity"
-            },
-            {
-                "command": "antigravity.toggleExtension",
-                "title": "Antigravity: Toggle ON/OFF"
-            },
-            {
-                "command": "antigravity.toggleAutoAccept",
-                "title": "Antigravity: Toggle Auto-Accept (Simple)"
-            },
-            {
-                "command": "antigravity.toggleAutoAll",
-                "title": "Antigravity: Toggle Auto-All (CDP/Multi-Tab)"
-            },
-            {
-                "command": "antigravity.toggleAutonomous",
-                "title": "Antigravity: Toggle Autonomous Mode (Yoke)"
-            },
-            {
-                "command": "antigravity.openSettings",
-                "title": "Antigravity: Open Dashboard"
-            },
-            {
-                "command": "antigravity.showStatusMenu",
-                "title": "Antigravity: Show Status Menu"
-            },
-            {
-                "command": "antigravity.toggleMcp",
-                "title": "Antigravity: Toggle MCP Server"
-            },
-            {
-                "command": "antigravity.toggleVoice",
-                "title": "Antigravity: Toggle Voice Control"
-            },
-            {
-                "command": "antigravity.processVoiceTranscript",
-                "title": "Antigravity: Process Voice Transcript (Debug)"
-            },
-            {
-                "command": "antigravity.generateTests",
-                "title": "Antigravity: Generate Tests"
-            },
-            {
-                "command": "antigravity.runCodeReview",
-                "title": "Antigravity: Run Code Review"
-            },
-            {
-                "command": "antigravity.startMultiAgent",
-                "title": "Antigravity: Start Multi-Agent Task"
-            },
-            {
-                "command": "antigravity.showMemory",
-                "title": "Antigravity: Show Session Memory"
-            },
-            {
-                "command": "antigravity.syncProjectTasks",
-                "title": "Antigravity: Sync Tasks (Jira/GitHub)"
-            },
-            {
-                "command": "antigravity.checkRuntimeState",
-                "title": "Antigravity: Check Runtime State"
-            },
-            {
-                "command": "antigravity.detectCompletionWaitingState",
-                "title": "Antigravity: Detect Completion + Waiting State"
-            },
-            {
-                "command": "antigravity.copyRuntimeStateJson",
-                "title": "Antigravity: Copy Runtime State JSON"
-            },
-            {
-                "command": "antigravity.refreshRuntimeAndReopenStatusMenu",
-                "title": "Antigravity: Refresh Runtime + Reopen Status Menu"
-            },
-            {
-                "command": "antigravity.resetStatusRefreshCounters",
-                "title": "Antigravity: Reset Status Refresh Counters"
-            },
-            {
-                "command": "antigravity.copyLastResumePayloadReport",
-                "title": "Antigravity: Copy Last Resume Payload Report"
-            },
-            {
-                "command": "antigravity.copyEscalationDiagnosticsReport",
-                "title": "Antigravity: Copy Escalation Diagnostics Report"
-            },
-            {
-                "command": "antigravity.copyEscalationHealthSummary",
-                "title": "Antigravity: Copy Escalation Health Summary"
-            },
-            {
-                "command": "antigravity.showEscalationMenu",
-                "title": "Antigravity: Show Escalation Controls"
-            },
-            {
-                "command": "antigravity.clearEscalationTimeline",
-                "title": "Antigravity: Clear Escalation Timeline"
-            },
-            {
-                "command": "antigravity.clearEscalationTimelineNow",
-                "title": "Antigravity: Clear Escalation Timeline (No Prompt)"
-            },
-            {
-                "command": "antigravity.resumeFromWaitingState",
-                "title": "Antigravity: Resume From Waiting State"
-            },
-            {
-                "command": "antigravity.validateCrossUiCoverage",
-                "title": "Antigravity: Validate Cross-UI Coverage"
-            },
-            {
-                "command": "antigravity.runCrossUiSelfTest",
-                "title": "Antigravity: Run Cross-UI Self-Test"
-            },
-            {
-                "command": "antigravity.explainAutoResumeGuard",
-                "title": "Antigravity: Explain Auto-Resume Guard"
-            },
-            {
-                "command": "antigravity.autoFixAutoResumeReadiness",
-                "title": "Antigravity: Auto-Fix Resume Readiness"
-            },
-            {
-                "command": "antigravity.diagnoseCdp",
-                "title": "Antigravity: Diagnose CDP Connection"
-            },
-            {
-                "command": "antigravity.testAudio",
-                "title": "Antigravity: Test Audio Feedback"
-            },
-            {
-                "command": "antigravity.clearAutoAll",
-                "title": "Antigravity: Clear Accept All"
-            },
-            {
-                "command": "antigravity.writeAndSubmitBump",
-                "title": "Antigravity: Write and Submit Bump"
+            "pollIntervalMs": {
+              "type": "number",
+              "default": 800,
+              "description": "Interval (ms) for the automation loop (overrides pollFrequency)."
             }
-        ],
-        "keybindings": [
-            {
-                "command": "antigravity.toggleAutoAccept",
-                "key": "ctrl+alt+shift+u",
-                "mac": "cmd+alt+shift+u"
-            },
-            {
-                "command": "antigravity.testAudio",
-                "key": "ctrl+alt+shift+t",
-                "mac": "cmd+alt+shift+t"
-            },
-            {
-                "command": "antigravity.clearAutoAll",
-                "key": "ctrl+alt+shift+k",
-                "mac": "cmd+alt+shift+k"
-            },
-            {
-                "command": "antigravity.writeAndSubmitBump",
-                "key": "ctrl+alt+shift+b",
-                "mac": "cmd+alt+shift+b"
-            }
-        ],
-        "configuration": {
-            "title": "Antigravity Autopilot",
-            "properties": {
-                "antigravity.strategy": {
-                    "type": "string",
-                    "enum": [
-                        "simple",
-                        "cdp"
-                    ],
-                    "default": "cdp",
-                    "description": "Driver Strategy: 'simple' uses VS Code commands (no restart), 'cdp' uses Browser Protocol (robust, multi-tab, requires restart).",
-                    "markdownDescription": "**Driver Strategy**: \n- `simple`: Uses standard VS Code commands. Good for basic usage but limited.\n- `cdp`: Uses Chrome DevTools Protocol. **Required for Multi-Tab Orchestration, background automation, and robust selector handling.**"
-                },
-                "antigravity.interactionUiProfile": {
-                    "type": "string",
-                    "enum": [
-                        "auto",
-                        "vscode",
-                        "antigravity",
-                        "cursor"
-                    ],
-                    "default": "auto",
-                    "description": "Select UI targeting profile for element selectors and click method bundle.",
-                    "markdownDescription": "**UI Targeting Profile**:\nDefines which set of CSS selectors to use for locating Chat Inputs, Send Buttons, and Run/Accept actions.\n- `auto`: Automatically detects the environment.\n- `vscode`: standard VS Code Chat.\n- `antigravity`: Antigravity Webview.\n- `cursor`: Cursor AI Pane."
-                },
-                "antigravity.autoAcceptEnabled": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Deprecated: Enable basic Auto-Accept of pending edits.",
-                    "deprecationMessage": "Use 'antigravity.actions.autoAccept.enabled' instead."
-                },
-                "antigravity.autoAllEnabled": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Deprecated: Enable robust Auto-All (CDP/Multi-Tab) for edits and terminal commands.",
-                    "deprecationMessage": "Use 'antigravity.strategy' and 'antigravity.autoContinueScriptEnabled' instead."
-                },
-                "antigravity.autopilotAutoAcceptEnabled": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Deprecated: Unified control: enable automatic accept/action handling for autopilot.",
-                    "deprecationMessage": "Use 'antigravity.actions.autoAccept.enabled' instead."
-                },
-                "antigravity.autopilotAutoBumpEnabled": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Deprecated: Unified control: enable automatic bump/resume nudges when conversation is idle.",
-                    "deprecationMessage": "Use 'antigravity.actions.bump.enabled' instead."
-                },
-                "antigravity.autopilotRunExpandContinueEnabled": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Deprecated: Unified control: allow autopilot to click Run/Expand/Continue style actions.",
-                    "deprecationMessage": "Use 'antigravity.actions.run.enabled' and 'antigravity.actions.expand.enabled' instead."
-                },
-                "antigravity.multiTabEnabled": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Enable Multi-Tab processing (requires CDP).",
-                    "markdownDescription": "**Multi-Tab Orchestration**: If enabled, Antigravity will connect to and control **ALL** compatible tabs (pages, iframes, webviews) found on the CDP port, not just the first one. Essential for complex multi-root workspaces."
-                },
-                "antigravity.autonomousEnabled": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Enable Autonomous Agent Loop (Yoke)."
-                },
-                "antigravity.continuousMode": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Enable continuous task execution in Autonomous Mode (proceed to next task automatically)."
-                },
-                "antigravity.mcpEnabled": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Enable MCP Server integration."
-                },
-                "antigravity.voiceControlEnabled": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Enable Voice Control."
-                },
-                "antigravity.watchdogEnabled": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Enable Self-Healing Watchdog.",
-                    "markdownDescription": "**Self-Healing Watchdog**: Monitors the browser automation script. If the script stops sending heartbeats (e.g., due to a crash or page reload), the watchdog will automatically re-inject it."
-                },
-                "antigravity.watchdogTimeoutMs": {
-                    "type": "number",
-                    "default": 15000,
-                    "description": "Watchdog timeout in milliseconds.",
-                    "markdownDescription": "Time in milliseconds to wait for a heartbeat before considering the script 'dead' and triggering re-injection."
-                },
-                "antigravity.autoContinueScriptEnabled": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Master Switch: Enable the injected automation script.",
-                    "markdownDescription": "**Master Switch**: Specific to the Browser/CDP automation. If disabled, **NO** automation scripts will be injected into the browser. This overrides all other `automation.*` settings."
-                },
-                "antigravity.automation.actions.clickRun": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Automatically click 'Run in Terminal' icons.",
-                    "markdownDescription": "**Auto-Run**:\nAutomatically clicks 'Run in Terminal' icons (play buttons) in code blocks. \n\n*Useful for quickly executing suggested commands.*"
-                },
-                "antigravity.automation.actions.clickExpand": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Automatically click 'Expand' twisties.",
-                    "markdownDescription": "**Auto-Expand**:\nAutomatically clicks 'Expand' twisties and file references to show hidden context or code blocks."
-                },
-                "antigravity.automation.actions.clickAccept": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Automatically click 'Accept' buttons.",
-                    "markdownDescription": "**Auto-Accept**:\nAutomatically clicks 'Accept', 'Apply', or 'Insert' buttons for inline code suggestions."
-                },
-                "antigravity.automation.actions.clickContinue": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Automatically click 'Continue' generation buttons.",
-                    "markdownDescription": "**Auto-Continue**:\nAutomatically clicks 'Continue' (generation) and 'Keep' (pre-computation) buttons to keep the agent moving."
-                },
-                "antigravity.automation.actions.clickSubmit": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Auto-click 'Submit/Send' buttons.",
-                    "markdownDescription": "**Auto-Submit**:\nAutomatically clicks 'Send' or 'Submit' buttons if text has been entered into the chat input.\n\n*Ensures your prompts are actually sent.*"
-                },
-                "antigravity.automation.actions.clickFeedback": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Automatically click positive feedback buttons.",
-                    "markdownDescription": "**Auto-Feedback**: Automatically clicks positive feedback buttons (Thumbs Up) to reinforce successful steps. (Default: false)"
-                },
-                "antigravity.automation.timing.pollIntervalMs": {
-                    "type": "number",
-                    "default": 800,
-                    "description": "How often (in milliseconds) the automation script scans the DOM for interactable elements. Lower values are more responsive but use more CPU."
-                },
-                "antigravity.automation.timing.actionThrottleMs": {
-                    "type": "number",
-                    "default": 1000,
-                    "description": "Minimum time (in milliseconds) between consecutive automated clicks to prevents rapid-fire misclicks."
-                },
-                "antigravity.automation.timing.cooldownMs": {
-                    "type": "number",
-                    "default": 2500,
-                    "description": "Global cooldown (in milliseconds) applied after certain heavy actions to allow the UI to settle."
-                },
-                "antigravity.automation.timing.randomness": {
-                    "type": "number",
-                    "default": 100,
-                    "description": "Random jitter (in milliseconds) added to actions to simulate human-like variability. Set to 0 for machine precision."
-                },
-                "antigravity.automation.debug.highlightClicks": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Visually flash a red border on elements when they are automatically clicked. Useful for verifying what the script is doing."
-                },
-                "antigravity.automation.debug.verboseLogging": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Enable detailed console logs in the browser DevTools for the automation script."
-                },
-                "antigravity.automation.actions.autoScroll": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Automatically scroll the chat view to the bottom to keep the latest content visible."
-                },
-                "antigravity.automation.actions.clickAcceptAll": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Automatically click 'Accept All' buttons if present (e.g. for batch edits)."
-                },
-                "antigravity.automation.actions.autoReply": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Automatically type and send a reply (e.g. 'continue') if the chat is idle. Useful for keeping the agent working."
-                },
-                "antigravity.automation.actions.autoReplyText": {
-                    "type": "string",
-                    "default": "continue",
-                    "description": "The text to type when auto-replying (e.g. 'continue', 'next', 'review')."
-                },
-                "antigravity.automation.timing.autoReplyDelayMs": {
-                    "type": "number",
-                    "default": 7000,
-                    "description": "Time (in milliseconds) to wait before triggering an auto-reply if no other actions occur."
-                },
-                "antigravity.autoSwitchModels": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Automatically switch models based on task type (in Autonomous Mode)."
-                },
-                "antigravity.preferredModelForReasoning": {
-                    "type": "string",
-                    "default": "claude-opus-4.5-thinking",
-                    "enum": [
-                        "claude-opus-4.5-thinking",
-                        "claude-sonnet-4.5-thinking",
-                        "claude-sonnet-3.5",
-                        "claude-sonnet-3.7"
-                    ],
-                    "description": "Model for complex reasoning tasks"
-                },
-                "antigravity.preferredModelForFrontend": {
-                    "type": "string",
-                    "default": "gemini-3-pro-high",
-                    "enum": [
-                        "gemini-3-pro-high",
-                        "gemini-3-pro-low",
-                        "gemini-3-flash",
-                        "gpt-4o"
-                    ],
-                    "description": "Model for frontend/UI tasks"
-                },
-                "antigravity.preferredModelForQuick": {
-                    "type": "string",
-                    "default": "gemini-3-flash",
-                    "enum": [
-                        "gemini-3-flash",
-                        "gemini-3-pro-low",
-                        "gpt-4o-mini"
-                    ],
-                    "description": "Model for quick tasks"
-                },
-                "antigravity.autoGitCommit": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Auto-commit progress every 10 loops."
-                },
-                "antigravity.pollFrequency": {
-                    "type": "number",
-                    "default": 500,
-                    "minimum": 100,
-                    "maximum": 5000,
-                    "description": "Polling frequency in ms."
-                },
-                "antigravity.bannedCommands": {
-                    "type": "array",
-                    "default": [
-                        "rm -rf /",
-                        "rm -rf ~",
-                        "format c:",
-                        "del /f /s /q"
-                    ],
-                    "description": "Commands to hard-block from execution."
-                },
-                "antigravity.automation.timing": {
-                    "type": "object",
-                    "default": {
-                        "actionThrottleMs": 100,
-                        "cooldownMs": 3000,
-                        "pollIntervalMs": 800
-                    },
-                    "properties": {
-                        "actionThrottleMs": {
-                            "type": "number",
-                            "default": 100,
-                            "description": "Delay (ms) between click actions to prevent flooding."
-                        },
-                        "cooldownMs": {
-                            "type": "number",
-                            "default": 3000,
-                            "description": "Cooldown (ms) after a successful auto-bump before retrying."
-                        },
-                        "pollIntervalMs": {
-                            "type": "number",
-                            "default": 800,
-                            "description": "Interval (ms) for the automation loop (overrides pollFrequency)."
-                        }
-                    },
-                    "description": "Granular timing controls for automation actions."
-                },
-                "antigravity.loopInterval": {
-                    "type": "number",
-                    "default": 30,
-                    "minimum": 5,
-                    "maximum": 300,
-                    "description": "Seconds between autonomous loops."
-                },
-                "antigravity.maxLoopsPerSession": {
-                    "type": "number",
-                    "default": 100,
-                    "description": "Max loops before pausing autonomous mode."
-                },
-                "antigravity.maxConsecutiveTestLoops": {
-                    "type": "number",
-                    "default": 3,
-                    "minimum": 1,
-                    "maximum": 10,
-                    "description": "Exit after this many consecutive test-only loops"
-                },
-                "antigravity.executionTimeout": {
-                    "type": "number",
-                    "default": 15,
-                    "description": "Minutes to wait for AI response before timing out."
-                },
-                "antigravity.maxCallsPerHour": {
-                    "type": "number",
-                    "default": 100,
-                    "description": "Maximum API calls per hour."
-                },
-                "antigravity.voiceMode": {
-                    "type": "string",
-                    "enum": [
-                        "push-to-talk",
-                        "always-listening"
-                    ],
-                    "default": "push-to-talk",
-                    "description": "Voice Control Mode."
-                },
-                "antigravity.threadWaitInterval": {
-                    "type": "number",
-                    "default": 5,
-                    "description": "Seconds to wait between autonomous loop steps."
-                },
-                "antigravity.autoApproveDelay": {
-                    "type": "number",
-                    "default": 30,
-                    "description": "Seconds to wait before auto-approving changes."
-                },
-                "antigravity.autoAcceptPollIntervalMs": {
-                    "type": "number",
-                    "default": 1000,
-                    "minimum": 100,
-                    "maximum": 10000,
-                    "description": "Unified timing: polling interval in ms for auto-accept/action scanning."
-                },
-                "antigravity.autoBumpCooldownSec": {
-                    "type": "number",
-                    "default": 30,
-                    "minimum": 1,
-                    "maximum": 3600,
-                    "description": "Unified timing: minimum seconds between auto-bump attempts."
-                },
-                "antigravity.cdpTimeout": {
-                    "type": "number",
-                    "default": 10000,
-                    "description": "Timeout in milliseconds for CDP operations."
-                },
-                "antigravity.cdpPort": {
-                    "type": "number",
-                    "default": 9000,
-                    "description": "Port to use for Chrome DevTools Protocol (CDP)."
-                },
-                "antigravity.bumpMessage": {
-                    "type": "string",
-                    "default": "bump",
-                    "deprecationMessage": "Use antigravity.actions.bump.text instead.",
-                    "description": "Deprecated: Message to post to bump the thread."
-                },
-                "antigravity.actions.bump.enabled": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Enable automatic bump/resume nudges."
-                },
-                "antigravity.actions.bump.text": {
-                    "type": "string",
-                    "default": "bump",
-                    "description": "Text to type when bumping the thread."
-                },
-                "antigravity.actions.bump.cooldown": {
-                    "type": "number",
-                    "default": 30,
-                    "description": "Minimum seconds between bump attempts."
-                },
-                "antigravity.actions.bump.typingDelayMs": {
-                    "type": "number",
-                    "default": 50,
-                    "description": "Delay (ms) between keystrokes when typing bump message."
-                },
-                "antigravity.actions.bump.submitDelayMs": {
-                    "type": "number",
-                    "default": 100,
-                    "description": "Delay (ms) before submitting the bump message."
-                },
-                "antigravity.actions.autoAccept.enabled": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Enable automatic clicking of 'Accept', 'Allow', 'OK' buttons."
-                },
-                "antigravity.actions.autoAccept.pollIntervalMs": {
-                    "type": "number",
-                    "default": 1000,
-                    "description": "How often to scan for accept buttons (ms)."
-                },
-                "antigravity.actions.autoAccept.delayMs": {
-                    "type": "number",
-                    "default": 100,
-                    "description": "Delay (ms) before clicking an accept button after finding it."
-                },
-                "antigravity.actions.run.enabled": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Enable clicking 'Run', 'Debug', or 'Play' buttons."
-                },
-                "antigravity.actions.run.delayMs": {
-                    "type": "number",
-                    "default": 100,
-                    "description": "Delay (ms) before clicking a run button."
-                },
-                "antigravity.actions.expand.enabled": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Enable clicking expand/collapse chevrons."
-                },
-                "antigravity.actions.expand.delayMs": {
-                    "type": "number",
-                    "default": 50,
-                    "description": "Delay (ms) before clicking expand elements."
-                },
-                "antigravity.runtimeWaitingReminderEnabled": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Show reminder notifications when runtime stays in waiting_for_chat_message state."
-                },
-                "antigravity.runtimeWaitingReminderDelaySec": {
-                    "type": "number",
-                    "default": 60,
-                    "minimum": 5,
-                    "maximum": 3600,
-                    "description": "Seconds to wait in waiting_for_chat_message state before showing reminder."
-                },
-                "antigravity.runtimeWaitingReminderCooldownSec": {
-                    "type": "number",
-                    "default": 180,
-                    "minimum": 5,
-                    "maximum": 7200,
-                    "description": "Minimum seconds between repeated waiting-state reminders."
-                },
-                "antigravity.runtimeAutoResumeEnabled": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Automatically send a resume message when runtime remains in waiting_for_chat_message state."
-                },
-                "antigravity.runtimeAutoResumeMessage": {
-                    "type": "string",
-                    "default": "Continue with the next highest-priority development task in this workspace. If everything is complete, summarize what is done and propose the next best improvement.",
-                    "description": "Message sent automatically (or manually) to resume Copilot chat when waiting."
-                },
-                "antigravity.runtimeAutoResumeUseMinimalContinue": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "When waiting-for-chat completion is confidently detected, send a concise continuation nudge for Copilot Insiders instead of the full resume prompt."
-                },
-                "antigravity.runtimeAutoResumeMinimalMessage": {
-                    "type": "string",
-                    "default": "Continue with the next highest-priority development task in this workspace.",
-                    "description": "Short continuation message used when minimal continue mode is enabled and runtime is waiting for a new chat message."
-                },
-                "antigravity.runtimeAutoResumeMinimalMessageVSCode": {
-                    "type": "string",
-                    "default": "Continue with the next highest-priority coding task in this VS Code workspace.",
-                    "description": "Profile-specific minimal continuation message used when runtime mode resolves to vscode."
-                },
-                "antigravity.runtimeAutoResumeMinimalMessageAntigravity": {
-                    "type": "string",
-                    "default": "Continue with the next highest-priority Antigravity development task.",
-                    "description": "Profile-specific minimal continuation message used when runtime mode resolves to antigravity."
-                },
-                "antigravity.runtimeAutoResumeMinimalMessageCursor": {
-                    "type": "string",
-                    "default": "Continue with the next highest-priority Cursor coding task in this workspace.",
-                    "description": "Profile-specific minimal continuation message used when runtime mode resolves to cursor."
-                },
-                "antigravity.runtimeAutoResumeCooldownSec": {
-                    "type": "number",
-                    "default": 300,
-                    "minimum": 5,
-                    "maximum": 7200,
-                    "description": "Minimum seconds between automatic resume messages while waiting."
-                },
-                "antigravity.runtimeAutoResumeStabilityPolls": {
-                    "type": "number",
-                    "default": 2,
-                    "minimum": 1,
-                    "maximum": 10,
-                    "description": "How many consecutive runtime polls must report ready-to-resume before automatic resume sends a message."
-                },
-                "antigravity.runtimeAutoFixWaitingEnabled": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Enable watchdog that runs safe readiness auto-fix actions when waiting state persists."
-                },
-                "antigravity.runtimeAutoFixWaitingDelaySec": {
-                    "type": "number",
-                    "default": 180,
-                    "minimum": 5,
-                    "maximum": 7200,
-                    "description": "Seconds to remain in waiting state before watchdog triggers Auto-Fix Resume Readiness."
-                },
-                "antigravity.runtimeAutoFixWaitingCooldownSec": {
-                    "type": "number",
-                    "default": 300,
-                    "minimum": 5,
-                    "maximum": 7200,
-                    "description": "Minimum seconds between watchdog auto-fix runs while waiting persists."
-                },
-                "antigravity.runtimeAutoFixWaitingEscalationEnabled": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "When watchdog auto-fix repeatedly fails to recover waiting state, force one full resume prompt on the next automatic resume attempt."
-                },
-                "antigravity.runtimeAutoFixWaitingEscalationThreshold": {
-                    "type": "number",
-                    "default": 2,
-                    "minimum": 1,
-                    "maximum": 10,
-                    "description": "Number of consecutive watchdog non-recovery outcomes before escalation arms a one-time full resume prompt."
-                },
-                "antigravity.runtimeAutoFixWaitingEscalationCooldownSec": {
-                    "type": "number",
-                    "default": 900,
-                    "minimum": 5,
-                    "maximum": 14400,
-                    "description": "Minimum seconds between escalation re-arms to prevent repeated full-prompt bursts during prolonged noisy waiting states."
-                },
-                "antigravity.runtimeAutoFixWaitingEscalationMaxEvents": {
-                    "type": "number",
-                    "default": 10,
-                    "minimum": 3,
-                    "maximum": 100,
-                    "description": "Maximum number of recent watchdog escalation events retained in runtime telemetry and diagnostics reports."
-                },
-                "antigravity.runtimeEscalationClearRequireConfirm": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Require a confirmation dialog before clearing escalation timeline data from commands or dashboard actions."
-                },
-                "antigravity.runtimeTelemetryStaleSec": {
-                    "type": "number",
-                    "default": 12,
-                    "minimum": 3,
-                    "maximum": 300,
-                    "description": "Seconds after which runtime telemetry is marked stale in the dashboard if no fresh updates are observed."
-                },
-                "antigravity.runtimeStatusMenuRefreshDebounceMs": {
-                    "type": "number",
-                    "default": 800,
-                    "minimum": 100,
-                    "maximum": 5000,
-                    "description": "Debounce window in milliseconds for the 'Refresh Runtime + Reopen Status Menu' action to prevent rapid overlap/flooding."
-                },
-                "antigravity.runtimeStatusMenuRefreshDebugLogs": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "When enabled, logs detailed skip/run reasons for status-menu refresh guard behavior (in-flight/debounce)."
-                },
-                "antigravity.runtimeAutoResumeMinScore": {
-                    "type": "number",
-                    "default": 70,
-                    "minimum": 0,
-                    "maximum": 100,
-                    "description": "Minimum Cross-UI self-test score required before automatic resume sends a message."
-                },
-                "antigravity.runtimeAutoResumeRequireStrictPrimary": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Require strict VS Code + Antigravity text/button readiness before automatic resume is allowed."
-                },
-                "antigravity.acceptPatterns": {
-                    "type": "array",
-                    "default": [],
-                    "description": "Custom button text patterns to Click (overrides defaults)."
-                },
-                "antigravity.rejectPatterns": {
-                    "type": "array",
-                    "default": [],
-                    "description": "Custom button text patterns to Avoid (appended to defaults)."
-                },
-                "antigravity.interactionTextMethods": {
-                    "type": "array",
-                    "default": [
-                        "cdp-keys",
-                        "cdp-insert-text",
-                        "clipboard-paste",
-                        "dom-inject",
-                        "bridge-type"
-                    ],
-                    "description": "Enabled text input methods (IDs). Options: cdp-keys, cdp-insert-text, clipboard-paste, dom-inject, bridge-type, vscode-type"
-                },
-                "antigravity.interactionClickMethods": {
-                    "type": "array",
-                    "default": [
-                        "dom-scan-click",
-                        "dom-click",
-                        "bridge-click",
-                        "cdp-mouse",
-                        "native-accept",
-                        "vscode-cmd",
-                        "script-force",
-                        "process-peek"
-                    ],
-                    "description": "Enabled click methods (IDs). Options: dom-scan-click, dom-click, bridge-click, cdp-mouse, native-accept, vscode-cmd, script-force, process-peek, visual-verify-click, coord-click"
-                },
-                "antigravity.interactionSubmitMethods": {
-                    "type": "array",
-                    "default": [
-                        "vscode-submit",
-                        "cdp-enter",
-                        "script-submit",
-                        "ctrl-enter",
-                        "alt-enter"
-                    ],
-                    "description": "Enabled submit methods (IDs). Options: vscode-submit, cdp-enter, script-submit, ctrl-enter, alt-enter"
-                },
-                "antigravity.interactionTimings": {
-                    "type": "object",
-                    "default": {},
-                    "description": "Per-method timing overrides in ms. Example: {\"cdp-keys\": 20, \"cdp-enter\": 100}"
-                },
-                "antigravity.interactionRetryCount": {
-                    "type": "number",
-                    "default": 3,
-                    "description": "How many methods to try (sequentially) before giving up."
-                },
-                "antigravity.interactionParallel": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Try all enabled methods simultaneously instead of sequentially."
-                },
-                "antigravity.interactionVisualDiffThreshold": {
-                    "type": "number",
-                    "default": 0.001,
-                    "minimum": 0,
-                    "maximum": 1,
-                    "description": "Visual diff sensitivity for screenshot-verified click methods (0-1)."
-                },
-                "antigravity.interactionClickMethodsVSCode": {
-                    "type": "array",
-                    "default": [
-                        "dom-scan-click",
-                        "native-accept",
-                        "process-peek",
-                        "vscode-cmd",
-                        "cdp-mouse",
-                        "bridge-click"
-                    ],
-                    "description": "Click method IDs used when UI profile resolves to vscode."
-                },
-                "antigravity.interactionClickMethodsAntigravity": {
-                    "type": "array",
-                    "default": [
-                        "dom-scan-click",
-                        "dom-click",
-                        "bridge-click",
-                        "cdp-mouse",
-                        "script-force",
-                        "native-accept"
-                    ],
-                    "description": "Click method IDs used when UI profile resolves to antigravity."
-                },
-                "antigravity.interactionClickMethodsCursor": {
-                    "type": "array",
-                    "default": [
-                        "dom-scan-click",
-                        "dom-click",
-                        "cdp-mouse",
-                        "script-force",
-                        "native-accept"
-                    ],
-                    "description": "Click method IDs used when UI profile resolves to cursor."
-                },
-                "antigravity.interactionClickSelectorsVSCode": {
-                    "type": "array",
-                    "default": [
-                        "button[aria-label*=\"Accept\"]",
-                        "button[title*=\"Accept\"]",
-                        "button[aria-label*=\"Apply\"]",
-                        "button[title*=\"Apply\"]",
-                        ".monaco-button",
-                        ".monaco-dialog-box button",
-                        ".monaco-notification-list button"
-                    ],
-                    "description": "CSS selector list used for VS Code UI element discovery."
-                },
-                "antigravity.interactionClickSelectorsAntigravity": {
-                    "type": "array",
-                    "default": [
-                        "#antigravity\\.agentPanel button",
-                        "#antigravity\\.agentPanel [role=\"button\"]",
-                        ".bg-ide-button-background",
-                        "button.grow"
-                    ],
-                    "description": "CSS selector list used for Antigravity UI element discovery."
-                },
-                "antigravity.interactionClickSelectorsCursor": {
-                    "type": "array",
-                    "default": [
-                        "#workbench\\.parts\\.auxiliarybar button",
-                        "#workbench\\.parts\\.auxiliarybar [role=\"button\"]",
-                        ".chat-session-item [role=\"button\"]",
-                        ".monaco-button"
-                    ],
-                    "description": "CSS selector list used for Cursor UI element discovery."
-                },
-                "antigravity.experimental.cdpExplicitDiscovery": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "If true, explicitly queries for existing webviews/iframes and attaches to them on startup. Disable if experiencing blank screen issues.",
-                    "scope": "window"
-                },
-                "antigravity.experimental.cdpAggressiveDiscovery": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Enable aggressive CDP target discovery/attachment for nested webviews/iframes. WARNING: May cause UI instability or blank panels."
-                }
-            }
+          },
+          "description": "Granular timing controls for automation actions."
+        },
+        "antigravity.loopInterval": {
+          "type": "number",
+          "default": 30,
+          "minimum": 5,
+          "maximum": 300,
+          "description": "Seconds between autonomous loops."
+        },
+        "antigravity.maxLoopsPerSession": {
+          "type": "number",
+          "default": 100,
+          "description": "Max loops before pausing autonomous mode."
+        },
+        "antigravity.maxConsecutiveTestLoops": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Exit after this many consecutive test-only loops"
+        },
+        "antigravity.executionTimeout": {
+          "type": "number",
+          "default": 15,
+          "description": "Minutes to wait for AI response before timing out."
+        },
+        "antigravity.maxCallsPerHour": {
+          "type": "number",
+          "default": 100,
+          "description": "Maximum API calls per hour."
+        },
+        "antigravity.voiceMode": {
+          "type": "string",
+          "enum": [
+            "push-to-talk",
+            "always-listening"
+          ],
+          "default": "push-to-talk",
+          "description": "Voice Control Mode."
+        },
+        "antigravity.threadWaitInterval": {
+          "type": "number",
+          "default": 5,
+          "description": "Seconds to wait between autonomous loop steps."
+        },
+        "antigravity.autoApproveDelay": {
+          "type": "number",
+          "default": 30,
+          "description": "Seconds to wait before auto-approving changes."
+        },
+        "antigravity.autoAcceptPollIntervalMs": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 10000,
+          "description": "Unified timing: polling interval in ms for auto-accept/action scanning."
+        },
+        "antigravity.autoBumpCooldownSec": {
+          "type": "number",
+          "default": 30,
+          "minimum": 1,
+          "maximum": 3600,
+          "description": "Unified timing: minimum seconds between auto-bump attempts."
+        },
+        "antigravity.cdpTimeout": {
+          "type": "number",
+          "default": 10000,
+          "description": "Timeout in milliseconds for CDP operations."
+        },
+        "antigravity.cdpPort": {
+          "type": "number",
+          "default": 9000,
+          "description": "Port to use for Chrome DevTools Protocol (CDP)."
+        },
+        "antigravity.bumpMessage": {
+          "type": "string",
+          "default": "bump",
+          "deprecationMessage": "Use antigravity.actions.bump.text instead.",
+          "description": "Deprecated: Message to post to bump the thread."
+        },
+        "antigravity.actions.bump.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable automatic bump/resume nudges."
+        },
+        "antigravity.actions.bump.text": {
+          "type": "string",
+          "default": "bump",
+          "description": "Text to type when bumping the thread."
+        },
+        "antigravity.actions.bump.cooldown": {
+          "type": "number",
+          "default": 30,
+          "description": "Minimum seconds between bump attempts."
+        },
+        "antigravity.actions.bump.typingDelayMs": {
+          "type": "number",
+          "default": 50,
+          "description": "Delay (ms) between keystrokes when typing bump message."
+        },
+        "antigravity.actions.bump.submitDelayMs": {
+          "type": "number",
+          "default": 100,
+          "description": "Delay (ms) before submitting the bump message."
+        },
+        "antigravity.actions.autoAccept.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable automatic clicking of 'Accept', 'Allow', 'OK' buttons."
+        },
+        "antigravity.actions.autoAccept.pollIntervalMs": {
+          "type": "number",
+          "default": 1000,
+          "description": "How often to scan for accept buttons (ms)."
+        },
+        "antigravity.actions.autoAccept.delayMs": {
+          "type": "number",
+          "default": 100,
+          "description": "Delay (ms) before clicking an accept button after finding it."
+        },
+        "antigravity.actions.run.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable clicking 'Run', 'Debug', or 'Play' buttons."
+        },
+        "antigravity.actions.run.delayMs": {
+          "type": "number",
+          "default": 100,
+          "description": "Delay (ms) before clicking a run button."
+        },
+        "antigravity.actions.expand.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable clicking expand/collapse chevrons."
+        },
+        "antigravity.actions.expand.delayMs": {
+          "type": "number",
+          "default": 50,
+          "description": "Delay (ms) before clicking expand elements."
+        },
+        "antigravity.runtimeWaitingReminderEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show reminder notifications when runtime stays in waiting_for_chat_message state."
+        },
+        "antigravity.runtimeWaitingReminderDelaySec": {
+          "type": "number",
+          "default": 60,
+          "minimum": 5,
+          "maximum": 3600,
+          "description": "Seconds to wait in waiting_for_chat_message state before showing reminder."
+        },
+        "antigravity.runtimeWaitingReminderCooldownSec": {
+          "type": "number",
+          "default": 180,
+          "minimum": 5,
+          "maximum": 7200,
+          "description": "Minimum seconds between repeated waiting-state reminders."
+        },
+        "antigravity.runtimeAutoResumeEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically send a resume message when runtime remains in waiting_for_chat_message state."
+        },
+        "antigravity.runtimeAutoResumeMessage": {
+          "type": "string",
+          "default": "Continue with the next highest-priority development task in this workspace. If everything is complete, summarize what is done and propose the next best improvement.",
+          "description": "Message sent automatically (or manually) to resume Copilot chat when waiting."
+        },
+        "antigravity.runtimeAutoResumeUseMinimalContinue": {
+          "type": "boolean",
+          "default": true,
+          "description": "When waiting-for-chat completion is confidently detected, send a concise continuation nudge for Copilot Insiders instead of the full resume prompt."
+        },
+        "antigravity.runtimeAutoResumeMinimalMessage": {
+          "type": "string",
+          "default": "Continue with the next highest-priority development task in this workspace.",
+          "description": "Short continuation message used when minimal continue mode is enabled and runtime is waiting for a new chat message."
+        },
+        "antigravity.runtimeAutoResumeMinimalMessageVSCode": {
+          "type": "string",
+          "default": "Continue with the next highest-priority coding task in this VS Code workspace.",
+          "description": "Profile-specific minimal continuation message used when runtime mode resolves to vscode."
+        },
+        "antigravity.runtimeAutoResumeMinimalMessageAntigravity": {
+          "type": "string",
+          "default": "Continue with the next highest-priority Antigravity development task.",
+          "description": "Profile-specific minimal continuation message used when runtime mode resolves to antigravity."
+        },
+        "antigravity.runtimeAutoResumeMinimalMessageCursor": {
+          "type": "string",
+          "default": "Continue with the next highest-priority Cursor coding task in this workspace.",
+          "description": "Profile-specific minimal continuation message used when runtime mode resolves to cursor."
+        },
+        "antigravity.runtimeAutoResumeCooldownSec": {
+          "type": "number",
+          "default": 300,
+          "minimum": 5,
+          "maximum": 7200,
+          "description": "Minimum seconds between automatic resume messages while waiting."
+        },
+        "antigravity.runtimeAutoResumeStabilityPolls": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "How many consecutive runtime polls must report ready-to-resume before automatic resume sends a message."
+        },
+        "antigravity.runtimeAutoFixWaitingEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable watchdog that runs safe readiness auto-fix actions when waiting state persists."
+        },
+        "antigravity.runtimeAutoFixWaitingDelaySec": {
+          "type": "number",
+          "default": 180,
+          "minimum": 5,
+          "maximum": 7200,
+          "description": "Seconds to remain in waiting state before watchdog triggers Auto-Fix Resume Readiness."
+        },
+        "antigravity.runtimeAutoFixWaitingCooldownSec": {
+          "type": "number",
+          "default": 300,
+          "minimum": 5,
+          "maximum": 7200,
+          "description": "Minimum seconds between watchdog auto-fix runs while waiting persists."
+        },
+        "antigravity.runtimeAutoFixWaitingEscalationEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "When watchdog auto-fix repeatedly fails to recover waiting state, force one full resume prompt on the next automatic resume attempt."
+        },
+        "antigravity.runtimeAutoFixWaitingEscalationThreshold": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Number of consecutive watchdog non-recovery outcomes before escalation arms a one-time full resume prompt."
+        },
+        "antigravity.runtimeAutoFixWaitingEscalationCooldownSec": {
+          "type": "number",
+          "default": 900,
+          "minimum": 5,
+          "maximum": 14400,
+          "description": "Minimum seconds between escalation re-arms to prevent repeated full-prompt bursts during prolonged noisy waiting states."
+        },
+        "antigravity.runtimeAutoFixWaitingEscalationMaxEvents": {
+          "type": "number",
+          "default": 10,
+          "minimum": 3,
+          "maximum": 100,
+          "description": "Maximum number of recent watchdog escalation events retained in runtime telemetry and diagnostics reports."
+        },
+        "antigravity.runtimeEscalationClearRequireConfirm": {
+          "type": "boolean",
+          "default": true,
+          "description": "Require a confirmation dialog before clearing escalation timeline data from commands or dashboard actions."
+        },
+        "antigravity.runtimeTelemetryStaleSec": {
+          "type": "number",
+          "default": 12,
+          "minimum": 3,
+          "maximum": 300,
+          "description": "Seconds after which runtime telemetry is marked stale in the dashboard if no fresh updates are observed."
+        },
+        "antigravity.runtimeStatusMenuRefreshDebounceMs": {
+          "type": "number",
+          "default": 800,
+          "minimum": 100,
+          "maximum": 5000,
+          "description": "Debounce window in milliseconds for the 'Refresh Runtime + Reopen Status Menu' action to prevent rapid overlap/flooding."
+        },
+        "antigravity.runtimeStatusMenuRefreshDebugLogs": {
+          "type": "boolean",
+          "default": false,
+          "description": "When enabled, logs detailed skip/run reasons for status-menu refresh guard behavior (in-flight/debounce)."
+        },
+        "antigravity.runtimeAutoResumeMinScore": {
+          "type": "number",
+          "default": 70,
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Minimum Cross-UI self-test score required before automatic resume sends a message."
+        },
+        "antigravity.runtimeAutoResumeRequireStrictPrimary": {
+          "type": "boolean",
+          "default": true,
+          "description": "Require strict VS Code + Antigravity text/button readiness before automatic resume is allowed."
+        },
+        "antigravity.acceptPatterns": {
+          "type": "array",
+          "default": [],
+          "description": "Custom button text patterns to Click (overrides defaults)."
+        },
+        "antigravity.rejectPatterns": {
+          "type": "array",
+          "default": [],
+          "description": "Custom button text patterns to Avoid (appended to defaults)."
+        },
+        "antigravity.interactionTextMethods": {
+          "type": "array",
+          "default": [
+            "cdp-keys",
+            "cdp-insert-text",
+            "clipboard-paste",
+            "dom-inject",
+            "bridge-type",
+            "vscode-type"
+          ],
+          "description": "Enabled text input methods (IDs). Options: cdp-keys, cdp-insert-text, clipboard-paste, dom-inject, bridge-type, vscode-type"
+        },
+        "antigravity.accessibility.screenReaderOptimized": {
+          "type": "boolean",
+          "default": false,
+          "description": "Optimize UI and Status Bar for Screen Readers (concise text, explicit ARIA labels)."
+        },
+        "antigravity.interactionClickMethods": {
+          "type": "array",
+          "default": [
+            "dom-scan-click",
+            "dom-click",
+            "bridge-click",
+            "cdp-mouse",
+            "native-accept",
+            "vscode-cmd",
+            "script-force",
+            "process-peek"
+          ],
+          "description": "Enabled click methods (IDs). Options: dom-scan-click, dom-click, bridge-click, cdp-mouse, native-accept, vscode-cmd, script-force, process-peek, visual-verify-click, coord-click"
+        },
+        "antigravity.interactionSubmitMethods": {
+          "type": "array",
+          "default": [
+            "vscode-submit",
+            "cdp-enter",
+            "script-submit",
+            "ctrl-enter",
+            "alt-enter"
+          ],
+          "description": "Enabled submit methods (IDs). Options: vscode-submit, cdp-enter, script-submit, ctrl-enter, alt-enter"
+        },
+        "antigravity.interactionTimings": {
+          "type": "object",
+          "default": {},
+          "description": "Per-method timing overrides in ms. Example: {\"cdp-keys\": 20, \"cdp-enter\": 100}"
+        },
+        "antigravity.interactionRetryCount": {
+          "type": "number",
+          "default": 3,
+          "description": "How many methods to try (sequentially) before giving up."
+        },
+        "antigravity.interactionParallel": {
+          "type": "boolean",
+          "default": false,
+          "description": "Try all enabled methods simultaneously instead of sequentially."
+        },
+        "antigravity.interactionVisualDiffThreshold": {
+          "type": "number",
+          "default": 0.001,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Visual diff sensitivity for screenshot-verified click methods (0-1)."
+        },
+        "antigravity.interactionClickMethodsVSCode": {
+          "type": "array",
+          "default": [
+            "dom-scan-click",
+            "native-accept",
+            "process-peek",
+            "vscode-cmd",
+            "cdp-mouse",
+            "bridge-click"
+          ],
+          "description": "Click method IDs used when UI profile resolves to vscode."
+        },
+        "antigravity.interactionClickMethodsAntigravity": {
+          "type": "array",
+          "default": [
+            "dom-scan-click",
+            "dom-click",
+            "bridge-click",
+            "cdp-mouse",
+            "script-force",
+            "native-accept"
+          ],
+          "description": "Click method IDs used when UI profile resolves to antigravity."
+        },
+        "antigravity.interactionClickMethodsCursor": {
+          "type": "array",
+          "default": [
+            "dom-scan-click",
+            "dom-click",
+            "cdp-mouse",
+            "script-force",
+            "native-accept"
+          ],
+          "description": "Click method IDs used when UI profile resolves to cursor."
+        },
+        "antigravity.interactionClickSelectorsVSCode": {
+          "type": "array",
+          "default": [
+            "button[aria-label*=\"Accept\"]",
+            "button[title*=\"Accept\"]",
+            "button[aria-label*=\"Apply\"]",
+            "button[title*=\"Apply\"]",
+            ".monaco-button",
+            ".monaco-dialog-box button",
+            ".monaco-notification-list button"
+          ],
+          "description": "CSS selector list used for VS Code UI element discovery."
+        },
+        "antigravity.interactionClickSelectorsAntigravity": {
+          "type": "array",
+          "default": [
+            "#antigravity\\.agentPanel button",
+            "#antigravity\\.agentPanel [role=\"button\"]",
+            ".bg-ide-button-background",
+            "button.grow"
+          ],
+          "description": "CSS selector list used for Antigravity UI element discovery."
+        },
+        "antigravity.interactionClickSelectorsCursor": {
+          "type": "array",
+          "default": [
+            "#workbench\\.parts\\.auxiliarybar button",
+            "#workbench\\.parts\\.auxiliarybar [role=\"button\"]",
+            ".chat-session-item [role=\"button\"]",
+            ".monaco-button"
+          ],
+          "description": "CSS selector list used for Cursor UI element discovery."
+        },
+        "antigravity.experimental.cdpExplicitDiscovery": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true, explicitly queries for existing webviews/iframes and attaches to them on startup. Disable if experiencing blank screen issues.",
+          "scope": "window"
+        },
+        "antigravity.experimental.cdpAggressiveDiscovery": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable aggressive CDP target discovery/attachment for nested webviews/iframes. WARNING: May cause UI instability or blank panels."
         }
-    },
-    "scripts": {
-        "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --platform=node --format=cjs --sourcemap",
-        "watch": "npm run compile -- --watch",
-        "test": "node --test antigravity-jules-orchestration/tests/**/*.test.js",
-        "test:soak:completion": "node --test tests/completion-detection-soak.test.js",
-        "test:audit-policy": "node --test tests/audit-policy.test.js",
-        "test:quality-gates": "node --test tests/command-parity.test.js tests/schema-parity.test.js tests/runtime-placeholder-policy.test.js",
-        "package": "vsce package",
-        "lint": "eslint src --ext ts",
-        "audit:policy": "node scripts/audit-policy.js",
-        "verify:release:secure": "npm run test:audit-policy && npm run audit:policy && npm run verify:release",
-        "verify:release": "npm run compile && npm run lint && npm test && npm run package && node -e \"const fs=require('fs');const crypto=require('crypto');const pkg=require('./package.json');const f='antigravity-autopilot-'+pkg.version+'.vsix';const b=fs.readFileSync(f);console.log('VSIX',f);console.log('SHA256',crypto.createHash('sha256').update(b).digest('hex').toUpperCase());console.log('SIZE',b.length);\""
-    },
-    "dependencies": {
-        "ws": "^8.13.0"
-    },
-    "devDependencies": {
-        "@types/node": "^20.10.0",
-        "@types/vscode": "^1.75.0",
-        "@types/ws": "^8.5.10",
-        "@typescript-eslint/eslint-plugin": "^8.56.0",
-        "@typescript-eslint/parser": "^8.56.0",
-        "@vscode/vsce": "^2.22.0",
-        "compression": "^1.8.1",
-        "esbuild": "^0.27.1",
-        "eslint": "^8.55.0",
-        "joi": "^17.13.3",
-        "lru-cache": "^10.4.3",
-        "typescript": "^5.3.0"
+      }
     }
+  },
+  "scripts": {
+    "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --platform=node --format=cjs --sourcemap",
+    "watch": "npm run compile -- --watch",
+    "test": "node --test tests/**/*.test.js",
+    "test:soak:completion": "node --test tests/completion-detection-soak.test.js",
+    "test:audit-policy": "node --test tests/audit-policy.test.js",
+    "test:quality-gates": "node --test tests/command-parity.test.js tests/schema-parity.test.js tests/runtime-placeholder-policy.test.js",
+    "package": "vsce package",
+    "lint": "eslint src --ext ts",
+    "audit:policy": "node scripts/audit-policy.js",
+    "verify:release:secure": "npm run test:audit-policy && npm run audit:policy && npm run verify:release",
+    "verify:release": "npm run compile && npm run lint && npm test && npm run package && node -e \"const fs=require('fs');const crypto=require('crypto');const pkg=require('./package.json');const f='antigravity-autopilot-'+pkg.version+'.vsix';const b=fs.readFileSync(f);console.log('VSIX',f);console.log('SHA256',crypto.createHash('sha256').update(b).digest('hex').toUpperCase());console.log('SIZE',b.length);\""
+  },
+  "dependencies": {
+    "ws": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.75.0",
+    "@types/ws": "^8.5.10",
+    "@typescript-eslint/eslint-plugin": "^8.56.0",
+    "@typescript-eslint/parser": "^8.56.0",
+    "@vscode/vsce": "^2.22.0",
+    "compression": "^1.8.1",
+    "esbuild": "^0.27.1",
+    "eslint": "^8.55.0",
+    "joi": "^17.13.3",
+    "lru-cache": "^10.4.3",
+    "typescript": "^5.3.0"
+  }
 }

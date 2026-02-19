@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { createLogger } from '../utils/logger';
+import { config } from '../utils/config';
 
 const log = createLogger('StatusBar');
 
@@ -47,20 +48,22 @@ export class StatusBarManager {
 
         const runtimeSuffix = this.runtimeStateLabel ? ` • ${this.runtimeStateLabel}` : '';
 
+        const screenReader = config.get('accessibility.screenReaderOptimized');
+
         if (state.autonomousEnabled) {
-            this.statusMain.text = `$(sync~spin) Yoke: ${state.loopCount}${runtimeSuffix}`;
-            this.statusMain.tooltip = 'Autonomous Mode Running';
+            this.statusMain.text = screenReader ? `Antigravity: Running (${state.loopCount})` : `$(sync~spin) Yoke: ${state.loopCount}${runtimeSuffix}`;
+            this.statusMain.tooltip = 'Autonomous Mode Running - Click to Stop';
             this.statusMain.backgroundColor = new vscode.ThemeColor('statusBarItem.prominentBackground');
         } else if (state.autoAllEnabled) {
-            this.statusMain.text = `$(rocket) Yoke: CDP${runtimeSuffix}`;
+            this.statusMain.text = screenReader ? `Antigravity: Monitoring` : `$(rocket) Yoke: CDP${runtimeSuffix}`;
             this.statusMain.tooltip = this.runtimeStateLabel
                 ? `CDP Auto-All Enabled (${this.runtimeStateLabel})`
                 : 'CDP Auto-All Enabled';
             this.statusMain.backgroundColor = undefined;
         } else {
-            this.statusMain.text = `$(circle-slash) Yoke: OFF${runtimeSuffix}`;
-            this.statusMain.tooltip = 'Click to enable';
-            this.statusMain.backgroundColor = undefined; // new vscode.ThemeColor('statusBarItem.warningBackground');
+            this.statusMain.text = screenReader ? `Antigravity: Off` : `$(circle-slash) Yoke: OFF${runtimeSuffix}`;
+            this.statusMain.tooltip = 'Antigravity Paused - Click to Enable';
+            this.statusMain.backgroundColor = undefined;
         }
     }
 

@@ -207,6 +207,11 @@ export class CDPStrategy implements IStrategy {
     }
 
     /**
+     * Test a specific interaction method by ID.
+     */
+
+
+    /**
      * Auto-accept agent steps using configured interaction methods.
      */
     private async executeAutoAccept() {
@@ -281,12 +286,14 @@ export class CDPStrategy implements IStrategy {
     }
 
     private updateStatusBar() {
+        const screenReader = config.get('accessibility.screenReaderOptimized');
+
         if (this.isActive) {
-            this.statusBarItem.text = '$(check) CDP: ON';
+            this.statusBarItem.text = screenReader ? 'Antigravity CDP: Connected' : '$(check) CDP: ON';
             this.statusBarItem.tooltip = 'Antigravity CDP Strategy Active — Click to Toggle';
             this.statusBarItem.backgroundColor = undefined;
         } else {
-            this.statusBarItem.text = '$(circle-slash) CDP: OFF';
+            this.statusBarItem.text = screenReader ? 'Antigravity CDP: Disconnected' : '$(circle-slash) CDP: OFF';
             this.statusBarItem.tooltip = 'Antigravity CDP Strategy Inactive — Click to Toggle';
             this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
         }
@@ -342,5 +349,35 @@ export class CDPStrategy implements IStrategy {
     async sendHybridBump(message: string): Promise<boolean> {
         SoundEffects.play('bump');
         return this.cdpHandler.sendHybridBump(message);
+    }
+
+    /**
+     * Executes a specific interaction method for testing purposes.
+     */
+    async testMethod(methodId: string, text: string): Promise<boolean> {
+        if (!this.isActive) return false;
+
+        const ctx: InteractionContext = {
+            cdpHandler: this.cdpHandler,
+            vscodeCommands: vscode.commands,
+            text: text
+        };
+
+        // We need to resolve a selector for the test.
+        // For testing, we can try to find *any* input if it's a text method, or any button if it's a click method.
+        // But the registry requires a selector for some methods.
+        const profile = this.resolveUiProfile();
+        const selector = this.getClickSelectorForProfile(profile);
+
+        // For text methods, we might need input selectors
+        // This is a bit hacky, but valid for a test harness.
+        const registryProp = (this as any).registry; // Access private registry if needed, or make it protected
+        if (registryProp && typeof registryProp.executeMethod === 'function') {
+            return registryProp.executeMethod(methodId, {
+                ...ctx,
+                selector: selector
+            });
+        }
+        return false;
     }
 }

@@ -120,24 +120,7 @@ This file runs **inside the browser** (VS Code's Chromium process). Special rule
 
 ---
 
-## 5. Submodules Reference
 
-The workspace contains 10 git submodules. These are **reference implementations** — the active code lives in `src/` and `main_scripts/`.
-
-| Submodule | Origin | Purpose |
-|:----------|:-------|:--------|
-| `AUTO-ALL-AntiGravity` | ai-dev-2024 | Original CDP multi-tab auto-accept (reference) |
-| `antigravity-auto-accept` | pesoszpesosz | Simple command-based auto-accept (reference) |
-| `auto-accept-agent` | Munkhin | CDP auto-accept variant (reference) |
-| `yoke-antigravity` | ai-dev-2024 | Autonomous loop + MCP + Voice (reference) |
-| `free-auto-accept-antigravity` | RendezvousP | Free community auto-accept (reference) |
-| `AntiBridge-Antigravity-remote` | linhbq82 | Remote bridge for Antigravity (reference) |
-| `AntigravityMobile` | AvenalJ | Mobile companion app concept (reference) |
-| `antigravity-jules-orchestration` | Scarmonit | Jules API + MCP orchestration (reference) |
-| `antigravity-multi-purpose-agent` | rodhayl | Multi-purpose agent variant (reference) |
-| `Claude-Autopilot` | benbasha | Claude queue automation + auto-resume reference (reference) |
-
----
 
 ## 6. Configuration Reference
 

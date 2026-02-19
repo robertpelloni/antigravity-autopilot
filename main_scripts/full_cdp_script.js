@@ -331,7 +331,11 @@
                 '[aria-label*="Accept"]',
                 '[title*="Accept"]',
                 '[aria-label*="Allow"]',
-                '[title*="Allow"]'
+                '[title*="Allow"]',
+                '[aria-label*="Accept (Limited)"]',
+                '[title*="Accept (Limited)"]',
+                '[aria-label*="Accept (Limited)"]',
+                '[title*="Accept (Limited)"]'
             ],
             sendButtons: [
                 'button[aria-label*="Send"]',
@@ -1478,7 +1482,9 @@
 
         let found = [];
         selectors.forEach(s => queryAll(s).forEach(el => {
-            if (isValidInteractionTarget(el)) found.push(el);
+            if (isValidInteractionTarget(el)) {
+                found.push({ el, selector: s, source: 'Primary' });
+            }
         }));
 
         if (found.length === 0) {
@@ -1487,14 +1493,14 @@
                 ...getUnifiedClickSelectors('antigravity'),
                 ...getUnifiedClickSelectors('cursor'),
                 // User Requested "Gold Standard" coverage:
-                '[aria-label*="Allow"]', '[title*="Allow"]', 'button:contains("Allow")',
-                '[aria-label*="Accept All"]', '[title*="Accept All"]', 'button:contains("Accept All")',
-                '[aria-label*="Yes"]', '[title*="Yes"]',
-                '.monaco-button:contains("Allow")',
-                '.monaco-button:contains("Accept")'
+                '[aria-label*="Allow"]', '[title*="Allow"]',
+                '[aria-label*="Accept All"]', '[title*="Accept All"]',
+                '[aria-label*="Yes"]', '[title*="Yes"]'
             ];
             [...new Set(fallbackSelectors)].forEach(s => queryAll(s).forEach(el => {
-                if (isValidInteractionTarget(el)) found.push(el);
+                if (isValidInteractionTarget(el)) {
+                    found.push({ el, selector: s, source: 'Fallback' });
+                }
             }));
         }
 
@@ -1511,7 +1517,9 @@
                         ...getUnifiedClickSelectors('cursor')
                     ];
                     [...new Set(fallbackSelectors)].forEach(s => queryAll(s).forEach(el => {
-                        if (isValidInteractionTarget(el)) found.push(el);
+                        if (isValidInteractionTarget(el)) {
+                            found.push({ el, selector: s, source: 'Expanded-Fallback' });
+                        }
                     }));
                 }
             }
@@ -1519,13 +1527,34 @@
 
         let clicked = 0;
         let verified = 0;
-        const uniqueFound = [...new Set(found)];
+        const uniqueFound = [];
+        const seen = new Set();
+        found.forEach(item => {
+            if (!seen.has(item.el)) {
+                seen.add(item.el);
+                uniqueFound.push(item);
+            }
+        });
 
-        for (const el of uniqueFound) {
+        for (const item of uniqueFound) {
+            const { el, selector, source } = item;
+            // FILTER: Only interact with buttons matching allowlist/rejectlist
             // FILTER: Only interact with buttons matching allowlist/rejectlist
             if (!isAcceptButton(el)) {
-                // log(`[Filter] Skipping non-accept button: "${el.textContent?.substring(0, 20)}..."`);
                 continue;
+            }
+
+            // Broadcast detection - Diagnostics Matrix
+            if (window.monitorButtonDetection) {
+                const diag = {
+                    acceptAll: !!findVisibleElementBySelectors(SELECTORS.ACCEPT_ALL_BUTTONS),
+                    run: !!findVisibleElementBySelectors(SELECTORS.RUN_BUTTONS),
+                    expand: !!findVisibleElementBySelectors(SELECTORS.EXPAND_BUTTONS),
+                    chatInput: !!findVisibleElementBySelectors(SELECTORS.CHAT_INPUT_AREA),
+                    submitConfig: !!findVisibleElementBySelectors(SELECTORS.SUBMIT_BUTTONS),
+                    feedback: !!document.querySelector('.chat-input-container .feedback-icon, .chat-input-container .thumbs-up, .chat-input-container .thumbs-down')
+                };
+                console.log(`__ANTIGRAVITY_DIAGNOSTICS__:${JSON.stringify(diag)}`);
             }
 
             // Stuck Button Detection
@@ -1533,6 +1562,8 @@
             if (!state.clickHistory) state.clickHistory = { signature: '', count: 0 };
 
             if (isAcceptButton(el)) {
+                log(`[Trace] Found Candidate. Text: "${el.textContent?.substring(0, 30)}", Selector: "${selector}" (${source})`);
+
                 // Hybrid Strategy: Check if we can use a command instead of click
                 const txt = (el.textContent || el.getAttribute('aria-label') || '').toLowerCase();
 
@@ -1712,6 +1743,12 @@
                 // Gold Standard: Update Coverage Metrics for Self-Test
                 updateProfileCoverage();
 
+                // 1.5 Click Accept All (if enabled)
+                if (window.__antigravityConfig && window.__antigravityConfig.clickAcceptAll) {
+                    const acceptAllSelectors = ['[title*="Accept All"]', '[aria-label*="Accept All"]'];
+                    await performClick(acceptAllSelectors, { skipAcceptCheck: true });
+                }
+
                 // 2. Click Feedback Buttons (if enabled)
                 if (window.__antigravityConfig && window.__antigravityConfig.clickFeedback) {
                     await performClick(getUnifiedFeedbackSelectors('cursor'), { skipAcceptCheck: true });
@@ -1788,6 +1825,12 @@
 
                 // Expand any collapsed sections (e.g. "Step Requires Input")
                 await expandCollapsedSections();
+
+                // 1.5 Click Accept All (if enabled)
+                if (window.__antigravityConfig && window.__antigravityConfig.clickAcceptAll) {
+                    const acceptAllSelectors = ['[title*="Accept All"]', '[aria-label*="Accept All"]'];
+                    await performClick(acceptAllSelectors, { skipAcceptCheck: true });
+                }
 
                 // 2. Click Feedback Buttons (if enabled)
                 if (window.__antigravityConfig && window.__antigravityConfig.clickFeedback) {
