@@ -459,6 +459,74 @@
           "default": 100,
           "description": "Submit control delay threshold in milliseconds."
         },
+        "antigravity.automation.controls.acceptAll.detectMethods": {
+          "type": "array",
+          "default": [
+            "enabled-flag",
+            "not-generating",
+            "action-cooldown"
+          ],
+          "description": "Detection components for Accept All control firing."
+        },
+        "antigravity.automation.controls.acceptAll.actionMethods": {
+          "type": "array",
+          "default": [
+            "accept-all-button",
+            "dom-click"
+          ],
+          "description": "Action methods for Accept All control."
+        },
+        "antigravity.automation.controls.acceptAll.delayMs": {
+          "type": "number",
+          "default": 100,
+          "description": "Accept All control delay threshold in milliseconds."
+        },
+        "antigravity.automation.controls.continue.detectMethods": {
+          "type": "array",
+          "default": [
+            "enabled-flag",
+            "not-generating",
+            "action-cooldown"
+          ],
+          "description": "Detection components for Continue/Keep control firing."
+        },
+        "antigravity.automation.controls.continue.actionMethods": {
+          "type": "array",
+          "default": [
+            "continue-button",
+            "keep-button",
+            "dom-click"
+          ],
+          "description": "Action methods for Continue/Keep control."
+        },
+        "antigravity.automation.controls.continue.delayMs": {
+          "type": "number",
+          "default": 100,
+          "description": "Continue control delay threshold in milliseconds."
+        },
+        "antigravity.automation.controls.feedback.detectMethods": {
+          "type": "array",
+          "default": [
+            "enabled-flag",
+            "not-generating",
+            "action-cooldown"
+          ],
+          "description": "Detection components for Feedback control firing."
+        },
+        "antigravity.automation.controls.feedback.actionMethods": {
+          "type": "array",
+          "default": [
+            "thumbs-up",
+            "helpful-button",
+            "dom-click"
+          ],
+          "description": "Action methods for Feedback control."
+        },
+        "antigravity.automation.controls.feedback.delayMs": {
+          "type": "number",
+          "default": 150,
+          "description": "Feedback control delay threshold in milliseconds."
+        },
         "antigravity.automation.actions.clickFeedback": {
           "type": "boolean",
           "default": false,

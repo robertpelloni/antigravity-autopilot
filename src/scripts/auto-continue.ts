@@ -16,10 +16,13 @@ export const AUTO_CONTINUE_SCRIPT = `
      autoReply: true,
      autoReplyText: 'continue',
      controls: {
+         acceptAll: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-button', 'dom-click'], delayMs: 100 },
+         continue: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['continue-button', 'keep-button', 'dom-click'], delayMs: 100 },
          run: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 100 },
          expand: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 50 },
          accept: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-first', 'accept-single', 'dom-click'], delayMs: 100 },
-         submit: { detectMethods: ['enabled-flag', 'not-generating'], actionMethods: ['click-send', 'enter-key'], delayMs: 100 }
+         submit: { detectMethods: ['enabled-flag', 'not-generating'], actionMethods: ['click-send', 'enter-key'], delayMs: 100 },
+         feedback: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['thumbs-up', 'helpful-button', 'dom-click'], delayMs: 150 }
      },
      bump: {
          detectMethods: ['feedback-visible', 'not-generating', 'last-sender-user', 'network-error-retry'],
@@ -89,12 +92,18 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       const enabledByFlag = controlName === 'run'
           ? !!cfg.clickRun
+          : controlName === 'continue'
+              ? !!cfg.clickContinue
+              : controlName === 'acceptAll'
+                  ? (!!cfg.clickAccept && !!cfg.clickAcceptAll)
           : controlName === 'expand'
               ? !!cfg.clickExpand
               : controlName === 'accept'
                   ? !!cfg.clickAccept
                   : controlName === 'submit'
                       ? !!cfg.clickSubmit
+                      : controlName === 'feedback'
+                          ? !!cfg.clickFeedback
                       : true;
 
       if (hasMethod(detect, 'enabled-flag') && !enabledByFlag) return false;
@@ -268,22 +277,37 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
 
       // 1. Continue / Keep (Priority)
-      if (cfg.clickContinue) {
+      if (controlGatePass('continue', cfg, state, now, lastAction)) {
+          const continueControl = getControlConfig(cfg, 'continue');
           const contSel = 'a.monaco-button, button.monaco-button, .action-label';
           const els = Array.from(document.querySelectorAll(contSel));
           const target = els.find(el => {
               const t = (el.textContent || '').trim().toLowerCase();
               const l = (el.getAttribute('aria-label') || '').toLowerCase();
-              if (/continue/i.test(t) || /continue/i.test(l)) return !/rebase/i.test(l);
-              if (/^keep$/i.test(t)) return true;
+              const continueMatch = hasMethod(continueControl.actionMethods, 'continue-button') && (/continue/i.test(t) || /continue/i.test(l));
+              const keepMatch = hasMethod(continueControl.actionMethods, 'keep-button') && /^keep$/i.test(t);
+              if (continueMatch) return !/rebase/i.test(l);
+              if (keepMatch) return true;
               return false;
           });
           
           if (target && (target.offsetParent || target.clientWidth > 0)) {
-               highlight(target);
-               target.click();
-               actionTaken = true;
-               log('Clicked Continue/Keep');
+               if (hasMethod(continueControl.actionMethods, 'dom-click')) {
+                    highlight(target);
+                    target.click();
+                    actionTaken = true;
+                    log('Clicked Continue/Keep');
+               }
+          }
+      }
+
+      // 2.5 Auto-Accept-All
+      if (!actionTaken && controlGatePass('acceptAll', cfg, state, now, lastAction)) {
+          const acceptAllControl = getControlConfig(cfg, 'acceptAll');
+          if (hasMethod(acceptAllControl.actionMethods, 'accept-all-button') || hasMethod(acceptAllControl.actionMethods, 'dom-click')) {
+              if (tryClick('[title*="Accept All"], [aria-label*="Accept All"], .codicon-check-all', 'Accept All')) {
+                  actionTaken = true;
+              }
           }
       }
 
@@ -315,12 +339,6 @@ export const AUTO_CONTINUE_SCRIPT = `
       // 3. Auto-Accept
       if (!actionTaken && controlGatePass('accept', cfg, state, now, lastAction)) {
           const acceptControl = getControlConfig(cfg, 'accept');
-
-          if (!actionTaken && cfg.clickAcceptAll && hasMethod(acceptControl.actionMethods, 'accept-all-first')) {
-              if (tryClick('[title*="Accept All"], [aria-label*="Accept All"], .codicon-check-all', 'Accept All')) {
-                  actionTaken = true;
-              }
-          }
 
           if (!actionTaken && hasMethod(acceptControl.actionMethods, 'accept-single')) {
               if (tryClick('[title="Accept"], [aria-label="Accept"], [title="Apply"], .codicon-check', 'Accept')) {
@@ -383,8 +401,14 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
 
       // 6. Feedback
-      if (!actionTaken && cfg.clickFeedback) {
-          const els = Array.from(document.querySelectorAll('[title*="Helpful"], [aria-label*="Helpful"], .codicon-thumbsup'));
+      if (!actionTaken && controlGatePass('feedback', cfg, state, now, lastAction)) {
+          const feedbackControl = getControlConfig(cfg, 'feedback');
+          const selectors = [];
+          if (hasMethod(feedbackControl.actionMethods, 'helpful-button')) selectors.push('[title*="Helpful"]', '[aria-label*="Helpful"]');
+          if (hasMethod(feedbackControl.actionMethods, 'thumbs-up')) selectors.push('.codicon-thumbsup');
+          if (hasMethod(feedbackControl.actionMethods, 'dom-click')) selectors.push('[title*="Helpful"]', '[aria-label*="Helpful"]', '.codicon-thumbsup');
+          const selector = selectors.join(',');
+          const els = selector ? Array.from(document.querySelectorAll(selector)) : [];
           const target = els.find(el => !el.classList.contains('checked') && !el.classList.contains('selected') && (el.offsetParent || el.clientWidth>0));
           if (target) {
                highlight(target);

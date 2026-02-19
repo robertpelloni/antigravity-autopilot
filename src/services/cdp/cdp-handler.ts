@@ -158,6 +158,21 @@ export class CDPHandler extends EventEmitter {
                                     detectMethods: config.get<string[]>('automation.controls.submit.detectMethods') ?? ['enabled-flag', 'not-generating'],
                                     actionMethods: config.get<string[]>('automation.controls.submit.actionMethods') ?? ['click-send', 'enter-key'],
                                     delayMs: config.get<number>('automation.controls.submit.delayMs') ?? 100
+                                },
+                                acceptAll: {
+                                    detectMethods: config.get<string[]>('automation.controls.acceptAll.detectMethods') ?? ['enabled-flag', 'not-generating', 'action-cooldown'],
+                                    actionMethods: config.get<string[]>('automation.controls.acceptAll.actionMethods') ?? ['accept-all-button', 'dom-click'],
+                                    delayMs: config.get<number>('automation.controls.acceptAll.delayMs') ?? 100
+                                },
+                                continue: {
+                                    detectMethods: config.get<string[]>('automation.controls.continue.detectMethods') ?? ['enabled-flag', 'not-generating', 'action-cooldown'],
+                                    actionMethods: config.get<string[]>('automation.controls.continue.actionMethods') ?? ['continue-button', 'keep-button', 'dom-click'],
+                                    delayMs: config.get<number>('automation.controls.continue.delayMs') ?? 100
+                                },
+                                feedback: {
+                                    detectMethods: config.get<string[]>('automation.controls.feedback.detectMethods') ?? ['enabled-flag', 'not-generating', 'action-cooldown'],
+                                    actionMethods: config.get<string[]>('automation.controls.feedback.actionMethods') ?? ['thumbs-up', 'helpful-button', 'dom-click'],
+                                    delayMs: config.get<number>('automation.controls.feedback.delayMs') ?? 150
                                 }
                             },
                             bump: {

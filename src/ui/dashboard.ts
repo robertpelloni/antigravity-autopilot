@@ -538,6 +538,59 @@ export class DashboardPanel {
             </div>
 
             <div class="card">
+                <h2>Control Group: Accept All</h2>
+                <div class="setting"><label>Accept All Enabled:</label><input type="checkbox" ${config.get('automation.actions.clickAcceptAll') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickAcceptAll', this.checked)"></div>
+                <details open>
+                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components</summary>
+                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get('automation.controls.acceptAll.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.detectMethods', 'enabled-flag', this.checked)"></div>
+                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get('automation.controls.acceptAll.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.detectMethods', 'not-generating', this.checked)"></div>
+                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get('automation.controls.acceptAll.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.detectMethods', 'action-cooldown', this.checked)"></div>
+                </details>
+                <details open>
+                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
+                    <div class="setting"><label>Accept-All Button:</label><input type="checkbox" ${(config.get('automation.controls.acceptAll.actionMethods') || []).includes('accept-all-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'accept-all-button', this.checked)"></div>
+                    <div class="setting"><label>DOM Click:</label><input type="checkbox" ${(config.get('automation.controls.acceptAll.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'dom-click', this.checked)"></div>
+                </details>
+                <div class="setting"><label>Accept All Delay (ms):</label><input type="number" value="${config.get('automation.controls.acceptAll.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.acceptAll.delayMs', parseInt(this.value))"></div>
+            </div>
+
+            <div class="card">
+                <h2>Control Group: Continue / Keep</h2>
+                <div class="setting"><label>Continue Enabled:</label><input type="checkbox" ${config.get('automation.actions.clickContinue') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickContinue', this.checked)"></div>
+                <details open>
+                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components</summary>
+                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get('automation.controls.continue.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.detectMethods', 'enabled-flag', this.checked)"></div>
+                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get('automation.controls.continue.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.detectMethods', 'not-generating', this.checked)"></div>
+                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get('automation.controls.continue.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.detectMethods', 'action-cooldown', this.checked)"></div>
+                </details>
+                <details open>
+                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
+                    <div class="setting"><label>Continue Button:</label><input type="checkbox" ${(config.get('automation.controls.continue.actionMethods') || []).includes('continue-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.actionMethods', 'continue-button', this.checked)"></div>
+                    <div class="setting"><label>Keep Button:</label><input type="checkbox" ${(config.get('automation.controls.continue.actionMethods') || []).includes('keep-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.actionMethods', 'keep-button', this.checked)"></div>
+                    <div class="setting"><label>DOM Click:</label><input type="checkbox" ${(config.get('automation.controls.continue.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.actionMethods', 'dom-click', this.checked)"></div>
+                </details>
+                <div class="setting"><label>Continue Delay (ms):</label><input type="number" value="${config.get('automation.controls.continue.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.continue.delayMs', parseInt(this.value))"></div>
+            </div>
+
+            <div class="card">
+                <h2>Control Group: Feedback</h2>
+                <div class="setting"><label>Feedback Enabled:</label><input type="checkbox" ${config.get('automation.actions.clickFeedback') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickFeedback', this.checked)"></div>
+                <details open>
+                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components</summary>
+                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get('automation.controls.feedback.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.detectMethods', 'enabled-flag', this.checked)"></div>
+                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get('automation.controls.feedback.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.detectMethods', 'not-generating', this.checked)"></div>
+                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get('automation.controls.feedback.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.detectMethods', 'action-cooldown', this.checked)"></div>
+                </details>
+                <details open>
+                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
+                    <div class="setting"><label>Thumbs Up Icon:</label><input type="checkbox" ${(config.get('automation.controls.feedback.actionMethods') || []).includes('thumbs-up') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.actionMethods', 'thumbs-up', this.checked)"></div>
+                    <div class="setting"><label>Helpful Button:</label><input type="checkbox" ${(config.get('automation.controls.feedback.actionMethods') || []).includes('helpful-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.actionMethods', 'helpful-button', this.checked)"></div>
+                    <div class="setting"><label>DOM Click:</label><input type="checkbox" ${(config.get('automation.controls.feedback.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.actionMethods', 'dom-click', this.checked)"></div>
+                </details>
+                <div class="setting"><label>Feedback Delay (ms):</label><input type="number" value="${config.get('automation.controls.feedback.delayMs') ?? 150}" min="0" onchange="updateConfig('automation.controls.feedback.delayMs', parseInt(this.value))"></div>
+            </div>
+
+            <div class="card">
                 <h2>Control Group: Run</h2>
                 <div class="setting"><label>Run Enabled:</label><input type="checkbox" ${config.get('automation.actions.clickRun') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickRun', this.checked)"></div>
                 <details open>
