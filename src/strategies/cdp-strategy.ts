@@ -5,6 +5,7 @@ import { InteractionMethodRegistry, InteractionContext } from './interaction-met
 import { config } from '../utils/config';
 import { CDPHandler } from '../services/cdp/cdp-handler';
 import { SoundEffects } from '../utils/sound-effects';
+import { logToOutput } from '../utils/output-channel';
 
 export interface CDPRuntimeState {
     status: string;
@@ -36,7 +37,14 @@ export class CDPStrategy implements IStrategy {
     // ... (private methods unchanged)
 
     private isUnifiedAutoAcceptEnabled(): boolean {
-        return !!config.get<boolean>('autopilotAutoAcceptEnabled')
+        return !!config.get<boolean>('actions.autoAccept.enabled')
+            || !!config.get<boolean>('automation.actions.clickAccept')
+            || !!config.get<boolean>('automation.actions.clickAcceptAll')
+            || !!config.get<boolean>('automation.actions.clickRun')
+            || !!config.get<boolean>('automation.actions.clickExpand')
+            || !!config.get<boolean>('automation.actions.clickContinue')
+            || !!config.get<boolean>('automation.actions.clickSubmit')
+            || !!config.get<boolean>('autopilotAutoAcceptEnabled')
             || !!config.get<boolean>('autoAllEnabled')
             || !!config.get<boolean>('autoAcceptEnabled');
     }
@@ -52,7 +60,7 @@ export class CDPStrategy implements IStrategy {
     private shouldRunBlindBump(): boolean {
         const cfg = config.getAll();
         const bumpText = (cfg.actions.bump.text || '').trim();
-        return cfg.actions.bump.enabled && this.isUnifiedAutoAcceptEnabled() && bumpText.length > 0;
+        return cfg.actions.bump.enabled && cfg.autoContinueScriptEnabled !== false && bumpText.length > 0;
     }
 
     private syncBlindBumpHandlerState(): void {
@@ -98,9 +106,14 @@ export class CDPStrategy implements IStrategy {
         // Connect to CDP
         const workspaceName = vscode.workspace.name;
         // console.log(`[CDPStrategy] Connecting with filter: "${workspaceName}"`);
-        const connected = await this.cdpHandler.connect(workspaceName);
+        let connected = await this.cdpHandler.connect(workspaceName);
+        if (!connected) {
+            // Fallback for VS Code title mismatches where workspace name is absent from target title.
+            connected = await this.cdpHandler.connect();
+        }
         if (!connected) {
             vscode.window.showWarningMessage('Antigravity: CDP connection failed. Retrying in background...');
+            logToOutput('[CDPStrategy] Initial CDP connect failed (filtered + unfiltered fallback).');
         }
 
         this.syncBlindBumpHandlerState();
@@ -117,7 +130,11 @@ export class CDPStrategy implements IStrategy {
 
             // Reconnect if disconnected
             if (!this.cdpHandler.isConnected()) {
-                await this.cdpHandler.connect(workspaceName);
+                let reconnectOk = await this.cdpHandler.connect(workspaceName);
+                if (!reconnectOk) reconnectOk = await this.cdpHandler.connect();
+                if (!reconnectOk) {
+                    logToOutput('[CDPStrategy] Background reconnect attempt failed.');
+                }
             }
 
             // Execute configured click interactions (auto-accept buttons)

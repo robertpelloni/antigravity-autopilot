@@ -108,7 +108,7 @@ export class ExitDetector {
             partialSignals += 2; // Strong penalty
         }
 
-        const positiveScore = validCompletionSignals * 0.6;
+        const positiveScore = validCompletionSignals * 0.8;
         const negativeScore = (activeWorkSignals * 0.3) + (uncertaintySignals * 0.2) + (partialSignals * 0.4);
         const confidence = Math.max(0, Math.min(1, positiveScore - negativeScore));
 

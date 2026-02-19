@@ -867,6 +867,13 @@ export class InteractionMethodRegistry {
             for (const m of methods) {
                 if (ctx.visualDiffThreshold && m.id === 'visual-verify-click') continue; // specialized use only
 
+                // Check retry count limit
+                const successCount = results.filter(r => r.success).length;
+                if (successCount >= this.config.retryCount) {
+                    logToOutput(`[Interaction] Reached retry count target (${this.config.retryCount}), stopping sequence.`);
+                    break;
+                }
+
                 const start = Date.now();
                 try {
                     logToOutput(`[Interaction] START ${category}:${m.id}`);

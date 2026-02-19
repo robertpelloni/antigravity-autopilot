@@ -14,6 +14,7 @@ export interface AntigravityConfig {
             typingDelayMs: number;
             submitDelayMs: number;
         };
+
         autoAccept: {
             enabled: boolean;
             pollIntervalMs: number;
@@ -27,6 +28,11 @@ export interface AntigravityConfig {
             enabled: boolean;
             delayMs: number;
         };
+    };
+    // Audio Settings
+    audio: {
+        enabled: boolean;
+        volume: number;
     };
 
     // Deprecated / Legacy (kept for internal compat if needed, but actions.* preferred)
@@ -158,22 +164,28 @@ export class ConfigManager {
         const legacyAutoAllEnabled = config.get<boolean>('autoAllEnabled', false);
         const legacyAutopilotAutoAccept = config.get<boolean>('autopilotAutoAcceptEnabled', legacyAutoAllEnabled || legacyAutoAcceptEnabled);
         const legacyRunExpand = config.get<boolean>('autopilotRunExpandContinueEnabled', true);
-        const legacyPoll = config.get<number>('autoAcceptPollIntervalMs', 1000);
+        const legacyPoll = config.get<number>('autoAcceptPollIntervalMs', config.get('pollFrequency', 1000));
 
         return {
             strategy: config.get('strategy', 'cdp'),
             interactionUiProfile: config.get('interactionUiProfile', 'auto'),
             continuousMode: config.get('continuousMode', true),
+            // Audio Settings
+            audio: {
+                enabled: config.get('audio.enabled', config.get('soundEffectsEnabled', false)),
+                volume: config.get('audio.volume', 1.0)
+            },
 
             // New Actions Logic
             actions: {
                 bump: {
                     enabled: config.get('actions.bump.enabled', legacyAutoBumpEnabled),
                     text: config.get('actions.bump.text', legacyBumpMessage),
-                    cooldown: config.get('actions.bump.cooldown', config.get('autoBumpCooldownSec', 30)),
+                    cooldown: config.get('actions.bump.cooldown', config.get('autoBumpCooldownSec', config.get('autoApproveDelay', 30))),
                     typingDelayMs: config.get('actions.bump.typingDelayMs', 50),
                     submitDelayMs: config.get('actions.bump.submitDelayMs', 100)
                 },
+
                 autoAccept: {
                     enabled: config.get('actions.autoAccept.enabled', legacyAutopilotAutoAccept),
                     pollIntervalMs: config.get('actions.autoAccept.pollIntervalMs', legacyPoll),
@@ -196,7 +208,7 @@ export class ConfigManager {
             autopilotAutoBumpEnabled: legacyAutoBumpEnabled,
             autopilotRunExpandContinueEnabled: legacyRunExpand,
             autoAcceptPollIntervalMs: legacyPoll,
-            autoBumpCooldownSec: config.get('autoBumpCooldownSec', 30),
+            autoBumpCooldownSec: config.get('autoBumpCooldownSec', config.get('autoApproveDelay', 30)),
             bumpMessage: legacyBumpMessage,
 
             multiTabEnabled: config.get('multiTabEnabled', false),

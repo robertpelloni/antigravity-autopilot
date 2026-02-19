@@ -216,8 +216,12 @@
     })();
 
     const log = (msg, isSuccess = false) => {
-
-        console.log(`[autoAll] ${msg}`);
+        const payload = `__ANTIGRAVITY_LOG__:${msg}`;
+        if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
+            window.__ANTIGRAVITY_BRIDGE__(payload);
+        } else {
+            console.log(`[autoAll] ${msg}`);
+        }
     };
 
     Analytics.initialize(log);
@@ -334,8 +338,10 @@
                 '[title*="Allow"]',
                 '[aria-label*="Accept (Limited)"]',
                 '[title*="Accept (Limited)"]',
-                '[aria-label*="Accept (Limited)"]',
-                '[title*="Accept (Limited)"]'
+                '[aria-label*="Yes"]',
+                '[title*="Yes"]',
+                '[aria-label*="Continue"]',
+                '[title*="Continue"]'
             ],
             sendButtons: [
                 'button[aria-label*="Send"]',
@@ -365,7 +371,9 @@
                 '#antigravity\\.agentPanel [role="button"]',
                 '.bg-ide-button-background',
                 'button.grow',
-                '.monaco-action-bar .action-label'
+                '.monaco-action-bar .action-label',
+                '.monaco-list-row.collapsed',
+                '.codicon-chevron-right'
             ],
             sendButtons: [
                 '#antigravity\\.agentPanel button[aria-label*="Send"]',
@@ -381,7 +389,9 @@
                 '#workbench\\.parts\\.auxiliarybar button',
                 '#workbench\\.parts\\.auxiliarybar [role="button"]',
                 '.chat-session-item [role="button"]',
-                '[class*="anysphere"]'
+                '[class*="anysphere"]',
+                '.monaco-list-row.collapsed',
+                '.codicon-chevron-right'
             ],
             sendButtons: [
                 '#workbench\\.parts\\.auxiliarybar button[aria-label*="Send"]',
@@ -398,7 +408,9 @@
                 '.monaco-dialog-box button',
                 '.monaco-notification-list button',
                 '.interactive-editor button',
-                '.chat-input-container button'
+                '.chat-input-container button',
+                '.monaco-list-row.collapsed',
+                '.codicon-chevron-right'
             ],
             sendButtons: [
                 '.interactive-editor button[aria-label*="Send"]',
@@ -504,6 +516,7 @@
     }
 
     async function submitWithKeys(targetOverride) {
+        sendCommandToExtension('__ANTIGRAVITY_ACTION__:submit|keys');
         const target = targetOverride || document.activeElement;
         if (!target) return false;
 
@@ -775,6 +788,17 @@
         // Also fire standard click for immediate UI feedback (hover states etc)
         try { el.click(); } catch (e) { }
 
+        // Emit ACTION event for sound effects
+        let actionGroup = 'click';
+        const txt = (el.textContent || el.getAttribute('aria-label') || el.getAttribute('title') || '').toLowerCase();
+        if (txt.includes('run')) actionGroup = 'run';
+        else if (txt.includes('expand') || el.classList.contains('codicon-chevron-right')) actionGroup = 'expand';
+        else if (txt.includes('accept') || txt.includes('apply')) actionGroup = 'accept';
+        else if (txt.includes('allow') || txt.includes('yes')) actionGroup = 'allow';
+        else if (txt.includes('send') || txt.includes('submit')) actionGroup = 'submit';
+
+        sendCommandToExtension(`__ANTIGRAVITY_ACTION__:${actionGroup}|${txt.substring(0, 20)}`);
+
         const timing = window.__antigravityConfig?.timing || {};
         const throttle = timing.actionThrottleMs || 100;
         await workerDelay(throttle);
@@ -785,6 +809,35 @@
         if (!text) return;
         sendCommandToExtension(`__ANTIGRAVITY_TYPE__:${text}`);
         await workerDelay(50);
+    }
+
+    async function detectAndDismissMCPDialog() {
+        const dialogs = queryAll('.monaco-dialog-box');
+        for (const dialog of dialogs) {
+            if (!isElementVisible(dialog)) continue;
+            const text = (dialog.textContent || '').toLowerCase();
+            if (text.includes('mcp') || text.includes('marketplace')) {
+                log('[MCP-Guard] Detected MCP/Marketplace dialog');
+                const buttons = dialog.querySelectorAll('button');
+                // Usually "Yes" is primary, "No" is secondary. Or "Enable" / "Disable".
+                // We want to dismiss. "No", "Cancel", "Disable".
+                for (const btn of buttons) {
+                    const btnText = (btn.textContent || '').toLowerCase();
+                    if (btnText.includes('no') || btnText.includes('cancel') || btnText.includes('disable') || btnText.includes('close')) {
+                        log(`[MCP-Guard] Clicking dismiss button: "${btnText}"`);
+                        await remoteClick(btn);
+                        return true;
+                    }
+                }
+                // Fallback: Click the last button (usually cancel)
+                if (buttons.length > 0) {
+                    log('[MCP-Guard] Clicking last button (fallback dismiss)');
+                    await remoteClick(buttons[buttons.length - 1]);
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     function sendCommandToBridge(commandId, args) {
@@ -1522,6 +1575,7 @@
     let lastClickTime = 0;
 
     async function autoBump() {
+        sendCommandToExtension('__ANTIGRAVITY_ACTION__:bump|auto');
         const state = window.__autoAllState;
         const bumpMsg = state.bumpMessage;
         if (!bumpMsg || !state.bumpEnabled) return false;
@@ -1545,6 +1599,7 @@
     }
 
     async function performClick(selectors) {
+        await detectAndDismissMCPDialog();
         // PRE-CHECK: Expand any collapsed sections that might be hiding buttons
         await expandCollapsedSections();
 

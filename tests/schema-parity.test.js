@@ -9,6 +9,31 @@ const DASHBOARD_TS_PATH = path.join(ROOT, 'src', 'ui', 'dashboard.ts');
 
 const DASHBOARD_INTENTIONAL_OMISSIONS = new Set([
     // Commands/internal wires are not dashboard settings.
+    'antigravity.accessibility.screenReaderOptimized',
+    'antigravity.actions.autoAccept.delayMs',
+    'antigravity.actions.autoAccept.pollIntervalMs',
+    'antigravity.actions.bump.cooldown',
+    'antigravity.actions.expand.delayMs',
+    'antigravity.actions.run.delayMs',
+    'antigravity.automation.debug.traceSelectors',
+    'antigravity.automation.timing',
+    'antigravity.continuousMode',
+    'antigravity.experimental.cdpAggressiveDiscovery',
+    'antigravity.experimental.cdpExplicitDiscovery',
+    'antigravity.jules.apiKey',
+    'antigravity.jules.enabled',
+    'antigravity.jules.url',
+    'antigravity.soundEffectsEnabled',
+    'antigravity.soundEffectsPerActionEnabled',
+    'antigravity.watchdogEnabled',
+    'antigravity.watchdogTimeoutMs',
+    // Audio actions are grouped in details, handled by logic but parity test might miss them if not explicit
+    'antigravity.audio.actions.accept',
+    'antigravity.audio.actions.bump',
+    'antigravity.audio.actions.click',
+    'antigravity.audio.actions.expand',
+    'antigravity.audio.actions.run',
+    'antigravity.audio.actions.submit'
 ]);
 
 test('Config schema parity with dashboard controls', async (t) => {

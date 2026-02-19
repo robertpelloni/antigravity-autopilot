@@ -2,7 +2,7 @@
   "name": "antigravity-autopilot",
   "displayName": "Antigravity Autopilot (Unified)",
   "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-  "version": "5.0.12",
+  "version": "5.0.13",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -270,7 +270,7 @@
           "type": "boolean",
           "default": false,
           "description": "Deprecated: Enable basic Auto-Accept of pending edits.",
-          "deprecationMessage": "Use 'antigravity.actions.autoAccept.enabled' instead."
+          "deprecationMessage": "Use 'antigravity.automation.actions.clickAccept' instead."
         },
         "antigravity.autoAllEnabled": {
           "type": "boolean",
@@ -282,19 +282,19 @@
           "type": "boolean",
           "default": false,
           "description": "Deprecated: Unified control: enable automatic accept/action handling for autopilot.",
-          "deprecationMessage": "Use 'antigravity.actions.autoAccept.enabled' instead."
+          "deprecationMessage": "Use 'antigravity.automation.actions.clickAccept' instead."
         },
         "antigravity.autopilotAutoBumpEnabled": {
           "type": "boolean",
           "default": true,
           "description": "Deprecated: Unified control: enable automatic bump/resume nudges when conversation is idle.",
-          "deprecationMessage": "Use 'antigravity.actions.bump.enabled' instead."
+          "deprecationMessage": "Use 'antigravity.automation.actions.clickContinue' (and related) instead."
         },
         "antigravity.autopilotRunExpandContinueEnabled": {
           "type": "boolean",
           "default": true,
           "description": "Deprecated: Unified control: allow autopilot to click Run/Expand/Continue style actions.",
-          "deprecationMessage": "Use 'antigravity.actions.run.enabled' and 'antigravity.actions.expand.enabled' instead."
+          "deprecationMessage": "Use 'antigravity.automation.actions.clickRun' and 'antigravity.automation.actions.clickExpand' instead."
         },
         "antigravity.multiTabEnabled": {
           "type": "boolean",
@@ -325,32 +325,63 @@
         "antigravity.soundEffectsEnabled": {
           "type": "boolean",
           "default": false,
-          "description": "Enable audible action feedback beeps (Windows console beep)."
+          "description": "DEPRECATED: Use antigravity.audio.enabled.",
+          "deprecationMessage": "Use antigravity.audio.enabled instead."
         },
         "antigravity.soundEffectsPerActionEnabled": {
           "type": "boolean",
           "default": true,
-          "description": "When enabled, play action-group-specific sounds (run, expand, submit, bump, etc.)."
+          "description": "DEPRECATED: Use antigravity.audio.actions.*.",
+          "deprecationMessage": "Use antigravity.audio.actions.* instead."
         },
         "antigravity.soundEffectsActionMap": {
           "type": "object",
-          "default": {
-            "submit": "submit",
-            "bump": "bump",
-            "resume": "bump",
-            "type": "type",
-            "run": "run",
-            "expand": "expand",
-            "alt-enter": "alt-enter",
-            "accept": "click",
-            "accept-all": "success",
-            "allow": "click",
-            "continue": "submit",
-            "click": "click",
-            "success": "success",
-            "error": "error"
-          },
-          "description": "Map action groups to sound effect IDs. Example: { \"run\": \"run\", \"accept\": \"click\" }."
+          "default": {},
+          "description": "DEPRECATED: Configure via code or future audio themes.",
+          "deprecationMessage": "Configuration via map is deprecated."
+        },
+        "antigravity.audio.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable audible action feedback.",
+          "markdownDescription": "**Audio Feedback**: Enable sound effects for automated actions (Run, Expand, Accept, etc)."
+        },
+        "antigravity.audio.volume": {
+          "type": "number",
+          "default": 1.0,
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Master volume for sound effects (0.0 to 1.0)."
+        },
+        "antigravity.audio.actions.click": {
+          "type": "boolean",
+          "default": true,
+          "description": "Play sound for standard clicks."
+        },
+        "antigravity.audio.actions.run": {
+          "type": "boolean",
+          "default": true,
+          "description": "Play sound for 'Run in Terminal' actions."
+        },
+        "antigravity.audio.actions.expand": {
+          "type": "boolean",
+          "default": true,
+          "description": "Play sound for 'Expand' actions."
+        },
+        "antigravity.audio.actions.accept": {
+          "type": "boolean",
+          "default": true,
+          "description": "Play sound for 'Accept' actions."
+        },
+        "antigravity.audio.actions.submit": {
+          "type": "boolean",
+          "default": true,
+          "description": "Play sound for 'Submit' actions."
+        },
+        "antigravity.audio.actions.bump": {
+          "type": "boolean",
+          "default": true,
+          "description": "Play sound for 'Bump' actions."
         },
         "antigravity.watchdogEnabled": {
           "type": "boolean",
@@ -605,6 +636,11 @@
           "type": "boolean",
           "default": true,
           "description": "Forward automation logs/events from injected scripts into Antigravity Debug output channel."
+        },
+        "antigravity.automation.debug.traceSelectors": {
+          "type": "boolean",
+          "default": false,
+          "description": "Log every selector attempt and match result. Warning: Very noisy."
         },
         "antigravity.automation.actions.autoScroll": {
           "type": "boolean",
@@ -1188,7 +1224,7 @@
         },
         "antigravity.experimental.cdpExplicitDiscovery": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "If true, explicitly queries for existing webviews/iframes and attaches to them on startup. Disable if experiencing blank screen issues.",
           "scope": "window"
         },

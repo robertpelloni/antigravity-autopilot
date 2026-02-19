@@ -720,14 +720,25 @@ export class DashboardPanel {
                         <option value="always-listening" ${settings.voiceMode === 'always-listening' ? 'selected' : ''}>Always Listening</option>
                     </select>
                 </div>
-                <div class="setting" title="Enable audible action feedback. When OFF, Antigravity will not emit Windows console beeps.">
-                    <label>Sound Effects:</label>
-                    <input type="checkbox" ${settings.soundEffectsEnabled ? 'checked' : ''} onchange="updateConfig('soundEffectsEnabled', this.checked)">
+                <div class="setting" title="Master toggle for sound effects.">
+                    <label>Audio Enabled:</label>
+                    <input type="checkbox" ${settings.audio?.enabled ? 'checked' : ''} onchange="updateConfig('audio.enabled', this.checked)">
                 </div>
-                <div class="setting" title="When enabled, each action group can play its own distinct sound pattern (run/expand/submit/bump/etc).">
-                    <label>Per-Action Sounds:</label>
-                    <input type="checkbox" ${settings.soundEffectsPerActionEnabled !== false ? 'checked' : ''} onchange="updateConfig('soundEffectsPerActionEnabled', this.checked)">
+                <div class="setting" title="Master volume (0.0 - 1.0).">
+                    <label>Volume:</label>
+                    <input type="number" step="0.1" min="0" max="1" value="${settings.audio?.volume ?? 1.0}" onchange="updateConfig('audio.volume', parseFloat(this.value))">
                 </div>
+                
+                <details>
+                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Audio Actions (checkboxes)</summary>
+                    <div class="setting"><label>Click:</label><input type="checkbox" ${config.get('audio.actions.click') !== false ? 'checked' : ''} onchange="updateConfig('audio.actions.click', this.checked)"></div>
+                    <div class="setting"><label>Run:</label><input type="checkbox" ${config.get('audio.actions.run') !== false ? 'checked' : ''} onchange="updateConfig('audio.actions.run', this.checked)"></div>
+                    <div class="setting"><label>Expand:</label><input type="checkbox" ${config.get('audio.actions.expand') !== false ? 'checked' : ''} onchange="updateConfig('audio.actions.expand', this.checked)"></div>
+                    <div class="setting"><label>Accept:</label><input type="checkbox" ${config.get('audio.actions.accept') !== false ? 'checked' : ''} onchange="updateConfig('audio.actions.accept', this.checked)"></div>
+                    <div class="setting"><label>Submit:</label><input type="checkbox" ${config.get('audio.actions.submit') !== false ? 'checked' : ''} onchange="updateConfig('audio.actions.submit', this.checked)"></div>
+                    <div class="setting"><label>Bump:</label><input type="checkbox" ${config.get('audio.actions.bump') !== false ? 'checked' : ''} onchange="updateConfig('audio.actions.bump', this.checked)"></div>
+                </details>
+
                 <div class="setting vertical" title="JSON map from action group -> sound effect id. Example: {\"run\":\"run\",\"accept\":\"click\"}.">
                     <label>Action Sound Map (JSON):</label>
                     <textarea onchange="updateConfig('soundEffectsActionMap', parseInteractionTimings(this.value))">${JSON.stringify(settings.soundEffectsActionMap || {

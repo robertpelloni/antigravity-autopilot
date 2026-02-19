@@ -35,6 +35,8 @@ All settings are under `antigravity.*` in VS Code settings. Key ones:
 | `autoBumpCooldownSec` | `30` | Unified bump cooldown (seconds) |
 | `threadWaitInterval` | `5` | Wait between loop cycles (seconds) |
 | `bannedCommands` | `[]` | Commands to never auto-click |
+| `antigravity.audio.enabled` | `true` | Master toggle for sound effects |
+| `antigravity.audio.volume` | `1.0` | Master volume (0.0-1.0) |
 
 ## Documentation
 

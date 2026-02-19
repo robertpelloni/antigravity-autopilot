@@ -100,12 +100,41 @@ export class SoundEffects {
     }
 
     static playActionGroup(group: ActionSoundGroup) {
-        if (!config.get<boolean>('soundEffectsEnabled')) return;
+        // 1. Check Global Audio Enable (New -> Legacy)
+        const enabled = config.get<boolean>('audio.enabled') ?? config.get<boolean>('soundEffectsEnabled');
+        if (!enabled) return;
 
-        const perActionEnabled = config.get<boolean>('soundEffectsPerActionEnabled');
-        if (perActionEnabled === false) {
-            this.play('click');
-            return;
+        // 2. Check Action-Specific Filters
+        // Map detailed groups to broader config categories
+        let configCategory = 'click'; // Default
+        switch (group) {
+            case 'run': configCategory = 'run'; break;
+            case 'expand': configCategory = 'expand'; break;
+            case 'accept':
+            case 'accept-all':
+            case 'allow':
+                configCategory = 'accept'; break;
+            case 'submit':
+            case 'continue':
+                configCategory = 'submit'; break;
+            case 'bump':
+            case 'resume':
+                configCategory = 'bump'; break;
+            default: configCategory = 'click'; break;
+        }
+
+        // Check if this category is explicitly disabled
+        // We default to true if the setting doesn't exist, to match "enabled" behavior
+        const specificEnabled = config.get<boolean>(`audio.actions.${configCategory}`);
+        if (specificEnabled === false) return;
+
+        // 3. Fallback to Legacy "Per Action" Switch (if new config not set)
+        if (specificEnabled === undefined) {
+            const legacyPerAction = config.get<boolean>('soundEffectsPerActionEnabled');
+            if (legacyPerAction === false) {
+                this.play('click');
+                return;
+            }
         }
 
         const configured = config.get<Record<string, SoundEffect>>('soundEffectsActionMap') || {};

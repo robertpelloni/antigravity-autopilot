@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [5.0.13] - 2026-02-19
+- **Audio**: Implemented robust audio configuration (`antigravity.audio.*`) with master volume and per-action toggles.
+- **Reliability**: Implemented MCP dialog evasion and enhanced selector coverage for Run/Expand buttons.
+- **Commands**: Added `antigravity.resetConnection` for full strategy restart.
+- **Logging**: Enhanced browser-side logging via `__ANTIGRAVITY_LOG__` bridge.
+
 ## [5.0.12] - 2026-02-19
 - **Release**: Version synchronization across manifest/constants with routine patch bump.
 
