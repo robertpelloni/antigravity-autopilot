@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 ---
 
 
+## [5.0.9] - 2026-02-19
+- **Hotfix**: Improved auto-bump submission reliability by requiring real composer-state change after submit attempts instead of treating key dispatch as implicit success.
+- **Fix**: If Send click / Enter variants do not actually submit, runtime now escalates to bridge-driven hybrid bump submission path.
+
 ## [5.0.8] - 2026-02-19
 - **Hotfix**: Added blocked-term tab filtering to `antigravityLoop` tab rotation path to prevent switching into Extensions/Marketplace/plugin surfaces.
 - **Stability**: Reduced risk of unintended extension-install page activation caused by broad `button.grow` tab cycling.

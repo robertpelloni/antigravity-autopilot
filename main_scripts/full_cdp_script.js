@@ -494,9 +494,21 @@
         }
     }
 
-    async function submitWithKeys() {
-        const target = document.activeElement;
+    function readComposerValue(target) {
+        if (!target) return '';
+        try {
+            if (target.isContentEditable) return (target.textContent || '').trim();
+            if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') return (target.value || '').trim();
+        } catch (e) { }
+        return '';
+    }
+
+    async function submitWithKeys(targetOverride) {
+        const target = targetOverride || document.activeElement;
         if (!target) return false;
+
+        const beforeText = readComposerValue(target);
+        if (!beforeText) return false;
 
         const combos = [
             { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: false, shiftKey: false },
@@ -510,11 +522,16 @@
                 const up = new KeyboardEvent('keyup', { bubbles: true, cancelable: true, ...combo });
                 target.dispatchEvent(down);
                 target.dispatchEvent(up);
-                await workerDelay(40);
+                await workerDelay(120);
+
+                const afterText = readComposerValue(target);
+                if (!afterText || afterText.length < beforeText.length) {
+                    return true;
+                }
             } catch (e) { }
         }
 
-        return true;
+        return false;
     }
 
     function countPendingAcceptButtons(selectors) {
@@ -1432,6 +1449,7 @@
                 if (inputEl) {
                     log(`[Chat] Found input element (${profile})`);
                     if (setInputValue(inputEl, text)) {
+                        const beforeSubmitText = readComposerValue(inputEl);
                         await workerDelay(100); // Wait for UI debounce
 
                         // Try finding send button
@@ -1440,13 +1458,19 @@
                             log(`[Chat] Found send button, clicking...`);
                             await remoteClick(sendEl);
                             await workerDelay(500); // Wait for reaction
-                            return true;
+
+                            const afterSendText = readComposerValue(inputEl);
+                            if (!afterSendText || afterSendText.length < beforeSubmitText.length) {
+                                return true;
+                            }
+
+                            log(`[Chat] Send click did not clear composer (${profile}), trying keyboard fallback...`);
                         } else {
                             log(`[Chat] Send button not found, trying Enter key...`);
                         }
 
                         // Method B: Keyboard Submit (Enter)
-                        const success = await submitWithKeys();
+                        const success = await submitWithKeys(inputEl);
                         if (success) {
                             log(`[Chat] Message submitted via keyboard`);
                             return true;
@@ -1460,7 +1484,7 @@
 
         // Method C: CDP Bridge (Ultimate Fallback)
         log('[Chat] Falling back to hybrid CDP bridge strategy');
-        console.log('__ANTIGRAVITY_HYBRID_BUMP__:' + text);
+        sendCommandToExtension('__ANTIGRAVITY_HYBRID_BUMP__:' + text);
         // IMPORTANT: do not also send __ANTIGRAVITY_TYPE__ here;
         // it causes duplicate bump text with no guaranteed submit.
         return true; // We assume bridge handles it
