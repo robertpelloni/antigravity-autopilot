@@ -1192,10 +1192,9 @@ export class DashboardPanel {
                  <div class="setting">
                     <label>Reasoning Model:</label>
                     <select onchange="updateConfig('preferredModelForReasoning', this.value)">
-                         <option value="claude-3-7-sonnet-20250219" ${settings.preferredModelForReasoning === 'claude-3-7-sonnet-20250219' ? 'selected' : ''}>Claude 3.7 Sonnet</option>
-                         <option value="claude-3-opus-latest" ${settings.preferredModelForReasoning === 'claude-3-opus-latest' ? 'selected' : ''}>Claude 3 Opus (Latest)</option>
-                         <option value="gemini-2.5-pro" ${settings.preferredModelForReasoning === 'gemini-2.5-pro' ? 'selected' : ''}>Gemini 2.5 Pro</option>
-                         <option value="gemini-2.5-flash" ${settings.preferredModelForReasoning === 'gemini-2.5-flash' ? 'selected' : ''}>Gemini 2.5 Flash</option>
+                         <option value="gemini-3.1-pro-high" ${settings.preferredModelForReasoning === 'gemini-3.1-pro-high' ? 'selected' : ''}>Gemini 3.1 Pro (High)</option>
+                         <option value="claude-opus-4.6" ${settings.preferredModelForReasoning === 'claude-opus-4.6' ? 'selected' : ''}>Claude Opus 4.6</option>
+                         <option value="claude-sonnet-4.6" ${settings.preferredModelForReasoning === 'claude-sonnet-4.6' ? 'selected' : ''}>Claude Sonnet 4.6</option>
                          <option value="claude-opus-4.5-thinking" ${settings.preferredModelForReasoning === 'claude-opus-4.5-thinking' ? 'selected' : ''}>Claude Opus 4.5 (Thinking)</option>
                          <option value="claude-sonnet-4.5-thinking" ${settings.preferredModelForReasoning === 'claude-sonnet-4.5-thinking' ? 'selected' : ''}>Claude Sonnet 4.5 (Thinking)</option>
                          <option value="claude-sonnet-3.5" ${settings.preferredModelForReasoning === 'claude-sonnet-3.5' ? 'selected' : ''}>Claude Sonnet 3.5</option>
@@ -1204,10 +1203,9 @@ export class DashboardPanel {
                 <div class="setting">
                     <label>Frontend Model:</label>
                     <select onchange="updateConfig('preferredModelForFrontend', this.value)">
-                         <option value="claude-3-7-sonnet-20250219" ${settings.preferredModelForFrontend === 'claude-3-7-sonnet-20250219' ? 'selected' : ''}>Claude 3.7 Sonnet</option>
-                         <option value="claude-3-opus-latest" ${settings.preferredModelForFrontend === 'claude-3-opus-latest' ? 'selected' : ''}>Claude 3 Opus (Latest)</option>
-                         <option value="gemini-2.5-pro" ${settings.preferredModelForFrontend === 'gemini-2.5-pro' ? 'selected' : ''}>Gemini 2.5 Pro</option>
-                         <option value="gemini-2.5-flash" ${settings.preferredModelForFrontend === 'gemini-2.5-flash' ? 'selected' : ''}>Gemini 2.5 Flash</option>
+                         <option value="gemini-3.1-pro-high" ${settings.preferredModelForFrontend === 'gemini-3.1-pro-high' ? 'selected' : ''}>Gemini 3.1 Pro (High)</option>
+                         <option value="claude-opus-4.6" ${settings.preferredModelForFrontend === 'claude-opus-4.6' ? 'selected' : ''}>Claude Opus 4.6</option>
+                         <option value="claude-sonnet-4.6" ${settings.preferredModelForFrontend === 'claude-sonnet-4.6' ? 'selected' : ''}>Claude Sonnet 4.6</option>
                          <option value="gemini-3-pro-high" ${settings.preferredModelForFrontend === 'gemini-3-pro-high' ? 'selected' : ''}>Gemini 3 Pro (High)</option>
                          <option value="gemini-3-pro-low" ${settings.preferredModelForFrontend === 'gemini-3-pro-low' ? 'selected' : ''}>Gemini 3 Pro (Low)</option>
                          <option value="gpt-4o" ${settings.preferredModelForFrontend === 'gpt-4o' ? 'selected' : ''}>GPT-4o</option>
