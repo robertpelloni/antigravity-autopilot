@@ -5,6 +5,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [5.1.2] - 2026-02-19
+- **Dashboard Control Regression Fix**: Restored top action controls in VS Code dashboard (`Panic Stop`, `Toggle`, `Max Out`) with direct command wiring.
+- **Command Availability Hardening**: Registered `antigravity.openSettings` early in activation so dashboard access remains available even when later subsystem initialization fails.
+- **Registration Cleanup**: Removed duplicate command registrations that could destabilize activation flow.
+
 ## [5.1.1] - 2026-02-19
 - **Release Hygiene**: Synced version metadata across `package.json`, `src/utils/constants.ts`, and lockfile for a clean patch build.
 - **Changelog Cleanup**: Removed duplicated `4.10.117` notes that duplicated the `5.1.0` release content.
