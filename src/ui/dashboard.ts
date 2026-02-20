@@ -267,10 +267,19 @@ export class DashboardPanel {
                 .runtime-history { margin-top: 10px; max-height: 120px; overflow-y: auto; border: 1px solid var(--vscode-widget-border); border-radius: 4px; padding: 6px; }
                 .runtime-history-item { font-size: 12px; padding: 2px 0; color: var(--vscode-descriptionForeground); border-bottom: 1px dashed var(--vscode-widget-border); }
                 .runtime-history-item:last-child { border-bottom: none; }
+                .top-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
+                .top-actions button { font-weight: 700; }
+                .btn-danger { background: var(--vscode-errorForeground, #dc2626); color: #fff; }
+                .btn-danger:hover { filter: brightness(1.1); }
             </style>
         </head>
         <body>
             <h1>⚡ Antigravity Autopilot</h1>
+            <div class="top-actions">
+                <button class="btn-danger" title="Emergency stop: disable Auto-All and stop strategy runtime" onclick="runCommand('antigravity.clearAutoAll')">🛑 Panic Stop</button>
+                <button title="Toggle extension strategy on/off" onclick="runCommand('antigravity.toggleExtension')">⏻ Toggle</button>
+                <button title="Enable Auto-All (CDP mode)" onclick="runCommand('antigravity.toggleAutoAll')">🚀 Max Out</button>
+            </div>
 
             <div class="card">
                 <h2>Runtime State</h2>

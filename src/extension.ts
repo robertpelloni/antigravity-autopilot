@@ -35,6 +35,14 @@ export function activate(context: vscode.ExtensionContext) {
     // Initialize UI
     statusBar = new StatusBarManager(context);
 
+    // Register critical command first so dashboard is always reachable even if
+    // later optional subsystem initialization fails.
+    context.subscriptions.push(
+        vscode.commands.registerCommand('antigravity.openSettings', () => {
+            DashboardPanel.createOrShow(context.extensionUri);
+        })
+    );
+
     const isUnifiedAutoAcceptEnabled = () => {
         return !!config.get<boolean>('autopilotAutoAcceptEnabled')
             || !!config.get<boolean>('autoAllEnabled')
@@ -843,9 +851,6 @@ export function activate(context: vscode.ExtensionContext) {
             const fallbackPort = config.get<number>('cdpPort') || 9000;
             return `ws://127.0.0.1:${fallbackPort}`;
         }),
-        vscode.commands.registerCommand('antigravity.clickRun', () => resolveCDPStrategy()?.executeAction('run')),
-        vscode.commands.registerCommand('antigravity.clickExpand', () => resolveCDPStrategy()?.executeAction('expand')),
-        vscode.commands.registerCommand('antigravity.clickAccept', () => resolveCDPStrategy()?.executeAction('accept')),
         vscode.commands.registerCommand('antigravity.resetConnection', async () => {
             const cdpStrategy = resolveCDPStrategy();
             if (cdpStrategy) {
@@ -924,9 +929,6 @@ export function activate(context: vscode.ExtensionContext) {
                 await autonomousLoop.start();
                 await config.update('autonomousEnabled', true);
             }
-        }),
-        vscode.commands.registerCommand('antigravity.openSettings', () => {
-            DashboardPanel.createOrShow(context.extensionUri);
         }),
         vscode.commands.registerCommand('antigravity.toggleMcp', async () => {
             const current = config.get<boolean>('mcpEnabled');
