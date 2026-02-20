@@ -194,26 +194,27 @@ export const AUTO_CONTINUE_SCRIPT = `
           // Heuristic for sender:
           // User messages often have specific avatars or class names
           const html = lastRow.innerHTML.toLowerCase();
-          if (html.includes('codicon-account') || html.includes('user-avatar')) {
+          const cx = lastRow.className.toLowerCase();
+          if (html.includes('codicon-account') || html.includes('user-avatar') || cx.includes('user')) {
               lastSender = 'user';
-          } else if (html.includes('codicon-copilot') || html.includes('ai-avatar')) {
+          } else if (html.includes('codicon-copilot') || html.includes('ai-avatar') || html.includes('antigravity') || cx.includes('assistant')) {
               lastSender = 'ai';
           } else {
               // Text based fallback
               if (lastText.startsWith('You:')) lastSender = 'user';
-              if (lastText.startsWith('Copilot:')) lastSender = 'ai';
+              if (lastText.startsWith('Copilot:') || lastText.startsWith('Antigravity:')) lastSender = 'ai';
           }
       }
 
       const rowCount = rows.length;
       const buttonSignals = {
-          acceptAll: document.querySelectorAll('[title*="Accept All"], [aria-label*="Accept All"]').length,
+          acceptAll: document.querySelectorAll('[title*="Accept All"], [aria-label*="Accept All"], button:has(.codicon-check-all)').length,
           keep: document.querySelectorAll('[title="Keep"], [aria-label="Keep"], button[title*="Keep"], button[aria-label*="Keep"]').length,
           allow: document.querySelectorAll('[title*="Allow"], [aria-label*="Allow"], button[title*="Allow"], button[aria-label*="Allow"]').length,
-          run: document.querySelectorAll('[title*="Run in Terminal"], [aria-label*="Run in Terminal"], .codicon-play, .codicon-run').length,
-          expand: document.querySelectorAll('[title*="Expand"], [aria-label*="Expand"], .monaco-tl-twistie.collapsed, .codicon-chevron-right').length,
+          run: document.querySelectorAll('[title*="Run in Terminal"], [aria-label*="Run in Terminal"], button.run-action, button:has(.codicon-play), button:has(.codicon-run), .codicon-play, .codicon-run').length,
+          expand: document.querySelectorAll('[title*="Expand"], [aria-label*="Expand"], .monaco-tl-twistie.collapsed, .codicon-chevron-right, .expand-indicator.collapsed').length,
           continue: document.querySelectorAll('a.monaco-button, button.monaco-button, .action-label').length,
-          submit: document.querySelectorAll('[title="Send"], [aria-label="Send"], [title*="Submit"], [aria-label*="Submit"], .codicon-send').length,
+          submit: document.querySelectorAll('[title="Send"], [aria-label="Send"], [title*="Submit"], [aria-label*="Submit"], button[type="submit"], .codicon-send').length,
           feedback: document.querySelectorAll('.codicon-thumbsup, .codicon-thumbsdown, [title*="Helpful"], [aria-label*="Helpful"], [title*="Good"], [title*="Bad"]').length
       };
       return { isGenerating, lastSender, lastText, rowCount, hasInputReady, feedbackVisible, buttonSignals };
