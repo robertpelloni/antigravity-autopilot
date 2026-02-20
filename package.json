@@ -915,7 +915,7 @@
     "scripts": {
         "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --platform=node --format=cjs --sourcemap",
         "watch": "npm run compile -- --watch",
-        "test": "node --test antigravity-jules-orchestration/tests/**/*.test.js",
+        "test": "node --test dist/**/*.test.js",
         "test:soak:completion": "node --test tests/completion-detection-soak.test.js",
         "test:audit-policy": "node --test tests/audit-policy.test.js",
         "test:quality-gates": "node --test tests/command-parity.test.js tests/schema-parity.test.js tests/runtime-placeholder-policy.test.js",

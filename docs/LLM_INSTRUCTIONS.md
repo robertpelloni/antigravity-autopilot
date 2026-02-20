@@ -133,7 +133,6 @@ The workspace contains 10 git submodules. These are **reference implementations*
 | `free-auto-accept-antigravity` | RendezvousP | Free community auto-accept (reference) |
 | `AntiBridge-Antigravity-remote` | linhbq82 | Remote bridge for Antigravity (reference) |
 | `AntigravityMobile` | AvenalJ | Mobile companion app concept (reference) |
-| `antigravity-jules-orchestration` | Scarmonit | Jules API + MCP orchestration (reference) |
 | `antigravity-multi-purpose-agent` | rodhayl | Multi-purpose agent variant (reference) |
 | `Claude-Autopilot` | benbasha | Claude queue automation + auto-resume reference (reference) |
 

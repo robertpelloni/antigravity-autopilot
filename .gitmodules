@@ -19,9 +19,6 @@
 [submodule "AntigravityMobile"]
 	path = AntigravityMobile
 	url = https://github.com/AvenalJ/AntigravityMobile
-[submodule "antigravity-jules-orchestration"]
-	path = antigravity-jules-orchestration
-	url = https://github.com/Scarmonit/antigravity-jules-orchestration
 [submodule "antigravity-multi-purpose-agent"]
 	path = antigravity-multi-purpose-agent
 	url = https://github.com/rodhayl/antigravity-multi-purpose-agent
