@@ -1344,6 +1344,11 @@ export class DashboardPanel {
 
                 function evaluateCrossUiHealth(state) {
                     const coverage = state && state.profileCoverage ? state.profileCoverage : {};
+                    const mode = String((state && state.mode) || '').toLowerCase();
+                    const strictTarget = mode.includes('vscode') ? 'vscode'
+                        : mode.includes('antigravity') ? 'antigravity'
+                        : mode.includes('cursor') ? 'cursor'
+                        : 'unknown';
                     const evaluate = (cov) => {
                         const hasInput = !!(cov && cov.hasVisibleInput);
                         const hasSend = !!(cov && cov.hasVisibleSendButton);
@@ -1374,12 +1379,23 @@ export class DashboardPanel {
                     };
 
                     const score = Object.values(scoreParts).reduce((a, b) => a + b, 0);
-                    const strictPass = strict.vscodeTextReady && strict.vscodeButtonReady && strict.antigravityTextReady && strict.antigravityButtonReady;
+                    const vscodeStrictReady = strict.vscodeTextReady && strict.vscodeButtonReady;
+                    const antigravityStrictReady = strict.antigravityTextReady && strict.antigravityButtonReady;
+                    const cursorStrictReady = profiles.cursor.hasInput && (profiles.cursor.hasSend || profiles.cursor.pending > 0);
+                    const strictPass = strictTarget === 'vscode'
+                        ? vscodeStrictReady
+                        : strictTarget === 'antigravity'
+                            ? antigravityStrictReady
+                            : strictTarget === 'cursor'
+                                ? cursorStrictReady
+                                : (vscodeStrictReady || antigravityStrictReady || cursorStrictReady);
                     const scorePass = score >= autoResumeMinScore;
                     const allowed = scorePass && (!autoResumeRequireStrict || strictPass);
                     const reasons = [];
                     if (!scorePass) reasons.push('score below min');
-                    if (autoResumeRequireStrict && !strictPass) reasons.push('strict primary not ready');
+                    if (autoResumeRequireStrict && !strictPass) {
+                        reasons.push('strict primary not ready (' + strictTarget + ')');
+                    }
 
                     return {
                         score,

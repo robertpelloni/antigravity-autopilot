@@ -76,6 +76,14 @@ function evaluateCoverageProfile(cov: any): CrossUiProfileHealth {
     return { ready, hasInput, hasSend, pending };
 }
 
+function detectStrictTargetMode(state: any): 'vscode' | 'antigravity' | 'cursor' | 'unknown' {
+    const mode = String(state?.mode || '').toLowerCase();
+    if (mode.includes('vscode')) return 'vscode';
+    if (mode.includes('antigravity')) return 'antigravity';
+    if (mode.includes('cursor')) return 'cursor';
+    return 'unknown';
+}
+
 export function evaluateCrossUiHealth(state: any): CrossUiHealth {
     const coverage = state?.profileCoverage || {};
 
@@ -102,7 +110,17 @@ export function evaluateCrossUiHealth(state: any): CrossUiHealth {
 
     const score = Object.values(scoreParts).reduce((a, b) => a + b, 0);
     const grade: 'A' | 'B' | 'C' | 'D' | 'F' = score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 40 ? 'D' : 'F';
-    const strictPass = strict.vscodeTextReady && strict.vscodeButtonReady && strict.antigravityTextReady && strict.antigravityButtonReady;
+    const vscodeStrictReady = strict.vscodeTextReady && strict.vscodeButtonReady;
+    const antigravityStrictReady = strict.antigravityTextReady && strict.antigravityButtonReady;
+    const cursorStrictReady = profiles.cursor.hasInput && (profiles.cursor.hasSend || profiles.cursor.pending > 0);
+    const strictTarget = detectStrictTargetMode(state);
+    const strictPass = strictTarget === 'vscode'
+        ? vscodeStrictReady
+        : strictTarget === 'antigravity'
+            ? antigravityStrictReady
+            : strictTarget === 'cursor'
+                ? cursorStrictReady
+                : (vscodeStrictReady || antigravityStrictReady || cursorStrictReady);
 
     return { profiles, strict, scoreParts, score, grade, strictPass };
 }
@@ -123,19 +141,28 @@ export function buildAutoResumeGuardReport(state: any, options: AutoResumeGuardO
         suggestions.push('Run Cross-UI Self-Test and improve profile coverage signals.');
     }
 
+    const strictTarget = detectStrictTargetMode(state);
+
     if (requireStrict && !health.strictPass) {
         reasons.push('strict primary readiness failed');
-        if (!health.strict.vscodeTextReady) {
+        const checkVSCode = strictTarget === 'vscode' || strictTarget === 'unknown';
+        const checkAntigravity = strictTarget === 'antigravity' || strictTarget === 'unknown';
+        const checkCursor = strictTarget === 'cursor';
+
+        if (checkVSCode && !health.strict.vscodeTextReady) {
             suggestions.push('VS Code text input signal missing; open/focus Copilot chat input.');
         }
-        if (!health.strict.vscodeButtonReady) {
+        if (checkVSCode && !health.strict.vscodeButtonReady) {
             suggestions.push('VS Code submit/accept signal missing; expose send/accept controls.');
         }
-        if (!health.strict.antigravityTextReady) {
+        if (checkAntigravity && !health.strict.antigravityTextReady) {
             suggestions.push('Antigravity text input signal missing; ensure agent panel input is visible.');
         }
-        if (!health.strict.antigravityButtonReady) {
+        if (checkAntigravity && !health.strict.antigravityButtonReady) {
             suggestions.push('Antigravity submit/accept signal missing; ensure send/accept controls are visible.');
+        }
+        if (checkCursor && !(health.profiles.cursor.hasInput && (health.profiles.cursor.hasSend || health.profiles.cursor.pending > 0))) {
+            suggestions.push('Cursor strict readiness missing; ensure cursor chat input and send/accept controls are visible.');
         }
     }
 
@@ -150,17 +177,23 @@ export function buildAutoResumeGuardReport(state: any, options: AutoResumeGuardO
     let recommendedNextAction = 'No action needed; auto-resume is currently allowed.';
     let recommendedNextActionConfidence: 'high' | 'medium' | 'low' = 'high';
     if (!allowed) {
-        if (requireStrict && !health.strict.vscodeTextReady) {
+        if (requireStrict && strictTarget === 'vscode' && !health.strict.vscodeTextReady) {
             recommendedNextAction = 'Open/focus VS Code Copilot chat input, then re-run Auto-Fix Resume Readiness.';
             recommendedNextActionConfidence = 'high';
-        } else if (requireStrict && !health.strict.vscodeButtonReady) {
+        } else if (requireStrict && strictTarget === 'vscode' && !health.strict.vscodeButtonReady) {
             recommendedNextAction = 'Expose VS Code send/accept controls (or pending action buttons), then re-check guard.';
             recommendedNextActionConfidence = 'high';
-        } else if (requireStrict && !health.strict.antigravityTextReady) {
+        } else if (requireStrict && strictTarget === 'antigravity' && !health.strict.antigravityTextReady) {
             recommendedNextAction = 'Open/focus Antigravity agent panel input, then re-run guard check.';
             recommendedNextActionConfidence = 'high';
-        } else if (requireStrict && !health.strict.antigravityButtonReady) {
+        } else if (requireStrict && strictTarget === 'antigravity' && !health.strict.antigravityButtonReady) {
             recommendedNextAction = 'Expose Antigravity send/accept controls, then re-check guard.';
+            recommendedNextActionConfidence = 'high';
+        } else if (requireStrict && strictTarget === 'cursor') {
+            recommendedNextAction = 'Open/focus Cursor chat input and send controls, then re-run Auto-Fix Resume Readiness.';
+            recommendedNextActionConfidence = 'high';
+        } else if (requireStrict && strictTarget === 'unknown' && !health.strict.vscodeTextReady) {
+            recommendedNextAction = 'Open/focus the active chat input (VS Code or Antigravity), then re-run Auto-Fix Resume Readiness.';
             recommendedNextActionConfidence = 'high';
         } else if (!scorePass) {
             recommendedNextAction = 'Run Cross-UI Self-Test to improve coverage signals or lower runtimeAutoResumeMinScore temporarily.';

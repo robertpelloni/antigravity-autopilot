@@ -81,8 +81,9 @@ describe('Runtime auto-resume deterministic soak harness', () => {
         assert.ok(after.health.score > before.health.score);
     });
 
-    it('blocks when strict mode fails even if non-strict score is high enough', () => {
+    it('blocks when active-mode strict readiness fails even if relaxed score passes', () => {
         const strictFailState = state({
+            mode: 'antigravity',
             profileCoverage: {
                 vscode: { hasVisibleInput: true, hasVisibleSendButton: true, pendingAcceptButtons: 0 },
                 antigravity: { hasVisibleInput: false, hasVisibleSendButton: true, pendingAcceptButtons: 0 },
@@ -96,6 +97,20 @@ describe('Runtime auto-resume deterministic soak harness', () => {
         assert.strictEqual(strictReport.allowed, false);
         assert.strictEqual(relaxedReport.allowed, true);
         assert.strictEqual(strictReport.health.score, relaxedReport.health.score);
+    });
+
+    it('allows strict mode when active host profile is ready even if other host profile is missing', () => {
+        const vscodeOnlyReady = state({
+            mode: 'vscode',
+            profileCoverage: {
+                vscode: { hasVisibleInput: true, hasVisibleSendButton: true, pendingAcceptButtons: 0 },
+                antigravity: { hasVisibleInput: false, hasVisibleSendButton: false, pendingAcceptButtons: 0 },
+                cursor: { hasVisibleInput: false, hasVisibleSendButton: false, pendingAcceptButtons: 0 }
+            }
+        });
+
+        const report = buildAutoResumeGuardReport(vscodeOnlyReady, { minScore: 40, requireStrict: true });
+        assert.strictEqual(report.allowed, true);
     });
 
     it('produces stable grade and score parts for equivalent replay states', () => {

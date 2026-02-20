@@ -186,6 +186,10 @@ export function activate(context: vscode.ExtensionContext) {
                 }
 
                 const waitingElapsed = now - waitingStateSince;
+                const completionReadyToResume = runtimeState?.completionWaiting?.readyToResume === true;
+                const autoResumeDelayMs = completionReadyToResume
+                    ? Math.min(waitingDelayMs, 15000)
+                    : waitingDelayMs;
 
                 if (autoFixWaitingEnabled
                     && waitingElapsed >= autoFixWaitingDelayMs
@@ -244,7 +248,7 @@ export function activate(context: vscode.ExtensionContext) {
                     }
                 }
 
-                if (autoResumeEnabled && waitingElapsed >= waitingDelayMs && (now - lastAutoResumeAt) >= autoResumeCooldownMs && readyToResumeStreak >= stablePollsRequired) {
+                if (autoResumeEnabled && waitingElapsed >= autoResumeDelayMs && (now - lastAutoResumeAt) >= autoResumeCooldownMs && readyToResumeStreak >= stablePollsRequired) {
                     const guard = getAutoResumeGuardReport(runtimeState);
 
                     if (guard.allowed) {
@@ -271,7 +275,7 @@ export function activate(context: vscode.ExtensionContext) {
                         lastAutoResumeBlockedReason = guard.reason;
                         log.info(`[AutoResume] Guard blocked auto-resume: score=${guard.health.score}/${guard.minScore}, strictPass=${guard.health.strictPass}, requireStrict=${guard.requireStrict}, reason=${guard.reason}`);
                     }
-                } else if (autoResumeEnabled && waitingElapsed >= waitingDelayMs && (now - lastAutoResumeAt) >= autoResumeCooldownMs && readyToResumeStreak < stablePollsRequired) {
+                } else if (autoResumeEnabled && waitingElapsed >= autoResumeDelayMs && (now - lastAutoResumeAt) >= autoResumeCooldownMs && readyToResumeStreak < stablePollsRequired) {
                     lastAutoResumeOutcome = 'blocked';
                     lastAutoResumeBlockedReason = `awaiting stable waiting signal (${readyToResumeStreak}/${stablePollsRequired})`;
                 }
