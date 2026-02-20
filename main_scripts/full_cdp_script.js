@@ -420,12 +420,16 @@
             ],
             sendButtons: [
                 '#workbench\\.parts\\.auxiliarybar button[aria-label*="Send"]',
-                '.interactive-editor button[aria-label*="Send"]'
+                '#workbench\\.parts\\.auxiliarybar button[aria-label*="Submit"]',
+                '.interactive-editor button[aria-label*="Send"]',
+                '.interactive-editor button[aria-label*="Submit"]',
+                '[class*="anysphere"] button[aria-label*="Submit"]'
             ],
             textInputs: [
                 '#workbench\\.parts\\.auxiliarybar textarea',
                 '.interactive-editor textarea',
-                '.interactive-editor [contenteditable="true"]'
+                '.interactive-editor [contenteditable="true"]',
+                '[class*="anysphere"] textarea'
             ]
         },
         vscode: {

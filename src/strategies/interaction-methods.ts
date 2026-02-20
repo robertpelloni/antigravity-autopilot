@@ -696,9 +696,16 @@ export class ScriptForceSubmit implements IInteractionMethod {
 
     async execute(ctx: InteractionContext): Promise<boolean> {
         if (!ctx.cdpHandler) return false;
-        const script = `if (window.__autoAllState && window.__autoAllState.forceSubmit) window.__autoAllState.forceSubmit();`;
-        await ctx.cdpHandler.executeScriptInAllSessions(script);
-        return true;
+        const script = `
+            (async function() {
+                if (window.__autoAllState && window.__autoAllState.forceSubmit) {
+                    return await window.__autoAllState.forceSubmit();
+                }
+                return false;
+            })()
+        `;
+        const results = await ctx.cdpHandler.executeInAllSessions?.(script, true);
+        return Array.isArray(results) ? results.some((r: any) => !!r) : false;
     }
 }
 

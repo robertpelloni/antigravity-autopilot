@@ -229,7 +229,22 @@ export class DashboardPanel {
             '#workbench\\.parts\\.auxiliarybar button',
             '#workbench\\.parts\\.auxiliarybar [role="button"]',
             '.chat-session-item [role="button"]',
-            '.monaco-button'
+            '[class*="anysphere"]',
+            '.monaco-list-row.collapsed',
+            '.codicon-chevron-right'
+        ];
+        const cursorSend = [
+            '#workbench\\.parts\\.auxiliarybar button[aria-label*="Send"]',
+            '#workbench\\.parts\\.auxiliarybar button[aria-label*="Submit"]',
+            '.interactive-editor button[aria-label*="Send"]',
+            '.interactive-editor button[aria-label*="Submit"]',
+            '[class*="anysphere"] button[aria-label*="Submit"]'
+        ];
+        const cursorInputs = [
+            '#workbench\\.parts\\.auxiliarybar textarea',
+            '.interactive-editor textarea',
+            '.interactive-editor [contenteditable="true"]',
+            '[class*="anysphere"] textarea'
         ];
 
         const selectors = profile === 'vscode'
