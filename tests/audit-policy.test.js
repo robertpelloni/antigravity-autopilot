@@ -7,6 +7,7 @@ const {
   extractJson,
   parseAuditReport,
   summarizeVulnerabilities,
+  summarizeEffectivePolicyVulnerabilities,
   runPolicy,
 } = require('../scripts/audit-policy.js');
 
@@ -96,6 +97,25 @@ test('runPolicy returns 1 when high vulnerabilities exist', () => {
 
   assert.equal(exitCode, 1);
   assert.ok(errors.some((line) => line.includes('Policy violation')));
+});
+
+test('summarizeEffectivePolicyVulnerabilities allowlists configured tooling highs only', () => {
+  const summary = summarizeEffectivePolicyVulnerabilities({
+    metadata: {
+      vulnerabilities: {
+        total: 2,
+        high: 2,
+      },
+    },
+    vulnerabilities: {
+      '@vscode/vsce': { severity: 'high' },
+      'left-pad': { severity: 'high' },
+    },
+  });
+
+  assert.equal(summary.high, 2);
+  assert.equal(summary.allowlistedHigh, 1);
+  assert.equal(summary.effectiveHigh, 1);
 });
 
 test('runPolicy parses JSON from command error stdout/stderr', () => {

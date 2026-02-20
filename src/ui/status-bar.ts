@@ -17,6 +17,8 @@ export class StatusBarManager {
     private statusMain: vscode.StatusBarItem;
     private statusSettings: vscode.StatusBarItem;
     private runtimeStateLabel: string | null = null;
+    private controllerRoleLabel: string | null = null;
+    private controllerRoleTooltip: string | null = null;
     private disposed = false;
 
     constructor(context: vscode.ExtensionContext) {
@@ -47,24 +49,41 @@ export class StatusBarManager {
         if (this.disposed) return;
 
         const runtimeSuffix = this.runtimeStateLabel ? ` • ${this.runtimeStateLabel}` : '';
+        const controllerSuffix = this.controllerRoleLabel ? ` • ${this.controllerRoleLabel}` : '';
+        const statusSuffix = `${runtimeSuffix}${controllerSuffix}`;
 
         const screenReader = config.get('accessibility.screenReaderOptimized');
 
         if (state.autonomousEnabled) {
-            this.statusMain.text = screenReader ? `Antigravity: Running (${state.loopCount})` : `$(sync~spin) Yoke: ${state.loopCount}${runtimeSuffix}`;
-            this.statusMain.tooltip = 'Autonomous Mode Running - Click to Stop';
+            this.statusMain.text = screenReader ? `Antigravity: Running (${state.loopCount})` : `$(sync~spin) Yoke: ${state.loopCount}${statusSuffix}`;
+            this.statusMain.tooltip = this.controllerRoleTooltip
+                ? `Autonomous Mode Running - Click to Stop (${this.controllerRoleTooltip})`
+                : 'Autonomous Mode Running - Click to Stop';
             this.statusMain.backgroundColor = new vscode.ThemeColor('statusBarItem.prominentBackground');
         } else if (state.autoAllEnabled) {
-            this.statusMain.text = screenReader ? `Antigravity: Monitoring` : `$(rocket) Yoke: CDP${runtimeSuffix}`;
+            this.statusMain.text = screenReader ? `Antigravity: Monitoring` : `$(rocket) Yoke: CDP${statusSuffix}`;
             this.statusMain.tooltip = this.runtimeStateLabel
-                ? `CDP Auto-All Enabled (${this.runtimeStateLabel})`
-                : 'CDP Auto-All Enabled';
+                ? `CDP Auto-All Enabled (${this.runtimeStateLabel})${this.controllerRoleTooltip ? ` | ${this.controllerRoleTooltip}` : ''}`
+                : `CDP Auto-All Enabled${this.controllerRoleTooltip ? ` | ${this.controllerRoleTooltip}` : ''}`;
             this.statusMain.backgroundColor = undefined;
         } else {
-            this.statusMain.text = screenReader ? `Antigravity: Off` : `$(circle-slash) Yoke: OFF${runtimeSuffix}`;
-            this.statusMain.tooltip = 'Antigravity Paused - Click to Enable';
+            this.statusMain.text = screenReader ? `Antigravity: Off` : `$(circle-slash) Yoke: OFF${statusSuffix}`;
+            this.statusMain.tooltip = `Antigravity Paused - Click to Enable${this.controllerRoleTooltip ? ` | ${this.controllerRoleTooltip}` : ''}`;
             this.statusMain.backgroundColor = undefined;
         }
+    }
+
+    updateControllerRole(isLeader: boolean, leaderWorkspace?: string | null): void {
+        if (this.disposed) return;
+
+        this.controllerRoleLabel = isLeader ? 'LEADER' : 'FOLLOWER';
+        if (isLeader) {
+            this.controllerRoleTooltip = 'Controller lease role: LEADER (this window controls automation)';
+            return;
+        }
+
+        const workspaceSuffix = leaderWorkspace ? ` | leader workspace: ${leaderWorkspace}` : '';
+        this.controllerRoleTooltip = `Controller lease role: FOLLOWER (another window is active)${workspaceSuffix}`;
     }
 
     updateRuntimeState(runtimeState: any | null): void {

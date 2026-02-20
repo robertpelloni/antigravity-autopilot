@@ -19,6 +19,7 @@ import { memoryManager } from './core/memory-manager';
 import { buildAutoResumeGuardReport, evaluateEscalationArming, evaluateCrossUiHealth } from './core/runtime-auto-resume-guard';
 import { runAutoResumeReadinessFix, sendAutoResumeMessage } from './core/runtime-auto-resume-guard-effects';
 import { projectManager } from './providers/project-manager';
+import { ControllerLease } from './core/controller-lease';
 
 import { StatusBarManager } from './ui/status-bar';
 import { CDPStrategy, CDPRuntimeState } from './strategies/cdp-strategy';
@@ -30,6 +31,7 @@ import * as os from 'os';
 
 const log = createLogger('Extension');
 let statusBar: StatusBarManager;
+let controllerLease: ControllerLease | null = null;
 
 function safeRegisterCommand(commandId: string, callback: (...args: any[]) => any): vscode.Disposable {
     try {
@@ -61,6 +63,36 @@ export function activate(context: vscode.ExtensionContext) {
         // Initialize Managers
         const strategyManager = new StrategyManager(context);
         fs.appendFileSync(debugDumpPath, `[${new Date().toISOString()}] Strategy Manager init success\n`);
+        const workspaceId = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || 'no-workspace';
+        const leaseOwnerId = `${process.pid}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
+        controllerLease = new ControllerLease(leaseOwnerId, workspaceId);
+        controllerLease.start();
+        context.subscriptions.push({
+            dispose: () => {
+                controllerLease?.stop();
+                controllerLease = null;
+            }
+        });
+
+        const isControllerLeader = () => !!controllerLease?.isLeader();
+        const updateControllerRoleStatus = () => {
+            const leader = controllerLease?.getLeaderInfo();
+            statusBar.updateControllerRole(isControllerLeader(), leader?.workspace || null);
+        };
+        const ensureControllerLeader = (reason: string, notify: boolean = false): boolean => {
+            updateControllerRoleStatus();
+            if (isControllerLeader()) {
+                return true;
+            }
+
+            const leader = controllerLease?.getLeaderInfo();
+            const leaderWorkspace = leader?.workspace ? ` | leader workspace: ${leader.workspace}` : '';
+            log.info(`[ControllerLease] Follower mode in this window; skipping ${reason}.${leaderWorkspace}`);
+            if (notify) {
+                vscode.window.showInformationMessage('Antigravity is in follower mode in this window. Another window is the active controller.');
+            }
+            return false;
+        };
         let latestRuntimeState: CDPRuntimeState | null = null;
         let waitingStateSince: number | null = null;
         let lastWaitingReminderAt = 0;
@@ -85,6 +117,8 @@ export function activate(context: vscode.ExtensionContext) {
         let refreshStatusMenuDroppedInFlight = 0;
         let refreshStatusMenuDroppedDebounce = 0;
 
+        updateControllerRoleStatus();
+
         const pushWatchdogEscalationEvent = (event: string, detail: string) => {
             const maxEvents = Math.max(3, Math.min(100, config.get<number>('runtimeAutoFixWaitingEscalationMaxEvents') || 10));
             watchdogEscalationEvents.unshift({
@@ -107,6 +141,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         const refreshRuntimeState = async () => {
             try {
+                updateControllerRoleStatus();
                 const cdp = resolveCDPStrategy();
                 if (!cdp || !cdp.isConnected()) {
                     latestRuntimeState = null;
@@ -331,6 +366,10 @@ export function activate(context: vscode.ExtensionContext) {
         };
 
         const enableAllAutonomy = async (source: string = 'master toggle on') => {
+            if (!ensureControllerLeader(`enableAllAutonomy (${source})`, true)) {
+                return;
+            }
+
             const updates: Array<[string, any]> = [
                 ['strategy', 'cdp'],
                 ['autonomousEnabled', true],
@@ -366,6 +405,10 @@ export function activate(context: vscode.ExtensionContext) {
         };
 
         const enableMaximumAutopilot = async (source: string = 'maximum autopilot') => {
+            if (!ensureControllerLeader(`enableMaximumAutopilot (${source})`, true)) {
+                return;
+            }
+
             const updates: Array<[string, any]> = [
                 ['strategy', 'cdp'],
                 ['autonomousEnabled', true],
@@ -475,7 +518,8 @@ export function activate(context: vscode.ExtensionContext) {
             const expectedCommands = [
                 'antigravity.openSettings',
                 'antigravity.openExtensionSettings',
-                'antigravity.showStatusMenu'
+                'antigravity.showStatusMenu',
+                'antigravity.showControllerLeaseState'
             ];
             const missingExpectedCommands = expectedCommands.filter(cmd => !availableCommands.includes(cmd));
 
@@ -1102,6 +1146,7 @@ export function activate(context: vscode.ExtensionContext) {
             multiTabEnabled: config.get('multiTabEnabled'),
             mode: config.get('strategy')
         });
+        updateControllerRoleStatus();
 
         // Phase 39: Manual Triggers & Error Suppression
         // Note: cdpStrategy is expected to be defined elsewhere or passed into this scope.
@@ -1132,6 +1177,9 @@ export function activate(context: vscode.ExtensionContext) {
                 if (cdpStrategy) {
                     vscode.window.showInformationMessage('Restoring Anti-Gravity...');
                     try {
+                        if (!ensureControllerLeader('resetConnection', true)) {
+                            return;
+                        }
                         await strategyManager.stop();
                         await strategyManager.start();
                         vscode.window.showInformationMessage('Anti-Gravity Reset Complete.');
@@ -1168,7 +1216,15 @@ export function activate(context: vscode.ExtensionContext) {
                 await config.update('actions.autoAccept.enabled', next);
                 await config.update('actions.bump.enabled', next); // Usually coupled
 
-                await strategyManager.start();
+                if (next) {
+                    if (ensureControllerLeader('toggleAutoAccept enable', true)) {
+                        await strategyManager.start();
+                    } else {
+                        await strategyManager.stop();
+                    }
+                } else {
+                    await strategyManager.stop();
+                }
             }),
             safeRegisterCommand('antigravity.toggleAutoAll', async () => {
                 const next = !isUnifiedAutoAcceptEnabled();
@@ -1186,7 +1242,15 @@ export function activate(context: vscode.ExtensionContext) {
                 if (next) {
                     await config.update('strategy', 'cdp');
                 }
-                await strategyManager.start();
+                if (next) {
+                    if (ensureControllerLeader('toggleAutoAll enable', true)) {
+                        await strategyManager.start();
+                    } else {
+                        await strategyManager.stop();
+                    }
+                } else {
+                    await strategyManager.stop();
+                }
                 await refreshRuntimeState();
             }),
             safeRegisterCommand('antigravity.clearAutoAll', async () => {
@@ -1211,6 +1275,9 @@ export function activate(context: vscode.ExtensionContext) {
                     autonomousLoop.stop('User toggled off');
                     await config.update('autonomousEnabled', false);
                 } else {
+                    if (!ensureControllerLeader('toggleAutonomous enable', true)) {
+                        return;
+                    }
                     await autonomousLoop.start();
                     await config.update('autonomousEnabled', true);
                 }
@@ -1233,6 +1300,9 @@ export function activate(context: vscode.ExtensionContext) {
                 if (current) {
                     await mcpServer.stop();
                 } else {
+                    if (!ensureControllerLeader('toggleMcp enable', true)) {
+                        return;
+                    }
                     await mcpServer.start();
                 }
                 await config.update('mcpEnabled', !current);
@@ -1242,6 +1312,9 @@ export function activate(context: vscode.ExtensionContext) {
                 if (current) {
                     await voiceControl.stop();
                 } else {
+                    if (!ensureControllerLeader('toggleVoice enable', true)) {
+                        return;
+                    }
                     await voiceControl.start();
                 }
                 await config.update('voiceControlEnabled', !current);
@@ -1324,6 +1397,8 @@ export function activate(context: vscode.ExtensionContext) {
             }),
             safeRegisterCommand('antigravity.showStatusMenu', async () => {
                 await refreshRuntimeState();
+                const leaseLeader = controllerLease?.getLeaderInfo();
+                const leaseIsLeader = isControllerLeader();
                 const statusGuard = latestRuntimeState ? getAutoResumeGuardReport(latestRuntimeState) : null;
                 const statusTiming = latestRuntimeState
                     ? getAutoResumeTimingReport(latestRuntimeState?.status === 'waiting_for_chat_message' || latestRuntimeState?.waitingForChatMessage === true)
@@ -1343,6 +1418,13 @@ export function activate(context: vscode.ExtensionContext) {
                         label: runtimeHeaderLabel,
                         description: `Live runtime snapshot (read-only) | telemetry age ${formatDurationShort(telemetryAgeMs)} | stale threshold ${telemetryStaleSec}s`,
                         action: undefined as string | undefined
+                    },
+                    {
+                        label: `$(account) Controller Role: ${leaseIsLeader ? 'LEADER' : 'FOLLOWER'}`,
+                        description: leaseIsLeader
+                            ? 'This window is the active automation controller'
+                            : `Follower mode; active leader workspace: ${leaseLeader?.workspace || 'unknown'}`,
+                        action: 'antigravity.showControllerLeaseState'
                     },
                     {
                         label: '$(sync) Refresh Runtime + Reopen Status Menu',
@@ -1484,6 +1566,26 @@ export function activate(context: vscode.ExtensionContext) {
             safeRegisterCommand('antigravity.syncProjectTasks', async () => {
                 await projectManager.syncFromFixPlan();
                 vscode.window.showInformationMessage('Project tasks synced from planner files (task.md → TODO.md → @fix_plan.md → ROADMAP.md).');
+            }),
+            safeRegisterCommand('antigravity.showControllerLeaseState', async () => {
+                const leader = controllerLease?.getLeaderInfo();
+                const payload = {
+                    timestamp: new Date().toISOString(),
+                    role: isControllerLeader() ? 'leader' : 'follower',
+                    thisWindow: {
+                        pid: process.pid,
+                        workspace: workspaceId
+                    },
+                    leader
+                };
+
+                updateControllerRoleStatus();
+
+                const serialized = JSON.stringify(payload, null, 2);
+                await vscode.env.clipboard.writeText(serialized);
+                const doc = await vscode.workspace.openTextDocument({ content: serialized, language: 'json' });
+                await vscode.window.showTextDocument(doc, { preview: false });
+                vscode.window.showInformationMessage(`Antigravity controller role: ${payload.role.toUpperCase()} (report copied to clipboard).`);
             }),
             safeRegisterCommand('antigravity.checkRuntimeState', async () => {
                 const cdp = resolveCDPStrategy();
@@ -2030,25 +2132,32 @@ export function activate(context: vscode.ExtensionContext) {
         // Initialize based on saved config
         // 1. Strategy (Core Driver)
         if (isUnifiedAutoAcceptEnabled()) {
-            strategyManager.start().catch(e => log.error(`Failed to start strategy: ${e.message}`));
+            if (ensureControllerLeader('activation bootstrap')) {
+                strategyManager.start().catch(e => log.error(`Failed to start strategy: ${e.message}`));
 
+                refreshRuntimeState().catch(() => { });
 
-            refreshRuntimeState().catch(() => { });
+                // 2. Autonomous Loop
+                if (config.get('autonomousEnabled')) {
+                    autonomousLoop.start().catch(e => log.error(`Failed to start autonomous loop: ${e.message}`));
+                }
 
-            // 2. Autonomous Loop
-            if (config.get('autonomousEnabled')) {
-                autonomousLoop.start().catch(e => log.error(`Failed to start autonomous loop: ${e.message}`));
+                // 3. Modules
+                if (config.get('mcpEnabled')) {
+                    mcpServer.start().catch(e => log.error(`MCP start failed: ${e.message}`));
+                }
+                if (config.get('voiceControlEnabled')) {
+                    voiceControl.start().catch(e => log.error(`Voice start failed: ${e.message}`));
+                }
+
+                log.info('Antigravity Autopilot activated as ACTIVE controller.');
+            } else {
+                strategyManager.stop().catch(() => { });
+                autonomousLoop.stop('Follower mode bootstrap');
+                mcpServer.stop().catch(() => { });
+                voiceControl.stop().catch(() => { });
+                log.info('Antigravity Autopilot activated as PASSIVE follower in this window.');
             }
-
-            // 3. Modules
-            if (config.get('mcpEnabled')) {
-                mcpServer.start().catch(e => log.error(`MCP start failed: ${e.message}`));
-            }
-            if (config.get('voiceControlEnabled')) {
-                voiceControl.start().catch(e => log.error(`Voice start failed: ${e.message}`));
-            }
-
-            log.info('Antigravity Autopilot activated!');
         }
     } catch (e: any) {
         fs.appendFileSync(path.join(os.homedir() || os.tmpdir(), 'antigravity-activation.log'), `[${new Date().toISOString()}] FATAL ACTIVATION ERROR: ${e?.stack || e}\n`);
@@ -2056,6 +2165,8 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
+    controllerLease?.stop();
+    controllerLease = null;
     autonomousLoop.stop('Deactivating');
     mcpServer.stop();
     voiceControl.stop();

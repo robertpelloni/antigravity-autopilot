@@ -499,6 +499,21 @@
             return false;
         }
 
+        // EXCLUSION: Ignore workbench chrome controls (panel headers/tabs/activity/status/sidebar)
+        // to prevent looping clicks on IDE navigation buttons instead of chat action buttons.
+        const role = (el.getAttribute && (el.getAttribute('role') || '') || '').toLowerCase();
+        if (role === 'tab' || el.closest('[role="tablist"]')) {
+            return false;
+        }
+
+        if (el.closest(
+            '.pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, ' +
+            '.monaco-workbench .part.activitybar, .monaco-workbench .part.statusbar, .monaco-workbench .part.sidebar, ' +
+            '.monaco-panel .composite.title, .monaco-panel .panel-switcher-container'
+        )) {
+            return false;
+        }
+
         return true;
     }
 
@@ -1305,7 +1320,7 @@
 
         // Use configured patterns from state if available, otherwise use defaults
         const state = window.__autoAllState || {};
-        const defaultPatterns = ['accept', 'accept all', 'keep', 'run', 'run command', 'retry', 'apply', 'execute', 'confirm', 'allow once', 'allow', 'proceed', 'continue', 'yes', 'ok', 'save', 'approve', 'overwrite'];
+        const defaultPatterns = ['accept', 'accept all', 'keep', 'run in terminal', 'run command', 'execute command', 'retry', 'apply', 'confirm', 'allow once', 'allow', 'proceed', 'continue', 'yes', 'ok', 'save', 'approve', 'overwrite'];
 
         const patterns = state.acceptPatterns || defaultPatterns;
 
@@ -2191,7 +2206,7 @@
             const isBG = config.isBackgroundMode === true;
 
             // Visual confirmation of injection
-            window.showAutoAllToast('Antigravity v5.2.1 Active 🚀');
+            window.showAutoAllToast('Antigravity v5.2.3 Active 🚀');
 
             if (config.bannedCommands) {
                 window.__autoAllUpdateBannedCommands(config.bannedCommands);

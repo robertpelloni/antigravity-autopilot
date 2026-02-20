@@ -33,3 +33,9 @@ If the `activate(context)` function inside `src/extension.ts` throws an unhandle
 
 - **Flattened Repo Structure**: Avoid `git sumbodules`. The project has struggled with detached HEAD states and submodule sync issues. Native directories are preferred.
 - **Verbose Action Logging**: Users requested that *every* button click be logged visibly. Do not silence `__ANTIGRAVITY_LOG__` outputs in the CDP script; they are intentional user telemetry.
+
+## Recent Release Gotchas (v5.2.3)
+
+- **Panel Chrome Click-Loop Risk**: Broad button scans can accidentally click VS Code panel/header/tab chrome controls in loops. Keep strict exclusions in `isValidInteractionTarget` for tab/tablist + workbench chrome containers, and preserve regression coverage in `tests/panel-click-guard.test.js`.
+- **Run Pattern Over-Match**: Avoid broad standalone `run` accept-pattern matching; keep command-intent variants (`run in terminal`, `run command`, `execute command`) to reduce false positives outside chat action surfaces.
+- **Secure Release Audit Policy**: Current ecosystem may report high advisories in dev tooling with no upstream fix path. Policy now computes effective high/critical counts with a narrow allowlist; do not broaden this list casually. Non-allowlisted high/critical findings must still fail CI.

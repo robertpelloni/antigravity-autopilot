@@ -6,7 +6,7 @@ This document contains the authoritative steps for building, packaging, and inst
 
 Before deploying, **you must ensure the version is perfectly synced** in three places:
 1. `package.json` -> `"version"` field
-2. `main_scripts/full_cdp_script.js` -> `const ANTIGRAVITY_VERSION = "x.y.z"`
+2. `main_scripts/full_cdp_script.js` -> runtime version metadata/toast string (e.g. `Antigravity vX.Y.Z Active 🚀`)
 3. `CHANGELOG.md` -> Add a new header `## [x.y.z] - YYYY-MM-DD`
 
 ## 2. Compilation and Release
@@ -17,10 +17,16 @@ We execute compilation, linting, testing, and packaging via a single unified com
 npm run verify:release
 ```
 
+For policy-hardened release validation (audit policy + release gate), run:
+
+```bash
+npm run verify:release:secure
+```
+
 **What this script does:**
 - Runs `esbuild` to compile `src/extension.ts` into `dist/extension.js`.
 - Runs `eslint` on the `src/` directory.
-- Runs the `vitest` test suite.
+- Runs the Node.js built-in test suite (`node --test`, via `npm test`).
 - Runs `vsce package` to bundle the `.vsix` file.
 - Outputs the generated VSIX file name, SHA256 checksum, and file size.
 

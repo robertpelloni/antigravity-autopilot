@@ -5,10 +5,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [5.2.3] - 2026-02-19
+- **Release**: Patch version bump to `5.2.3`.
+- **Version Sync**: Updated `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` runtime toast metadata.
+- **Safety Fix**: Hardened automation interaction targeting to ignore panel/workbench chrome controls (`tab`/header/action regions), preventing repeated click loops on UI panel buttons.
+- **Selector Guard**: Tightened broad `run` matching to command-specific patterns (`run in terminal` / command-run labels) to reduce false-positive clicks outside chat action surfaces.
+- **Test Coverage**: Added `tests/panel-click-guard.test.js` and wired it into `npm run test:quality-gates` to prevent panel/chrome click-loop regressions.
+- **Audit Policy**: Added explicit effective high/critical evaluation with a narrow dev-tooling allowlist in `scripts/audit-policy.js` so unresolved upstream advisories in packaging/lint toolchains do not block secure release, while non-allowlisted high/critical findings still fail the gate.
+
 ## [5.2.2] - 2026-02-19
-- **Critical Fix: CDP Port Isolation**: Removed hardcoded `[9222, 9229]` from `scanForInstances()`. The extension now **only** connects to the port configured in `antigravity.cdpPort` (default: `9000`). Previously, it would scan and connect to any program listening on 9222 (e.g., VS Code Insiders), causing cross-program interference.
-- **CDPClient Port Passthrough**: `CDPClient` and all CDP probes now respect the user's `cdpPort` setting instead of defaulting to a 9000–9030 range.
-- **Diagnostic Report Fix**: `diagnose()` now shows the correct configured port instead of hardcoded 9222 references.
+- **Reliability Fix: CDP Port Discovery Fallbacks**: `scanForInstances()` now prioritizes the configured `antigravity.cdpPort` range and also checks well-known CDP fallbacks (`9222`, `9000`) when needed.
+- **Resilience**: Prevents false “CDP unavailable” states when host/editor runtime exposes CDP on a common port different from current user config.
+- **Multi-Window Coordination**: Added a cross-window controller lease so only one extension host window actively runs CDP/autonomy modules while other windows enter passive follower mode.
+- **Operator UX**: Status menu now shows explicit controller role (`LEADER`/`FOLLOWER`) and includes `Antigravity: Show Controller Lease State` diagnostics command.
+- **Test Coverage**: Added `tests/controller-lease.test.js` to validate acquisition, follower blocking, stale takeover, and owner-only release cleanup.
+- **Version Sync**: Updated runtime metadata strings to `5.2.2` across extension constants and injected CDP script activation toast.
 
 ## [5.2.1] - 2026-02-19
 - **Release**: Version bump to `5.2.1` with synchronized manifest/runtime version metadata.

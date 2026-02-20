@@ -33,8 +33,18 @@ export class CDPHandler extends EventEmitter {
         const instances = [];
         const portsToCheck = new Set<number>();
 
-        // Only scan the configured port range — no hardcoded extras
+        // Scan configured port range first, then well-known CDP fallbacks.
         for (let p = this.startPort; p <= this.endPort; p++) portsToCheck.add(p);
+
+        // Also check common CDP defaults to recover from frequent host/editor port drift
+        // (e.g. extension configured for 9000 while editor exposes 9222).
+        const fallbackPorts = [9222, 9000];
+        for (const fallbackPort of fallbackPorts) {
+            if (fallbackPort >= this.startPort && fallbackPort <= this.endPort) {
+                continue;
+            }
+            portsToCheck.add(fallbackPort);
+        }
 
         for (const port of portsToCheck) {
             try {
