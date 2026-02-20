@@ -1920,3 +1920,4 @@ export function deactivate() {
     if (statusBar) statusBar.dispose();
     log.info('Antigravity Autopilot deactivated');
 }
+bumpbumpbumpbumpbumpbump
