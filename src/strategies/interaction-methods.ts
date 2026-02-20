@@ -221,7 +221,15 @@ export class DOMValueInjection implements IInteractionMethod {
                     if (el.isContentEditable) {
                         el.textContent = '${escapedText}';
                     } else {
-                        el.value = '${escapedText}';
+                        let nativeSetter = el.tagName === 'TEXTAREA'
+                            ? Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set
+                            : Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                            
+                        if (nativeSetter) {
+                            nativeSetter.call(el, '${escapedText}');
+                        } else {
+                            el.value = '${escapedText}';
+                        }
                     }
                     el.dispatchEvent(new Event('input', { bubbles: true }));
                     return true;

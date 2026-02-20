@@ -165,6 +165,27 @@
             log('[Analytics] Initialized');
 
             // Phase 39: Manual Trigger API
+            window.__autoAllState.forceSubmit = async function () {
+                log(`[ForceSubmit] Triggering direct DOM submission...`);
+                const profile = getCurrentMode();
+                const sendSelectors = getUnifiedSendButtonSelectors(profile);
+                const sendEl = findVisibleElementBySelectors(sendSelectors);
+                if (sendEl) {
+                    log(`[ForceSubmit] Found send button, executing robust click...`);
+                    await remoteClick(sendEl);
+                    return true;
+                }
+
+                // Fallback to keyboard
+                const inputSelectors = getUnifiedTextInputSelectors(profile);
+                const inputEl = findVisibleElementBySelectors(inputSelectors);
+                if (inputEl) {
+                    log(`[ForceSubmit] Send button missing, trying keyboard shortcut fallback...`);
+                    return await submitWithKeys(inputEl);
+                }
+                return false;
+            };
+
             window.__autoAllState.forceAction = async function (action) {
                 log(`[ForceAction] Received manual trigger: ${action}`);
                 let selectors = [];
@@ -497,7 +518,16 @@
                 el.textContent = value;
             } else if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
                 el.focus();
-                el.value = value;
+
+                let nativeSetter = el.tagName === 'TEXTAREA'
+                    ? Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set
+                    : Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+
+                if (nativeSetter) {
+                    nativeSetter.call(el, value);
+                } else {
+                    el.value = value;
+                }
             } else {
                 return false;
             }
