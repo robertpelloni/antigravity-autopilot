@@ -367,21 +367,25 @@
         },
         antigravity: {
             click: [
-                '#antigravity\\.agentPanel button',
-                '#antigravity\\.agentPanel [role="button"]',
+                'button',
+                '[role="button"]',
                 '.bg-ide-button-background',
                 'button.grow',
                 '.monaco-action-bar .action-label',
                 '.monaco-list-row.collapsed',
-                '.codicon-chevron-right'
+                '.codicon-chevron-right',
+                '[data-testid="accept-all"]',
+                '[data-testid*="accept"]'
             ],
             sendButtons: [
-                '#antigravity\\.agentPanel button[aria-label*="Send"]',
-                '#antigravity\\.agentPanel button[title*="Send"]'
+                'button[aria-label*="Send"]',
+                'button[title*="Send"]',
+                'button[aria-label*="submit" i]',
+                'button[aria-label*="run" i]'
             ],
             textInputs: [
-                '#antigravity\\.agentPanel textarea',
-                '#antigravity\\.agentPanel [contenteditable="true"]'
+                'textarea',
+                '[contenteditable="true"]'
             ]
         },
         cursor: {
@@ -532,8 +536,10 @@
         for (const combo of combos) {
             try {
                 const down = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...combo });
+                const press = new KeyboardEvent('keypress', { bubbles: true, cancelable: true, ...combo });
                 const up = new KeyboardEvent('keyup', { bubbles: true, cancelable: true, ...combo });
                 target.dispatchEvent(down);
+                target.dispatchEvent(press);
                 target.dispatchEvent(up);
                 await workerDelay(120);
 
@@ -784,6 +790,17 @@
             console.log(payload);
             log(`[Bridge] Sent Click via Console: ${centerX},${centerY}`);
         }
+
+        // ----------------------------------------------------------------
+        // ROBUST NATIVE DISPATCH (Crucial for React/Monaco inside Webviews)
+        // ----------------------------------------------------------------
+        try {
+            const evOpts = { bubbles: true, cancelable: true, view: window };
+            el.dispatchEvent(new PointerEvent('pointerdown', evOpts));
+            el.dispatchEvent(new MouseEvent('mousedown', evOpts));
+            el.dispatchEvent(new PointerEvent('pointerup', evOpts));
+            el.dispatchEvent(new MouseEvent('mouseup', evOpts));
+        } catch (e) { }
 
         // Also fire standard click for immediate UI feedback (hover states etc)
         try { el.click(); } catch (e) { }

@@ -218,8 +218,8 @@ export class DashboardPanel {
         ];
 
         const antigravitySelectors = [
-            '#antigravity\\.agentPanel button',
-            '#antigravity\\.agentPanel [role="button"]',
+            'button',
+            '[role="button"]',
             '.bg-ide-button-background',
             'button.grow',
             '.monaco-button'
