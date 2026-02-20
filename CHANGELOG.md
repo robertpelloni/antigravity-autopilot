@@ -5,6 +5,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [5.1.5] - 2026-02-19
+- **Incremental Patch Release**: Published next patch cut from current release branch state to keep install/update flow moving.
+- **Artifact Refresh**: Regenerated VSIX package and release checksum for immediate distribution.
+
 ## [5.1.4] - 2026-02-19
 - **Patch Release Rollup**: Published an incremental patch cut from the latest `release/5.1.1` branch state to keep distribution/version progression aligned with current hotfixes.
 - **Release Artifact Refresh**: Regenerated VSIX package from current sources for immediate install/update workflows.
