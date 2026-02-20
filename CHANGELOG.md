@@ -3,6 +3,10 @@
 All notable changes to **Antigravity Autopilot (Unified)** are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.9] - 2026-02-20
+- **Reliability Fix**: Repaired a configuration injection bug in `cdp-handler.ts` where uninstantiated array defaults (`config.get('...')`) evaluated to `[]` instead of `undefined`, disabling detection features like `not-generating` and `action-cooldown` globally.
+- **Reliability Fix**: Enhanced `auto-continue.ts` DOM heuristics to natively recognize Antigravity's chat UI elements, including AI vs User sender detection, the `.run-action` button, and generic `button[type="submit"]` selectors.
+
 ## [5.2.8] - 2026-02-19
 - **Model Support**: Corrected latest model lists to feature Claude Opus 4.6, Claude Sonnet 4.6, and Gemini 3.1 Pro High instead of the older targets.
 
