@@ -2,7 +2,7 @@
   "name": "antigravity-autopilot",
   "displayName": "Antigravity Autopilot (Unified)",
   "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-  "version": "5.0.20",
+  "version": "5.2.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -72,6 +72,14 @@
       {
         "command": "antigravity.openSettings",
         "title": "Antigravity: Open Dashboard"
+      },
+      {
+        "command": "antigravity.openExtensionSettings",
+        "title": "Antigravity: Open Extension Settings (Native)"
+      },
+      {
+        "command": "antigravity.checkSettingsSurfacesHealth",
+        "title": "Antigravity: Settings Surfaces Health Check"
       },
       {
         "command": "antigravity.showStatusMenu",
@@ -224,6 +232,16 @@
         "command": "antigravity.toggleMasterControl",
         "key": "ctrl+alt+shift+m",
         "mac": "cmd+alt+shift+m"
+      },
+      {
+        "command": "antigravity.openSettings",
+        "key": "ctrl+alt+shift+g",
+        "mac": "cmd+alt+shift+g"
+      },
+      {
+        "command": "antigravity.openExtensionSettings",
+        "key": "ctrl+alt+shift+o",
+        "mac": "cmd+alt+shift+o"
       }
     ],
     "configuration": {
@@ -1244,7 +1262,7 @@
     "test:audit-policy": "node --test tests/audit-policy.test.js",
     "test:quality-gates": "node --test tests/command-parity.test.js tests/schema-parity.test.js tests/runtime-placeholder-policy.test.js",
     "package": "vsce package",
-    "lint": "eslint src --ext ts",
+    "lint": "eslint src",
     "audit:policy": "node scripts/audit-policy.js",
     "verify:release:secure": "npm run test:audit-policy && npm run audit:policy && npm run verify:release",
     "verify:release": "npm run compile && npm run lint && npm test && npm run package && node -e \"const fs=require('fs');const crypto=require('crypto');const pkg=require('./package.json');const f='antigravity-autopilot-'+pkg.version+'.vsix';const b=fs.readFileSync(f);console.log('VSIX',f);console.log('SHA256',crypto.createHash('sha256').update(b).digest('hex').toUpperCase());console.log('SIZE',b.length);\""

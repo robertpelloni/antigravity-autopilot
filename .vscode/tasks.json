@@ -10,6 +10,16 @@
 				"package"
 			],
 			"isBackground": false
+		},
+		{
+			"label": "Lint Root",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"lint"
+			],
+			"isBackground": false
 		}
 	]
 }

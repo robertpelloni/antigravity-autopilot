@@ -441,6 +441,113 @@ export function activate(context: vscode.ExtensionContext) {
             return `${status} | tabs ${done}/${total} | pending ${pending} | waiting chat ${waiting}`;
         };
 
+        const openNativeExtensionSettings = async () => {
+            const extensionId = context.extension?.id || 'ai-dev-2024.antigravity-autopilot';
+            const candidateFilters = [
+                `@ext:${extensionId}`,
+                '@ext:ai-dev-2024.antigravity-autopilot',
+                '@ext:antigravity-autopilot',
+                'antigravity.'
+            ];
+
+            for (const query of candidateFilters) {
+                try {
+                    await vscode.commands.executeCommand('workbench.action.openSettings', query);
+                    return;
+                } catch {
+                    // Try next fallback query.
+                }
+            }
+
+            await vscode.commands.executeCommand('workbench.action.openSettings');
+            vscode.window.showInformationMessage(`Antigravity: opened Settings. Try filtering by @ext:${extensionId} or antigravity.`);
+        };
+
+        const runSettingsSurfaceHealthCheck = async () => {
+            const extensionId = context.extension?.id || 'ai-dev-2024.antigravity-autopilot';
+            const packageJson = (context.extension?.packageJSON || {}) as any;
+            const contributedCommands: string[] = Array.isArray(packageJson?.contributes?.commands)
+                ? packageJson.contributes.commands.map((c: any) => String(c?.command || '')).filter(Boolean)
+                : [];
+            const contributedSettings: string[] = Object.keys(packageJson?.contributes?.configuration?.properties || {});
+
+            const availableCommands = await vscode.commands.getCommands(true);
+            const expectedCommands = [
+                'antigravity.openSettings',
+                'antigravity.openExtensionSettings',
+                'antigravity.showStatusMenu'
+            ];
+            const missingExpectedCommands = expectedCommands.filter(cmd => !availableCommands.includes(cmd));
+
+            const dashboardWasOpen = !!DashboardPanel.currentPanel;
+            let dashboardOpenAttempted = false;
+            let dashboardOpenResult = false;
+            let dashboardOpenError: string | null = null;
+
+            try {
+                dashboardOpenAttempted = true;
+                DashboardPanel.createOrShow(context.extensionUri);
+                dashboardOpenResult = !!DashboardPanel.currentPanel;
+            } catch (error: any) {
+                dashboardOpenError = String(error?.message || error || 'unknown error');
+            }
+
+            let nativeSettingsAttempted = false;
+            let nativeSettingsResult = false;
+            let nativeSettingsError: string | null = null;
+            try {
+                nativeSettingsAttempted = true;
+                await openNativeExtensionSettings();
+                nativeSettingsResult = true;
+            } catch (error: any) {
+                nativeSettingsError = String(error?.message || error || 'unknown error');
+            }
+
+            const configSnapshot = config.getAll() as Record<string, unknown>;
+            const topLevelConfigKeys = Object.keys(configSnapshot || {});
+
+            const report = {
+                timestamp: new Date().toISOString(),
+                extension: {
+                    id: extensionId,
+                    version: String(packageJson?.version || 'unknown')
+                },
+                surfaces: {
+                    dashboard: {
+                        wasOpenBeforeCheck: dashboardWasOpen,
+                        attemptedOpen: dashboardOpenAttempted,
+                        openResult: dashboardOpenResult,
+                        error: dashboardOpenError
+                    },
+                    nativeSettings: {
+                        attemptedOpen: nativeSettingsAttempted,
+                        openResult: nativeSettingsResult,
+                        error: nativeSettingsError
+                    }
+                },
+                paritySummary: {
+                    contributedCommandCount: contributedCommands.length,
+                    contributedSettingsCount: contributedSettings.length,
+                    topLevelConfigKeyCount: topLevelConfigKeys.length,
+                    missingExpectedCommands,
+                    notes: [
+                        'CI parity checks remain authoritative: tests/command-parity.test.js and tests/schema-parity.test.js',
+                        'Runtime health check validates command availability and settings/dashboard navigation surfaces.'
+                    ]
+                }
+            };
+
+            const serialized = JSON.stringify(report, null, 2);
+            await vscode.env.clipboard.writeText(serialized);
+            const doc = await vscode.workspace.openTextDocument({ content: serialized, language: 'json' });
+            await vscode.window.showTextDocument(doc, { preview: false });
+
+            const passed = dashboardOpenResult && nativeSettingsResult && missingExpectedCommands.length === 0;
+            vscode.window.showInformationMessage(
+                `Antigravity Settings Health Check: ${passed ? 'PASS' : 'WARN'} | dashboard=${dashboardOpenResult ? 'ok' : 'fail'} | native=${nativeSettingsResult ? 'ok' : 'fail'} | missingCommands=${missingExpectedCommands.length}`
+            );
+        };
+
         const confirmDestructiveVoiceIntent = async (command: { intent: string; raw: string }): Promise<boolean> => {
             const destructiveIntents = new Set(['reject', 'pause', 'deploy']);
             if (!destructiveIntents.has(command.intent)) {
@@ -1003,7 +1110,8 @@ export function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(
             safeRegisterCommand('antigravity.getChromeDevtoolsMcpUrl', async () => {
                 try {
-                    const probe = new CDPHandler();
+                    const probePort = config.get<number>('cdpPort') || 9000;
+                    const probe = new CDPHandler(probePort, probePort);
                     const instances = await probe.scanForInstances();
                     for (const instance of instances) {
                         const wsTarget = instance.pages.find((p: any) => typeof p?.webSocketDebuggerUrl === 'string' && p.webSocketDebuggerUrl.length > 0);
@@ -1108,7 +1216,17 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             }),
             safeRegisterCommand('antigravity.openSettings', () => {
-                DashboardPanel.createOrShow(context.extensionUri);
+                try {
+                    DashboardPanel.createOrShow(context.extensionUri);
+                } catch {
+                    void openNativeExtensionSettings();
+                }
+            }),
+            safeRegisterCommand('antigravity.openExtensionSettings', async () => {
+                await openNativeExtensionSettings();
+            }),
+            safeRegisterCommand('antigravity.checkSettingsSurfacesHealth', async () => {
+                await runSettingsSurfaceHealthCheck();
             }),
             safeRegisterCommand('antigravity.toggleMcp', async () => {
                 const current = config.get<boolean>('mcpEnabled');
@@ -1272,6 +1390,16 @@ export function activate(context: vscode.ExtensionContext) {
                         label: '$(gear) Open Dashboard',
                         description: 'Configure settings',
                         action: 'antigravity.openSettings'
+                    },
+                    {
+                        label: '$(settings-gear) Open Native Extension Settings',
+                        description: 'Open host Settings filtered to this extension',
+                        action: 'antigravity.openExtensionSettings'
+                    },
+                    {
+                        label: '$(pulse) Settings Surfaces Health Check',
+                        description: 'Verify dashboard/native settings entrypoints and command availability',
+                        action: 'antigravity.checkSettingsSurfacesHealth'
                     },
                     {
                         label: '$(pulse) Check Runtime State',
@@ -1582,6 +1710,16 @@ export function activate(context: vscode.ExtensionContext) {
                         label: '$(gear) Open Dashboard',
                         description: 'Open dashboard runtime controls and settings',
                         action: 'antigravity.openSettings'
+                    },
+                    {
+                        label: '$(settings-gear) Open Native Extension Settings',
+                        description: 'Open host settings filtered to this extension',
+                        action: 'antigravity.openExtensionSettings'
+                    },
+                    {
+                        label: '$(pulse) Settings Surfaces Health Check',
+                        description: 'Verify dashboard/native settings and command availability',
+                        action: 'antigravity.checkSettingsSurfacesHealth'
                     }
                 ];
 
@@ -1924,4 +2062,3 @@ export function deactivate() {
     if (statusBar) statusBar.dispose();
     log.info('Antigravity Autopilot deactivated');
 }
-bumpbumpbumpbumpbumpbump

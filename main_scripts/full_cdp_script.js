@@ -2040,45 +2040,50 @@
 
                 await workerDelay(1500);
 
-                let tabs = queryAll('button.grow');
-                log(`[Loop] Cycle ${cycle}: Found ${tabs.length} tabs`);
+                const mode = getCurrentMode();
+                if (mode !== 'vscode') {
+                    let tabs = queryAll('button.grow');
+                    log(`[Loop] Cycle ${cycle}: Found ${tabs.length} tabs`);
 
-                const blockedTabTerms = ['extension', 'extensions', 'marketplace', 'plugin', 'mcp', 'source control', 'search', 'explorer', 'run and debug'];
-                tabs = tabs.filter(tab => {
-                    const label = (tab.getAttribute('aria-label') || tab.textContent || '').trim().toLowerCase();
-                    if (!label) return false;
-                    if (blockedTabTerms.some(term => label.includes(term))) return false;
-                    return label.includes('chat') || tab.className.toLowerCase().includes('chat-session') || tab.className.toLowerCase().includes('grow');
-                });
+                    const blockedTabTerms = ['extension', 'extensions', 'marketplace', 'plugin', 'mcp', 'source control', 'search', 'explorer', 'run and debug'];
+                    tabs = tabs.filter(tab => {
+                        const label = (tab.getAttribute('aria-label') || tab.textContent || '').trim().toLowerCase();
+                        if (!label) return false;
+                        if (blockedTabTerms.some(term => label.includes(term))) return false;
+                        return label.includes('chat') || tab.className.toLowerCase().includes('chat-session') || tab.className.toLowerCase().includes('grow');
+                    });
 
-                updateTabNames(tabs);
+                    updateTabNames(tabs);
 
-                if (tabs.length > 1) {
-                    const targetTab = tabs[index % tabs.length];
-                    const tabName = stripTimeSuffix(targetTab.textContent);
+                    if (tabs.length > 1) {
+                        const targetTab = tabs[index % tabs.length];
+                        const tabName = stripTimeSuffix(targetTab.textContent);
 
-                    const state = window.__autoAllState;
-                    if (state.completionStatus[tabName] !== 'done') {
-                        log(`[Loop] Cycle ${cycle}: Switching to tab "${tabName}"`);
-                        targetTab.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
-                        index++;
+                        const state = window.__autoAllState;
+                        if (state.completionStatus[tabName] !== 'done') {
+                            log(`[Loop] Cycle ${cycle}: Switching to tab "${tabName}"`);
+                            targetTab.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
+                            index++;
 
-                        await workerDelay(2000);
+                            await workerDelay(2000);
 
-                        const badges = queryAll('span').filter(s => {
-                            const t = s.textContent.trim();
-                            return t === 'Good' || t === 'Bad';
-                        });
+                            const badges = queryAll('span').filter(s => {
+                                const t = s.textContent.trim();
+                                return t === 'Good' || t === 'Bad';
+                            });
 
-                        if (badges.length > 0) {
-                            updateConversationCompletionState(tabName, 'done');
-                            log(`[Loop] Cycle ${cycle}: Tab "${tabName}" marked as DONE`);
+                            if (badges.length > 0) {
+                                updateConversationCompletionState(tabName, 'done');
+                                log(`[Loop] Cycle ${cycle}: Tab "${tabName}" marked as DONE`);
+                            }
+                        } else {
+
+                            index++;
+                            log(`[Loop] Cycle ${cycle}: Skipping completed tab "${tabName}"`);
                         }
-                    } else {
-
-                        index++;
-                        log(`[Loop] Cycle ${cycle}: Skipping completed tab "${tabName}"`);
                     }
+                } else {
+                    updateTabNames([]);
                 }
 
                 updateOverlay();
@@ -2186,7 +2191,7 @@
             const isBG = config.isBackgroundMode === true;
 
             // Visual confirmation of injection
-            window.showAutoAllToast('Antigravity v5.0.18 Active 🚀');
+            window.showAutoAllToast('Antigravity v5.2.1 Active 🚀');
 
             if (config.bannedCommands) {
                 window.__autoAllUpdateBannedCommands(config.bannedCommands);

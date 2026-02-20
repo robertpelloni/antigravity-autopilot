@@ -17,10 +17,11 @@ export class CDPHandler extends EventEmitter {
     private timeoutMs: number;
     private watchdogInterval: NodeJS.Timeout | null = null;
 
-    constructor(startPort = 9000, endPort = 9030) {
+    constructor(startPort?: number, endPort?: number) {
         super();
-        this.startPort = startPort;
-        this.endPort = endPort;
+        const configuredPort = config.get<number>('cdpPort') || 9000;
+        this.startPort = startPort ?? configuredPort;
+        this.endPort = endPort ?? configuredPort;
         this.connections = new Map();
         this.messageId = 1;
         this.pendingMessages = new Map();
@@ -30,13 +31,10 @@ export class CDPHandler extends EventEmitter {
 
     async scanForInstances(): Promise<{ port: number, pages: any[] }[]> {
         const instances = [];
-        const additionalPorts = [9222, 9229];
         const portsToCheck = new Set<number>();
 
-        // Add configured range
+        // Only scan the configured port range — no hardcoded extras
         for (let p = this.startPort; p <= this.endPort; p++) portsToCheck.add(p);
-        // Add standard ports
-        additionalPorts.forEach(p => portsToCheck.add(p));
 
         for (const port of portsToCheck) {
             try {
@@ -50,11 +48,11 @@ export class CDPHandler extends EventEmitter {
     async diagnose(): Promise<string> {
         const instances = await this.scanForInstances();
         let report = `CDP Diagnostic Report (${new Date().toISOString()})\n`;
-        report += `Scanning ports: ${this.startPort}-${this.endPort}, 9222, 9229\n\n`;
+        report += `Scanning port: ${this.startPort}${this.startPort !== this.endPort ? '-' + this.endPort : ''}\n\n`;
 
         if (instances.length === 0) {
             report += 'No active CDP instances found.\n';
-            report += 'Ensure VS Code is launched with --remote-debugging-port=9222 (or similar).\n';
+            report += `Ensure your editor is launched with --remote-debugging-port=${this.startPort}.\n`;
             return report;
         }
 
@@ -521,7 +519,7 @@ export class CDPHandler extends EventEmitter {
                 const bumpConfig = config.get<{ typingDelayMs: number; submitDelayMs: number; openChat?: boolean }>('actions.bump') || {};
                 const typingDelay = bumpConfig.typingDelayMs || 50;
                 const submitDelay = bumpConfig.submitDelayMs || 800;
-                const shouldOpenChat = bumpConfig.openChat !== false; // Default true, but user can disable
+                const shouldOpenChat = bumpConfig.openChat === true; // Default false to avoid opening new threads; user can explicitly enable
 
                 if (bumpText) {
                     try {

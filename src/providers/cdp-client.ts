@@ -10,7 +10,8 @@ export class CDPClient {
     private isPro = true;
 
     constructor() {
-        this.handler = new CDPHandler();
+        const port = config.get<number>('cdpPort') || 9000;
+        this.handler = new CDPHandler(port, port);
     }
 
     getHandler(): CDPHandler {

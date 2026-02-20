@@ -347,6 +347,14 @@ export class DashboardPanel {
                     <label>Emergency Stop:</label>
                     <button onclick="runCommand('antigravity.panicStop')">Disable Everything Now</button>
                 </div>
+                <div class="setting" title="Open this extension in the host native Settings UI (filtered by extension id). Useful fallback if dashboard rendering is blocked.">
+                    <label>Native Settings:</label>
+                    <button onclick="runCommand('antigravity.openExtensionSettings')">Open Extension Settings</button>
+                </div>
+                <div class="setting" title="Runs a one-click diagnostics report for settings entrypoints (dashboard + native settings + required commands).">
+                    <label>Settings Health:</label>
+                    <button onclick="runCommand('antigravity.checkSettingsSurfacesHealth')">Run Health Check</button>
+                </div>
             </div>
 
             <div class="card">

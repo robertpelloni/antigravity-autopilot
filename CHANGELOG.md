@@ -5,6 +5,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [5.2.2] - 2026-02-19
+- **Critical Fix: CDP Port Isolation**: Removed hardcoded `[9222, 9229]` from `scanForInstances()`. The extension now **only** connects to the port configured in `antigravity.cdpPort` (default: `9000`). Previously, it would scan and connect to any program listening on 9222 (e.g., VS Code Insiders), causing cross-program interference.
+- **CDPClient Port Passthrough**: `CDPClient` and all CDP probes now respect the user's `cdpPort` setting instead of defaulting to a 9000–9030 range.
+- **Diagnostic Report Fix**: `diagnose()` now shows the correct configured port instead of hardcoded 9222 references.
+
+## [5.2.1] - 2026-02-19
+- **Release**: Version bump to `5.2.1` with synchronized manifest/runtime version metadata.
+
+## [5.2.0] - 2026-02-19
+- **Release**: Version bump and packaging target for `5.2.0`.
+- **Fix**: Restored reliable dashboard/settings navigation by removing a stray activation-breaking token in `src/extension.ts`.
+- **Hotfix**: Prevented VS Code bump flow from opening a new chat thread by defaulting hybrid bump `openChat` to opt-in only.
+- **Hotfix**: Stopped unintended VS Code page/thread hopping by skipping tab-rotation logic in `vscode` runtime mode.
+- **UX**: Added unified settings entrypoints across hosts:
+    - New command `Antigravity: Open Extension Settings (Native)`
+    - Added status-menu and dashboard button shortcuts to open native extension settings
+    - Added dedicated keybindings for dashboard and native settings access
+- **Compat**: Added explicit command activation events for dashboard/settings commands to improve host startup behavior.
+- **Diagnostics**: Added `Antigravity: Settings Surfaces Health Check` command with status-menu + dashboard access; exports a JSON report validating dashboard/native settings entrypoints and required command availability.
+
 ## [5.0.18] - 2026-02-19
 - **Fix**: Wrapped all 43 native VS Code command registrations in a `safeRegisterCommand` try-catch block. This prevents the Extension Host from fatal-crashing when activated in multiple Cursor IDE windows sharing the same process.
 
