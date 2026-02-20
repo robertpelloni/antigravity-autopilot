@@ -177,7 +177,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       // 1. Check if generating
       const stopBtn = document.querySelector('[title*="Stop"], [aria-label*="Stop"]');
       const isGenerating = !!stopBtn;
-      const input = document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea');
+      const input = document.querySelector('[id*="chat-input"], [aria-label*="Chat Input"], .interactive-input-part textarea, .chat-input-widget textarea');
       const hasInputReady = !!input && (input.offsetParent || input.clientWidth > 0 || input.clientHeight > 0);
       const feedbackVisible = !!document.querySelector('.codicon-thumbsup, .codicon-thumbsdown, [title*="Helpful"], [aria-label*="Helpful"], [title*="Good"], [title*="Bad"]');
 
@@ -253,7 +253,7 @@ export const AUTO_CONTINUE_SCRIPT = `
   function typeAndSubmit(text) {
       const cfg = getConfig();
       const bump = getBumpConfig(cfg);
-      const input = document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea');
+      const input = document.querySelector('[id*="chat-input"], [aria-label*="Chat Input"], .interactive-input-part textarea, .chat-input-widget textarea');
       if (!input) return false;
 
       if (input.value && input.value.trim().length > 0) {
