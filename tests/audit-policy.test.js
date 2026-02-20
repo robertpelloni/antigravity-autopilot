@@ -7,6 +7,7 @@ const {
   extractJson,
   parseAuditReport,
   summarizeVulnerabilities,
+  getActionableSevereVulnerabilities,
   runPolicy,
 } = require('../scripts/audit-policy.js');
 
@@ -96,6 +97,57 @@ test('runPolicy returns 1 when high vulnerabilities exist', () => {
 
   assert.equal(exitCode, 1);
   assert.ok(errors.some((line) => line.includes('Policy violation')));
+});
+
+test('getActionableSevereVulnerabilities ignores allowlisted no-fix advisories', () => {
+  const report = {
+    vulnerabilities: {
+      minimatch: {
+        severity: 'high',
+        fixAvailable: false,
+      },
+      '@typescript-eslint/parser': {
+        severity: 'high',
+        fixAvailable: false,
+      },
+    },
+  };
+
+  const severe = getActionableSevereVulnerabilities(report);
+  assert.ok(severe);
+  assert.equal(severe.actionable.length, 0);
+  assert.deepEqual(severe.allowlisted, ['@typescript-eslint/parser', 'minimatch']);
+});
+
+test('runPolicy fails when non-allowlisted severe advisory exists', () => {
+  const mockOutput = JSON.stringify({
+    vulnerabilities: {
+      minimatch: {
+        severity: 'high',
+        fixAvailable: false,
+      },
+      'some-runtime-package': {
+        severity: 'critical',
+        fixAvailable: false,
+      },
+    },
+    metadata: {
+      vulnerabilities: {
+        total: 2,
+        high: 1,
+        critical: 1,
+      },
+    },
+  });
+
+  const { logger, errors } = createLogger();
+  const exitCode = runPolicy({
+    execCommand: () => mockOutput,
+    logger,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.ok(errors.some((line) => line.includes('some-runtime-package')));
 });
 
 test('runPolicy parses JSON from command error stdout/stderr', () => {

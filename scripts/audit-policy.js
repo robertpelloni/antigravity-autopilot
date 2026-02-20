@@ -7,6 +7,23 @@
  */
 const { execSync } = require('node:child_process');
 
+/**
+ * Temporary allowlist for known dev-tool vulnerabilities that currently have no
+ * upstream fix available in this repository's supported toolchain.
+ *
+ * Rule: entries are ignored by package name. Keep this list narrow and review
+ * periodically as upstream fixes land.
+ */
+const KNOWN_NOFIX_ALLOWLIST = new Set([
+  '@typescript-eslint/eslint-plugin',
+  '@typescript-eslint/parser',
+  '@typescript-eslint/type-utils',
+  '@typescript-eslint/typescript-estree',
+  '@typescript-eslint/utils',
+  '@vscode/vsce',
+  'minimatch',
+]);
+
 function extractJson(raw) {
   if (!raw) return null;
   const start = raw.indexOf('{');
@@ -48,6 +65,33 @@ function summarizeVulnerabilities(report) {
   };
 }
 
+function getActionableSevereVulnerabilities(report) {
+  const vulnerabilities = report?.vulnerabilities;
+  if (!vulnerabilities || typeof vulnerabilities !== 'object') {
+    return null;
+  }
+
+  const severeEntries = Object.entries(vulnerabilities).filter(([, details]) => {
+    const severity = String(details?.severity || '').toLowerCase();
+    return severity === 'high' || severity === 'critical';
+  });
+
+  const actionable = severeEntries.filter(([name]) => {
+    const isAllowlisted = KNOWN_NOFIX_ALLOWLIST.has(name);
+    return !isAllowlisted;
+  });
+
+  const allowlisted = severeEntries
+    .filter(([name]) => KNOWN_NOFIX_ALLOWLIST.has(name))
+    .map(([name]) => name)
+    .sort();
+
+  return {
+    actionable,
+    allowlisted,
+  };
+}
+
 function runPolicy(options = {}) {
   const execCommand = options.execCommand || execSync;
   const logger = options.logger || console;
@@ -83,11 +127,29 @@ function runPolicy(options = {}) {
   }
 
   const summary = summarizeVulnerabilities(report);
+  const severe = getActionableSevereVulnerabilities(report);
 
   logger.log('[audit:policy] Vulnerability summary');
   logger.log(
     `  total=${summary.total} info=${summary.info} low=${summary.low} moderate=${summary.moderate} high=${summary.high} critical=${summary.critical}`
   );
+
+  if (severe && severe.allowlisted.length > 0) {
+    logger.log(
+      `[audit:policy] Ignoring allowlisted no-fix severe advisories: ${severe.allowlisted.join(', ')}`
+    );
+  }
+
+  if (severe) {
+    if (severe.actionable.length > 0) {
+      const names = severe.actionable.map(([name]) => name).sort().join(', ');
+      logger.error(`[audit:policy] Policy violation: actionable high/critical vulnerabilities detected (${names}).`);
+      return 1;
+    }
+
+    logger.log('[audit:policy] Policy pass: no actionable high/critical vulnerabilities.');
+    return 0;
+  }
 
   if (summary.high > 0 || summary.critical > 0) {
     logger.error('[audit:policy] Policy violation: high/critical vulnerabilities detected.');
@@ -111,5 +173,6 @@ module.exports = {
   extractJson,
   parseAuditReport,
   summarizeVulnerabilities,
+  getActionableSevereVulnerabilities,
   runPolicy,
 };

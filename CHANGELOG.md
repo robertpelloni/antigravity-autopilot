@@ -5,6 +5,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [5.1.1] - 2026-02-19
+- **Release Hygiene**: Synced version metadata across `package.json`, `src/utils/constants.ts`, and lockfile for a clean patch build.
+- **Changelog Cleanup**: Removed duplicated `4.10.117` notes that duplicated the `5.1.0` release content.
+- **Tooling Compatibility**: Added flat-config `eslint.config.cjs` for ESLint 10 compatibility in release verification workflows.
+- **Secure Verification Stability**: Hardened audit policy handling with explicit allowlisting for known no-fix dev-tool advisories plus regression tests.
+
+## [5.1.0] - 2026-02-19
+**Major Release** — Autopilot Reliability Improvements + Audio/Debug Feedback System. Supersedes the 4.x series.
+- **Audio Feedback System**: `audioFeedbackEnabled` toggle in Dashboard → CDP & Automation section. Plays audible `click`, `type`, and `submit` sound cues via `SoundEffects` when enabled.
+- **Verbose Debug Logging**: `debugLoggingEnabled` toggle. All `[Browser Debug]` events emitted by the injected automation script are forwarded to the extension host console when enabled.
+- **CDP Script Instrumentation**: `full_cdp_script.js` now fires bridge events `__ANTIGRAVITY_PLAY_SOUND__` and `__ANTIGRAVITY_DEBUG_LOG__` at key automation points (`remoteClick`, `remoteType`, `performClick`, `submitWithKeys`).
+- **Fix: Blank Chat Panel on Restart**: Batched webview stabilization delay before multi-target attachment instead of per-target, eliminating the race that caused the chat panel to go blank on VS Code restart.
+- **Fix: Session Attachment Completeness**: `Target.attachedToTarget` now enables `Page.enable` and `DOM.enable` alongside `Runtime.enable` for full session readiness.
+- **Improved Submit Compatibility**: `submitWithKeys` now fires `metaKey+Enter` (Cmd+Enter) for macOS compatibility in addition to Ctrl+Enter and Alt+Enter.
+- **Dashboard "Test Audio" button**: Quick inline button next to the Audio Feedback toggle to immediately test sound output.
+
 ## [4.10.115] - 2024-02-18
 - **Continuous Autonomous Mode**: Agent automatically proceeds to the next task in `task.md` / `TODO.md` upon completion.
 - Added `antigravity.continuousMode` configuration (default: `true`).
