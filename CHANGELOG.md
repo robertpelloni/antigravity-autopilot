@@ -5,6 +5,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [5.2.4] - 2026-02-19
+- **Release/Build Optimization**: Version bump and sync build for latest multi-window target resolution changes.
+
 ## [5.2.3] - 2026-02-19
 - **Release**: Patch version bump to `5.2.3`.
 - **Version Sync**: Updated `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` runtime toast metadata.
