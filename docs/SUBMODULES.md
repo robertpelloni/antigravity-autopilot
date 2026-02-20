@@ -138,33 +138,7 @@ Reference for community patterns and user-facing simplicity.
 
 ---
 
-## 8. antigravity-jules-orchestration
-
-| Field | Value |
-|:------|:------|
-| **Path** | `antigravity-jules-orchestration/` |
-| **Origin** | [Scarmonit/antigravity-jules-orchestration](https://github.com/Scarmonit/antigravity-jules-orchestration) |
-| **Language** | JavaScript (Node.js) |
-| **Purpose** | Full Jules API + MCP orchestration system |
-
-### Architecture
-- **Orchestrator**: Node.js MCP server for task lifecycle management
-- **Jules API**: Express service for code execution
-- **Dashboard**: React web interface ("Mission Control")
-- **Infrastructure**: Docker Compose + PostgreSQL + Redis
-
-### Integration Status
-- **Agent Orchestrator**: Partially integrated into `src/core/agent-orchestrator.ts` (Phase 18).
-- **Jules API**: Remains external for now (Dockerized service).
-
-### Future Integration (Phase 6)
-- Jules PR-level autonomy
-- MCP federation with external servers
-- Orchestrated multi-agent workflows
-
----
-
-## 9. antigravity-multi-purpose-agent
+## 8. antigravity-multi-purpose-agent
 
 | Field | Value |
 |:------|:------|
@@ -182,7 +156,7 @@ Reference for expanded agent capabilities and alternative approaches to multi-pu
 
 ---
 
-## 10. Claude-Autopilot
+## 9. Claude-Autopilot
 
 | Field | Value |
 |:------|:------|
