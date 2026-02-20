@@ -14,7 +14,7 @@ export const AUTO_CONTINUE_SCRIPT = `
      clickFeedback: false,
      autoScroll: true,
      autoReply: true,
-     autoReplyText: 'continue',
+     autoReplyText: 'Proceed',
      controls: {
          acceptAll: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-button', 'keep-button', 'allow-all-button', 'dom-click'], delayMs: 100 },
          continue: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['continue-button', 'keep-button', 'dom-click'], delayMs: 100 },
@@ -608,7 +608,7 @@ export const AUTO_CONTINUE_SCRIPT = `
               // Idle state logic
               let computedDelay = cfg.timing?.autoReplyDelayMs ?? 7000;
               let shouldBump = false;
-              let bumpText = cfg.autoReplyText || 'continue';
+              let bumpText = cfg.autoReplyText || 'Proceed';
 
               if (hasMethod(detectMethods, 'not-generating')) {
                   shouldBump = true;

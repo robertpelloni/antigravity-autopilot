@@ -2,7 +2,7 @@
   "name": "antigravity-autopilot",
   "displayName": "Antigravity Autopilot (Unified)",
   "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-  "version": "5.2.10",
+  "version": "5.2.11",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -681,7 +681,7 @@
         },
         "antigravity.automation.actions.autoReplyText": {
           "type": "string",
-          "default": "continue",
+          "default": "Proceed",
           "description": "The text to type when auto-replying (e.g. 'continue', 'next', 'review')."
         },
         "antigravity.automation.bump.detectMethods": {
@@ -889,7 +889,7 @@
         },
         "antigravity.bumpMessage": {
           "type": "string",
-          "default": "bump",
+          "default": "Proceed",
           "deprecationMessage": "Use antigravity.actions.bump.text instead.",
           "description": "Deprecated: Message to post to bump the thread."
         },
@@ -900,7 +900,7 @@
         },
         "antigravity.actions.bump.text": {
           "type": "string",
-          "default": "bump",
+          "default": "Proceed",
           "description": "Text to type when bumping the thread."
         },
         "antigravity.actions.bump.cooldown": {

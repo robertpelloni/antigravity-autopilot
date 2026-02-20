@@ -509,7 +509,7 @@ export class DashboardPanel {
                 </div>
                 <div class="setting" title="The specific text message to send when bumping the AI (e.g., 'continue', 'next', 'go on').">
                     <label>Auto Reply Text:</label>
-                    <input type="text" value="${config.get('automation.actions.autoReplyText') ?? 'continue'}" onchange="updateConfig('automation.actions.autoReplyText', this.value)">
+                    <input type="text" value="${config.get('automation.actions.autoReplyText') ?? 'Proceed'}" onchange="updateConfig('automation.actions.autoReplyText', this.value)">
                 </div>
                 <div class="setting" title="The delay in milliseconds to wait after the AI stops generating before sending the auto-reply bump. Prevents spamming the chat.">
                     <label>Auto Reply Delay (ms):</label>
@@ -560,7 +560,7 @@ export class DashboardPanel {
 
                 <div class="setting vertical" title="Exact text payload sent during bump. Keep it short and deterministic (for example: 'continue').">
                     <label>Bump Text:</label>
-                    <input type="text" list="bump-texts" value="${settings.actions.bump.text || 'continue'}" onchange="updateConfig('actions.bump.text', this.value); updateConfig('automation.actions.autoReplyText', this.value); updateConfig('bumpMessage', this.value)">
+                    <input type="text" list="bump-texts" value="${settings.actions.bump.text || 'Proceed'}" onchange="updateConfig('actions.bump.text', this.value); updateConfig('automation.actions.autoReplyText', this.value); updateConfig('bumpMessage', this.value)">
                     <datalist id="bump-texts">
                         <option value="Proceed">
                         <option value="continue">

@@ -2,5 +2,5 @@
   "antigravity.autoApproveDelay": 600,
   "antigravity.pollFrequency": 3000,
   "antigravity.threadWaitInterval": 30,
-  "antigravity.bumpMessage": "continue"
+  "antigravity.actions.bump.text": "Proceed"
 }
