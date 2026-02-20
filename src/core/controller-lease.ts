@@ -69,7 +69,15 @@ export class ControllerLease {
     tryAcquire(): boolean {
         const existing = this.readLease();
         if (existing && !this.isStale(existing) && existing.ownerId !== this.ownerId) {
-            return false;
+            let isAlive = true;
+            try {
+                process.kill(existing.pid, 0);
+            } catch (e) {
+                isAlive = false;
+            }
+            if (isAlive) {
+                return false;
+            }
         }
 
         const now = Date.now();

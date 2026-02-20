@@ -22,10 +22,14 @@ export const DEFAULT_POLL_FREQUENCY_MS = 1000;
 // Exact models from Antigravity's model selector (as of Dec 2024)
 export const ModelId = {
     // Gemini Models
+    GEMINI_2_5_PRO: 'gemini-2.5-pro',
+    GEMINI_2_5_FLASH: 'gemini-2.5-flash',
     GEMINI_PRO_HIGH: 'gemini-3-pro-high',
     GEMINI_PRO_LOW: 'gemini-3-pro-low',
     GEMINI_FLASH: 'gemini-3-flash',
     // Claude Models
+    CLAUDE_3_7_SONNET: 'claude-3-7-sonnet-20250219',
+    CLAUDE_3_OPUS: 'claude-3-opus-latest',
     CLAUDE_SONNET: 'claude-sonnet-4.5',
     CLAUDE_SONNET_THINKING: 'claude-sonnet-4.5-thinking',
     CLAUDE_OPUS_THINKING: 'claude-opus-4.5-thinking',
@@ -35,6 +39,10 @@ export const ModelId = {
 
 // Model display names matching Antigravity's UI exactly
 export const MODEL_LABELS: Record<string, string> = {
+    [ModelId.GEMINI_2_5_PRO]: 'Gemini 2.5 Pro',
+    [ModelId.GEMINI_2_5_FLASH]: 'Gemini 2.5 Flash',
+    [ModelId.CLAUDE_3_7_SONNET]: 'Claude 3.7 Sonnet',
+    [ModelId.CLAUDE_3_OPUS]: 'Claude 3 Opus (Latest)',
     [ModelId.GEMINI_PRO_HIGH]: 'Gemini 3 Pro (High)',
     [ModelId.GEMINI_PRO_LOW]: 'Gemini 3 Pro (Low)',
     [ModelId.GEMINI_FLASH]: 'Gemini 3 Flash',

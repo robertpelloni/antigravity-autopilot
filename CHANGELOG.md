@@ -3,6 +3,11 @@
 All notable changes to **Antigravity Autopilot (Unified)** are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.7] - 2026-02-19
+- **Bug Fix**: Fixed a Multi-Window Lifecycle bug where a quick window reload caused a 15-second stale lease window, leaving all extensions operating defensively in `FOLLOWER` mode. Leases are now instantly dropped when the governing Extension Host process ID (`pid`) dies.
+- **UI Enhancement**: Modified the Dashboard "Bump Text" field to include a `datalist` dropdown with default suggestions (such as "Proceed").
+- **Model Support**: Updated model selection lists to natively feature the latest Claude 3.7 Sonnet, Claude 3 Opus, Gemini 2.5 Pro, and Gemini 2.5 Flash targets.
+
 ## [5.2.6] - 2026-02-19
 - **Bug Fix**: Fixed an issue where follower window Autopilot instances were not receiving the correct `bumpMessage` configuration.
 - **Reliability Fix**: Expanded the `isAcceptButton` text heuristics in `AUTO_CONTINUE_SCRIPT` to accurately detect and execute "1 Step Requires Input", "Expand <", and "Run" buttons that lack native title tooltips.
