@@ -112,20 +112,29 @@ export class CDPHandler extends EventEmitter {
                         const pages = JSON.parse(data);
                         // Phase 27: Intelligent Filter
                         const allowedTypes = ['page', 'webview', 'iframe', 'background_page'];
-                        const filtered = pages.filter((p: any) =>
-                            p.webSocketDebuggerUrl && allowedTypes.includes(p.type)
-                        );
+                        // Log exactly what types of targets are available and which ones match
+                        const filtered = pages.filter((p: any) => {
+                            const isAllowed = p.webSocketDebuggerUrl && allowedTypes.includes(p.type);
+                            return isAllowed;
+                        });
+
+                        if (filtered.length === 0) {
+                            logToOutput(`[CDPHandler] Port ${port} returned ${pages.length} raw targets. Filtered targets: 0.`);
+                            if (pages.length > 0) {
+                                logToOutput(`[CDPHandler] First raw target on port ${port}: ${JSON.stringify(pages[0])}`);
+                            }
+                        }
                         resolve(filtered);
-                    } catch (e) {
-                        console.error(`[CDPHandler] Error parsing JSON list from port ${port}:`, e);
+                    } catch (e: any) {
+                        logToOutput(`[CDPHandler] Error parsing JSON list from port ${port}: ${e.message || e}`);
                         reject(e);
                     }
                 });
             });
-            req.on('error', (e) => {
+            req.on('error', (e: any) => {
                 // Suppress ECONNREFUSED noise since it just means the port isn't active
-                if ((e as any).code !== 'ECONNREFUSED') {
-                    console.error(`[CDPHandler] Network error while scanning port ${port}:`, (e as any).message || e);
+                if (e.code !== 'ECONNREFUSED') {
+                    logToOutput(`[CDPHandler] Network error while scanning port ${port}: ${e.message || e}`);
                 }
                 reject(e);
             });
