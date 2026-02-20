@@ -5,6 +5,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [5.1.4] - 2026-02-19
+- **Patch Release Rollup**: Published an incremental patch cut from the latest `release/5.1.1` branch state to keep distribution/version progression aligned with current hotfixes.
+- **Release Artifact Refresh**: Regenerated VSIX package from current sources for immediate install/update workflows.
+
 ## [5.1.3] - 2026-02-19
 - **Antigravity Host Compatibility**: Added explicit command activation events for `antigravity.openSettings` and `antigravity.showStatusMenu` so command invocation can activate the extension even when startup activation timing differs from VS Code.
 - **Dashboard Availability Reliability**: Ensures dashboard/open-settings flows remain reachable in Antigravity-hosted environments where `onStartupFinished` alone may not reliably activate command handlers.
