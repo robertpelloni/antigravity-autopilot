@@ -855,7 +855,7 @@ export class InteractionMethodRegistry {
 
         logToOutput(`[Interaction] Category=${category} | methods=${methods.map(m => m.id).join(', ') || 'none'} | parallel=${this.config.parallelExecution}`);
 
-        if (this.config.parallelExecution) {
+        if (this.config.parallelExecution && category === 'click') {
             // Fire all methods simultaneously
             const settled = await Promise.allSettled(
                 methods.map(async m => {
@@ -882,10 +882,13 @@ export class InteractionMethodRegistry {
             for (const m of methods) {
                 if (ctx.visualDiffThreshold && m.id === 'visual-verify-click') continue; // specialized use only
 
-                // Check retry count limit
+                // For text, one success is rigidly all we need. 
+                // For click/submit, the user might want redundancy, but 1 is usually safer.
+                const targetSuccesses = category === 'text' ? 1 : this.config.retryCount;
+
                 const successCount = results.filter(r => r.success).length;
-                if (successCount >= this.config.retryCount) {
-                    logToOutput(`[Interaction] Reached retry count target (${this.config.retryCount}), stopping sequence.`);
+                if (successCount >= targetSuccesses) {
+                    logToOutput(`[Interaction] Reached target successes (${targetSuccesses}) for ${category}, stopping sequence.`);
                     break;
                 }
 

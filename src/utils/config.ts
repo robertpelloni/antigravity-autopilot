@@ -98,7 +98,7 @@ export interface AntigravityConfig {
     watchdogTimeoutMs: number;
 
     // CDP Settings
-    cdpPort: number;
+    cdpPort?: number;
     cdpTimeout: number;
 
     // Advanced Model & Loop Settings
@@ -276,7 +276,7 @@ export class ConfigManager {
             watchdogEnabled: config.get('watchdogEnabled', true),
             watchdogTimeoutMs: config.get('watchdogTimeoutMs', 15000),
 
-            cdpPort: config.get('cdpPort', 9000),
+            cdpPort: config.get('cdpPort'),
             cdpTimeout: config.get('cdpTimeout', 10000),
             preferredModelForReasoning: config.get('preferredModelForReasoning', 'claude-opus-4.5-thinking'),
             preferredModelForFrontend: config.get('preferredModelForFrontend', 'gemini-3-pro-high'),

@@ -140,6 +140,21 @@ export const AUTO_CONTINUE_SCRIPT = `
       return true;
   }
 
+  function queryShadowDOMAll(selector, root) {
+      root = root || document;
+      let results = [];
+      if (root.querySelectorAll) {
+          results = Array.from(root.querySelectorAll(selector));
+      }
+      const all = root.querySelectorAll ? root.querySelectorAll('*') : [];
+      for (let i = 0; i < all.length; i++) {
+          if (all[i].shadowRoot) {
+              results = results.concat(queryShadowDOMAll(selector, all[i].shadowRoot));
+          }
+      }
+      return results;
+  }
+
   function highlight(el) {
     const cfg = getConfig();
     if (!cfg.debug?.highlightClicks) return;
@@ -175,15 +190,14 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   function analyzeChatState() {
       // 1. Check if generating
-      const stopBtn = document.querySelector('[title*="Stop"], [aria-label*="Stop"]');
+      const stopBtn = queryShadowDOMAll('[title*="Stop" i], [aria-label*="Stop" i]')[0];
       const isGenerating = !!stopBtn;
-      const input = document.querySelector('[id*="chat-input"], [aria-label*="Chat Input"], .interactive-input-part textarea, .chat-input-widget textarea');
+      const input = queryShadowDOMAll('vscode-text-area, [id*="chat-input" i], [aria-label*="Chat Input" i], .interactive-input-part textarea, .chat-input-widget textarea')[0];
       const hasInputReady = !!input && (input.offsetParent || input.clientWidth > 0 || input.clientHeight > 0);
-      const feedbackVisible = !!document.querySelector('.codicon-thumbsup, .codicon-thumbsdown, [title*="Helpful"], [aria-label*="Helpful"], [title*="Good"], [title*="Bad"]');
 
       // 2. Find last message
       // Selectors depend on VS Code version, but usually .monaco-list-row or .chat-row
-      const rows = Array.from(document.querySelectorAll('.monaco-list-row, .chat-row, [role="listitem"]'));
+      const rows = queryShadowDOMAll('.monaco-list-row, .chat-row, [role="listitem"]');
       const lastRow = rows[rows.length - 1];
       
       let lastSender = 'unknown';
@@ -206,24 +220,47 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
       }
 
+      // Text checks for signals
+      const allBtns = queryShadowDOMAll('button, a, [role="button"], .monaco-button, .action-label, .codicon-bell');
+      let extExpand = 0, extAcceptAll = 0, extAccept = 0, extRun = 0, extFeedback = 0;
+      for (const b of allBtns) {
+          if (isUnsafeContext(b) || hasUnsafeLabel(b)) continue;
+          if (b.hasAttribute('disabled') || b.classList.contains('disabled')) continue;
+          if (!(b.offsetParent || b.clientWidth > 0 || b.clientHeight > 0)) continue;
+          
+          const t = (b.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+          const attr = (b.getAttribute('title') || b.getAttribute('aria-label') || '').toLowerCase();
+          
+          if (t.includes('expand') || t.includes('requires input') || (t.includes('step') && t.includes('input'))) {
+              if (!t.includes('explorer') && !attr.includes('explorer')) extExpand++;
+          }
+          if (t.includes('accept all')) extAcceptAll++;
+          if (t === 'accept' || t === 'apply') extAccept++;
+          if (t === 'run' || (t.includes('run') && t.includes('terminal'))) extRun++;
+          if (t === 'good' || t === 'bad' || t === 'helpful' || t === 'unhelpful') extFeedback++;
+      }
+
       const rowCount = rows.length;
       const buttonSignals = {
-          acceptAll: document.querySelectorAll('[title*="Accept All"], [aria-label*="Accept All"], button:has(.codicon-check-all)').length,
-          keep: document.querySelectorAll('[title="Keep"], [aria-label="Keep"], button[title*="Keep"], button[aria-label*="Keep"]').length,
-          allow: document.querySelectorAll('[title*="Allow"], [aria-label*="Allow"], button[title*="Allow"], button[aria-label*="Allow"]').length,
-          run: document.querySelectorAll('[title*="Run in Terminal"], [aria-label*="Run in Terminal"], button.run-action, button:has(.codicon-play), button:has(.codicon-run), .codicon-play, .codicon-run').length,
-          expand: document.querySelectorAll('[title*="Expand"], [aria-label*="Expand"], .monaco-tl-twistie.collapsed, .codicon-chevron-right, .expand-indicator.collapsed').length,
-          continue: document.querySelectorAll('a.monaco-button, button.monaco-button, .action-label').length,
-          submit: document.querySelectorAll('[title="Send"], [aria-label="Send"], [title*="Submit"], [aria-label*="Submit"], button[type="submit"], .codicon-send').length,
-          feedback: document.querySelectorAll('.codicon-thumbsup, .codicon-thumbsdown, [title*="Helpful"], [aria-label*="Helpful"], [title*="Good"], [title*="Bad"]').length
+          acceptAll: extAcceptAll + queryShadowDOMAll('[title*="Accept All" i], [aria-label*="Accept All" i], button:has(.codicon-check-all)').length,
+          keep: queryShadowDOMAll('[title="Keep" i], [aria-label="Keep" i], button[title*="Keep" i], button[aria-label*="Keep" i]').length,
+          allow: queryShadowDOMAll('[title*="Allow" i], [aria-label*="Allow" i], button[title*="Allow" i], button[aria-label*="Allow" i]').length,
+          run: extRun + queryShadowDOMAll('[title*="Run in Terminal" i], [aria-label*="Run in Terminal" i], button.run-action, button:has(.codicon-play), button:has(.codicon-run), .codicon-play, .codicon-run').length,
+          expand: extExpand + queryShadowDOMAll('[title*="Expand" i], [aria-label*="Expand" i], .monaco-tl-twistie.collapsed, .codicon-chevron-right, .expand-indicator.collapsed').length,
+          continue: queryShadowDOMAll('a.monaco-button, button.monaco-button, .action-label').length,
+          submit: queryShadowDOMAll('[title="Send" i], [aria-label="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send').length,
+          feedback: extFeedback + queryShadowDOMAll('.codicon-thumbsup, .codicon-thumbsdown, [title*="Helpful" i], [aria-label*="Helpful" i], [title*="Good" i], [title*="Bad" i], .feedback-button').length
       };
+
+      const feedbackVisible = buttonSignals.feedback > 0;
+
       return { isGenerating, lastSender, lastText, rowCount, hasInputReady, feedbackVisible, buttonSignals };
   }
 
   // --- Actions ---
 
     function tryClick(selector, name, group) {
-      const els = Array.from(document.querySelectorAll(selector));
+      const els = queryShadowDOMAll(selector);
       for (const el of els) {
           if (isUnsafeContext(el) || hasUnsafeLabel(el)) continue;
           if (el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0) {
@@ -257,12 +294,12 @@ export const AUTO_CONTINUE_SCRIPT = `
   function typeAndSubmit(text) {
       const cfg = getConfig();
       const bump = getBumpConfig(cfg);
-      const rawInputs = Array.from(document.querySelectorAll('[id*="chat-input" i], [aria-label*="Chat Input" i], .interactive-input-part, .chat-input-widget, textarea[placeholder*="Ask" i], textarea[placeholder*="Message" i]'));
+      const rawInputs = queryShadowDOMAll('[id*="chat-input" i], [aria-label*="Chat Input" i], .interactive-input-part, .chat-input-widget, textarea[placeholder*="Ask" i], textarea[placeholder*="Message" i], vscode-text-area');
       
       let input = null;
       for (const el of rawInputs) {
           if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) continue;
-          if (el.tagName === 'TEXTAREA' || el.isContentEditable || el.hasAttribute('contenteditable')) {
+          if (el.tagName === 'TEXTAREA' || el.tagName === 'VSCODE-TEXT-AREA' || el.isContentEditable || el.hasAttribute('contenteditable')) {
               input = el;
               break;
           }
@@ -275,7 +312,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       
       // Fallback: just find the first visible textarea on the screen if we couldn't find a widget
       if (!input) {
-          const fallbackInputs = Array.from(document.querySelectorAll('textarea'));
+          const fallbackInputs = queryShadowDOMAll('textarea, vscode-text-area');
           input = fallbackInputs.find(el => el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0);
       }
       
@@ -414,7 +451,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       // 0. Auto-Scroll
       if (cfg.autoScroll) {
-          const containers = document.querySelectorAll('.monaco-list-rows, .chat-list, [role="log"]');
+          const containers = queryShadowDOMAll('.monaco-list-rows, .chat-list, [role="log"]');
           for (const c of containers) {
              if (c.scrollTop + c.clientHeight >= c.scrollHeight - 150) {
                  c.scrollTop = c.scrollHeight;
@@ -426,7 +463,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (controlGatePass('continue', cfg, state, now, lastActionByControl.continue)) {
           const continueControl = getControlConfig(cfg, 'continue');
           const contSel = 'a.monaco-button, button.monaco-button, .action-label';
-          const els = Array.from(document.querySelectorAll(contSel));
+          const els = queryShadowDOMAll(contSel);
           const target = els.find(el => {
               if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
               const t = (el.textContent || '').trim().toLowerCase();
@@ -483,7 +520,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           ].join(',');
 
           if (hasMethod(runControl.actionMethods, 'dom-click')) {
-              const buttons = Array.from(document.querySelectorAll('button, [role="button"], .clickable'));
+              const buttons = queryShadowDOMAll('button, [role="button"], .clickable');
               const textMatch = buttons.find(el => {
                   if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
@@ -712,8 +749,9 @@ export const AUTO_CONTINUE_SCRIPT = `
                       computedDelay = Math.max(250, bump.retryDelayMs || 2000);
                       shouldBump = true;
                       bumpText = 'retry';
-                  } else if (hasMethod(detectMethods, 'feedback-visible')) {
-                      shouldBump = state.feedbackVisible || shouldBump;
+                  } else if (state.feedbackVisible || hasMethod(detectMethods, 'feedback-visible')) {
+                      shouldBump = true;
+                      computedDelay = Math.max(250, bump.retryDelayMs || 2000);
                   } else {
                       // Standard completion -> Standard Bump
                       // Heuristic: If it looks incomplete (no period, or code block open), bump.

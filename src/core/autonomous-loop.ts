@@ -195,7 +195,7 @@ export class AutonomousLoop {
             });
 
             await exec('git add .');
-            await exec(`git commit -m "antigravity: auto-save loop #${this.loopCount}"`);
+            await exec(`git commit --allow-empty -m "antigravity: auto-save loop #${this.loopCount}"`);
             log.info('Auto-commit successful');
         } catch (e: any) {
             log.error(`Auto-commit failed: ${e.message}`);

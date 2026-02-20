@@ -1155,7 +1155,10 @@ export function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(
             safeRegisterCommand('antigravity.getChromeDevtoolsMcpUrl', async () => {
                 try {
-                    const probePort = config.get<number>('cdpPort') || 9000;
+                    const probePort = config.get<number>('cdpPort');
+                    if (!probePort) {
+                        return undefined;
+                    }
                     const probe = new CDPHandler(probePort, probePort);
                     const instances = await probe.scanForInstances();
                     for (const instance of instances) {
@@ -1168,7 +1171,7 @@ export function activate(context: vscode.ExtensionContext) {
                     log.warn(`DevTools URL probe failed: ${String(error?.message || error || 'unknown error')}`);
                 }
 
-                const fallbackPort = config.get<number>('cdpPort') || 9000;
+                const fallbackPort = config.get<number>('cdpPort');
                 return `ws://127.0.0.1:${fallbackPort}`;
             }),
             safeRegisterCommand('antigravity.clickExpand', () => resolveCDPStrategy()?.executeAction('expand')),
@@ -2120,6 +2123,13 @@ export function activate(context: vscode.ExtensionContext) {
                 ];
                 for (const cmd of commands) {
                     try { await vscode.commands.executeCommand(cmd); } catch { }
+                }
+            }),
+            safeRegisterCommand('antigravity.forceAcquireLeader', async () => {
+                if (controllerLease) {
+                    controllerLease.forceAcquire();
+                    updateControllerRoleStatus();
+                    vscode.window.showInformationMessage('Antigravity: Forcibly acquired Leader role for this window.');
                 }
             })
         );

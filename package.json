@@ -2,12 +2,12 @@
   "name": "antigravity-autopilot",
   "displayName": "Antigravity Autopilot (Unified)",
   "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-  "version": "5.2.14",
+  "version": "5.2.26",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyper/antigravity-autopilot.git"
   },
-  "publisher": "ai-dev-2024",
+  "publisher": "robertpelloni",
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -56,6 +56,11 @@
       {
         "command": "antigravity.panicStop",
         "title": "Antigravity: EMERGENCY STOP (Disable All Autonomy)"
+      },
+      {
+        "command": "antigravity.forceAcquireLeader",
+        "title": "Antigravity: Force Acquire Leader Role",
+        "category": "Antigravity"
       },
       {
         "command": "antigravity.toggleAutoAccept",
@@ -884,7 +889,7 @@
         },
         "antigravity.cdpPort": {
           "type": "number",
-          "default": 9000,
+          "default": 9333,
           "description": "Port to use for Chrome DevTools Protocol (CDP)."
         },
         "antigravity.bumpMessage": {

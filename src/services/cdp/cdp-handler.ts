@@ -19,13 +19,22 @@ export class CDPHandler extends EventEmitter {
 
     constructor(startPort?: number, endPort?: number) {
         super();
-        const configuredPort = config.get<number>('cdpPort') || 9000;
+        const configuredPortRaw = config.get<number | string>('cdpPort');
+        let configuredPort = typeof configuredPortRaw === 'string' ? parseInt(configuredPortRaw, 10) : configuredPortRaw;
+
+        // If everything fails, use 9333 as a safe terminal fallback strictly to prevent NaN loops
+        if (typeof configuredPort !== 'number' || isNaN(configuredPort)) {
+            console.warn(`[CDPHandler] cdpPort setting could not be cleanly parsed: ${configuredPortRaw}. Defaulting to 9333 internally.`);
+            configuredPort = 9333;
+        }
+
         this.startPort = startPort ?? configuredPort;
         this.endPort = endPort ?? configuredPort;
         this.connections = new Map();
         this.messageId = 1;
         this.pendingMessages = new Map();
         this.timeoutMs = config.get<number>('cdpTimeout') || 10000;
+        logToOutput(`[CDPHandler] Initialized with strict target port range: ${this.startPort}-${this.endPort}`);
         this.startWatchdogLoop();
     }
 
@@ -33,24 +42,24 @@ export class CDPHandler extends EventEmitter {
         const instances = [];
         const portsToCheck = new Set<number>();
 
-        // Scan configured port range first, then well-known CDP fallbacks.
+        // Scan configured port range strictly, no hardcoded fallbacks as requested.
         for (let p = this.startPort; p <= this.endPort; p++) portsToCheck.add(p);
 
-        // Also check common CDP defaults to recover from frequent host/editor port drift
-        // (e.g. extension configured for 9000 while editor exposes 9222).
-        const fallbackPorts = [9222, 9000];
-        for (const fallbackPort of fallbackPorts) {
-            if (fallbackPort >= this.startPort && fallbackPort <= this.endPort) {
-                continue;
-            }
-            portsToCheck.add(fallbackPort);
-        }
+        // Use logToOutput for standard stdout visibility in the extension tab
+        logToOutput(`[CDPHandler] Resolving active DevTools sessions on ports ${this.startPort}${this.endPort !== this.startPort ? `-${this.endPort}` : ''}...`);
 
         for (const port of portsToCheck) {
             try {
                 const pages = await this.getPages(port);
                 if (pages.length > 0) instances.push({ port, pages });
-            } catch (e) { }
+            } catch (e: any) {
+                // Add explicit logging so we know WHY it was skipped
+                if (e.code === 'ECONNREFUSED') {
+                    // console.log(`[CDPHandler] Port ${port} is inactive (ECONNREFUSED).`);
+                } else {
+                    console.error(`[CDPHandler] Error scanning port ${port}:`, e.message || e);
+                }
+            }
         }
         return instances;
     }
@@ -103,15 +112,27 @@ export class CDPHandler extends EventEmitter {
                         const pages = JSON.parse(data);
                         // Phase 27: Intelligent Filter
                         const allowedTypes = ['page', 'webview', 'iframe', 'background_page'];
-                        resolve(pages.filter((p: any) =>
+                        const filtered = pages.filter((p: any) =>
                             p.webSocketDebuggerUrl && allowedTypes.includes(p.type)
-                        ));
+                        );
+                        resolve(filtered);
+                    } catch (e) {
+                        console.error(`[CDPHandler] Error parsing JSON list from port ${port}:`, e);
+                        reject(e);
                     }
-                    catch (e) { reject(e); }
                 });
             });
-            req.on('error', reject);
-            req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+            req.on('error', (e) => {
+                // Suppress ECONNREFUSED noise since it just means the port isn't active
+                if ((e as any).code !== 'ECONNREFUSED') {
+                    console.error(`[CDPHandler] Network error while scanning port ${port}:`, (e as any).message || e);
+                }
+                reject(e);
+            });
+            req.on('timeout', () => {
+                req.destroy();
+                reject(new Error('timeout'));
+            });
         });
     }
 
@@ -417,7 +438,7 @@ export class CDPHandler extends EventEmitter {
         let connectedCount = 0;
         const multiTabEnabled = config.get<boolean>('multiTabEnabled') ?? false;
 
-        console.log(`[CDP] Connect requested. Filter: "${targetFilter || 'NONE'}"`);
+        logToOutput(`[CDP] Connect requested. Filter: "${targetFilter || 'NONE'}" (Instances found: ${instances.length})`);
 
         for (const instance of instances) {
             for (const page of instance.pages) {

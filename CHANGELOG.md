@@ -1,7 +1,39 @@
 # Changelog
-
-All notable changes to **Antigravity Autopilot (Unified)** are documented here.
+All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+
+## [5.2.24] - 2026-02-20
+### Fixed
+- **CDP Handler**: Fully removed all implicit hardcoded fallbacks to port \`9000\` when scanning or displaying connection strings. 
+- **Settings**: The default `cdpPort` configuration value in `package.json` is now **9333**, which aligns with Chrome's standard debugger convention.
+
+## [5.2.23] - 2026-02-20
+### Fixed
+- **CDP Handler**: Removed all hardcoded fallback ports (9222/9333). The extension will now strictly use and only connect to the CDP Port defined in the dashboard settings, preventing connection anomalies and port collisions.
+- **Dashboard UI**: Updated tooltips to clearly reflect that the user's explicit setting is required rather than relying on assumed defaults like 9333.
+
+## [5.2.22] - 2026-02-20
+
+## [5.2.20]
+- Fixed issue where all open VS Code windows could become permanently stuck as "FOLLOWER" after a window reload, caused by Windows `EPERM` errors during `fs.renameSync` preventing the Controller Lease file from ever being updated. The lease election system now gracefully falls back to `fs.writeFileSync`.
+- Added manual `Antigravity: Force Acquire Leader Role` command to arbitrarily usurp control if the autonomous controller lease ever gets confused.
+
+## [5.2.19]
+- Fixed issue where backend "Blind Bump" fallback was running concurrently with the frontend Auto-Continue script, causing duplicate text injection and conflicts.
+- Reduced noise and added an exponential backoff to the continuous CDP reconnect attempts in background windows.
+
+## [5.2.18]
+- Fixed issue where "Accept All" and "Expand" signals were ignored if they were implemented as generic buttons with purely inner text (instead of `title` or `aria-label`).
+- Fixed issue where "Good/Bad" feedback requests caused the AI to hang; it now properly parses text-based feedback buttons and immediately automatically types a Smart Resume bump to bypass it.
+- Force compiled the extension before VSCE packaging to resolve the 5.2.16 staleness issue.
+
+## [5.2.17]
+- Fix compilation issue: the previous version 5.2.16 released an uncompiled distribution. Repackaging with the fix to `InteractionMethodRegistry` parallel execution.
+
+## [5.2.16]
+- Fixed issue where the backend fallback Interaction Mechanism (BlindBumpHandler) would spam "Proceed" multiple times in parallel when "Aggressive" preset or parallel execution mode was enabled.
+- Hardcoded InteractionMethodRegistry to enforce strictly sequential execution for all non-click actions like text input to prevent duplicate chat bumps.
+- Modified retry count to stop after 1 success for text injection.
 
 ## [5.2.14] - 2026-02-20
 - **Fixed:** Bulletproofed the "Proceed" check logic by recursively scanning the parent form or container for matching text nodes, ensuring that React `contenteditable` divs cannot falsely report empty states if the text has visibly rendered.

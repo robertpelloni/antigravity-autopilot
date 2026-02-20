@@ -845,7 +845,7 @@ export class DashboardPanel {
                     <label>CDP Timeout (ms):</label>
                     <input type="number" value="${settings.cdpTimeout}" onchange="updateConfig('cdpTimeout', parseInt(this.value))">
                 </div>
-                <div class="setting" title="The localhost port to connect to the Chrome DevTools Protocol. Must match the port Chrome was started with (usually 9222 or 9000-9005).">
+                <div class="setting" title="The localhost port to connect to the Chrome DevTools Protocol. Must match the port Chrome was started with.">
                     <label>CDP Port:</label>
                     <input type="number" value="${settings.cdpPort}" onchange="updateConfig('cdpPort', parseInt(this.value))">
                 </div>

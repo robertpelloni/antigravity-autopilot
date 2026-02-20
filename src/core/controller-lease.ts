@@ -66,9 +66,9 @@ export class ControllerLease {
         return lease;
     }
 
-    tryAcquire(): boolean {
+    tryAcquire(force: boolean = false): boolean {
         const existing = this.readLease();
-        if (existing && !this.isStale(existing) && existing.ownerId !== this.ownerId) {
+        if (!force && existing && !this.isStale(existing) && existing.ownerId !== this.ownerId) {
             let isAlive = true;
             try {
                 process.kill(existing.pid, 0);
@@ -85,12 +85,16 @@ export class ControllerLease {
             ownerId: this.ownerId,
             pid: process.pid,
             workspace: this.workspace,
-            createdAt: existing?.ownerId === this.ownerId ? existing.createdAt : now,
+            createdAt: (!force && existing?.ownerId === this.ownerId) ? existing.createdAt : now,
             updatedAt: now
         };
 
         this.writeLease(next);
         return true;
+    }
+
+    forceAcquire(): void {
+        this.tryAcquire(true);
     }
 
     private readLease(): ControllerLeasePayload | null {
@@ -118,8 +122,16 @@ export class ControllerLease {
         try {
             const tempPath = `${this.leasePath}.tmp.${process.pid}`;
             fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2), 'utf-8');
-            fs.renameSync(tempPath, this.leasePath);
-        } catch {
+            try {
+                fs.renameSync(tempPath, this.leasePath);
+            } catch (err: any) {
+                // On Windows, renameSync often throws EPERM if the file is locked by AV/indexing.
+                // Fall back to direct write.
+                fs.writeFileSync(this.leasePath, JSON.stringify(payload, null, 2), 'utf-8');
+                try { fs.unlinkSync(tempPath); } catch { }
+            }
+        } catch (e: any) {
+            console.error('[ControllerLease] Failed to write lease file:', e);
             // Best-effort write; non-critical.
         }
     }

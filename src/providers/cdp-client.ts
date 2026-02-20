@@ -10,8 +10,11 @@ export class CDPClient {
     private isPro = true;
 
     constructor() {
-        const port = config.get<number>('cdpPort') || 9000;
-        this.handler = new CDPHandler(port, port);
+        const port = config.get<number>('cdpPort');
+        if (!port) {
+            console.warn('[CDPClient] cdpPort not configured in settings.');
+        }
+        this.handler = new CDPHandler(port ?? 9333, port ?? 9333);
     }
 
     getHandler(): CDPHandler {

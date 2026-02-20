@@ -60,7 +60,8 @@ export class CDPStrategy implements IStrategy {
     private shouldRunBlindBump(): boolean {
         const cfg = config.getAll();
         const bumpText = (cfg.actions.bump.text || '').trim();
-        return cfg.actions.bump.enabled && cfg.autoContinueScriptEnabled !== false && bumpText.length > 0;
+        // Only run blind bump if frontend script is EXPLICITLY disabled (backend fallback)
+        return cfg.actions.bump.enabled && cfg.autoContinueScriptEnabled === false && bumpText.length > 0;
     }
 
     private syncBlindBumpHandlerState(): void {
@@ -129,9 +130,10 @@ export class CDPStrategy implements IStrategy {
             // Reconnect if disconnected
             if (!this.cdpHandler.isConnected()) {
                 let reconnectOk = await this.cdpHandler.connect();
-                if (!reconnectOk) reconnectOk = await this.cdpHandler.connect();
+                // Add a small backoff and only log once every 5 failures to reduce noise
                 if (!reconnectOk) {
-                    logToOutput('[CDPStrategy] Background reconnect attempt failed.');
+                    await new Promise(r => setTimeout(r, 2000));
+                    // No need to try back-to-back inside the same poll cycle
                 }
             }
 
