@@ -596,6 +596,21 @@ export class CDPHandler extends EventEmitter {
                 const detail = (detailRaw || '').trim();
                 logToOutput(`[AutoAction:${group}] ${detail || 'triggered'}`);
                 SoundEffects.playActionGroup(group);
+
+                if (group === 'submit' && detail === 'keys') {
+                    // Issue actual CDP Enter keys since DOM dispatchEvent gets ignored by Monaco
+                    await this.sendCommand(pageId, 'Input.dispatchKeyEvent', {
+                        type: 'keyDown', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
+                        windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+                        text: '\r', unmodifiedText: '\r'
+                    }, undefined, sessionId);
+                    await new Promise(r => setTimeout(r, 60));
+                    await this.sendCommand(pageId, 'Input.dispatchKeyEvent', {
+                        type: 'keyUp', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
+                        windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+                        text: '\r', unmodifiedText: '\r'
+                    }, undefined, sessionId);
+                }
             } else if (text.startsWith('__ANTIGRAVITY_LOG__:')) {
                 const raw = text.substring('__ANTIGRAVITY_LOG__:'.length);
                 logToOutput(`[AutoContinue] ${raw}`);

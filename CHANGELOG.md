@@ -13,6 +13,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 - **Test Coverage**: Added `tests/panel-click-guard.test.js` and wired it into `npm run test:quality-gates` to prevent panel/chrome click-loop regressions.
 - **Audit Policy**: Added explicit effective high/critical evaluation with a narrow dev-tooling allowlist in `scripts/audit-policy.js` so unresolved upstream advisories in packaging/lint toolchains do not block secure release, while non-allowlisted high/critical findings still fail the gate.
 
+## [5.2.3] - 2026-02-19
+- **Fix: Multi-Window Target Resolution**: `CDPStrategy` no longer aggressively filters CDP connections by `vscode.workspace.name`. The active Leader window will now successfully orchestrate chat actions (Expand, Run, Accept All) across all Follower instances connected to the same VS Code CDP debugging port.
+- **Fix: CDP Enter Key Dispatch**: Repaired a bridge logic gap where `submitWithKeys` fired an audio feedback event but failed to dispatch the physical Enter keystrokes over CDP. The Leader window will now correctly submit generated bump/continue messages.
+- **Feature Check**: `multiTabEnabled` configuration is now defaulted to `true` to empower single-process multi-window orchestration.
+
 ## [5.2.2] - 2026-02-19
 - **Reliability Fix: CDP Port Discovery Fallbacks**: `scanForInstances()` now prioritizes the configured `antigravity.cdpPort` range and also checks well-known CDP fallbacks (`9222`, `9000`) when needed.
 - **Resilience**: Prevents false “CDP unavailable” states when host/editor runtime exposes CDP on a common port different from current user config.

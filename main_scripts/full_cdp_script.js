@@ -577,9 +577,10 @@
         if (!beforeText) return false;
 
         const combos = [
-            { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: false, shiftKey: false },
-            { key: 'Enter', code: 'Enter', ctrlKey: true, altKey: false, shiftKey: false },
-            { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: true, shiftKey: false }
+            { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false },
+            { key: 'Enter', code: 'Enter', ctrlKey: true, altKey: false, shiftKey: false, metaKey: false },
+            { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: true, shiftKey: false, metaKey: false },
+            { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: false, shiftKey: false, metaKey: true }
         ];
 
         for (const combo of combos) {

@@ -103,12 +103,10 @@ export class CDPStrategy implements IStrategy {
         this.isActive = true;
         this.updateStatusBar();
 
-        // Connect to CDP
-        const workspaceName = vscode.workspace.name;
-        // console.log(`[CDPStrategy] Connecting with filter: "${workspaceName}"`);
-        let connected = await this.cdpHandler.connect(workspaceName);
+        // Connect to ALL windows (do not filter by workspace) so the Leader can orchestrate Followers
+        let connected = await this.cdpHandler.connect();
         if (!connected) {
-            // Fallback for VS Code title mismatches where workspace name is absent from target title.
+            // Fallback
             connected = await this.cdpHandler.connect();
         }
         if (!connected) {
@@ -130,7 +128,7 @@ export class CDPStrategy implements IStrategy {
 
             // Reconnect if disconnected
             if (!this.cdpHandler.isConnected()) {
-                let reconnectOk = await this.cdpHandler.connect(workspaceName);
+                let reconnectOk = await this.cdpHandler.connect();
                 if (!reconnectOk) reconnectOk = await this.cdpHandler.connect();
                 if (!reconnectOk) {
                     logToOutput('[CDPStrategy] Background reconnect attempt failed.');

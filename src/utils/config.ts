@@ -211,7 +211,7 @@ export class ConfigManager {
             autoBumpCooldownSec: config.get('autoBumpCooldownSec', config.get('autoApproveDelay', 30)),
             bumpMessage: legacyBumpMessage,
 
-            multiTabEnabled: config.get('multiTabEnabled', false),
+            multiTabEnabled: config.get('multiTabEnabled', true),
             autonomousEnabled: config.get('autonomousEnabled', false),
             mcpEnabled: config.get('mcpEnabled', false),
             voiceControlEnabled: config.get('voiceControlEnabled', false),
