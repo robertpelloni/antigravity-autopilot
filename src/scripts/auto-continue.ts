@@ -227,10 +227,11 @@ export const AUTO_CONTINUE_SCRIPT = `
       for (const el of els) {
           if (isUnsafeContext(el) || hasUnsafeLabel(el)) continue;
           if (el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0) {
-             if (el.hasAttribute('disabled') || el.classList.contains('disabled')) continue;
+             const targetToClick = el.closest('button, a') || el;
+             if (targetToClick.hasAttribute('disabled') || targetToClick.classList.contains('disabled')) continue;
              
-             highlight(el);
-             el.click();
+             highlight(targetToClick);
+             targetToClick.click();
              log('Clicked ' + name);
              emitAction(group || 'click', name);
              return true; 
@@ -256,7 +257,21 @@ export const AUTO_CONTINUE_SCRIPT = `
       const input = document.querySelector('[id*="chat-input"], [aria-label*="Chat Input"], .interactive-input-part textarea, .chat-input-widget textarea');
       if (!input) return false;
 
-      if (input.value && input.value.trim().length > 0) {
+      // Check for content in regular textareas
+      let hasText = !!(input.value && input.value.trim().length > 0);
+      
+      // Check for content in Monaco/ProseMirror editors
+      const editorWrapper = input.closest('.monaco-editor, .prosemirror, .chat-input-widget');
+      if (!hasText && editorWrapper) {
+          const contentEl = editorWrapper.querySelector('.view-lines, [contenteditable], .monaco-editor-text');
+          if (contentEl && contentEl.textContent.trim().length > 0) {
+              // Some setups use placeholder text inside elements, but usually Monaco view-lines is empty when empty.
+              // To be safe we'll assume text means it's populated.
+              hasText = true;
+          }
+      }
+
+      if (hasText) {
            // Skip typing if something is there
       } else {
           input.focus();
@@ -296,7 +311,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       const submitDelay = Math.max(0, bump.submitDelayMs || 0);
       setTimeout(() => {
-          const sendSelectors = '[title="Send"], [aria-label="Send"], [title*="Submit"], [aria-label*="Submit"], .codicon-send';
+          const sendSelectors = '[title*="Send"], [aria-label*="Send"], [title*="Submit"], [aria-label*="Submit"], button[type="submit"], .codicon-send';
           let submitted = false;
 
           if (hasMethod(bump.submitMethods, 'click-send')) {
@@ -305,6 +320,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
           if (!submitted && hasMethod(bump.submitMethods, 'enter-key')) {
               input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+              input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
               emitAction('submit', 'keys');
               submitted = true;
           }
@@ -312,6 +328,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           if (!submitted) {
               if (!tryClick(sendSelectors, 'Submit (Auto-Reply fallback)', 'submit')) {
                   input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+                  input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
                   emitAction('submit', 'keys');
               }
           }
@@ -554,7 +571,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (!actionTaken && controlGatePass('submit', cfg, state, now, lastActionByControl.submit)) {
           const submitControl = getControlConfig(cfg, 'submit');
           const submitDelay = Math.max(0, submitControl.delayMs || 0);
-          const sendSelectors = '[title="Send"], [aria-label="Send"], [title*="Submit"], [aria-label*="Submit"], .codicon-send';
+          const sendSelectors = '[title*="Send"], [aria-label*="Send"], [title*="Submit"], [aria-label*="Submit"], button[type="submit"], .codicon-send';
 
           if (hasMethod(submitControl.actionMethods, 'click-send') && tryClick(sendSelectors, 'Submit', 'submit')) {
               actionTaken = true;
@@ -566,6 +583,7 @@ export const AUTO_CONTINUE_SCRIPT = `
               if (input) {
                   setTimeout(() => {
                       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+                      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
                   }, submitDelay);
                   actionTaken = true;
                   lastActionByControl.submit = now;
