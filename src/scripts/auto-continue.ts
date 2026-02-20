@@ -264,10 +264,13 @@ export const AUTO_CONTINUE_SCRIPT = `
       const editorWrapper = input.closest('.monaco-editor, .prosemirror, .chat-input-widget');
       if (!hasText && editorWrapper) {
           const contentEl = editorWrapper.querySelector('.view-lines, [contenteditable], .monaco-editor-text');
-          if (contentEl && contentEl.textContent.trim().length > 0) {
-              // Some setups use placeholder text inside elements, but usually Monaco view-lines is empty when empty.
-              // To be safe we'll assume text means it's populated.
-              hasText = true;
+          if (contentEl) {
+              // Strip zero-width spaces that innerText/textContent often return for empty editors
+              const textContent = contentEl.textContent.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+              if (textContent.length > 0) {
+                  // Some setups use placeholder text inside elements, but usually Monaco view-lines is empty when empty.
+                  hasText = true;
+              }
           }
       }
 
