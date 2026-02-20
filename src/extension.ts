@@ -547,7 +547,7 @@ export function activate(context: vscode.ExtensionContext) {
                 nativeSettingsError = String(error?.message || error || 'unknown error');
             }
 
-            const configSnapshot = config.getAll() as Record<string, unknown>;
+            const configSnapshot = config.getAll() as unknown as Record<string, unknown>;
             const topLevelConfigKeys = Object.keys(configSnapshot || {});
 
             const report = {
@@ -2130,14 +2130,19 @@ export function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push({ dispose: () => clearInterval(runtimeStateTimer) });
 
         // Initialize based on saved config
-        // 1. Strategy (Core Driver)
         if (isUnifiedAutoAcceptEnabled()) {
-            if (ensureControllerLeader('activation bootstrap')) {
-                strategyManager.start().catch(e => log.error(`Failed to start strategy: ${e.message}`));
-
+            // CDP Strategy should run in ALL windows to ensure UI actions (Run, Expand, Accept) 
+            // always work even if the current window is a "Passive Follower".
+            // The browser script (auto-continue.ts) handles its own action safety.
+            try {
+                strategyManager.start().catch(e => log.error(`Failed to start decentralized strategy: ${e.message}`));
                 refreshRuntimeState().catch(() => { });
+            } catch (e) {
+                log.error(`Critical stall in strategy bootstrap: ${e}`);
+            }
 
-                // 2. Autonomous Loop
+            if (ensureControllerLeader('activation bootstrap')) {
+                // 2. Autonomous Loop (The "Brain" - stays gated to one leader)
                 if (config.get('autonomousEnabled')) {
                     autonomousLoop.start().catch(e => log.error(`Failed to start autonomous loop: ${e.message}`));
                 }
@@ -2150,13 +2155,13 @@ export function activate(context: vscode.ExtensionContext) {
                     voiceControl.start().catch(e => log.error(`Voice start failed: ${e.message}`));
                 }
 
-                log.info('Antigravity Autopilot activated as ACTIVE controller.');
+                log.info('Antigravity Autopilot: Brain ACTIVE as controller leader.');
             } else {
-                strategyManager.stop().catch(() => { });
+                // Follower mode: stop high-level services but KEEP decentralized automation (StrategyManager) running
                 autonomousLoop.stop('Follower mode bootstrap');
                 mcpServer.stop().catch(() => { });
                 voiceControl.stop().catch(() => { });
-                log.info('Antigravity Autopilot activated as PASSIVE follower in this window.');
+                log.info('Antigravity Autopilot: Brain PASSIVE (Leader in another workspace). UI automation ACTIVE.');
             }
         }
     } catch (e: any) {

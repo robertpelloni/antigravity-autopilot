@@ -660,11 +660,17 @@ export const AUTO_CONTINUE_SCRIPT = `
               }
 
               if (shouldBump && (now - lastAction > computedDelay)) {
-                  if (typeAndSubmit(bumpText)) {
-                       actionTaken = true;
-                       lastActionByControl.bump = now;
-                       log('Smart Resume: Bumped with "' + bumpText + '" (Delay: ' + computedDelay + 'ms)');
-                       emitAction('bump', 'smart resume bump text=' + bumpText);
+                  // Only bump if the tab is visible to avoid ghost typing in every open tab
+                  if (document.visibilityState === 'visible') {
+                      if (typeAndSubmit(bumpText)) {
+                           actionTaken = true;
+                           lastActionByControl.bump = now;
+                           log('Smart Resume: Bumped with "' + bumpText + '" (Delay: ' + computedDelay + 'ms)');
+                           emitAction('bump', 'smart resume bump text=' + bumpText);
+                      }
+                  } else {
+                      // Skip bump, but reset timer so we don't spam once it becomes visible
+                      lastAction = now;
                   }
               }
           }
