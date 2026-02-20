@@ -254,32 +254,44 @@ export const AUTO_CONTINUE_SCRIPT = `
   function typeAndSubmit(text) {
       const cfg = getConfig();
       const bump = getBumpConfig(cfg);
-      const inputs = Array.from(document.querySelectorAll('[id*="chat-input"], [aria-label*="Chat Input"], .interactive-input-part textarea, .chat-input-widget textarea'));
-      let input = inputs.find(el => el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0);
-      if (!input && inputs.length > 0) {
-          input = inputs[0];
+      const rawInputs = Array.from(document.querySelectorAll('[id*="chat-input" i], [aria-label*="Chat Input" i], .interactive-input-part, .chat-input-widget'));
+      let input = null;
+      for (const el of rawInputs) {
+          if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) continue;
+          if (el.tagName === 'TEXTAREA' || el.isContentEditable || el.hasAttribute('contenteditable')) {
+              input = el;
+              break;
+          }
+          const inner = el.querySelector('textarea, [contenteditable]');
+          if (inner && (inner.offsetParent || inner.clientWidth > 0 || inner.clientHeight > 0)) {
+              input = inner;
+              break;
+          }
       }
       if (!input) return false;
 
       // Check for content in regular textareas
       let hasText = false;
-      if (input.value !== undefined) {
-          hasText = !!(input.value && input.value.trim().length > 0);
+      if (input.value !== undefined && input.value !== null) {
+          hasText = input.value.trim().length > 0;
       }
       if (!hasText && (input.isContentEditable || input.hasAttribute('contenteditable'))) {
-          hasText = !!(input.textContent && input.textContent.trim().length > 0);
+          const textContent = (input.textContent || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+          hasText = textContent.length > 0;
       }
       
       // Check for content in Monaco/ProseMirror editors
       const editorWrapper = input.closest('.monaco-editor, .prosemirror, .chat-input-widget');
-      if (!hasText && editorWrapper) {
+      if (editorWrapper) {
           const contentEl = editorWrapper.querySelector('.view-lines, [contenteditable], .monaco-editor-text');
           if (contentEl) {
               // Strip zero-width spaces that innerText/textContent often return for empty editors
-              const textContent = contentEl.textContent.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+              const textContent = (contentEl.textContent || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
               if (textContent.length > 0) {
-                  // Some setups use placeholder text inside elements, but usually Monaco view-lines is empty when empty.
                   hasText = true;
+              } else {
+                  // Explicitly override to false if Monaco says it's empty
+                  hasText = false;
               }
           }
       }
