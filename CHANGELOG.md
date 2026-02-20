@@ -5,6 +5,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 
 ---
 
+## [5.1.3] - 2026-02-19
+- **Antigravity Host Compatibility**: Added explicit command activation events for `antigravity.openSettings` and `antigravity.showStatusMenu` so command invocation can activate the extension even when startup activation timing differs from VS Code.
+- **Dashboard Availability Reliability**: Ensures dashboard/open-settings flows remain reachable in Antigravity-hosted environments where `onStartupFinished` alone may not reliably activate command handlers.
+
 ## [5.1.2] - 2026-02-19
 - **Dashboard Control Regression Fix**: Restored top action controls in VS Code dashboard (`Panic Stop`, `Toggle`, `Max Out`) with direct command wiring.
 - **Command Availability Hardening**: Registered `antigravity.openSettings` early in activation so dashboard access remains available even when later subsystem initialization fails.
