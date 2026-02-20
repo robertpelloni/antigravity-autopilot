@@ -16,7 +16,9 @@
         "Other"
     ],
     "activationEvents": [
-        "onStartupFinished"
+        "onStartupFinished",
+        "onCommand:antigravity.openSettings",
+        "onCommand:antigravity.showStatusMenu"
     ],
     "main": "./dist/extension.js",
     "contributes": {
