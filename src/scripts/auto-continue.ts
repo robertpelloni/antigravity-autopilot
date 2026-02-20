@@ -241,14 +241,17 @@ export const AUTO_CONTINUE_SCRIPT = `
   }
 
   function dispatchInputEvents(input, text) {
+      input.focus();
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
       if (nativeInputValueSetter) {
           nativeInputValueSetter.call(input, text);
       } else {
           input.value = text;
       }
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true }));
+      
+      // Some React apps need this exact sequence to register
+      input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
   }
 
   function typeAndSubmit(text) {
@@ -333,31 +336,62 @@ export const AUTO_CONTINUE_SCRIPT = `
           emitAction('type', 'typed bump text');
       }
 
-      const submitDelay = Math.max(0, bump.submitDelayMs || 0);
+      const submitDelay = Math.max(100, bump.submitDelayMs || 100); // Enforce at least 100ms for React state update
       setTimeout(() => {
           const sendSelectors = '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send';
           let submitted = false;
+
+          // React explicit trick: find the form and requestSubmit
+          const form = input.closest('form');
 
           if (hasMethod(bump.submitMethods, 'click-send')) {
               submitted = tryClick(sendSelectors, 'Submit (Auto-Reply)', 'submit');
           }
 
           if (!submitted && hasMethod(bump.submitMethods, 'enter-key')) {
-              input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-              input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-              input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-              emitAction('submit', 'keys');
-              submitted = true;
+              // Try form submission first for highest reliability
+              if (form && typeof form.requestSubmit === 'function') {
+                   try {
+                       form.requestSubmit();
+                       submitted = true;
+                       emitAction('submit', 'form.requestSubmit');
+                   } catch(e) {}
+              }
+              
+              if (!submitted) {
+                  // Fallback to explicit Enter key events
+                  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+                  input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+                  input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+                  emitAction('submit', 'keys');
+                  submitted = true;
+              }
           }
 
           if (!submitted) {
-              if (!tryClick(sendSelectors, 'Submit (Auto-Reply fallback)', 'submit')) {
+              if (form && typeof form.requestSubmit === 'function') {
+                   try { form.requestSubmit(); submitted = true; emitAction('submit', 'form.requestSubmit-fallback'); } catch(e) {}
+              }
+              if (!submitted && !tryClick(sendSelectors, 'Submit (Auto-Reply fallback)', 'submit')) {
                   input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
                   input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
                   input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
                   emitAction('submit', 'keys-fallback');
               }
           }
+          
+          // CRITICAL: After submitting, forcefully clear our own tracking signature immediately
+          // so that we don't accidentally re-trigger if the UI is slow to clear the box.
+          // Wait a tiny bit for the submit event to process first.
+          setTimeout(() => {
+              if (input.value === text) {
+                   input.value = '';
+                   dispatchInputEvents(input, '');
+              } else if (input.isContentEditable) {
+                   if (input.textContent === text) input.textContent = '';
+              }
+          }, 200);
+
       }, submitDelay);
       return true;
   }
