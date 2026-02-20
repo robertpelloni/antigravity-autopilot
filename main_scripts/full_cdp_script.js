@@ -472,12 +472,19 @@
     function setInputValue(el, value) {
         if (!el) return false;
         try {
+            el.focus();
             if (el.isContentEditable) {
-                el.focus();
                 el.textContent = value;
             } else if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
-                el.focus();
-                el.value = value;
+                let nativeSetter = el.tagName === 'TEXTAREA'
+                    ? Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set
+                    : Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+
+                if (nativeSetter) {
+                    nativeSetter.call(el, value);
+                } else {
+                    el.value = value;
+                }
             } else {
                 return false;
             }
@@ -503,8 +510,10 @@
         for (const combo of combos) {
             try {
                 const down = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...combo });
+                const press = new KeyboardEvent('keypress', { bubbles: true, cancelable: true, ...combo });
                 const up = new KeyboardEvent('keyup', { bubbles: true, cancelable: true, ...combo });
                 target.dispatchEvent(down);
+                target.dispatchEvent(press);
                 target.dispatchEvent(up);
                 await workerDelay(40);
             } catch (e) { }
