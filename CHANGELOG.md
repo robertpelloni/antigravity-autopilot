@@ -3,7 +3,14 @@
 All notable changes to **Antigravity Autopilot (Unified)** are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 
----
+## [5.2.6] - 2026-02-19
+- **Bug Fix**: Fixed an issue where follower window Autopilot instances were not receiving the correct `bumpMessage` configuration.
+- **Reliability Fix**: Expanded the `isAcceptButton` text heuristics in `AUTO_CONTINUE_SCRIPT` to accurately detect and execute "1 Step Requires Input", "Expand <", and "Run" buttons that lack native title tooltips.
+- **Bug Fix**: Replaced incomplete JS KeyboardEvent Dispatch for Enter key (which failed to clear Chat Input focus) with actual CDP Key Events via Bridge execution.
+
+## [5.2.5] - 2026-02-19
+- **Bug Fix**: Replaced `requestAnimationFrame` with `setTimeout` inside element tracking loops (`waitForDisappear`, etc.). Chromium pauses `rAF` rendering pipelines entirely when OS windows are minimized or fully backgrounded, which was causing the Follower automation loops to hang indefinitely. Followers will now reliably discover and click elements regardless of window focus state.
+- **Bug Fix**: Removed unintended `sendCommandToExtension` prefixing inside keyboard submit fallback which prevented `submit|keys` events from reaching the CDP layer.
 
 ## [5.2.4] - 2026-02-19
 - **Release/Build Optimization**: Version bump and sync build for latest multi-window target resolution changes.

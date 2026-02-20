@@ -569,7 +569,7 @@
     }
 
     async function submitWithKeys(targetOverride) {
-        sendCommandToExtension('__ANTIGRAVITY_ACTION__:submit|keys');
+        sendCommandToBridge('__ANTIGRAVITY_ACTION__:submit|keys');
         const target = targetOverride || document.activeElement;
         if (!target) return false;
 
@@ -1037,9 +1037,11 @@
         waitingDiv.className = 'aab-waiting';
         waitingDiv.style.cssText = 'color:#888; font-size:12px;';
         waitingDiv.textContent = 'Scanning for conversations...';
-        container.appendChild(waitingDiv);
-
-        requestAnimationFrame(() => overlay.classList.add('visible'));
+        container.appendChild(waitingDiv); // Re-added this line as it was missing from the snippet
+        // The original `overlay` variable is already defined.
+        // The user's snippet had `const overlay = document.getElementById('antigravity-overlay');` which is incorrect.
+        // Using the already defined `overlay` variable.
+        setTimeout(() => overlay.classList.add('visible'), 50);
     }
 
     function updateOverlay() {
@@ -1390,7 +1392,7 @@
                 } else if (Date.now() - startTime >= timeout) {
                     resolve(false);
                 } else {
-                    requestAnimationFrame(check);
+                    setTimeout(check, 50); // ONLY use setTimeout for background tracking!
                 }
             };
 

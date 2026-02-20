@@ -304,14 +304,14 @@ export const AUTO_CONTINUE_SCRIPT = `
 
           if (!submitted && hasMethod(bump.submitMethods, 'enter-key')) {
               input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-              emitAction('submit', 'enter-key submit');
+              emitAction('submit', 'keys');
               submitted = true;
           }
 
           if (!submitted) {
               if (!tryClick(sendSelectors, 'Submit (Auto-Reply fallback)', 'submit')) {
                   input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-                  emitAction('submit', 'fallback enter-key submit');
+                  emitAction('submit', 'keys');
               }
           }
       }, submitDelay);
@@ -416,7 +416,27 @@ export const AUTO_CONTINUE_SCRIPT = `
               '.codicon-run' 
           ].join(',');
 
-          if (hasMethod(runControl.actionMethods, 'dom-click') && tryClick(runSelectors, 'Run', 'run')) {
+          if (hasMethod(runControl.actionMethods, 'dom-click')) {
+              const buttons = Array.from(document.querySelectorAll('button, [role="button"], .clickable'));
+              const textMatch = buttons.find(el => {
+                  if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
+                  if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
+                  if (!(el.offsetParent || el.clientWidth > 0)) return false;
+                  const text = (el.textContent || '').trim().toLowerCase();
+                  const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
+                  return text === 'run' || label === 'run' || label.includes('run (');
+              });
+              if (textMatch) {
+                  highlight(textMatch);
+                  textMatch.click();
+                  actionTaken = true;
+                  lastActionByControl.run = now;
+                  log('Clicked Run (Text Match)');
+                  emitAction('run', 'text-match run');
+              }
+          }
+
+          if (!actionTaken && hasMethod(runControl.actionMethods, 'dom-click') && tryClick(runSelectors, 'Run', 'run')) {
               actionTaken = true;
               lastActionByControl.run = now;
           }
@@ -472,10 +492,34 @@ export const AUTO_CONTINUE_SCRIPT = `
               '[title*="Expand"]',
               '[aria-label*="Expand"]',
               '.monaco-tl-twistie.collapsed',
-              '.codicon-chevron-right'
+              '.codicon-chevron-right',
+              '.codicon-bell'
           ].join(',');
 
-          if (hasMethod(expandControl.actionMethods, 'dom-click') && tryClick(expandSelectors, 'Expand', 'expand')) {
+          if (hasMethod(expandControl.actionMethods, 'dom-click')) {
+              const buttons = Array.from(document.querySelectorAll('button, [role="button"], .clickable, .codicon-bell'));
+              const textMatch = buttons.find(el => {
+                  if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
+                  if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
+                  if (!(el.offsetParent || el.clientWidth > 0)) return false;
+                  const text = (el.textContent || '').trim().toLowerCase();
+                  const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
+                  if (text.includes('requires input') || (text.includes('step') && text.includes('input')) || text.includes('expand') || label.includes('expand') || el.classList.contains('codicon-bell')) {
+                      return !text.includes('explorer') && !label.includes('explorer');
+                  }
+                  return false;
+              });
+              if (textMatch) {
+                  highlight(textMatch);
+                  textMatch.click();
+                  actionTaken = true;
+                  lastActionByControl.expand = now;
+                  log('Clicked Expand (Text Match)');
+                  emitAction('expand', 'text-match expand');
+              }
+          }
+
+          if (!actionTaken && hasMethod(expandControl.actionMethods, 'dom-click') && tryClick(expandSelectors, 'Expand', 'expand')) {
               actionTaken = true;
               lastActionByControl.expand = now;
           }

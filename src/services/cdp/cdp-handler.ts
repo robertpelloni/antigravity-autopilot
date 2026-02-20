@@ -146,7 +146,7 @@ export class CDPHandler extends EventEmitter {
                             autoScroll: config.get<boolean>('automation.actions.autoScroll') ?? true,
                             // Auto-Reply
                             autoReply: config.get<boolean>('automation.actions.autoReply') ?? true,
-                            autoReplyText: config.get<string>('automation.actions.autoReplyText') ?? config.get<string>('actions.bump.text') ?? 'continue',
+                            autoReplyText: config.get<string>('automation.actions.autoReplyText') ?? config.get<string>('actions.bump.text') ?? config.get<string>('bumpMessage') ?? 'continue',
                             controls: {
                                 run: {
                                     detectMethods: config.get<string[]>('automation.controls.run.detectMethods') ?? ['enabled-flag', 'not-generating', 'action-cooldown'],
