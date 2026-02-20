@@ -33,7 +33,7 @@ let statusBar: StatusBarManager;
 
 function safeRegisterCommand(commandId: string, callback: (...args: any[]) => any): vscode.Disposable {
     try {
-        return safeRegisterCommand(commandId, callback);
+        return vscode.commands.registerCommand(commandId, callback);
     } catch (error: any) {
         log.warn(`[SafeRegister] Ignored duplicate command: ${commandId}`);
         return { dispose: () => { } };

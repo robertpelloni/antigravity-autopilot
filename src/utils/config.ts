@@ -284,7 +284,7 @@ export class ConfigManager {
             maxConsecutiveTestLoops: config.get('maxConsecutiveTestLoops', 3),
             acceptPatterns: config.get('acceptPatterns', []),
             rejectPatterns: config.get('rejectPatterns', []),
-            interactionTextMethods: config.get('interactionTextMethods', ['cdp-keys', 'cdp-insert-text', 'clipboard-paste', 'dom-inject', 'bridge-type']),
+            interactionTextMethods: config.get('interactionTextMethods', ['cdp-keys', 'cdp-insert-text', 'dom-inject']),
             interactionClickMethods: config.get('interactionClickMethods', ['dom-scan-click', 'dom-click', 'bridge-click', 'cdp-mouse', 'native-accept', 'vscode-cmd', 'script-force', 'process-peek']),
             interactionSubmitMethods: config.get('interactionSubmitMethods', ['vscode-submit', 'cdp-enter', 'script-submit', 'ctrl-enter', 'alt-enter']),
             interactionTimings: config.get('interactionTimings', {

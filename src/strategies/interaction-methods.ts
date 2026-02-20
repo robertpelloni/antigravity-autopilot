@@ -156,7 +156,7 @@ export class ClipboardPaste implements IInteractionMethod {
     name = 'Clipboard Paste';
     description = 'Copies text to clipboard and executes paste command';
     category = 'text' as const;
-    enabled = true;
+    enabled = false; // Disabled by default to prevent hijacking active editor
     priority = 2;
     timingMs = 100;
     requiresCDP = false;
