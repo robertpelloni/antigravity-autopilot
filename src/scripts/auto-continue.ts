@@ -280,18 +280,17 @@ export const AUTO_CONTINUE_SCRIPT = `
           hasText = textContent.length > 0;
       }
       
-      // Check for content in Monaco/ProseMirror editors
-      const editorWrapper = input.closest('.monaco-editor, .prosemirror, .chat-input-widget');
-      if (editorWrapper) {
-          const contentEl = editorWrapper.querySelector('.view-lines, [contenteditable], .monaco-editor-text');
-          if (contentEl) {
-              // Strip zero-width spaces that innerText/textContent often return for empty editors
-              const textContent = (contentEl.textContent || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-              if (textContent.length > 0) {
-                  hasText = true;
-              } else {
-                  // Explicitly override to false if Monaco says it's empty
-                  hasText = false;
+      // Check for content in Monaco/ProseMirror editors ONLY if hasText is currently false
+      if (!hasText) {
+          const editorWrapper = input.closest('.monaco-editor, .prosemirror, .chat-input-widget');
+          if (editorWrapper) {
+              const contentEl = editorWrapper.querySelector('.view-lines, [contenteditable], .monaco-editor-text');
+              if (contentEl) {
+                  // Strip zero-width spaces that innerText/textContent often return for empty editors
+                  const textContent = (contentEl.textContent || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+                  if (textContent.length > 0) {
+                      hasText = true;
+                  }
               }
           }
       }
