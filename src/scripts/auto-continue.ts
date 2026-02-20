@@ -254,11 +254,21 @@ export const AUTO_CONTINUE_SCRIPT = `
   function typeAndSubmit(text) {
       const cfg = getConfig();
       const bump = getBumpConfig(cfg);
-      const input = document.querySelector('[id*="chat-input"], [aria-label*="Chat Input"], .interactive-input-part textarea, .chat-input-widget textarea');
+      const inputs = Array.from(document.querySelectorAll('[id*="chat-input"], [aria-label*="Chat Input"], .interactive-input-part textarea, .chat-input-widget textarea'));
+      let input = inputs.find(el => el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0);
+      if (!input && inputs.length > 0) {
+          input = inputs[0];
+      }
       if (!input) return false;
 
       // Check for content in regular textareas
-      let hasText = !!(input.value && input.value.trim().length > 0);
+      let hasText = false;
+      if (input.value !== undefined) {
+          hasText = !!(input.value && input.value.trim().length > 0);
+      }
+      if (!hasText && (input.isContentEditable || input.hasAttribute('contenteditable'))) {
+          hasText = !!(input.textContent && input.textContent.trim().length > 0);
+      }
       
       // Check for content in Monaco/ProseMirror editors
       const editorWrapper = input.closest('.monaco-editor, .prosemirror, .chat-input-widget');
@@ -298,7 +308,7 @@ export const AUTO_CONTINUE_SCRIPT = `
               } catch(e) {}
           }
 
-          if (hasMethod(bump.typeMethods, 'dispatch-events')) {
+          if (!typed && hasMethod(bump.typeMethods, 'dispatch-events')) {
               dispatchInputEvents(input, input.value || text);
               typed = true;
           }
@@ -314,7 +324,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       const submitDelay = Math.max(0, bump.submitDelayMs || 0);
       setTimeout(() => {
-          const sendSelectors = '[title*="Send"], [aria-label*="Send"], [title*="Submit"], [aria-label*="Submit"], button[type="submit"], .codicon-send';
+          const sendSelectors = '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send';
           let submitted = false;
 
           if (hasMethod(bump.submitMethods, 'click-send')) {
@@ -322,17 +332,19 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
 
           if (!submitted && hasMethod(bump.submitMethods, 'enter-key')) {
-              input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-              input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+              input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+              input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+              input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
               emitAction('submit', 'keys');
               submitted = true;
           }
 
           if (!submitted) {
               if (!tryClick(sendSelectors, 'Submit (Auto-Reply fallback)', 'submit')) {
-                  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-                  input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-                  emitAction('submit', 'keys');
+                  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+                  input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+                  input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+                  emitAction('submit', 'keys-fallback');
               }
           }
       }, submitDelay);
