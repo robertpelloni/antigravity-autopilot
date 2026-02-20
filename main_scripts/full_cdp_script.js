@@ -476,15 +476,7 @@
             if (el.isContentEditable) {
                 el.textContent = value;
             } else if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
-                let nativeSetter = el.tagName === 'TEXTAREA'
-                    ? Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set
-                    : Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-
-                if (nativeSetter) {
-                    nativeSetter.call(el, value);
-                } else {
-                    el.value = value;
-                }
+                el.value = value;
             } else {
                 return false;
             }

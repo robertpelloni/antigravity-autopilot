@@ -472,6 +472,15 @@ export class DashboardPanel {
             <!-- CDP & TIMING -->
             <div class="card">
                 <h2>CDP & Automation</h2>
+                <div class="setting" title="Play audible sound effects for automation events like clicks, typing, and submitting.">
+                    <label>Audio Feedback:</label>
+                    <input type="checkbox" ${settings.audioFeedbackEnabled ? 'checked' : ''} onchange="updateConfig('audioFeedbackEnabled', this.checked)">
+                    <button onclick="runCommand('antigravity.testAudio')" title="Play a test sound">Test Audio</button>
+                </div>
+                <div class="setting" title="Output verbose debug logs from the browser automation script to the extension host.">
+                    <label>Verbose Debug Logging:</label>
+                    <input type="checkbox" ${settings.debugLoggingEnabled ? 'checked' : ''} onchange="updateConfig('debugLoggingEnabled', this.checked)">
+                </div>
                 <div class="setting" title="Maximum time (in ms) to wait for a CDP command (like DOM query or click) to complete before throwing a timeout error.">
                     <label>CDP Timeout (ms):</label>
                     <input type="number" value="${settings.cdpTimeout}" onchange="updateConfig('cdpTimeout', parseInt(this.value))">
