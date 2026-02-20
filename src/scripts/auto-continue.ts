@@ -257,7 +257,8 @@ export const AUTO_CONTINUE_SCRIPT = `
   function typeAndSubmit(text) {
       const cfg = getConfig();
       const bump = getBumpConfig(cfg);
-      const rawInputs = Array.from(document.querySelectorAll('[id*="chat-input" i], [aria-label*="Chat Input" i], .interactive-input-part, .chat-input-widget'));
+      const rawInputs = Array.from(document.querySelectorAll('[id*="chat-input" i], [aria-label*="Chat Input" i], .interactive-input-part, .chat-input-widget, textarea[placeholder*="Ask" i], textarea[placeholder*="Message" i]'));
+      
       let input = null;
       for (const el of rawInputs) {
           if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) continue;
@@ -271,43 +272,40 @@ export const AUTO_CONTINUE_SCRIPT = `
               break;
           }
       }
+      
+      // Fallback: just find the first visible textarea on the screen if we couldn't find a widget
+      if (!input) {
+          const fallbackInputs = Array.from(document.querySelectorAll('textarea'));
+          input = fallbackInputs.find(el => el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0);
+      }
+      
       if (!input) return false;
 
-      // Check for content in regular textareas
+      // 1. Check if ANY text exists
       let hasText = false;
       if (input.value !== undefined && input.value !== null) {
           hasText = input.value.trim().length > 0;
       }
-      if (!hasText && (input.isContentEditable || input.hasAttribute('contenteditable'))) {
-          const textContent = (input.textContent || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-          hasText = textContent.length > 0;
-      }
-      
-      // Check for content in Monaco/ProseMirror editors ONLY if hasText is currently false
       if (!hasText) {
-          const editorWrapper = input.closest('.monaco-editor, .prosemirror, .chat-input-widget');
-          if (editorWrapper) {
-              const contentEl = editorWrapper.querySelector('.view-lines, [contenteditable], .monaco-editor-text');
-              if (contentEl) {
-                  // Strip zero-width spaces that innerText/textContent often return for empty editors
-                  const textContent = (contentEl.textContent || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-                  if (textContent.length > 0) {
-                      hasText = true;
-                  }
-              }
+          const tc = (input.textContent || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+          if (tc.length > 0) hasText = true;
+      }
+      if (!hasText) {
+          const container = input.closest('.monaco-editor, .prosemirror, .chat-input-widget, .interactive-input-part, form') || input.parentElement;
+          if (container) {
+              const tc = (container.textContent || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+              if (tc.length > 0) hasText = true;
           }
       }
 
       if (hasText) {
-           // Skip typing if something is there
+           log('Skipping typeAndSubmit because text already detected in input container.');
       } else {
           input.focus();
 
           let typed = false;
           if (hasMethod(bump.typeMethods, 'exec-command')) {
-              try {
-                  typed = !!document.execCommand('insertText', false, text);
-              } catch(e) {}
+              try { typed = !!document.execCommand('insertText', false, text); } catch(e) {}
           }
 
           if (!typed && hasMethod(bump.typeMethods, 'native-setter')) {
@@ -323,46 +321,45 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
 
           if (!typed && hasMethod(bump.typeMethods, 'dispatch-events')) {
-              dispatchInputEvents(input, input.value || text);
+              input.value = input.value || text;
               typed = true;
           }
 
           if (!typed) {
               input.value = text;
-              dispatchInputEvents(input, text);
           }
+
+          // Force sync React state
+          input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true, composed: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true, composed: true }));
 
           log('Auto-Replied (Typed): ' + text);
           emitAction('type', 'typed bump text');
       }
 
-      const submitDelay = Math.max(100, bump.submitDelayMs || 100); // Enforce at least 100ms for React state update
+      const submitDelay = Math.max(150, bump.submitDelayMs || 150);
       setTimeout(() => {
-          const sendSelectors = '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send';
+          const sendSelectors = '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send, .send-button, form button';
           let submitted = false;
-
-          // React explicit trick: find the form and requestSubmit
           const form = input.closest('form');
 
           if (hasMethod(bump.submitMethods, 'click-send')) {
               submitted = tryClick(sendSelectors, 'Submit (Auto-Reply)', 'submit');
           }
 
+          const dispatchEnters = () => {
+              const opts = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true };
+              input.dispatchEvent(new KeyboardEvent('keydown', opts));
+              input.dispatchEvent(new KeyboardEvent('keypress', opts));
+              input.dispatchEvent(new KeyboardEvent('keyup', opts));
+          };
+
           if (!submitted && hasMethod(bump.submitMethods, 'enter-key')) {
-              // Try form submission first for highest reliability
               if (form && typeof form.requestSubmit === 'function') {
-                   try {
-                       form.requestSubmit();
-                       submitted = true;
-                       emitAction('submit', 'form.requestSubmit');
-                   } catch(e) {}
+                   try { form.requestSubmit(); submitted = true; emitAction('submit', 'form.requestSubmit'); } catch(e) {}
               }
-              
               if (!submitted) {
-                  // Fallback to explicit Enter key events
-                  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-                  input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-                  input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+                  dispatchEnters();
                   emitAction('submit', 'keys');
                   submitted = true;
               }
@@ -373,24 +370,15 @@ export const AUTO_CONTINUE_SCRIPT = `
                    try { form.requestSubmit(); submitted = true; emitAction('submit', 'form.requestSubmit-fallback'); } catch(e) {}
               }
               if (!submitted && !tryClick(sendSelectors, 'Submit (Auto-Reply fallback)', 'submit')) {
-                  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-                  input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-                  input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+                  dispatchEnters();
                   emitAction('submit', 'keys-fallback');
               }
           }
           
-          // CRITICAL: After submitting, forcefully clear our own tracking signature immediately
-          // so that we don't accidentally re-trigger if the UI is slow to clear the box.
-          // Wait a tiny bit for the submit event to process first.
           setTimeout(() => {
-              if (input.value === text) {
-                   input.value = '';
-                   dispatchInputEvents(input, '');
-              } else if (input.isContentEditable) {
-                   if (input.textContent === text) input.textContent = '';
-              }
-          }, 200);
+              if (input.value === text) { input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true })); } 
+              else if (input.isContentEditable && input.textContent === text) { input.textContent = ''; }
+          }, 300);
 
       }, submitDelay);
       return true;

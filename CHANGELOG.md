@@ -3,12 +3,16 @@
 All notable changes to **Antigravity Autopilot (Unified)** are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.14] - 2026-02-20
+- **Fixed:** Bulletproofed the "Proceed" check logic by recursively scanning the parent form or container for matching text nodes, ensuring that React `contenteditable` divs cannot falsely report empty states if the text has visibly rendered.
+- **Improved:** Form submission simulation now fires `composed: true` for shadow DOM penetration and executes a broader `requestSubmit` fallback. 
+
 ## [5.2.13] - 2026-02-20
 - **Fixed:** Runaway "Proceed" bug correctly squashed by avoiding text overrides from adjacent `.view-lines` elements, and detecting text inside `contenteditable` React `<divs>`.
 - **Improved:** Increased reliability of React form submission defaults by requesting native form submission where available, and injecting `keypress` alongside standard enter keys.
 
 ## [5.2.12] - 2026-02-20
-- **Fixed:** Resolved the "ProceedProceedProceed" bug where Monaco editor `.view-lines` text content was not accurately evaluated, causing runaway typing loops without submission.
+ProceedProceedProceedProceedProceedProceedProceedProceedProceedProceedProceedProceed- **Fixed:** Resolved the "ProceedProceedProceed" bug where Monaco editor `.view-lines` text content was not accurately evaluated, causing runaway typing loops without submission.
 - **Improved:** `tryClick` correctly resolves `closest('button, a')` before evaluating disabled states, ensuring `.codicon-send` span clicks are no longer artificially swallowed by disabled parent buttons.
 - **Improved:** Broadened `sendSelectors` to match "Send (Enter)" variations and standard `button[type="submit"]`.
 - **Improved:** Added `keyup` dispatch to Enter key submission fallback to bypass strict React event listeners.
