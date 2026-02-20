@@ -215,8 +215,24 @@
         };
     })();
 
-    const log = (msg, isSuccess = false) => {
+    const debugLog = (msg) => {
+        try {
+            if (window.__antigravityConfig?.debug?.verboseLogging && typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
+                window.__ANTIGRAVITY_BRIDGE__(`__ANTIGRAVITY_DEBUG_LOG__:${msg}`);
+            }
+        } catch (e) { }
+    };
 
+    const playSound = (effect) => {
+        try {
+            if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
+                window.__ANTIGRAVITY_BRIDGE__(`__ANTIGRAVITY_PLAY_SOUND__:${effect}`);
+            }
+        } catch (e) { }
+    };
+
+    const log = (msg, isSuccess = false) => {
+        debugLog(msg);
         console.log(`[autoAll] ${msg}`);
     };
 
@@ -494,11 +510,13 @@
         if (!target) return false;
 
         const combos = [
-            { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: false, shiftKey: false },
-            { key: 'Enter', code: 'Enter', ctrlKey: true, altKey: false, shiftKey: false },
-            { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: true, shiftKey: false }
+            { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false },
+            { key: 'Enter', code: 'Enter', ctrlKey: true, altKey: false, shiftKey: false, metaKey: false },
+            { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: true, shiftKey: false, metaKey: false },
+            { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: false, shiftKey: false, metaKey: true }
         ];
 
+        let submitted = false;
         for (const combo of combos) {
             try {
                 const down = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...combo });
@@ -507,10 +525,12 @@
                 target.dispatchEvent(down);
                 target.dispatchEvent(press);
                 target.dispatchEvent(up);
+                submitted = true;
                 await workerDelay(40);
             } catch (e) { }
         }
 
+        if (submitted) playSound('submit');
         return true;
     }
 
@@ -726,6 +746,7 @@
 
         // Also fire standard click for immediate UI feedback (hover states etc)
         try { el.click(); } catch (e) { }
+        playSound('click');
 
         const timing = window.__antigravityConfig?.timing || {};
         const throttle = timing.actionThrottleMs || 100;
@@ -736,6 +757,7 @@
     async function remoteType(text) {
         if (!text) return;
         sendCommandToExtension(`__ANTIGRAVITY_TYPE__:${text}`);
+        playSound('type');
         await workerDelay(50);
     }
 
@@ -1474,6 +1496,7 @@
     }
 
     async function performClick(selectors) {
+        debugLog(`[performClick] Started for selectors: ${JSON.stringify(selectors)}`);
         // PRE-CHECK: Expand any collapsed sections that might be hiding buttons
         await expandCollapsedSections();
 
@@ -1518,6 +1541,7 @@
             }
         }
 
+        debugLog(`[performClick] Expansion and fallback completed. Found ${found.length} elements.`);
         let clicked = 0;
         let verified = 0;
         const uniqueFound = [...new Set(found)];
@@ -1570,7 +1594,7 @@
                                 document.execCommand('copy');
                                 document.body.removeChild(ta);
 
-                                log('[Hybrid] Copied. Focusing terminal...');
+                                log('[Hybrid] Focusing terminal...');
                                 sendCommandToBridge('workbench.action.terminal.focus');
                                 await workerDelay(100);
 
@@ -1578,12 +1602,14 @@
                                 sendCommandToBridge('workbench.action.terminal.paste');
                                 await workerDelay(100);
 
-                                // Send Enter? Paste usually doesn't run?
-                                // Depends on settings.
-                                // Let's send a newline sequence just in case.
-                                log('[Hybrid] Sending Enter...');
-                                sendCommandToBridge('workbench.action.terminal.sendSequence', { text: '\u000D' });
+                                // Send Enter?
+                                await workerDelay(100);
+                                log('[Hybrid] Pressing Enter manually');
+                                sendCommandToBridge('workbench.action.terminal.chat.accept');
 
+                                playSound('submit');
+
+                                state.clickHistory = { signature: '[HybridTerminalRun]', count: 1 };
                                 clicked++;
 
                                 // Flash Blue
