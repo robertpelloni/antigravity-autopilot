@@ -48,6 +48,53 @@ export const AUTO_CONTINUE_SCRIPT = `
     let lastStateSignature = '';
   let pollTimer = null;
 
+  // --- Active UI Nuke (Nuclear Option) ---
+  function nukeUnsafeUIElements(root) {
+      if (!root) return;
+      // Because VSCode relies heavily on aria-labels on generic .codicon containers, 
+      // these elements often bypass simple CSS selector exclusions before their full DOM renders.
+      // We physically delete them from the chat interface to guarantee the automation script cannot click them.
+      const nukeSelectors = [
+          '[aria-label*="Customize Layout" i]', '[title*="Customize Layout" i]', 
+          '[aria-label*="Layout Control" i]', '[title*="Layout Control" i]',
+          '[aria-label*="Attach Context" i]', '[title*="Attach Context" i]',
+          '[aria-label*="New Chat" i]', '[title*="New Chat" i]',
+          '[aria-label*="Clear Chat" i]', '[title*="Clear Chat" i]',
+          '[aria-label*="Clear Session" i]', '[title*="Clear Session" i]'
+      ];
+      
+      let allNodes;
+      if (root.querySelectorAll) {
+          allNodes = Array.from(root.querySelectorAll('*'));
+      } else {
+          allNodes = [];
+      }
+      
+      for (const node of allNodes) {
+          if (node.nodeType === 1) { // ELEMENT_NODE
+              const attrs = ((node.getAttribute('aria-label') || '') + ' ' + (node.getAttribute('title') || '')).toLowerCase();
+              if (/(customize layout|layout control|attach context|new chat|clear chat|clear session)/i.test(attrs)) {
+                  try {
+                      node.style.display = 'none'; // Fast hide
+                      node.remove(); // Nuke
+                  } catch (e) {}
+              }
+              if (node.shadowRoot) nukeUnsafeUIElements(node.shadowRoot);
+          }
+      }
+  }
+
+  // Set up the nuclear observer on the document root
+  try {
+      const nukeObserver = new MutationObserver((mutations) => {
+          for (let m of mutations) {
+              if (m.addedNodes.length) nukeUnsafeUIElements(document);
+          }
+      });
+      nukeObserver.observe(document, { childList: true, subtree: true });
+  } catch (e) {}
+
+  // --- Configuration Helpers ---
   function getConfig() {
     return window.__antigravityConfig || defaults;
   }
@@ -169,21 +216,72 @@ export const AUTO_CONTINUE_SCRIPT = `
     } catch(e) {}
   }
 
-  function hasUnsafeLabel(el) {
-      try {
-          const text = ((el?.textContent || '') + ' ' + (el?.getAttribute?.('aria-label') || '') + ' ' + (el?.getAttribute?.('title') || '')).toLowerCase();
-          return /(extension|extensions|marketplace|plugin|install|uninstall|enable|disable)/i.test(text);
-      } catch {
-          return false;
+  function shadowClosest(el, selector) {
+      let current = el;
+      while (current) {
+          if (current.nodeType === 1 && current.matches(selector)) return current;
+          current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
       }
+      return null;
   }
 
   function isUnsafeContext(el) {
-      if (!el || !el.closest) return false;
-      const unsafe = el.closest(
-          '.extensions-viewlet, [id*="workbench.view.extensions"], [class*="extensions"], [id*="extensions"], [class*="marketplace"], [id*="marketplace"], [data-view-id*="extensions"], .quick-input-widget, .monaco-quick-input-container, .settings-editor'
-      );
-      return !!unsafe;
+    if (!el) return false;
+
+    // 1. Check the element itself for unsafe text
+    try {
+        const text = ((el.textContent || '') + ' ' + (el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')).toLowerCase();
+        if (/(extension|marketplace|plugin|install|uninstall|customize layout|layout control|add context|attach context|attach a file|new chat|clear chat|clear session|view as|open in)/i.test(text)) {
+            return true;
+        }
+    } catch(e) {}
+
+    // 2. Descendant check for banned icons
+    try {
+        const bannedIcons = '[class*="codicon-settings-gear"], [class*="codicon-gear"], [class*="codicon-attach"], [class*="codicon-paperclip"], [class*="codicon-link"], [class*="codicon-layout"], [class*="codicon-clear-all"], [class*="codicon-trash"], [class*="codicon-add"], [class*="codicon-plus"], [class*="codicon-more"], [class*="codicon-history"]';
+        if (el.matches(bannedIcons) || el.querySelector(bannedIcons)) {
+            return true;
+        }
+    } catch(e) {}
+
+    // 3. Walk up the tree and check all ancestors for unsafe attributes and banned classes
+    let current = el;
+    while (current) {
+        if (current.nodeType === 1) { // ELEMENT_NODE
+            // Text/Attribute bans on parents
+            const attrs = ((current.getAttribute('aria-label') || '') + ' ' + (current.getAttribute('title') || '')).toLowerCase();
+            if (/(customize layout|layout control|add context|attach context|new chat|clear chat|clear session)/i.test(attrs)) {
+                return true;
+            }
+
+            // Workbench Chrome Bans
+            if (current.matches('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box')) {
+                return true;
+            }
+            if (current.getAttribute('role') === 'tab' || current.getAttribute('role') === 'tablist') {
+                return true;
+            }
+            
+            // Icon Class Bans
+            if (current.matches('.codicon-settings-gear, .codicon-attach, [class*="codicon-layout"], .codicon-clear-all, .codicon-trash, .codicon-add, .codicon-plus, .codicon-more, .codicon-history')) {
+                return true;
+            }
+        }
+        current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
+    }
+
+    // 3. Global Workbench safety lock (Prevent clicking native IDE elements)
+    if (window === window.top) {
+        if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview')) {
+            return true;
+        }
+    }
+
+    return false;
+  }
+
+  function hasUnsafeLabel(el) {
+      return false; // Deprecated - replaced by isUnsafeContext's deep check
   }
 
   // --- Analysis Helpers ---
@@ -221,7 +319,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
 
       // Text checks for signals
-      const allBtns = queryShadowDOMAll('button, a, [role="button"], .monaco-button, .action-label, .codicon-bell');
+      const allBtns = queryShadowDOMAll('button, a, [role="button"], .monaco-button');
       let extExpand = 0, extAcceptAll = 0, extAccept = 0, extRun = 0, extFeedback = 0;
       for (const b of allBtns) {
           if (isUnsafeContext(b) || hasUnsafeLabel(b)) continue;
@@ -246,8 +344,8 @@ export const AUTO_CONTINUE_SCRIPT = `
           keep: queryShadowDOMAll('[title="Keep" i], [aria-label="Keep" i], button[title*="Keep" i], button[aria-label*="Keep" i]').length,
           allow: queryShadowDOMAll('[title*="Allow" i], [aria-label*="Allow" i], button[title*="Allow" i], button[aria-label*="Allow" i]').length,
           run: extRun + queryShadowDOMAll('[title*="Run in Terminal" i], [aria-label*="Run in Terminal" i], button.run-action, button:has(.codicon-play), button:has(.codicon-run), .codicon-play, .codicon-run').length,
-          expand: extExpand + queryShadowDOMAll('[title*="Expand" i], [aria-label*="Expand" i], .monaco-tl-twistie.collapsed, .codicon-chevron-right, .expand-indicator.collapsed').length,
-          continue: queryShadowDOMAll('a.monaco-button, button.monaco-button, .action-label').length,
+          expand: extExpand + queryShadowDOMAll('[title*="Expand" i], [aria-label*="Expand" i], .monaco-tl-twistie.collapsed, .expand-indicator.collapsed').length,
+          continue: queryShadowDOMAll('a.monaco-button, button.monaco-button, [role="button"]').length,
           submit: queryShadowDOMAll('[title="Send" i], [aria-label="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send').length,
           feedback: extFeedback + queryShadowDOMAll('.codicon-thumbsup, .codicon-thumbsdown, [title*="Helpful" i], [aria-label*="Helpful" i], [title*="Good" i], [title*="Bad" i], .feedback-button').length
       };
@@ -376,7 +474,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       const submitDelay = Math.max(150, bump.submitDelayMs || 150);
       setTimeout(() => {
-          const sendSelectors = '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send, .send-button, form button';
+          const sendSelectors = '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send, .send-button';
           let submitted = false;
           const form = input.closest('form');
 
@@ -462,7 +560,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       // 1. Continue / Keep (Priority)
     if (controlGatePass('continue', cfg, state, now, lastActionByControl.continue)) {
           const continueControl = getControlConfig(cfg, 'continue');
-          const contSel = 'a.monaco-button, button.monaco-button, .action-label';
+          const contSel = 'a.monaco-button, button.monaco-button, [role="button"]';
           const els = queryShadowDOMAll(contSel);
           const target = els.find(el => {
               if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
@@ -594,9 +692,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           const expandSelectors = [
               '[title*="Expand"]',
               '[aria-label*="Expand"]',
-              '.monaco-tl-twistie.collapsed',
-              '.codicon-chevron-right',
-              '.codicon-bell'
+              '.monaco-tl-twistie.collapsed'
           ].join(',');
 
           if (hasMethod(expandControl.actionMethods, 'dom-click')) {
@@ -764,8 +860,8 @@ export const AUTO_CONTINUE_SCRIPT = `
               }
 
               if (shouldBump && (now - lastAction > computedDelay)) {
-                  // Only bump if the tab is visible to avoid ghost typing in every open tab
-                  if (document.visibilityState === 'visible') {
+                  // Only bump if the tab is visible to avoid ghost typing in every open tab (unless configured otherwise)
+                  if (!bump.requireVisible || document.visibilityState === 'visible') {
                       if (typeAndSubmit(bumpText)) {
                            actionTaken = true;
                            lastActionByControl.bump = now;
@@ -773,7 +869,7 @@ export const AUTO_CONTINUE_SCRIPT = `
                            emitAction('bump', 'smart resume bump text=' + bumpText);
                       }
                   } else {
-                      // Skip bump, but reset timer so we don't spam once it becomes visible
+                      // Skip bump because tab is invisible and requireVisible is true. Check again later.
                       lastAction = now;
                   }
               }

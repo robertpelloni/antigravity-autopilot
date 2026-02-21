@@ -392,7 +392,6 @@
                 '[role="button"]',
                 '.bg-ide-button-background',
                 'button.grow',
-                '.monaco-action-bar .action-label',
                 '.monaco-list-row.collapsed',
                 '.codicon-chevron-right',
                 '[data-testid="accept-all"]',
@@ -482,36 +481,92 @@
         return mergeSelectorSets(mode, 'feedback');
     }
 
+    // --- Active UI Nuke (Nuclear Option) ---
+    function nukeUnsafeUIElements(root) {
+        if (!root) return;
+        const allNodes = root.querySelectorAll ? Array.from(root.querySelectorAll('*')) : [];
+        for (const node of allNodes) {
+            if (node.nodeType === 1) { // ELEMENT_NODE
+                const attrs = ((node.getAttribute('aria-label') || '') + ' ' + (node.getAttribute('title') || '')).toLowerCase();
+                if (/(customize layout|layout control|attach context|new chat|clear chat|clear session)/i.test(attrs)) {
+                    try {
+                        node.style.display = 'none'; // Fast hide
+                        node.remove(); // Nuke
+                    } catch (e) { }
+                }
+                if (node.shadowRoot) nukeUnsafeUIElements(node.shadowRoot);
+            }
+        }
+    }
+
+    try {
+        const nukeObserver = new MutationObserver((mutations) => {
+            for (let m of mutations) {
+                if (m.addedNodes.length) nukeUnsafeUIElements(document);
+            }
+        });
+        nukeObserver.observe(document, { childList: true, subtree: true });
+    } catch (e) { }
+
+    function shadowClosest(el, selector) {
+        let current = el;
+        while (current) {
+            if (current.nodeType === 1 && current.matches(selector)) return current;
+            current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
+        }
+        return null;
+    }
+
     function isValidInteractionTarget(el) {
         if (!el) return false;
 
-        // EXCLUSION: Never interact with Command Palette / Quick Pick
-        if (el.closest('.quick-input-widget') ||
-            el.closest('.monaco-quick-input-container') ||
-            el.closest('.suggest-widget') ||
-            el.closest('.rename-box')) {
-            // log(`[Safety] Ignoring element in Quick Input/Suggest widget: ${el.tagName}`);
-            return false;
+        // 1. Check the element itself for unsafe text
+        try {
+            const text = ((el.textContent || '') + ' ' + (el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')).toLowerCase();
+            if (/(extension|marketplace|plugin|install|uninstall|customize layout|layout control|add context|attach context|attach a file|new chat|clear chat|clear session|view as|open in)/i.test(text)) {
+                return false;
+            }
+        } catch (e) { }
+
+        // 2. Descendant check for banned icons
+        try {
+            const bannedIcons = '[class*="codicon-settings-gear"], [class*="codicon-gear"], [class*="codicon-attach"], [class*="codicon-paperclip"], [class*="codicon-link"], [class*="codicon-layout"], [class*="codicon-clear-all"], [class*="codicon-trash"], [class*="codicon-add"], [class*="codicon-plus"], [class*="codicon-more"], [class*="codicon-history"]';
+            if (el.matches(bannedIcons) || el.querySelector(bannedIcons)) {
+                return false;
+            }
+        } catch (e) { }
+
+        // 3. Walk up the tree and check all ancestors for unsafe attributes and banned classes
+        let current = el;
+        while (current) {
+            if (current.nodeType === 1) { // ELEMENT_NODE
+                // Text/Attribute bans on parents
+                const attrs = ((current.getAttribute('aria-label') || '') + ' ' + (current.getAttribute('title') || '')).toLowerCase();
+                if (/(customize layout|layout control|add context|attach context|new chat|clear chat|clear session)/i.test(attrs)) {
+                    return false;
+                }
+
+                // Workbench Chrome Bans
+                if (current.matches('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box')) {
+                    return false;
+                }
+                if (current.getAttribute('role') === 'tab' || current.getAttribute('role') === 'tablist') {
+                    return false;
+                }
+
+                // Icon Class Bans
+                if (current.matches('.codicon-settings-gear, .codicon-attach, [class*="codicon-layout"], .codicon-clear-all, .codicon-trash, .codicon-add, .codicon-plus, .codicon-more, .codicon-history')) {
+                    return false;
+                }
+            }
+            current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
         }
 
-        // EXCLUSION: Never interact with Settings editor inputs (too dangerous)
-        if (el.closest('.settings-editor')) {
-            return false;
-        }
-
-        // EXCLUSION: Ignore workbench chrome controls (panel headers/tabs/activity/status/sidebar)
-        // to prevent looping clicks on IDE navigation buttons instead of chat action buttons.
-        const role = (el.getAttribute && (el.getAttribute('role') || '') || '').toLowerCase();
-        if (role === 'tab' || el.closest('[role="tablist"]')) {
-            return false;
-        }
-
-        if (el.closest(
-            '.pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, ' +
-            '.monaco-workbench .part.activitybar, .monaco-workbench .part.statusbar, .monaco-workbench .part.sidebar, ' +
-            '.monaco-panel .composite.title, .monaco-panel .panel-switcher-container'
-        )) {
-            return false;
+        // 3. Global Workbench safety lock (Prevent clicking native IDE elements)
+        if (window === window.top) {
+            if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview')) {
+                return false;
+            }
         }
 
         return true;

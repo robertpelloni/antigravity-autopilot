@@ -2,7 +2,7 @@
   "name": "antigravity-autopilot",
   "displayName": "Antigravity Autopilot (Unified)",
   "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-  "version": "5.2.28",
+  "version": "5.2.40",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -617,6 +617,12 @@
           "type": "number",
           "default": 150,
           "description": "Feedback control delay threshold in milliseconds."
+        },
+        "antigravity.automation.bump.requireVisible": {
+          "type": "boolean",
+          "default": true,
+          "description": "Require the chat document to be visible (not a background tab) before bumping a thread.",
+          "markdownDescription": "**Require Visibility**: If true, the extension will only bump active/visible tabs, preventing it from ghost-typing in background tabs. If false, it will bump all available threads simultaneously. (Default: true)"
         },
         "antigravity.automation.actions.clickFeedback": {
           "type": "boolean",

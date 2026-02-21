@@ -97,15 +97,15 @@ export class CDPHandler extends EventEmitter {
             this.discoveredPort = await this.autoDiscoverPort();
         }
 
-        // If we auto-discovered a port, use that instead of the configured port
+        // If we auto-discovered a port, use that FIRST (it overrides config)
         if (this.discoveredPort) {
             portsToCheck.add(this.discoveredPort);
         }
 
-        // Also check the configured port range as fallback
+        // Also check the configured port range as fallback (only if different)
         for (let p = this.startPort; p <= this.endPort; p++) portsToCheck.add(p);
 
-        logToOutput(`[CDPHandler] Resolving active DevTools sessions on ports ${[...portsToCheck].join(', ')}...`);
+        logToOutput(`[CDPHandler] Scanning CDP on ports: ${[...portsToCheck].join(', ')}...`);
 
         for (const port of portsToCheck) {
             try {
@@ -113,11 +113,9 @@ export class CDPHandler extends EventEmitter {
                 if (pages.length > 0) instances.push({ port, pages });
             } catch (e: any) {
                 if (e.code === 'ECONNREFUSED') {
-                    // Only log if this was a discovered port (not config fallback) — user should know
-                    if (port === this.discoveredPort) {
-                        logToOutput(`[CDPHandler] Auto-discovered port ${port} is not responding (ECONNREFUSED). Clearing cache.`);
-                        this.discoveredPort = null;
-                    }
+                    // Do NOT clear the discovered port — it may just not be ready yet
+                    // (Electron takes a few seconds to start the CDP server after launch)
+                    logToOutput(`[CDPHandler] Port ${port} not ready yet (ECONNREFUSED). Will retry.`);
                 } else {
                     logToOutput(`[CDPHandler] Error scanning port ${port}: ${e.message || e}`);
                 }
@@ -174,10 +172,14 @@ export class CDPHandler extends EventEmitter {
                         const pages = JSON.parse(data);
                         // Phase 27: Intelligent Filter
                         const allowedTypes = ['page', 'webview', 'iframe', 'background_page'];
+                        // Specifically exclude the main VSCode workbench to prevent runaway clicks on the editor
+                        const excludedUrls = ['chrome://newtab/', 'chrome://newtab-footer/', 'workbench-jetski-agent.html'];
                         // Log exactly what types of targets are available and which ones match
                         const filtered = pages.filter((p: any) => {
-                            const isAllowed = p.webSocketDebuggerUrl && allowedTypes.includes(p.type);
-                            return isAllowed;
+                            if (!p.webSocketDebuggerUrl) return false;
+                            if (!allowedTypes.includes(p.type)) return false;
+                            if (p.url && excludedUrls.some(ex => p.url.startsWith(ex) || p.url.includes(ex))) return false;
+                            return true;
                         });
 
                         if (filtered.length === 0) {
@@ -283,6 +285,7 @@ export class CDPHandler extends EventEmitter {
                                 }
                             },
                             bump: {
+                                requireVisible: config.get<boolean>('automation.bump.requireVisible') ?? true,
                                 detectMethods: getArr('automation.bump.detectMethods', ['feedback-visible', 'not-generating', 'last-sender-user', 'network-error-retry', 'waiting-for-input', 'loaded-conversation', 'completed-all-tasks', 'skip-ai-question']),
                                 typeMethods: getArr('automation.bump.typeMethods', ['exec-command', 'native-setter', 'dispatch-events']),
                                 submitMethods: getArr('automation.bump.submitMethods', ['click-send', 'enter-key']),
