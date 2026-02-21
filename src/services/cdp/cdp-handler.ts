@@ -333,12 +333,13 @@ export class CDPHandler extends EventEmitter {
                         try {
                             const { targetInfos } = await this.sendCommand(page.id, 'Target.getTargets');
                             if (targetInfos) {
-                                for (const info of targetInfos) {
-                                    if (['webview', 'iframe'].includes(info.type)) {
-                                        console.log(`[CDP] Explicitly attaching to existing target: ${info.type} ${info.url}`);
-                                        // Wait briefly for webview stabilization (prevent blank screen race)
-                                        await new Promise(r => setTimeout(r, 500));
+                                const attachableTargets = targetInfos.filter((info: any) => ['webview', 'iframe'].includes(info.type));
+                                if (attachableTargets.length > 0) {
+                                    // Give the host a moment to stabilize its views before we aggressively attach
+                                    await new Promise(r => setTimeout(r, 800));
 
+                                    for (const info of attachableTargets) {
+                                        console.log(`[CDP] Explicitly attaching to existing target: ${info.type} ${info.url}`);
                                         this.sendCommand(page.id, 'Target.attachToTarget', { targetId: info.targetId, flatten: true })
                                             .catch(e => console.error(`[CDP] Failed to attach to ${info.targetId}:`, e));
                                     }
@@ -382,13 +383,16 @@ export class CDPHandler extends EventEmitter {
                     // Handle Attachment Success
                     if (msg.method === 'Target.attachedToTarget') {
                         const sessionId = msg.params.sessionId;
+                        const targetInfo = msg.params.targetInfo;
                         const conn = this.connections.get(page.id);
                         if (conn) {
                             conn.sessions.add(sessionId);
                         }
+                        this.sendCommand(page.id, 'Page.enable', {}, undefined, sessionId).catch(() => { });
                         this.sendCommand(page.id, 'Runtime.enable', {}, undefined, sessionId).catch(() => { });
                         this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' }, undefined, sessionId).catch(() => { });
-                        this.emit('sessionAttached', { pageId: page.id, sessionId, type: msg.params.targetInfo.type, url: msg.params.targetInfo.url });
+                        this.sendCommand(page.id, 'DOM.enable', {}, undefined, sessionId).catch(() => { });
+                        this.emit('sessionAttached', { pageId: page.id, sessionId, type: targetInfo?.type, url: targetInfo?.url });
                     }
 
                     // Inject on Context Creation (Main Page + Nested)
@@ -616,6 +620,16 @@ export class CDPHandler extends EventEmitter {
                             console.error(`[Bridge] Command execution failed: ${e.message}`);
                         }
                     }
+                }
+            } else if (text.startsWith('__ANTIGRAVITY_PLAY_SOUND__:')) {
+                const effect = text.substring('__ANTIGRAVITY_PLAY_SOUND__:'.length).trim() as SoundEffect;
+                if (config.get<boolean>('audioFeedbackEnabled')) {
+                    SoundEffects.play(effect);
+                }
+            } else if (text.startsWith('__ANTIGRAVITY_DEBUG_LOG__:')) {
+                const logMsg = text.substring('__ANTIGRAVITY_DEBUG_LOG__:'.length).trim();
+                if (config.get<boolean>('debugLoggingEnabled')) {
+                    console.log(`[Browser Debug] ${logMsg}`);
                 }
             } else if (text.startsWith('__ANTIGRAVITY_HYBRID_BUMP__:')) {
                 // Phase 52: Hybrid Bump Strategy

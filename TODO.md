@@ -13,7 +13,7 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 - Compared feature claims in `README.md`, `ROADMAP.md`, `VISION.md`, `DASHBOARD.md`, `CHANGELOG.md`
 - Ran manifest/UI/command parity checks (`package.json` vs `dashboard.ts` vs `extension.ts`)
 - Reviewed root tests in `tests/` for implementation vs mocked-replica coverage
-- Sampled `antigravity-jules-orchestration/docs/reports/*` for claim drift and unresolved TODOs
+- Extracted core MCP tools for reference into Unified Intelligence.
 
 ---
 
@@ -172,11 +172,6 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 
 ## P4 — Ecosystem expansion and productization
 
-### P4.1 Root extension integration with Jules orchestration
-- [ ] Add explicit command surface for Jules workflows
-- [ ] Add connection profile management and auth checks
-- [ ] Add runtime status cards for Jules session lifecycle
-
 ### P4.2 AntiBridge remote integration in root extension
 - [ ] Promote reference bridge patterns to active root module with security model
 - [ ] Add permissions and host allowlist
@@ -208,7 +203,7 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 3. **UI/config parity completion** (`dashboard.ts`, `package.json`)  
 4. **Telemetry and quality-depth upgrades** (`progress-tracker.ts`, `test-generator.ts`)  
 5. **Testing modernization + CI gates** (`tests/*`, workflows)  
-6. **Ecosystem integrations** (Jules/bridge/mobile)
+6. **Ecosystem integrations** (mobile)
 
 ---
 

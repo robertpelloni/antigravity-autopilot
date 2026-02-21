@@ -55,7 +55,6 @@ This roadmap reflects current implementation truth in `src/` + `main_scripts/`, 
 - [ ] Expand CI checks to include extension command/config parity and dashboard-schema parity
 
 ## Phase E — Ecosystem Integration (P2/P3)
-- [ ] Production Jules orchestration bridge into root extension command surface
 - [ ] AntiBridge remote control integration from reference to active root module wiring
 - [ ] Mobile companion telemetry endpoint + auth + basic control actions
 

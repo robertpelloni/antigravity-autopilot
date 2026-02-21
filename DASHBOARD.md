@@ -96,7 +96,6 @@ antigravity-autopilot/
 | `free-auto-accept-antigravity` | [RendezvousP](https://github.com/RendezvousP/free-auto-accept-antigravity) | Free community auto-accept | 📚 Reference |
 | `AntiBridge-Antigravity-remote` | [linhbq82](https://github.com/linhbq82/AntiBridge-Antigravity-remote) | Remote bridge for multi-machine | 📚 Reference |
 | `AntigravityMobile` | [AvenalJ](https://github.com/AvenalJ/AntigravityMobile) | Mobile companion app concept | 📚 Reference |
-| `antigravity-jules-orchestration` | [Scarmonit](https://github.com/Scarmonit/antigravity-jules-orchestration) | Jules API + MCP orchestration | 📚 Reference |
 | `antigravity-multi-purpose-agent` | [rodhayl](https://github.com/rodhayl/antigravity-multi-purpose-agent) | Multi-purpose agent variant | 📚 Reference |
 | `Claude-Autopilot` | [benbasha](https://github.com/benbasha/Claude-Autopilot) | Claude queue processing + auto-resume reference | 📚 Reference |
 

@@ -232,6 +232,7 @@ export class DOMValueInjection implements IInteractionMethod {
                         }
                     }
                     el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
                     return true;
                 }
                 return false;

@@ -587,8 +587,8 @@
     function setInputValue(el, value) {
         if (!el) return false;
         try {
+            el.focus();
             if (el.isContentEditable) {
-                el.focus();
                 el.textContent = value;
             } else if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
                 el.focus();
@@ -638,6 +638,7 @@
             { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: false, shiftKey: false, metaKey: true }
         ];
 
+        let submitted = false;
         for (const combo of combos) {
             try {
                 const down = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...combo });
@@ -909,6 +910,7 @@
 
         // Also fire standard click for immediate UI feedback (hover states etc)
         try { el.click(); } catch (e) { }
+        playSound('click');
 
         // Emit ACTION event for sound effects
         let actionGroup = 'click';
@@ -930,6 +932,7 @@
     async function remoteType(text) {
         if (!text) return;
         sendCommandToExtension(`__ANTIGRAVITY_TYPE__:${text}`);
+        playSound('type');
         await workerDelay(50);
     }
 
@@ -1776,6 +1779,7 @@
             }
         }
 
+        debugLog(`[performClick] Expansion and fallback completed. Found ${found.length} elements.`);
         let clicked = 0;
         let verified = 0;
         const uniqueFound = [];
@@ -1851,7 +1855,7 @@
                                 document.execCommand('copy');
                                 document.body.removeChild(ta);
 
-                                log('[Hybrid] Copied. Focusing terminal...');
+                                log('[Hybrid] Focusing terminal...');
                                 sendCommandToBridge('workbench.action.terminal.focus');
                                 await workerDelay(100);
 
@@ -1859,12 +1863,14 @@
                                 sendCommandToBridge('workbench.action.terminal.paste');
                                 await workerDelay(100);
 
-                                // Send Enter? Paste usually doesn't run?
-                                // Depends on settings.
-                                // Let's send a newline sequence just in case.
-                                log('[Hybrid] Sending Enter...');
-                                sendCommandToBridge('workbench.action.terminal.sendSequence', { text: '\u000D' });
+                                // Send Enter?
+                                await workerDelay(100);
+                                log('[Hybrid] Pressing Enter manually');
+                                sendCommandToBridge('workbench.action.terminal.chat.accept');
 
+                                playSound('submit');
+
+                                state.clickHistory = { signature: '[HybridTerminalRun]', count: 1 };
                                 clicked++;
 
                                 // Flash Blue

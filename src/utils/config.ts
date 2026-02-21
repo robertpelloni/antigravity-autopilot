@@ -93,6 +93,10 @@ export interface AntigravityConfig {
     runtimeAutoResumeMinScore: number;
     runtimeAutoResumeRequireStrictPrimary: boolean;
 
+    // Reliability & Debug
+    audioFeedbackEnabled: boolean;
+    debugLoggingEnabled: boolean;
+
     // Watchdog Settings
     watchdogEnabled: boolean;
     watchdogTimeoutMs: number;
@@ -271,6 +275,9 @@ export class ConfigManager {
             runtimeStatusMenuRefreshDebugLogs: config.get('runtimeStatusMenuRefreshDebugLogs', false),
             runtimeAutoResumeMinScore: config.get('runtimeAutoResumeMinScore', 70),
             runtimeAutoResumeRequireStrictPrimary: config.get('runtimeAutoResumeRequireStrictPrimary', true),
+
+            audioFeedbackEnabled: config.get('audioFeedbackEnabled', false),
+            debugLoggingEnabled: config.get('debugLoggingEnabled', false),
 
             // Watchdog Settings
             watchdogEnabled: config.get('watchdogEnabled', true),
