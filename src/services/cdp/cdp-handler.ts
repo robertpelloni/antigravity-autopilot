@@ -2,7 +2,9 @@ import WebSocket from 'ws';
 import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { EventEmitter } from 'events';
+import * as vscode from 'vscode';
 import { config } from '../../utils/config';
 import { AUTO_CONTINUE_SCRIPT } from '../../scripts/auto-continue';
 import { logToOutput } from '../../utils/output-channel';
@@ -16,6 +18,7 @@ export class CDPHandler extends EventEmitter {
     private pendingMessages: Map<number, { resolve: Function, reject: Function }>;
     private timeoutMs: number;
     private watchdogInterval: NodeJS.Timeout | null = null;
+    private discoveredPort: number | null = null;
 
     constructor(startPort?: number, endPort?: number) {
         super();
@@ -34,30 +37,89 @@ export class CDPHandler extends EventEmitter {
         this.messageId = 1;
         this.pendingMessages = new Map();
         this.timeoutMs = config.get<number>('cdpTimeout') || 10000;
-        logToOutput(`[CDPHandler] Initialized with strict target port range: ${this.startPort}-${this.endPort}`);
+        logToOutput(`[CDPHandler] Initialized with configured port range: ${this.startPort}-${this.endPort}`);
         this.startWatchdogLoop();
+    }
+
+    /**
+     * Auto-discover the actual CDP port using multiple strategies:
+     * 1. Internal Antigravity API: vscode.antigravityUnifiedStateSync.BrowserPreferences.getBrowserCdpPort()
+     * 2. DevToolsActivePort file in the Antigravity user data directory
+     * 3. Fall back to configured cdpPort
+     */
+    private async autoDiscoverPort(): Promise<number | null> {
+        // Strategy 1: Use internal Antigravity API (same as chrome-devtools-mcp extension)
+        try {
+            const vsCodeAny = vscode as any;
+            if (vsCodeAny.antigravityUnifiedStateSync?.BrowserPreferences?.getBrowserCdpPort) {
+                const port = await vsCodeAny.antigravityUnifiedStateSync.BrowserPreferences.getBrowserCdpPort();
+                if (typeof port === 'number' && port > 0) {
+                    logToOutput(`[CDPHandler] Auto-discovered CDP port via internal API: ${port}`);
+                    return port;
+                }
+            }
+        } catch (e: any) {
+            logToOutput(`[CDPHandler] Internal API getBrowserCdpPort() not available: ${e.message || e}`);
+        }
+
+        // Strategy 2: Read DevToolsActivePort file from Antigravity user data dir
+        try {
+            const userDataDir = path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Antigravity');
+            const portFilePath = path.join(userDataDir, 'DevToolsActivePort');
+            if (fs.existsSync(portFilePath)) {
+                const content = fs.readFileSync(portFilePath, 'utf8');
+                const [rawPort] = content.split('\n').map(l => l.trim()).filter(l => !!l);
+                const port = parseInt(rawPort, 10);
+                if (!isNaN(port) && port > 0 && port <= 65535) {
+                    // Verify the port is actually listening before committing
+                    try {
+                        await this.getPages(port);
+                        logToOutput(`[CDPHandler] Auto-discovered CDP port via DevToolsActivePort: ${port}`);
+                        return port;
+                    } catch {
+                        logToOutput(`[CDPHandler] DevToolsActivePort says ${port} but it's not responding (stale file).`);
+                    }
+                }
+            }
+        } catch (e: any) {
+            logToOutput(`[CDPHandler] DevToolsActivePort read failed: ${e.message || e}`);
+        }
+
+        return null;
     }
 
     async scanForInstances(): Promise<{ port: number, pages: any[] }[]> {
         const instances = [];
         const portsToCheck = new Set<number>();
 
-        // Scan configured port range strictly, no hardcoded fallbacks as requested.
+        // Auto-discover the real CDP port if not already cached
+        if (!this.discoveredPort) {
+            this.discoveredPort = await this.autoDiscoverPort();
+        }
+
+        // If we auto-discovered a port, use that instead of the configured port
+        if (this.discoveredPort) {
+            portsToCheck.add(this.discoveredPort);
+        }
+
+        // Also check the configured port range as fallback
         for (let p = this.startPort; p <= this.endPort; p++) portsToCheck.add(p);
 
-        // Use logToOutput for standard stdout visibility in the extension tab
-        logToOutput(`[CDPHandler] Resolving active DevTools sessions on ports ${this.startPort}${this.endPort !== this.startPort ? `-${this.endPort}` : ''}...`);
+        logToOutput(`[CDPHandler] Resolving active DevTools sessions on ports ${[...portsToCheck].join(', ')}...`);
 
         for (const port of portsToCheck) {
             try {
                 const pages = await this.getPages(port);
                 if (pages.length > 0) instances.push({ port, pages });
             } catch (e: any) {
-                // Add explicit logging so we know WHY it was skipped
                 if (e.code === 'ECONNREFUSED') {
-                    // console.log(`[CDPHandler] Port ${port} is inactive (ECONNREFUSED).`);
+                    // Only log if this was a discovered port (not config fallback) — user should know
+                    if (port === this.discoveredPort) {
+                        logToOutput(`[CDPHandler] Auto-discovered port ${port} is not responding (ECONNREFUSED). Clearing cache.`);
+                        this.discoveredPort = null;
+                    }
                 } else {
-                    console.error(`[CDPHandler] Error scanning port ${port}:`, e.message || e);
+                    logToOutput(`[CDPHandler] Error scanning port ${port}: ${e.message || e}`);
                 }
             }
         }
