@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.55] - 2026-02-22
+### Added
+- **Embedded Remote Control**: Promoted the AntiBridge legacy standalone server into a native VS Code core module (`src/modules/remote/server.ts`). Users can now control Antigravity from their phone's browser or any WebSocket client on port 8000 directly from the IDE's Extension Host, without needing to run separate Node scripts.
+
 ## [5.2.54] - 2026-02-21
 ### Added
 - **Dynamic MCP Transport Tools**: The HTTP MCP Server now dynamically exposes `vscode.commands` starting with `antigravity.*` as executing tools over the `/rpc` endpoint, replacing the hardcoded project tracker scaffolds and completing the P1 Real Transport objective.

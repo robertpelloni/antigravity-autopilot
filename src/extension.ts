@@ -7,6 +7,7 @@ import { autonomousLoop } from './core/autonomous-loop';
 // import { circuitBreaker } from './core/circuit-breaker'; // Removed unused import
 import { progressTracker } from './core/progress-tracker';
 import { mcpServer } from './modules/mcp/server';
+import { activateRemoteServer, RemoteServer } from './modules/remote';
 import { voiceControl } from './modules/voice/control';
 import { CDPHandler } from './services/cdp/cdp-handler';
 import { diagnoseCdp } from './commands/diagnose-cdp';
@@ -98,6 +99,7 @@ export function activate(context: vscode.ExtensionContext) {
         let lastWaitingReminderAt = 0;
         let lastAutoResumeAt = 0;
         let readyToResumeStreak = 0;
+        let remoteServer: RemoteServer | null = null;
         let lastAutoResumeOutcome: 'none' | 'sent' | 'blocked' | 'send-failed' = 'none';
         let lastAutoResumeBlockedReason = 'not evaluated';
         let lastAutoResumeMessageKind: 'none' | 'full' | 'minimal' = 'none';
@@ -2131,6 +2133,13 @@ export function activate(context: vscode.ExtensionContext) {
                     updateControllerRoleStatus();
                     vscode.window.showInformationMessage('Antigravity: Forcibly acquired Leader role for this window.');
                 }
+            }),
+            safeRegisterCommand('antigravity.startRemoteServer', async () => {
+                if (remoteServer) {
+                    remoteServer.toggle();
+                } else {
+                    remoteServer = await activateRemoteServer(context);
+                }
             })
         );
 
@@ -2163,6 +2172,14 @@ export function activate(context: vscode.ExtensionContext) {
                 }
                 if (config.get('voiceControlEnabled')) {
                     voiceControl.start().catch(e => log.error(`Voice start failed: ${e.message}`));
+                }
+
+                if (config.get('remoteControlEnabled')) {
+                    if (!remoteServer) {
+                        activateRemoteServer(context).then((server: RemoteServer) => {
+                            remoteServer = server;
+                        }).catch((e: Error) => log.error(`RemoteServer start failed: ${e.message}`));
+                    }
                 }
 
                 log.info('Antigravity Autopilot: Brain ACTIVE as controller leader.');

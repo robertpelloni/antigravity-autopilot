@@ -173,7 +173,7 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 ## P4 — Ecosystem expansion and productization
 
 ### P4.2 AntiBridge remote integration in root extension
-- [ ] Promote reference bridge patterns to active root module with security model
+- [x] Promote reference bridge patterns to active root module with setup and routing (Embedded Express/WS server)
 - [ ] Add permissions and host allowlist
 
 ### P4.3 Mobile companion integration
