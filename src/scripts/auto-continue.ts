@@ -34,8 +34,8 @@ export const AUTO_CONTINUE_SCRIPT = `
      controls: {
          acceptAll: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-button', 'keep-button', 'allow-all-button', 'dom-click'], delayMs: 100 },
          continue: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['continue-button', 'keep-button', 'dom-click'], delayMs: 100 },
-         run: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click', 'alt-enter'], delayMs: 100 },
-         expand: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click', 'alt-enter'], delayMs: 50 },
+         run: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 100 },
+         expand: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 50 },
          accept: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-first', 'accept-single', 'dom-click'], delayMs: 100 },
          submit: { detectMethods: ['enabled-flag', 'not-generating'], actionMethods: ['click-send', 'enter-key'], delayMs: 100 },
          feedback: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['thumbs-up', 'helpful-button', 'dom-click'], delayMs: 150 }
@@ -259,7 +259,7 @@ export const AUTO_CONTINUE_SCRIPT = `
             }
 
             // Workbench Chrome Bans + Menus
-            if (current.matches('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menubar"]')) {
+            if (current.matches('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box, .monaco-menu, .monaco-menu-container, .menubar, .menubar-menu-button, [role="menu"], [role="menuitem"], [role="menubar"]')) {
                 return true;
             }
             if (current.getAttribute('role') === 'tab' || current.getAttribute('role') === 'tablist') {
@@ -698,7 +698,10 @@ export const AUTO_CONTINUE_SCRIPT = `
                   if (!(el.offsetParent || el.clientWidth > 0)) return false;
                   const text = (el.textContent || '').trim().toLowerCase();
                   const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
-                  return text === 'run' || label === 'run' || label.includes('run (');
+                  return text === 'run in terminal'
+                      || label.includes('run in terminal')
+                      || label.includes('run command')
+                      || label.includes('execute command');
               });
               if (textMatch) {
                   highlight(textMatch);

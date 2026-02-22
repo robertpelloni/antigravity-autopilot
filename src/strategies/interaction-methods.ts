@@ -316,10 +316,22 @@ export class DOMScanClick implements IInteractionMethod {
                     : [];
 
                 const fallbackSelectors = [
-                    'button',
-                    '[role="button"]',
                     '.monaco-button',
-                    '[class*="button"]'
+                    '[title*="Accept"]',
+                    '[aria-label*="Accept"]',
+                    '[title*="Allow"]',
+                    '[aria-label*="Allow"]',
+                    '[title*="Continue"]',
+                    '[aria-label*="Continue"]',
+                    '[title*="Run in Terminal"]',
+                    '[aria-label*="Run in Terminal"]',
+                    '[title*="Run command"]',
+                    '[aria-label*="Run command"]',
+                    '[title*="Execute command"]',
+                    '[aria-label*="Execute command"]',
+                    '.codicon-play',
+                    '.codicon-run',
+                    '.codicon-debug-start'
                 ];
 
                 const allSelectors = Array.from(new Set([...selectorParts, ...fallbackSelectors]));
@@ -353,6 +365,7 @@ export class DOMScanClick implements IInteractionMethod {
                         if (current.nodeType === 1) {
                              const attrs = ((current.getAttribute('aria-label') || '') + ' ' + (current.getAttribute('title') || '')).toLowerCase();
                              if (/(customize layout|layout control|add context|attach context|new chat|clear chat|clear session)/i.test(attrs)) return true;
+                             if (current.matches && current.matches('.title-actions, .tabs-and-actions-container, .part.titlebar, .part.activitybar, .part.statusbar, .menubar, .menubar-menu-button, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"]')) return true;
                         }
                         current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
                     }
@@ -376,6 +389,7 @@ export class DOMScanClick implements IInteractionMethod {
                     }
 
                     if (!text || text.length > 120) continue;
+                    if (/^(run|execute)$/.test(text)) continue;
                     if (!visible(el)) continue;
                     if (reject.some(p => text.includes(p))) continue;
                     if (!accept.some(p => text.includes(p))) continue;

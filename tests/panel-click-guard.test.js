@@ -82,6 +82,9 @@ test('Auto-continue submit uses safe chat input helper', () => {
     assert.match(autoContinue, /function getSafeChatInput\(\)/, 'auto-continue should define getSafeChatInput helper');
     assert.match(autoContinue, /const input = getSafeChatInput\(\);/, 'submit path should use getSafeChatInput instead of broad document.querySelector');
     assert.match(autoContinue, /Composer is empty\. Suppressing submit key dispatch\./, 'submit path should suppress empty composer Enter dispatches');
+    assert.ok(!/actionMethods:\s*\['dom-click',\s*'native-click',\s*'alt-enter'\]/.test(autoContinue), 'run/expand defaults must not include alt-enter fallback');
+    assert.ok(!/text === 'run'\s*\|\|\s*label === 'run'/.test(autoContinue), 'run matching must not allow bare "run" labels');
+    assert.match(autoContinue, /\[role="menuitem"\]/, 'unsafe context guard should block menuitem surfaces');
 });
 
 test('CDP bridge blocks unsafe global Enter relay for submit keys', () => {
