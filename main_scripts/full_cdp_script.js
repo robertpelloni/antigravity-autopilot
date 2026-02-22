@@ -646,6 +646,13 @@
             await workerDelay(50);
         }
 
+        // NUCLEAR OPTION: If active element STILL isn't our target textarea, ATB (Abort The Board)
+        // Never blindly fire KeyboardEvents if focus is captured by '.monaco-workbench'
+        if (document.activeElement !== target) {
+            log('[SubmitGuard] ABORT: Failed to acquire focus on Chat Input. Suppressing rogue Enter key dispatch.');
+            return false;
+        }
+
         const combos = [
             { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false },
             { key: 'Enter', code: 'Enter', ctrlKey: true, altKey: false, shiftKey: false, metaKey: false },
@@ -655,6 +662,9 @@
 
         let submitted = false;
         for (const combo of combos) {
+            // Re-verify focus every loop iteration, as dispatching might trigger a blur
+            if (document.activeElement !== target) break;
+
             try {
                 const down = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...combo });
                 const press = new KeyboardEvent('keypress', { bubbles: true, cancelable: true, ...combo });
@@ -901,15 +911,20 @@
         const centerX = Math.round(x + (width / 2));
         const centerY = Math.round(y + (height / 2));
 
-        // Send command to Extension via Console Bridge
-        // Send command to Extension via Bridge (Binding preferred)
-        const payload = `__ANTIGRAVITY_CLICK__:${centerX}:${centerY}`;
-        if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
-            window.__ANTIGRAVITY_BRIDGE__(payload);
-            log(`[Bridge] Sent Click via Binding: ${centerX},${centerY}`);
+        let isMainWindow = !!document.querySelector('.monaco-workbench');
+
+        if (isMainWindow) {
+            // Send command to Extension via Bridge (Binding preferred)
+            const payload = `__ANTIGRAVITY_CLICK__:${centerX}:${centerY}`;
+            if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
+                window.__ANTIGRAVITY_BRIDGE__(payload);
+                log(`[Bridge] Sent Click via Binding: ${centerX},${centerY}`);
+            } else {
+                console.log(payload);
+                log(`[Bridge] Sent Click via Console: ${centerX},${centerY}`);
+            }
         } else {
-            console.log(payload);
-            log(`[Bridge] Sent Click via Console: ${centerX},${centerY}`);
+            log(`[Bridge] Sub-frame detected. Suppressing CDP coordinate click to prevent titlebar leakage.`);
         }
 
         // ----------------------------------------------------------------
@@ -925,6 +940,9 @@
 
         // Also fire standard click for immediate UI feedback (hover states etc)
         // try { el.click(); } catch (e) { } // Disabled to allow untrusted MouseEvent tracking via CDP spy
+        if (!isMainWindow) {
+            try { el.click(); } catch (e) { }
+        }
         playSound('click');
 
         // Emit ACTION event for sound effects

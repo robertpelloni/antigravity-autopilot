@@ -493,10 +493,34 @@ export const AUTO_CONTINUE_SCRIPT = `
               if (document.activeElement !== input) {
                   try { input.focus(); } catch(e) {}
               }
-              const opts = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true };
-              input.dispatchEvent(new KeyboardEvent('keydown', opts));
-              input.dispatchEvent(new KeyboardEvent('keypress', opts));
-              input.dispatchEvent(new KeyboardEvent('keyup', opts));
+              
+              // NUCLEAR OPTION: If active element STILL isn't our target textarea, ATB (Abort The Board)
+              // Never blindly fire KeyboardEvents if focus is captured by '.monaco-workbench'
+              const activeEl = window.document.activeElement;
+              const isShadowMatch = activeEl && activeEl.shadowRoot && activeEl.shadowRoot.activeElement === input;
+              if (activeEl !== input && !isShadowMatch) {
+                  logAction('[SubmitGuard] ABORT: Focus lost to <' + (activeEl?.tagName || 'unknown') + '>. Suppressing rogue Enter key dispatch.');
+                  return;
+              }
+
+              const combos = [
+                  { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false },
+                  { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, ctrlKey: true, metaKey: false, altKey: false, shiftKey: false },
+                  { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, ctrlKey: false, metaKey: true, altKey: false, shiftKey: false }
+              ];
+              for (const c of combos) {
+                  // Re-verify focus every loop iteration
+                  const currentActive = window.document.activeElement;
+                  const currentIsShadowMatch = currentActive && currentActive.shadowRoot && currentActive.shadowRoot.activeElement === input;
+                  if (currentActive !== input && !currentIsShadowMatch) break;
+                  
+                  try {
+                      const opts = { bubbles: true, cancelable: true, composed: true, ...c };
+                      input.dispatchEvent(new KeyboardEvent('keydown', opts));
+                      input.dispatchEvent(new KeyboardEvent('keypress', opts));
+                      input.dispatchEvent(new KeyboardEvent('keyup', opts));
+                  } catch (e) { }
+              }
           };
 
           if (!submitted && hasMethod(bump.submitMethods, 'enter-key')) {
@@ -787,6 +811,14 @@ export const AUTO_CONTINUE_SCRIPT = `
                       if (document.activeElement !== input) {
                           try { (input as HTMLElement).focus(); } catch (e) {}
                       }
+                      
+                      const activeEl = window.document.activeElement;
+                      const isShadowMatch = activeEl && activeEl.shadowRoot && activeEl.shadowRoot.activeElement === input;
+                      if (activeEl !== input && !isShadowMatch) {
+                          logAction('[SubmitGuard] ABORT: Focus lost to <' + (activeEl?.tagName || 'unknown') + '>. Suppressing rogue Enter key dispatch.');
+                          return;
+                      }
+
                       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
                       input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
                   }, submitDelay);

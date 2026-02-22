@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.57] - 2026-02-22
+### Fixed
+- **Coordinate Bleed (Menu Bar & Layout Clicks)**: Fixed a critical bug where `Input.dispatchMouseEvent` was firing at incorrect coordinates when `full_cdp_script.js` executed inside VS Code Webviews. The script calculated Webview-relative coordinates instead of root window offsets, causing clicks intended for Chat buttons to accidentally strike the main "Run" menu or "Customize Layout" buttons on the Title Bar. Clicks inside Sub-frames are now strictly contained via native `el.click()`, dropping CDP dispatch.
+
+## [5.2.56] - 2026-02-22
+### Fixed
+- **Phantom Clicks / Layout Flicker**: Fixed a bug where `submitWithKeys` in `full_cdp_script.js` and `auto-continue.ts` would continuously dispatch un-guarded 'Enter' key events to the global `window` object even if the Chat Input text area was completely unfocused. This prevented VS Code's native keyboard interceptors from toggling 'Customize Layout' dialogs constantly during automated cycles.
+
 ## [5.2.55] - 2026-02-22
 ### Added
 - **Embedded Remote Control**: Promoted the AntiBridge legacy standalone server into a native VS Code core module (`src/modules/remote/server.ts`). Users can now control Antigravity from their phone's browser or any WebSocket client on port 8000 directly from the IDE's Extension Host, without needing to run separate Node scripts.
