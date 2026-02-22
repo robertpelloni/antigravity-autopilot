@@ -1,72 +1,58 @@
 # Antigravity Autopilot Roadmap (Reality-Based)
 
-Last reconciled: **2026-02-16**
+Last reconciled: **2026-02-22**
 
-This roadmap reflects current implementation truth in `src/` + `main_scripts/`, not historical intent claims.
+This roadmap reflects implementation truth in the root extension (`src/`, `main_scripts/`) and current release line (`5.2.63`).
 
-## Current Readiness Snapshot
+## Current State Snapshot
 
-### Production-ready core (implemented and wired)
-- [x] CDP connection + runtime state polling (`src/services/cdp/cdp-handler.ts`, `src/strategies/cdp-strategy.ts`)
-- [x] Auto-All runtime telemetry UX (status menu + runtime dashboard card)
-- [x] Cross-UI selector/method routing (`interactionUiProfile` + per-profile method bundles)
-- [x] Runtime waiting detection, guarded auto-resume, watchdog escalation controls
-- [x] Basic simple-mode command strategy (`src/strategies/simple-strategy.ts`)
+### Completed foundations
+- [x] CDP runtime + multi-target bridge orchestration
+- [x] Runtime state telemetry + status/dashboard diagnostics
+- [x] Auto-resume guard, watchdog escalation, and recovery command surfaces
+- [x] MCP server/federation real HTTP + WebSocket execution
+- [x] Antigravity click safety hardening (menu/layout anti-mistarget protections)
+- [x] Embedded remote server promotion into root extension
+- [x] **Remote host security baseline**: localhost default + explicit host allowlist/LAN gate
 
-### Partially implemented (works, but not complete/robust)
-- [~] Autonomous loop (`src/core/autonomous-loop.ts`) — operational but still includes placeholder circuit-state reporting and simplistic completion pipeline
-- [~] Agent orchestrator (`src/core/agent-orchestrator.ts`) — queue/swarm exists; decomposition/execution reliability is heuristic
-- [~] Project tracking (`src/core/project-tracker.ts`, `src/providers/project-manager.ts`) — works for markdown parsing but weak source-of-truth consistency
-- [~] Model routing (`src/core/model-selector.ts`) — wired but uses heuristic/fragile model availability and string matching
+### Partially complete / active hardening
+- [~] Completion detection manual soak validation (deterministic soak is complete; long-run product soak remains)
+- [~] Multi-fork UI isolation tuning under dual-open environments (ongoing edge-case hardening)
+- [~] Governance/doc sync discipline (improved, but requires continued per-release enforcement)
 
-### Scaffolded / simulation-level modules (not production-ready)
-- [ ] MCP server transport (`src/modules/mcp/server.ts`) — simulated lifecycle + limited in-process request handler
-- [ ] MCP federation transport (`src/modules/mcp/federation.ts`) — simulated connection/tool invocation path
-- [ ] Progress tracker depth (`src/core/progress-tracker.ts`) — placeholder metrics (`responseLength`, `responseHash`, files changed inference)
-- [ ] Test generator quality (`src/core/test-generator.ts`) — regex extraction and placeholder error tests
-- [ ] Voice control capture path (`src/modules/voice/control.ts`) — parser exists; no actual speech capture pipeline wiring
+### Not yet complete
+- [ ] Mobile companion first-class telemetry/auth integration
+- [ ] Remote control role/permission model beyond host allowlist
+- [ ] Enterprise policy layers (audit retention/export, SSO/multi-user controls)
+- [ ] Single-source version automation (eliminate drift-prone multi-file version literals)
 
-## Phased Delivery Plan
+## Next Delivery Phases
 
-## Phase A — Platform Truth & Safety (P0)
-- [ ] Replace simulated MCP server with real transport (HTTP/SSE or stdio) and typed request dispatch
-- [ ] Implement real MCP federation client lifecycle (connect/list/call with retries, auth, per-server health)
-- [ ] Replace autonomous-loop placeholder circuit status with actual circuit breaker state
-- [ ] Remove hardcoded dummy command return (`antigravity.getChromeDevtoolsMcpUrl`)
-- [ ] Standardize task source-of-truth (`TODO.md`/`task.md`/`ROADMAP.md`) and enforce single authoritative source
+### Phase R1 — Runtime Safety Continuation
+- [ ] Complete dual-fork mixed-environment soak matrix (Antigravity + VS Code Insiders + Cursor combinations)
+- [ ] Add structured runtime counters for blocked unsafe targets (menu/layout/chrome banlist hits)
+- [ ] Add dashboard card for selector-profile health and blocked-hit trends
 
-## Phase B — Core Loop Robustness (P1)
-- [ ] Upgrade `ProgressTracker` to derive real file/response telemetry from workspace and runtime data
-- [ ] Harden response completion detection (reduce false-positive “done” exits)
-- [ ] Add structured failure taxonomy and recovery policy for loop/orchestrator failures
-- [ ] Improve model selection reliability and fix identifier mismatch/drift
+### Phase R2 — Remote Ecosystem Hardening
+- [x] Add host allowlist + localhost default binding
+- [ ] Add optional auth token / session handshake for remote clients
+- [ ] Add role-based action restrictions (read-only telemetry vs control actions)
+- [ ] Add explicit allowlist UX in dashboard settings with validation
 
-## Phase C — UX Coverage & Config Completeness (P1)
-- [ ] Add missing dashboard controls for manifest settings:
-	- `maxConsecutiveTestLoops`
-	- `maxCallsPerHour`
-	- `interactionTimings`
-- [ ] Ensure command discoverability parity (manifest vs registered handlers)
-- [ ] Add context help/tooltips for advanced runtime guard/escalation settings
+### Phase R3 — Mobile/Companion Integration
+- [ ] Implement read-only runtime telemetry endpoint tailored for mobile dashboard consumption
+- [ ] Add signed command channel for safe remote control actions
+- [ ] Add integration tests across extension remote server + mobile companion client
 
-## Phase D — Quality Automation (P2)
-- [ ] Replace placeholder-generated tests with semantic source analysis and framework-aware assertions
-- [ ] Convert mocked/replicated tests to real module tests for root `src/` implementation
-- [ ] Expand CI checks to include extension command/config parity and dashboard-schema parity
-
-## Phase E — Ecosystem Integration (P2/P3)
-- [ ] AntiBridge remote control integration from reference to active root module wiring
-- [ ] Mobile companion telemetry endpoint + auth + basic control actions
-
-## Phase F — Commercial/Enterprise (P4)
-- [ ] Multi-tenant memory service
-- [ ] Audit logging policy + export
-- [ ] SSO and deployment hardening
+### Phase R4 — Release Governance
+- [ ] Introduce `VERSION` single-source file and generate/sync package + runtime constants during release build
+- [ ] Add CI check that fails on version drift (`package.json` / constants / script metadata / changelog header)
+- [ ] Add docs freshness check for dashboard/roadmap/vision/handoff timestamps
 
 ## Exit Criteria for “Feature Complete”
 
-- [ ] No simulation/placeholder logic remains in active root modules
-- [ ] Every config in `package.json` has explicit UI representation or documented rationale
-- [ ] Every user-facing command is both registered and manifest-declared (or intentionally private/documented)
-- [ ] Root tests validate real implementations (not replicas) for core modules
-- [ ] Runtime/manual docs align with code behavior and current version
+- [ ] No unsafe broad selectors can trigger workbench chrome actions across supported UIs
+- [ ] Remote control path has host allowlist + auth + role constraints + audit visibility
+- [ ] Versioning is single-source and drift-proof
+- [ ] Roadmap/TODO/dashboard/handoff remain synchronized at each release
+- [ ] Runtime and docs both reflect the same operational truth

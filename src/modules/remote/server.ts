@@ -22,6 +22,30 @@ export class RemoteServer {
         this.extensionContext = context;
     }
 
+    private normalizeRemoteAddress(raw: string | undefined): string {
+        const value = String(raw || '').trim().toLowerCase();
+        if (!value) return '';
+        if (value.startsWith('::ffff:')) return value.substring('::ffff:'.length);
+        if (value === '::1') return '127.0.0.1';
+        return value;
+    }
+
+    private isLoopbackAddress(address: string): boolean {
+        return address === '127.0.0.1' || address === 'localhost';
+    }
+
+    private isAllowedRemoteAddress(rawAddress: string | undefined, allowLan: boolean, allowedHosts: Set<string>): boolean {
+        const address = this.normalizeRemoteAddress(rawAddress);
+        if (!address) return false;
+
+        if (allowLan) {
+            if (allowedHosts.size === 0) return true;
+            return allowedHosts.has(address);
+        }
+
+        return this.isLoopbackAddress(address);
+    }
+
     public async start() {
         if (this.isActive) return;
 
@@ -30,6 +54,19 @@ export class RemoteServer {
             if (!enabled) return;
 
             const port = config.get<number>('remoteControlPort') || 8000;
+            const allowLan = config.get<boolean>('remoteControlAllowLan') ?? false;
+            const configuredHosts = config.get<string[]>('remoteControlAllowedHosts') || [];
+            const allowedHosts = new Set(
+                configuredHosts
+                    .map((v) => this.normalizeRemoteAddress(v))
+                    .filter((v) => !!v)
+            );
+            const bindHost = allowLan ? '0.0.0.0' : '127.0.0.1';
+
+            if (!allowLan) {
+                allowedHosts.add('127.0.0.1');
+                allowedHosts.add('localhost');
+            }
 
             this.app = express();
             this.server = http.createServer(this.app);
@@ -37,6 +74,17 @@ export class RemoteServer {
 
             this.app.use(cors());
             this.app.use(express.json());
+
+            this.app.use((req, res, next) => {
+                const remoteAddress = req.socket?.remoteAddress;
+                if (!this.isAllowedRemoteAddress(remoteAddress, allowLan, allowedHosts)) {
+                    const normalized = this.normalizeRemoteAddress(remoteAddress);
+                    log.warn(`Blocked HTTP remote client from ${normalized || 'unknown'} (allowLan=${allowLan})`);
+                    res.status(403).json({ error: 'Remote access denied by host allowlist' });
+                    return;
+                }
+                next();
+            });
 
             const frontendPath = path.join(this.extensionContext.extensionPath, 'assets', 'remote-ui');
             this.app.use(express.static(frontendPath));
@@ -48,6 +96,13 @@ export class RemoteServer {
             // Mirroring the WebSocket bridge patterns from AntiBridge
             this.wss.on('connection', (ws, req) => {
                 const urlPath = req.url || '';
+                const remoteAddress = req.socket?.remoteAddress;
+                if (!this.isAllowedRemoteAddress(remoteAddress, allowLan, allowedHosts)) {
+                    const normalized = this.normalizeRemoteAddress(remoteAddress);
+                    log.warn(`Blocked WS remote client from ${normalized || 'unknown'} (allowLan=${allowLan})`);
+                    ws.close(1008, 'Remote access denied by host allowlist');
+                    return;
+                }
 
                 // Allow direct root connection or /ws/extension legacy paths
                 this.connections.add(ws);
@@ -92,14 +147,15 @@ export class RemoteServer {
             });
 
             await new Promise<void>((resolve, reject) => {
-                this.server!.listen(port, '0.0.0.0', () => {
+                this.server!.listen(port, bindHost, () => {
                     resolve();
                 }).on('error', reject);
             });
 
             this.isActive = true;
-            log.info(`Remote Control Server listening on http://localhost:${port}`);
-            vscode.window.showInformationMessage(`Antigravity Remote Control active on port ${port} 📱`);
+            const modeLabel = allowLan ? 'LAN-enabled' : 'localhost-only';
+            log.info(`Remote Control Server listening on http://${bindHost}:${port} (${modeLabel})`);
+            vscode.window.showInformationMessage(`Antigravity Remote Control active on port ${port} (${modeLabel}) 📱`);
         } catch (error) {
             log.error(`Failed to start RemoteServer: ${error}`);
             vscode.window.showErrorMessage(`Failed to start Remote Control Server: ${(error as Error).message}`);

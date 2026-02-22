@@ -13,7 +13,7 @@
 5. **Documentation Lifecycle**: Update documentation **immediately** after code changes:
    - `CHANGELOG.md` — every release/build bump gets an entry.
    - `DASHBOARD.md` — keep submodule versions and directory status current.
-   - `VERSION` / `package.json` / `main_scripts/full_cdp_script.js` — All version strings must sync.
+  - `VERSION` / `package.json` / `src/utils/constants.ts` / `main_scripts/full_cdp_script.js` — All version strings must sync.
    - `MEMORY.md` — Update with ongoing codebase observations and design preferences.
    - `DEPLOY.md` — Keep updated with compilation and packaging standards.
 
@@ -40,10 +40,11 @@
 
 ### A. Git & Versioning Protocol
 - **Every build gets a new version number**.
-- **Three locations must stay in sync**:
+- **Core version locations must stay in sync**:
   1. `package.json` → `"version"` field
-  2. `main_scripts/full_cdp_script.js` → `ANTIGRAVITY_VERSION` variable
-  3. `CHANGELOG.md` → detailed entry at the top (`## [x.x.x] - YYYY-MM-DD`)
+  2. `src/utils/constants.ts` → `EXTENSION_VERSION`
+  3. `main_scripts/full_cdp_script.js` → `ANTIGRAVITY_VERSION` variable (and runtime toast string)
+  4. `CHANGELOG.md` → detailed entry at the top (`## [x.x.x] - YYYY-MM-DD`)
 - Make sure to git pull, commit, and push routinely.
 
 ### B. Code Style & Integrity

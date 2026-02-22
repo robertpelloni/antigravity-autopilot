@@ -1,28 +1,66 @@
-# Antigravity Autopilot: Project Vision (v5.0.16)
+# Antigravity Autopilot Vision (v5.2.63)
 
-## Ultimate Goal
-To evolve **Antigravity Autopilot** from a highly configurable IDE macro-clicker into a **fully autonomous, multi-modal Agent Orchestrator**. Antigravity will serve as the localized "Yoke" of the user's development environment, seamlessly connecting natively-sandboxed AI tools (GitHub Copilot, Cursor AI, local LLMs) with real execution frameworks (MCP, Node, Chromium).
+## Product North Star
 
-## Core Pillars
+Antigravity Autopilot should be a **safe, transparent, self-driving IDE operations layer** for AI-assisted coding:
 
-### 1. The Autonomous Orchestrator ("Yoke")
-Just as a yoke connects oxen to pull an entire plow, Antigravity networks isolated AI chats into a localized, persistent work engine.
-- **Unified Control**: The Antigravity extension runs a continuous event loop (`autonomous-loop.ts`). It doesn't just wait for user input; it observes idle intervals, stuck UI states, and compilation errors, and autonomously prompts the active IDE LLM to fix the issue.
-- **Deep Memory**: By implementing a local `MemoryManager` reading from `~/.gemini/antigravity/brain`, the AI establishes context continuity across VS Code window reloads and session drops.
+- It must keep work moving when chat UIs stall.
+- It must never trigger destructive or unrelated IDE chrome actions.
+- It must expose enough telemetry that operators can explain every autonomous decision.
 
-### 2. Deep Integration via CDP (Chrome DevTools Protocol)
-- **Subverting Sandbox Limitations**: Standard VS Code Extension APIs deliberately sandbox extensions, hiding the DOM. Antigravity connects to port `9000` to execute `main_scripts/full_cdp_script.js` directly inside the Chromium render thread.
-- **Micro-Automation**: This script precisely targets invisible `.monaco-list-row` DOM elements to force "Accept", "Run", or "Expand" buttons without human interaction, overcoming the native LLM's inability to actuate its own UI.
+## Core System Design
 
-### 3. Agentic & Tool Federation (Phase 5.1+)
-- **MCP Server integration**: Antigravity is not just an executor; it broadcasts an MCP layer (`src/modules/mcp/server.ts`) so *other* AI agents can command it.
-- **Voice Control**: The foundation is laid in `src/modules/voice/control.ts` to allow hands-free "intent routing," parsing transcripts into strict Extension commands.
+### 1) Runtime Autonomy Engine
 
-### 4. Smart Self-Correction & Watchdogs
-- **Deterministic Escaping**: Replacing simplistic "blind tick" loops with the newly configured `RuntimeStatus` evaluation. The watchdog monitors for `pendingAccept` or `waiting_for_chat_message` states, ensuring it never bumps an LLM that is actively generating logic.
+`src/core/autonomous-loop.ts` and related guardrails drive continuous execution:
 
-## Roadmap to Singularity (Phase 5.1)
-1. **The Orchestrator Awakening**: Connect `AgentOrchestrator` to read from a master `task.md` checklist and map out its own workflow.
-2. **Persistent Context**: Wire `MemoryManager` to funnel actual errors caught by the CDP script back into the extension to dynamically update the agent on what failed.
-3. **Robust Text Interface**: Move beyond `submit` to `typeAndSubmit()`, letting Antigravity inject "Fix line 43" instead of just "continue."
-4. **LLM Agnosticism Hand-off**: Enable Antigravity to generate `HANDOFF.md` summaries automatically and switch from Gemini (planning) to Claude (refactoring) mid-stream.
+- task progression
+- waiting-state detection
+- guarded auto-resume
+- escalation/watchdog behavior
+
+Design principle: **autonomy without opacity** (every automated decision should be diagnosable via runtime/state reports).
+
+### 2) CDP + Injected Interaction Layer
+
+`src/services/cdp/cdp-handler.ts` + `main_scripts/full_cdp_script.js` provide browser-surface control where standard extension APIs cannot.
+
+Design principle: **interaction precision over breadth**. Broad selectors and global key/mouse fallbacks are treated as high-risk and must be constrained.
+
+### 3) Strategy + Profile Routing
+
+`src/strategies/` routes behavior across VS Code/Cursor/Antigravity UI profiles.
+
+Design principle: **profile isolation**. Each UI surface should use narrowly-scoped selectors/methods to avoid cross-surface mis-targeting.
+
+### 4) Ecosystem Interfaces
+
+- MCP server/federation for tool interoperability
+- embedded remote server (`src/modules/remote/server.ts`)
+- mobile/companion integration path
+
+Design principle: **secure-by-default remote control** (localhost-only defaults, explicit allowlist, and progressive auth/permission controls).
+
+## Current Reality (2026-02-22)
+
+### Achieved
+- Robust runtime telemetry and diagnostics surfaces
+- Runtime waiting/escalation control plane
+- CDP hardening against menu/layout ghost interactions
+- Embedded remote server with host allowlist baseline
+
+### In Progress
+- Dual-fork mixed-environment soak hardening
+- Remote control auth/role model
+- Documentation/governance synchronization discipline
+
+### Next Strategic Milestones
+1. Ship remote auth + role-scoped permissions.
+2. Complete mobile telemetry integration with safe command channel.
+3. Introduce single-source version governance and drift-proof CI checks.
+
+## Non-Negotiables
+
+- Safety > speed when interaction confidence is low.
+- Every release updates version markers and changelog in lockstep.
+- TODO/ROADMAP/HANDOFF must reflect code truth, not aspiration.

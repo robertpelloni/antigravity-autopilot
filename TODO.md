@@ -1,6 +1,6 @@
 # Antigravity Autopilot — Master TODO (Reality-Based)
 
-Last updated: **2026-02-16**
+Last updated: **2026-02-22**
 
 This file is the ordered implementation backlog for implementor models.
 Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
@@ -174,11 +174,17 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 
 ### P4.2 AntiBridge remote integration in root extension
 - [x] Promote reference bridge patterns to active root module with setup and routing (Embedded Express/WS server)
-- [ ] Add permissions and host allowlist
+- [x] Add permissions baseline and host allowlist (`remoteControlAllowLan`, `remoteControlAllowedHosts`, localhost-default bind)
+- [ ] Add authenticated session/token validation for remote-control actions
+- [ ] Add role-scoped remote permissions (telemetry-only vs control-capable clients)
 
 ### P4.3 Mobile companion integration
 - [ ] Implement read-only telemetry endpoint first
 - [ ] Add remote control actions with role-based guardrails
+
+### P4.5 Version-governance hardening
+- [ ] Introduce single-source version file (`VERSION`) and sync generation for package/constants/injected-runtime
+- [ ] Add CI drift test for version parity (`package.json`, `constants.ts`, `full_cdp_script.js`, `CHANGELOG.md`)
 
 ### P4.4 Enterprise/commercial layers
 - [ ] Audit logs, retention policy, export
@@ -189,7 +195,7 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 
 ## UX and documentation debt (cross-cutting)
 
-- [ ] Keep `README.md`, `ROADMAP.md`, `DASHBOARD.md`, `VISION.md`, `CHANGELOG.md` synchronized at every release
+- [~] Keep `README.md`, `ROADMAP.md`, `DASHBOARD.md`, `VISION.md`, `CHANGELOG.md` synchronized at every release *(major sync pass completed 2026-02-22; enforce continuously)*
 - [ ] Add admin/operator manual for runtime guard/escalation settings
 - [ ] Add advanced settings docs for interaction matrix and profile selectors
 - [ ] Remove or clearly mark aspirational claims in docs/reports that are not yet rooted in active code

@@ -2,7 +2,7 @@
   "name": "antigravity-autopilot",
   "displayName": "Antigravity Autopilot (Unified)",
   "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-  "version": "5.2.57",
+  "version": "5.2.63",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -1242,10 +1242,14 @@
         "antigravity.interactionClickSelectorsAntigravity": {
           "type": "array",
           "default": [
-            "#antigravity\\.agentPanel button",
-            "#antigravity\\.agentPanel [role=\"button\"]",
-            ".bg-ide-button-background",
-            "button.grow"
+            "[data-testid=\"accept-all\"]",
+            "[data-testid*=\"accept\"]",
+            "button[aria-label*=\"Accept\"]",
+            "button[title*=\"Accept\"]",
+            "button[aria-label*=\"Allow\"]",
+            "button[title*=\"Allow\"]",
+            "button[aria-label*=\"Continue\"]",
+            "button[title*=\"Continue\"]"
           ],
           "description": "CSS selector list used for Antigravity UI element discovery."
         },
@@ -1279,6 +1283,22 @@
           "type": "number",
           "default": 8000,
           "description": "Port for the embedded AntiBridge Remote Control Server."
+        },
+        "antigravity.remoteControlAllowLan": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow remote control server access from LAN/non-localhost addresses (security-sensitive; disabled by default)."
+        },
+        "antigravity.remoteControlAllowedHosts": {
+          "type": "array",
+          "default": [
+            "127.0.0.1",
+            "localhost"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Allowed client host/IP list for remote control access. Used in LAN mode and validated for HTTP/WebSocket requests."
         }
       }
     }

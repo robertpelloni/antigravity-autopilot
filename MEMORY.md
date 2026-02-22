@@ -45,3 +45,8 @@ When dealing with "ghost" UI actions (e.g., the window layout mysteriously toggl
 - **Not a DOM Event:** We instrumented `click-spy-advanced.js` and confirmed there are absolutely zero untrusted DOM MouseEvents triggering layout changes.
 - **The Culprit is Native Layer or Shortcuts:** The CDP `__ANTIGRAVITY_COMMAND__` dispatch or stray `submitWithKeys` Enter/Space keys firing while focus is improperly trapped in the workbench chrome triggers native commands.
 - **Fix Pattern:** Always ensure the chat composer input explicitly holds focus *before* emitting Enter keystrokes to prevent VS Code keybindings from intercepting the submit event.
+
+## Recent Hardening Notes (v5.2.63)
+
+- **Antigravity Selector Isolation:** In mixed environments (Antigravity + VS Code Insiders/Copilot both open), broad Antigravity selectors like `button`/`button.grow` can still discover non-chat chrome surfaces. Keep Antigravity click selectors narrow and avoid merging broad shared click selectors into Antigravity mode.
+- **Remote Control Security Baseline:** Embedded remote server must default to localhost-only bind and validate HTTP/WS client host allowlist before accepting control traffic. LAN mode should remain opt-in and explicitly configured.

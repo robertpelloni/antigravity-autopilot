@@ -67,9 +67,10 @@ Use `verify:release:secure` when you want policy-test + audit-gate enforcement b
 
 ## Version
 
-**v4.10.86** — See [CHANGELOG.md](CHANGELOG.md) for details.
+**v5.2.63** — See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## Implementation Status Note
 
 Core CDP runtime, runtime telemetry, auto-resume watchdog systems, and real MCP server/federation HTTP+WebSocket execution are active.
+Embedded remote control now includes localhost-default host allowlisting and LAN-gated access controls.
 Remaining planned work is focused on higher-level reliability tuning and ecosystem expansion (see [TODO.md](TODO.md)).

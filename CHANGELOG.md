@@ -1,6 +1,42 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.63] - 2026-02-22
+### Fixed
+- **Antigravity Target Isolation (Dual VS Code Fork Safety)**: Hardened injected Antigravity click routing to remove broad selectors (`button`, `[role="button"]`, `button.grow`) and block run-labeled send-button matching in Antigravity mode.
+- **Antigravity Selector Merge Guard**: Added mode-aware selector merge behavior so broad shared click selectors are no longer merged into Antigravity click scans, reducing cross-surface chrome hits (e.g., Run menu/Customize Layout).
+- **Antigravity Tab Detection Hardening**: Replaced broad `button.grow` tab detection with role/chat-oriented tab selectors and stricter filtering.
+
+### Added
+- **Remote Control Host Allowlist Security (P4.2 milestone)**:
+    - Added localhost-default binding for embedded remote server (`127.0.0.1` when LAN mode is disabled).
+    - Added explicit HTTP and WebSocket host allowlist checks with deny logging.
+    - Added new settings: `antigravity.remoteControlAllowLan` and `antigravity.remoteControlAllowedHosts`.
+    - Added regression coverage in `tests/remote-server-security.test.js`.
+
+## [5.2.62] - 2026-02-22
+### Fixed
+- **The True Hardware Coordinate Ghost Click (Nuclear Option)**: Version `5.2.61` removed `__ANTIGRAVITY_CLICK__` from the main frontend script, but "Customize Layout" ghost clicks paradoxically persisted. A deep audit revealed a secondary, hidden click vector: the `interaction-methods.ts` backend subsystem (designed for Auto-Accept strategies) also contained independent methods (`CDPMouseEvent` and `BridgeCoordinateClick`) that calculated spatial dimensions, scaled them improperly via VS Code's `window.zoomLevel`, and dispatched physical scaling-cursed coordinate hardware clicks either natively from Node or across the bridge. Both of these strategies were permanently neutered from the core engine flow. Finally, the extension receiver port inside `cdp-handler.ts` was entirely stripped of the `__ANTIGRAVITY_CLICK__` listener to mathematically guarantee that hardware clicks can never execute across the bridge again.
+
+## [5.2.61] - 2026-02-22
+### Fixed
+- **The Simultaneous Ghost Click (Zoom Level Offsets & Settings Toggles)**: Finally discovered the complete multi-causal bug responsible for opening the "Auto proceed" submenu and "Customize Layout" buttons at the exact same moment. 
+  1. **Settings Toggles Matching**: The word "proceed" was included in the `defaultPatterns` string matching array for Accept buttons. When Copilot rendered an "Auto proceed" settings toggle next to its "Run in Terminal" button, the script mistook it for a single-use "Allow" button and invoked `remoteClick` on it.
+  2. **CDP Hardware Coordinate Desyncs**: The `remoteClick` script natively dispatched a PointerEvent to that button (which opened the "Auto proceed" submenu), but then redundantly transmitted `__ANTIGRAVITY_CLICK__` to the backend for a Chromium-level fallback physical click. Because the user's OS display scaling (`window.devicePixelRatio`) or VS Code `window.zoomLevel` was factored into Chromium's viewport space but not the DOM bounds rect, the physical CDP click struck offset coordinates on the screen... perfectly landing on the Title Bar's "Customize Layout" button at the top right of the application frame! 
+  - **Resolution**: `__ANTIGRAVITY_CLICK__` CDP clicks have been completely and permanently retired from the execution loop. `remoteClick` now exclusively relies on completely scale-agnostic native `el.click()` events across all windows. Furthermore, "Auto proceed" was permanently blacklisted.
+
+## [5.2.60] - 2026-02-22
+### Fixed
+- **Coordinate Bleed True Root Cause (Webview Class Inheriting)**: Uncovered a massive flaw in the frame detection logic added in `5.2.57`. The script assumed that `!!document.querySelector('.monaco-workbench')` would only evaluate to `true` in the main VS Code window context. However, the Microsoft Chat team explicitly wraps their Webview DOMs in a `<div class="monaco-workbench">` to ensure global CSS variable cascading formatting remains identical to native IDE tabs. As a result, the Webviews passed the main window test and continuously transmitted phantom CDP coordinates (`X=800, Y=15`) over the bridge to the main process, which caused Chromium's compositor to click the exact physical coordinates on the main OS application menu bar. Evaluated execution frames now rely on `vscode-webview://` protocol matching and DOM `window.top` boundary checking.
+
+## [5.2.59] - 2026-02-22
+### Fixed
+- **Alt+Enter Keyboard Bleed (Windows Native Menu Activation)**: Resolved the final missing piece of the "Customize Layout" and "Run" menu bugs. The automation script was utilizing an `Alt+Enter` simulated keypress as a robust fallback for the "Run" and "Expand" actions when normal clicks failed. On Windows running Electron/VS Code, dispatching an `Alt` key simulation bubbles directly to the native OS window manager, causing the top Menu Bar and Layout Controls to gain focus, bypassing all DOM-level filtering. The `alt-enter` strategy has been completely stripped from the extension.
+
+## [5.2.58] - 2026-02-22
+### Fixed
+- **Synchronized DOM Banlists (Menu & Layout Clicks)**: Fixed a bug where `auto-continue.ts` was bypassing the strict IDE chrome exclusions present in the main automation script. Replicated the exact, exhaustive `bannedAncestors` string from `full_cdp_script.js` directly into `auto-continue.ts`, specifically outlawing `.monaco-menu`, `.monaco-menu-container`, and `.title-actions`. This entirely terminates the ability of `auto-continue.ts` to execute naive `Element.click()` calls against the VS Code native "Run" menu and Custom Title Bar "Customize Layout" buttons.
+
 ## [5.2.57] - 2026-02-22
 ### Fixed
 - **Coordinate Bleed (Menu Bar & Layout Clicks)**: Fixed a critical bug where `Input.dispatchMouseEvent` was firing at incorrect coordinates when `full_cdp_script.js` executed inside VS Code Webviews. The script calculated Webview-relative coordinates instead of root window offsets, causing clicks intended for Chat buttons to accidentally strike the main "Run" menu or "Customize Layout" buttons on the Title Bar. Clicks inside Sub-frames are now strictly contained via native `el.click()`, dropping CDP dispatch.
