@@ -428,18 +428,23 @@
         },
         antigravity: {
             click: [
-                'button',
-                '[role="button"]',
-                '.bg-ide-button-background',
-                'button.grow',
                 '[data-testid="accept-all"]',
-                '[data-testid*="accept"]'
+                '[data-testid*="accept"]',
+                'button[aria-label*="Accept"]',
+                'button[title*="Accept"]',
+                'button[aria-label*="Allow"]',
+                'button[title*="Allow"]',
+                'button[aria-label*="Continue"]',
+                'button[title*="Continue"]',
+                'button[aria-label*="Keep"]',
+                'button[title*="Keep"]',
+                'button[aria-label*="Retry"]',
+                'button[title*="Retry"]'
             ],
             sendButtons: [
                 'button[aria-label*="Send"]',
                 'button[title*="Send"]',
-                'button[aria-label*="submit" i]',
-                'button[aria-label*="run" i]'
+                'button[aria-label*="submit" i]'
             ],
             textInputs: [
                 'textarea',
@@ -496,6 +501,14 @@
     function mergeSelectorSets(mode, category) {
         const shared = (UI_SELECTORS.shared[category] || []).slice();
         const modeSpecific = (UI_SELECTORS[mode] && UI_SELECTORS[mode][category]) ? UI_SELECTORS[mode][category] : [];
+
+        // Antigravity hardening: do not merge broad shared click selectors (e.g. generic button)
+        // into Antigravity click scans. This prevents cross-targeting workbench chrome controls
+        // such as Customize Layout / Run menu when both VS Code forks are open.
+        if (mode === 'antigravity' && category === 'click') {
+            return [...new Set([...modeSpecific])];
+        }
+
         return [...new Set([...modeSpecific, ...shared])];
     }
 
@@ -2155,7 +2168,19 @@
 
                 const mode = getCurrentMode();
                 if (mode !== 'vscode') {
-                    let tabs = queryAll('button.grow');
+                    const tabSelectors = [
+                        '[role="tab"]',
+                        '[aria-controls*="chat" i]',
+                        '[data-testid*="chat-tab" i]',
+                        '[class*="chat"] [role="tab"]',
+                        '[class*="conversation"] [role="tab"]'
+                    ];
+
+                    let tabs = [];
+                    for (const selector of tabSelectors) {
+                        tabs = queryAll(selector);
+                        if (tabs.length > 0) break;
+                    }
                     log(`[Loop] Cycle ${cycle}: Found ${tabs.length} tabs`);
 
                     const blockedTabTerms = ['extension', 'extensions', 'marketplace', 'plugin', 'mcp', 'source control', 'search', 'explorer', 'run and debug'];
@@ -2163,7 +2188,10 @@
                         const label = (tab.getAttribute('aria-label') || tab.textContent || '').trim().toLowerCase();
                         if (!label) return false;
                         if (blockedTabTerms.some(term => label.includes(term))) return false;
-                        return label.includes('chat') || tab.className.toLowerCase().includes('chat-session') || tab.className.toLowerCase().includes('grow');
+
+                        const className = (tab.className || '').toLowerCase();
+                        const role = (tab.getAttribute('role') || '').toLowerCase();
+                        return role === 'tab' || label.includes('chat') || className.includes('chat-session') || className.includes('conversation');
                     });
 
                     updateTabNames(tabs);

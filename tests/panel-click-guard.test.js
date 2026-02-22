@@ -58,6 +58,23 @@ test('Submit keyboard fallback blocks Alt+Enter and keeps safe input targeting',
     assert.ok(!/altKey:\s*true/.test(submitWithKeysSource), 'submitWithKeys must not include Alt+Enter combo');
 });
 
+test('Antigravity profile avoids broad selectors that can hit workbench chrome', () => {
+    const script = readScript();
+
+    const antigravityStart = script.indexOf('antigravity: {');
+    const cursorStart = script.indexOf('cursor: {', antigravityStart);
+    assert.ok(antigravityStart >= 0 && cursorStart > antigravityStart, 'antigravity selector block should exist');
+    const antigravityBlock = script.slice(antigravityStart, cursorStart);
+
+    assert.ok(!/\bbutton\.grow\b/.test(antigravityBlock), 'antigravity click selectors must not include button.grow');
+    assert.ok(!/'button'\s*,/.test(antigravityBlock), 'antigravity click selectors must not include broad button selector');
+    assert.ok(!/'\[role="button"\]'\s*,/.test(antigravityBlock), 'antigravity click selectors must not include broad role=button selector');
+    assert.ok(!/aria-label\*="run"/i.test(antigravityBlock), 'antigravity send selectors must not include run-labeled button selectors');
+
+    assert.ok(/mode === 'antigravity' && category === 'click'/.test(script), 'mergeSelectorSets should harden antigravity click selector merging');
+    assert.ok(!/queryAll\('button\.grow'\)/.test(script), 'antigravity loop tab detection must not query button.grow directly');
+});
+
 test('Auto-continue submit uses safe chat input helper', () => {
     const autoContinuePath = path.join(ROOT, 'src', 'scripts', 'auto-continue.ts');
     const autoContinue = fs.readFileSync(autoContinuePath, 'utf-8');
