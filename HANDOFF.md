@@ -1,46 +1,24 @@
-# Handoff: Antigravity Autopilot (v4.10.103)
+# Handoff Report
 
-## Current Status
-- **Core Automation**: Functional. `auto-continue.ts` is injected via CDP and handles "Click Run", "Click Accept", "Click Expand", and "Auto-Reply".
-- **Dashboard**: "Granular Controls" implemented in v4.10.103. User can toggle individual actions.
-- **Voice Control**: *Incomplete.* `modules/voice/control.ts` exists as a command parser but lacks an audio input source (Microphone).
-- **Smart Resume**: *Basic.* Currently uses `blind-bump-handler.ts` which is a simple timer. Needs to be upgraded to "Smart Bump" using DOM analysis.
+**Date**: 2026-02-21
+**Prepared by**: Gemini
+**Target Protocol**: Agent Hand-over readiness (Gemini -> Claude -> GPT -> Copilot)
 
-## Roadmap & Missing Features
+## 1. Project Health & State
+The Antigravity Autopilot repository has achieved "Gold Standard" operational stability (version 5.2.52). The autonomous mode (Yoke) successfully manages continuous execution blocks across multiple windows via controller lease mechanics, and integrates cross-window CDP connections.
 
-### 1. Smart Resume / Context-Aware Autopilot
-- **Problem**: `blind-bump-handler.ts` blindly types "bump" every X seconds.
-- **Solution**: Implement `SmartResumeHandler`.
-- **Implementation**:
-  - Use CDP to query the last chat message.
-  - Detect if the last message is from the User or AI.
-  - Detect "Generating..." state (spinners).
-  - Only bump if "Idle" and "Last Message = AI" or "Last Message = User (but stale)".
+The most recent diagnostic sessions resolved the "Phantom Click" phenomena (Customize Layout flicker) by proving via `click-spy-advanced.js` that the CDP DOM layer is NOT emitting the rogue clicks. The next agent should focus on the `submitWithKeys` focus-blurring or stray `__ANTIGRAVITY_COMMAND__` dispatches in `cdp-handler.ts`.
 
-### 2. Voice Control Activation
-- **Problem**: `VoiceControl` class has no ears.
-- **Solution**: Use the Dashboard Webview (`dashboard.ts`) to capture audio.
-- **Implementation**:
-  - Add `<button id="mic">` to Dashboard.
-  - Use `window.webkitSpeechRecognition` in the Webview.
-  - Send `voice-transcription` messages to the extension.
-  - Route to `voiceControl.processAndExecuteTranscription()`.
+## 2. Outstanding Incomplete Features (from Roadmap & TODO)
+- **Real MCP Transport (HTTP/SSE or stdio)**: The infrastructure is partially implemented but simulation placeholders exist. P1 goal is to rip out the remaining scaffold and wire real typed dispatch in `server.ts`.
+- **Ecosystem Expansion (Mobile Companion)**: Read-only telemetry endpoint integration.
+- **Agent Orchestrator Quality**: Swarm logic is present but task decomposition reliability is heuristic.
 
-### 3. Multi-Tab Orchestration
-- **Problem**: Extension only focuses on the active tab.
-- **Solution**: Use CDP to list all targets (`Target.getTargets`).
-- **Implementation**:
-  - Attach to multiple sessions.
-  - Round-robin "Auto-Continue" injection into all `type: 'page'` targets.
+## 3. Submodule Status
+Submodules have been fundamentally deprecated from this architecture in favor of flattened monorepo tracking to prevent `detached HEAD` failures during rapid AI-driven git ops. See `DASHBOARD.md` for virtual tracking metrics.
 
-### 4. Self-Healing Watchdogs
-- **Problem**: If the `auto-continue.ts` script crashes or is navigating away, automation stops.
-- **Solution**: `CDPHandler` should ping the script every 5s (`window.__antigravityHeartbeat`). If no pong, re-inject.
+## 4. Immediate Next Step
+1. Address the stray FOCUSED element Enter key press causing the "Customize Layout" Native command to trigger. Refactor `submitWithKeys` in `full_cdp_script.js` to rigidly enforce `textarea` focus checking before dispatch.
+2. Advance to the next item on `TODO.md`.
 
-## Immediate Next Steps
-1.  Upgrade `blind-bump-handler.ts` to `SmartBumpHandler` (Backend/CDP work).
-2.  Wire up Voice Control via Dashboard (Frontend/Bridge work).
-3.  Implement Multi-Tab attaching (CDP work).
-
----
-*Analysis by Antigravity (Gemini 2.0 Flash) - 2026-02-18*
+*End of Handoff.*

@@ -39,3 +39,9 @@ If the `activate(context)` function inside `src/extension.ts` throws an unhandle
 - **Panel Chrome Click-Loop Risk**: Broad button scans can accidentally click VS Code panel/header/tab chrome controls in loops. Keep strict exclusions in `isValidInteractionTarget` for tab/tablist + workbench chrome containers, and preserve regression coverage in `tests/panel-click-guard.test.js`.
 - **Run Pattern Over-Match**: Avoid broad standalone `run` accept-pattern matching; keep command-intent variants (`run in terminal`, `run command`, `execute command`) to reduce false positives outside chat action surfaces.
 - **Secure Release Audit Policy**: Current ecosystem may report high advisories in dev tooling with no upstream fix path. Policy now computes effective high/critical counts with a narrow allowlist; do not broaden this list casually. Non-allowlisted high/critical findings must still fail CI.
+
+## Phantom Clicks & The Custom Layout Flicker
+When dealing with "ghost" UI actions (e.g., the window layout mysteriously toggling during automated loops):
+- **Not a DOM Event:** We instrumented `click-spy-advanced.js` and confirmed there are absolutely zero untrusted DOM MouseEvents triggering layout changes.
+- **The Culprit is Native Layer or Shortcuts:** The CDP `__ANTIGRAVITY_COMMAND__` dispatch or stray `submitWithKeys` Enter/Space keys firing while focus is improperly trapped in the workbench chrome triggers native commands.
+- **Fix Pattern:** Always ensure the chat composer input explicitly holds focus *before* emitting Enter keystrokes to prevent VS Code keybindings from intercepting the submit event.

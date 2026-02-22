@@ -7,6 +7,9 @@
     const Analytics = (function () {
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
+        // ============================================================================
+        const ANTIGRAVITY_VERSION = '5.2.52';
+        // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
 
@@ -913,7 +916,7 @@
         } catch (e) { }
 
         // Also fire standard click for immediate UI feedback (hover states etc)
-        try { el.click(); } catch (e) { }
+        // try { el.click(); } catch (e) { } // Disabled to allow untrusted MouseEvent tracking via CDP spy
         playSound('click');
 
         // Emit ACTION event for sound effects

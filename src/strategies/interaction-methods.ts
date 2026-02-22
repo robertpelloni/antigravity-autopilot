@@ -343,7 +343,25 @@ export class DOMScanClick implements IInteractionMethod {
                     return style.display !== 'none' && style.visibility !== 'hidden' && style.pointerEvents !== 'none' && !el.disabled && rect.width > 0 && rect.height > 0;
                 }
 
+                function isNodeBanned(el) {
+                    if (!el) return false;
+                    const banned = '.codicon-settings-gear, .codicon-gear, .codicon-layout, .codicon-attach, .codicon-paperclip, .codicon-add, .codicon-plus';
+                    if (el.matches && el.matches(banned)) return true;
+                    if (el.querySelector && el.querySelector(banned)) return true;
+                    let current = el;
+                    while(current) {
+                        if (current.nodeType === 1) {
+                             const attrs = ((current.getAttribute('aria-label') || '') + ' ' + (current.getAttribute('title') || '')).toLowerCase();
+                             if (/(customize layout|layout control|add context|attach context|new chat|clear chat|clear session)/i.test(attrs)) return true;
+                        }
+                        current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
+                    }
+                    return false;
+                }
+
                 for (const el of candidates) {
+                    if (isNodeBanned(el)) continue;
+
                     let text = ((el.textContent || '') + ' ' + (el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')).trim().toLowerCase();
                     
                     // Icon-only button handling (Run / Expand)
@@ -351,7 +369,7 @@ export class DOMScanClick implements IInteractionMethod {
                         const classList = (el.className || '').toLowerCase();
                         if (classList.includes('codicon-play') || classList.includes('codicon-run') || classList.includes('codicon-debug-start')) {
                             text = 'run';
-                        } else if (classList.includes('codicon-chevron-right') || classList.includes('monaco-tl-twistie') || classList.includes('codicon-tree-item-expanded') === false) { 
+                        } else if (classList.includes('codicon-chevron-right') || classList.includes('monaco-tl-twistie')) { 
                             // chevron-right usually means collapsed/expandable
                             text = 'expand';
                         }
@@ -361,7 +379,9 @@ export class DOMScanClick implements IInteractionMethod {
                     if (!visible(el)) continue;
                     if (reject.some(p => text.includes(p))) continue;
                     if (!accept.some(p => text.includes(p))) continue;
-                    el.click();
+                    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                    el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
                     return true;
                 }
 
@@ -581,7 +601,9 @@ export class VisualVerifiedClick implements IInteractionMethod {
             (function() {
                 const el = document.querySelector('${escapedSelector}');
                 if (!el) return false;
-                el.click();
+                el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
                 return true;
             })()
         `;

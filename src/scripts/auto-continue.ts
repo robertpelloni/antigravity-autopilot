@@ -368,9 +368,12 @@ export const AUTO_CONTINUE_SCRIPT = `
           if (el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0) {
              const targetToClick = el.closest('button, a') || el;
              if (targetToClick.hasAttribute('disabled') || targetToClick.classList.contains('disabled')) continue;
+             if (isUnsafeContext(targetToClick) || isNodeBanned(targetToClick)) continue;
              
              highlight(targetToClick);
-             targetToClick.click();
+             targetToClick.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+             targetToClick.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+             targetToClick.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
              log('Clicked ' + name);
              emitAction(group || 'click', name);
              return true; 
@@ -701,8 +704,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           const expandControl = getControlConfig(cfg, 'expand');
           const expandSelectors = [
               '[title*="Expand"]',
-              '[aria-label*="Expand"]',
-              '.monaco-tl-twistie.collapsed'
+              '[aria-label*="Expand"]'
           ].join(',');
 
           if (hasMethod(expandControl.actionMethods, 'dom-click')) {

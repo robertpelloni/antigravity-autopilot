@@ -4,3 +4,6 @@
 **PLEASE READ**: `docs/LLM_INSTRUCTIONS.md`
 
 All project mandates, coding styles, git protocols, and architectural context exist purely within that file. Proceed immediately to read it before executing any user requests.
+
+-- **Claude Specific Instructions**:
+As Claude, your primary strength is deep refactoring, code quality, and robust architectural design. Always leverage your long context window to understand the entire `CDPHandler` and `autonomous-loop` flow before writing code.

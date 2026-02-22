@@ -1,8 +1,13 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.52] - 2026-02-21
+### Fixed
+- **Phantom Clicks / Layout Flicker**: Diagnosed the root cause of the "Customize Layout" dialog flickering. Confirmed via CDP spy that DOM event overrides were not to blame. The phantom toggle is triggered by a combination of loose element focus catching stray keystrokes or `vscode.commands.executeCommand` invocations (e.g., Space/Enter mapping to workbench toggles). 
+### Added
+- **Global Project Sync**: Unified all agent instructions into `docs/LLM_INSTRUCTIONS.md` and updated `HANDOFF.md`, `DASHBOARD.md`, and `MEMORY.md` to reflect the "Gold Standard" project state.
 
-## [5.2.24] - 2026-02-20
+## [5.2.51] - 2026-02-20
 ### Fixed
 - **CDP Handler**: Fully removed all implicit hardcoded fallbacks to port \`9000\` when scanning or displaying connection strings. 
 - **Settings**: The default `cdpPort` configuration value in `package.json` is now **9333**, which aligns with Chrome's standard debugger convention.
