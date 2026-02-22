@@ -93,11 +93,12 @@ export class MCPServer {
         const url = req.url || '/';
 
         if (method === 'GET' && (url === '/' || url === '/health')) {
+            const tools = await this.getToolMetadata();
             this.writeJson(res, 200, {
                 ok: true,
                 service: 'antigravity-mcp-server',
                 active: this.isActive,
-                tools: this.getToolMetadata().map(t => t.name),
+                tools: tools.map(t => t.name),
                 timestamp: Date.now()
             });
             return;
@@ -165,11 +166,49 @@ export class MCPServer {
         res.end(body);
     }
 
-    private getToolMetadata(): Array<{ name: string; description: string }> {
-        return [
-            { name: 'get_next_task', description: 'Read the next incomplete task from project tracking files.' },
-            { name: 'complete_task', description: 'Mark a task as complete in project tracking files.' }
+    private async getToolMetadata(): Promise<Array<{ name: string; description: string; inputSchema: any }>> {
+        const tools: Array<{ name: string; description: string; inputSchema: any }> = [
+            {
+                name: 'get_next_task',
+                description: 'Read the next incomplete task from project tracking files.',
+                inputSchema: { type: 'object', properties: {} }
+            },
+            {
+                name: 'complete_task',
+                description: 'Mark a task as complete in project tracking files.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        task_description: { type: 'string', description: 'Task text to mark complete.' }
+                    },
+                    required: ['task_description']
+                }
+            }
         ];
+
+        try {
+            const allCommands = await vscode.commands.getCommands(true);
+            const antigravityCommands = allCommands.filter(cmd => cmd.startsWith('antigravity.'));
+            for (const cmd of antigravityCommands) {
+                tools.push({
+                    name: cmd.replace(/\./g, '_'), // MCP tools prefer snake_case or specific formats, replacing dot
+                    description: `Execute VS Code command: ${cmd}`,
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            args: {
+                                type: 'array',
+                                description: 'Optional array of arguments to pass to the command.'
+                            }
+                        }
+                    }
+                });
+            }
+        } catch (e) {
+            log.error(`Failed to fetch vscode commands for MCP tools: ${e}`);
+        }
+
+        return tools;
     }
 
     async handleRequest(request: MCPJsonRpcRequest): Promise<MCPJsonRpcResponse> {
@@ -179,22 +218,15 @@ export class MCPServer {
             const id = request.id ?? null;
 
             if (request.method === 'tools/list') {
+                const tools = await this.getToolMetadata();
                 return {
                     jsonrpc: '2.0',
                     id,
                     result: {
-                        tools: this.getToolMetadata().map(tool => ({
+                        tools: tools.map(tool => ({
                             name: tool.name,
                             description: tool.description,
-                            inputSchema: {
-                                type: 'object',
-                                properties: tool.name === 'complete_task'
-                                    ? {
-                                        task_description: { type: 'string', description: 'Task text to mark complete.' }
-                                    }
-                                    : {},
-                                required: tool.name === 'complete_task' ? ['task_description'] : []
-                            }
+                            inputSchema: tool.inputSchema
                         }))
                     }
                 };
@@ -219,6 +251,33 @@ export class MCPServer {
                         id,
                         result: { content: [{ type: 'text', text: success ? 'Task marked as complete' : 'Task not found' }] },
                     };
+                }
+
+                if (name.startsWith('antigravity_')) {
+                    const vscodeCmd = name.replace(/_/g, '.');
+                    const cmdArgs = args?.args || [];
+                    try {
+                        const result = await vscode.commands.executeCommand(vscodeCmd, ...cmdArgs);
+                        return {
+                            jsonrpc: '2.0',
+                            id,
+                            result: {
+                                content: [{
+                                    type: 'text',
+                                    text: result ? JSON.stringify(result, null, 2) : `Command '${vscodeCmd}' executed successfully.`
+                                }]
+                            }
+                        };
+                    } catch (cmdError: any) {
+                        return {
+                            jsonrpc: '2.0',
+                            id,
+                            error: {
+                                code: -32603,
+                                message: `Command execution failed: ${cmdError.message || String(cmdError)}`
+                            }
+                        };
+                    }
                 }
 
                 return {

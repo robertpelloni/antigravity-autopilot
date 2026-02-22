@@ -22,7 +22,7 @@ Priority order is strict: **P0 → P1 → P2 → P3 → P4**.
 ### P0.1 Replace simulated MCP server with real transport
 - [x] Implement real MCP server lifecycle in `src/modules/mcp/server.ts`
 - [x] Support transport mode(s): stdio and/or HTTP/SSE with clear config *(HTTP JSON-RPC implemented at `/rpc`; stdio remains backlog)*
-- [x] Implement typed `tools/list`, `tools/call`, errors, and health endpoint
+- [x] Implement typed `tools/list`, `tools/call`, errors, and health endpoint (Dynamic `antigravity.*` VS Code Command Map)
 - [x] Remove simulated startup logs and timeout-based faux "listening" behavior
 - **Evidence:** `src/modules/mcp/server.ts` currently logs `simulated` and uses placeholder server field
 - **Definition of done:** external MCP client can discover and invoke root tools end-to-end

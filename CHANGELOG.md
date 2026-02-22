@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.54] - 2026-02-21
+### Added
+- **Dynamic MCP Transport Tools**: The HTTP MCP Server now dynamically exposes `vscode.commands` starting with `antigravity.*` as executing tools over the `/rpc` endpoint, replacing the hardcoded project tracker scaffolds and completing the P1 Real Transport objective.
 
 ## [5.2.53] - 2026-02-21
 ### Fixed
