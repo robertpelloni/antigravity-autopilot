@@ -260,12 +260,12 @@ export class CDPHandler extends EventEmitter {
                             controls: {
                                 run: {
                                     detectMethods: getArr('automation.controls.run.detectMethods', ['enabled-flag', 'not-generating', 'action-cooldown']),
-                                    actionMethods: getArr('automation.controls.run.actionMethods', ['dom-click', 'native-click', 'alt-enter']),
+                                    actionMethods: getArr('automation.controls.run.actionMethods', ['dom-click', 'native-click']),
                                     delayMs: config.get<number>('automation.controls.run.delayMs') ?? 100
                                 },
                                 expand: {
                                     detectMethods: getArr('automation.controls.expand.detectMethods', ['enabled-flag', 'not-generating', 'action-cooldown']),
-                                    actionMethods: getArr('automation.controls.expand.actionMethods', ['dom-click', 'native-click', 'alt-enter']),
+                                    actionMethods: getArr('automation.controls.expand.actionMethods', ['dom-click', 'native-click']),
                                     delayMs: config.get<number>('automation.controls.expand.delayMs') ?? 50
                                 },
                                 accept: {
@@ -569,31 +569,7 @@ export class CDPHandler extends EventEmitter {
         if (typeof text !== 'string') return;
 
         try {
-            if (text.startsWith('__ANTIGRAVITY_CLICK__:')) {
-                const parts = text.split(':');
-                const x = parseInt(parts[1]);
-                const y = parseInt(parts[2]);
-                if (!isNaN(x) && !isNaN(y)) {
-                    // Click = Pressed (buttons=1) + Delay + Released
-                    await this.sendCommand(pageId, 'Input.dispatchMouseEvent', {
-                        type: 'mousePressed',
-                        x, y,
-                        button: 'left',
-                        buttons: 1, // Bitmask: Left button down
-                        clickCount: 1
-                    }, undefined, sessionId);
-
-                    await new Promise(r => setTimeout(r, 50));
-
-                    await this.sendCommand(pageId, 'Input.dispatchMouseEvent', {
-                        type: 'mouseReleased',
-                        x, y,
-                        button: 'left',
-                        buttons: 0,
-                        clickCount: 1
-                    }, undefined, sessionId);
-                }
-            } else if (text.startsWith('__ANTIGRAVITY_TYPE__:')) {
+            if (text.startsWith('__ANTIGRAVITY_TYPE__:')) {
                 const content = text.substring('__ANTIGRAVITY_TYPE__:'.length);
                 if (content) {
                     await this.sendCommand(pageId, 'Input.insertText', { text: content }, undefined, sessionId);
@@ -632,7 +608,7 @@ export class CDPHandler extends EventEmitter {
                     }
                 }
             } else if (text.startsWith('__ANTIGRAVITY_PLAY_SOUND__:')) {
-                const effect = text.substring('__ANTIGRAVITY_PLAY_SOUND__:'.length).trim() as SoundEffect;
+                const effect = text.substring('__ANTIGRAVITY_PLAY_SOUND__:'.length).trim() as any;
                 if (config.get<boolean>('audioFeedbackEnabled')) {
                     SoundEffects.play(effect);
                 }
@@ -699,20 +675,10 @@ export class CDPHandler extends EventEmitter {
                     } catch (e) { }
                 }
 
-                // 3. Fallback: Physical Enter Key (CDP)
+                // 3. Safety: Do NOT emit global CDP Enter fallback.
+                // It can target non-chat UI focus and trigger native menu/layout actions.
                 await new Promise(r => setTimeout(r, Math.max(100, submitDelay / 2)));
-                logToOutput(`[Bump-Step] 6. Fallback CDP Enter Key`);
-                await this.dispatchKeyEventToAll({
-                    type: 'keyDown', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
-                    windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
-                    text: '\r', unmodifiedText: '\r'
-                });
-                await new Promise(r => setTimeout(r, 50));
-                await this.dispatchKeyEventToAll({
-                    type: 'keyUp', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
-                    windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
-                    text: '\r', unmodifiedText: '\r'
-                });
+                logToOutput(`[Bump-Step] 6. Skipping unsafe global CDP Enter fallback`);
                 logToOutput(`[Bump-End] Hybrid Bump Sequence Complete`);
             } else if (text.startsWith('__ANTIGRAVITY_ACTION__:')) {
                 const raw = text.substring('__ANTIGRAVITY_ACTION__:'.length);
@@ -723,18 +689,9 @@ export class CDPHandler extends EventEmitter {
                 SoundEffects.playActionGroup(group);
 
                 if (group === 'submit' && detail === 'keys') {
-                    // Issue actual CDP Enter keys since DOM dispatchEvent gets ignored by Monaco
-                    await this.sendCommand(pageId, 'Input.dispatchKeyEvent', {
-                        type: 'keyDown', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
-                        windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
-                        text: '\r', unmodifiedText: '\r'
-                    }, undefined, sessionId);
-                    await new Promise(r => setTimeout(r, 60));
-                    await this.sendCommand(pageId, 'Input.dispatchKeyEvent', {
-                        type: 'keyUp', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
-                        windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
-                        text: '\r', unmodifiedText: '\r'
-                    }, undefined, sessionId);
+                    // Safety hardening: never translate script-level "submit|keys" into global CDP Enter.
+                    // Focus drift here can activate Run menu / Customize Layout instead of chat submit.
+                    logToOutput(`[AutoAction:submit] Blocked unsafe CDP Enter relay for submit|keys`);
                 }
             } else if (text.startsWith('__ANTIGRAVITY_LOG__:')) {
                 const raw = text.substring('__ANTIGRAVITY_LOG__:'.length);

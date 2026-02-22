@@ -174,10 +174,10 @@ export class ConfigManager {
         };
 
         const blockedClickMethods = new Set(['bridge-click', 'cdp-mouse', 'coord-click']);
-        const blockedSubmitMethods = new Set(['alt-enter']);
+        const blockedSubmitMethods = new Set(['alt-enter', 'cdp-enter', 'ctrl-enter']);
 
         const safeDefaultClickMethods = ['dom-scan-click', 'dom-click', 'native-accept', 'vscode-cmd', 'script-force', 'process-peek'];
-        const safeDefaultSubmitMethods = ['vscode-submit', 'cdp-enter', 'script-submit', 'ctrl-enter'];
+        const safeDefaultSubmitMethods = ['vscode-submit', 'script-submit'];
 
         const interactionClickMethods = sanitizeMethods(
             config.get('interactionClickMethods', safeDefaultClickMethods),

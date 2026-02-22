@@ -66,3 +66,11 @@ test('Auto-continue submit uses safe chat input helper', () => {
     assert.match(autoContinue, /const input = getSafeChatInput\(\);/, 'submit path should use getSafeChatInput instead of broad document.querySelector');
     assert.match(autoContinue, /Composer is empty\. Suppressing submit key dispatch\./, 'submit path should suppress empty composer Enter dispatches');
 });
+
+test('CDP bridge blocks unsafe global Enter relay for submit keys', () => {
+    const cdpHandlerPath = path.join(ROOT, 'src', 'services', 'cdp', 'cdp-handler.ts');
+    const cdpHandler = fs.readFileSync(cdpHandlerPath, 'utf-8');
+
+    assert.match(cdpHandler, /Blocked unsafe CDP Enter relay for submit\|keys/, 'cdp-handler should explicitly block submit|keys Enter relay');
+    assert.ok(!/Fallback CDP Enter Key/.test(cdpHandler), 'cdp-handler should not use global Fallback CDP Enter Key');
+});

@@ -774,7 +774,7 @@ export class InteractionMethodRegistry {
         this.config = {
             textInput: ['cdp-keys', 'cdp-insert-text', 'clipboard-paste', 'dom-inject', 'bridge-type'],
             click: ['dom-scan-click', 'dom-click', 'native-accept', 'vscode-cmd', 'script-force', 'process-peek'],
-            submit: ['vscode-submit', 'cdp-enter', 'script-submit', 'ctrl-enter'],
+            submit: ['vscode-submit', 'script-submit'],
             timings: {},
             retryCount: 3,
             parallelExecution: false,
