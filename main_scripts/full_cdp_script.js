@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '5.2.52';
+        const ANTIGRAVITY_VERSION = '5.2.53';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
@@ -637,6 +637,14 @@
 
         const beforeText = readComposerValue(target);
         if (!beforeText) return false;
+
+        // CRITICAL FIX: Ensure the composer maintains explicit focus.
+        // Unbound global Enter keys can trigger native VS Code commands (like "Customize Layout")
+        // if the focus is accidentally trapped in the workbench chrome.
+        if (document.activeElement !== target) {
+            try { target.focus(); } catch (e) { }
+            await workerDelay(50);
+        }
 
         const combos = [
             { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false },

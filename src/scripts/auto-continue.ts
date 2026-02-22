@@ -490,6 +490,9 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
 
           const dispatchEnters = () => {
+              if (document.activeElement !== input) {
+                  try { input.focus(); } catch(e) {}
+              }
               const opts = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true };
               input.dispatchEvent(new KeyboardEvent('keydown', opts));
               input.dispatchEvent(new KeyboardEvent('keypress', opts));
@@ -670,6 +673,9 @@ export const AUTO_CONTINUE_SCRIPT = `
           if (!actionTaken && hasMethod(runControl.actionMethods, 'alt-enter')) {
               const target = document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea, [id*="chat-input"]');
               if (target) {
+                  if (document.activeElement !== target) {
+                      try { (target as HTMLElement).focus(); } catch (e) {}
+                  }
                   target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
                   target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
                   actionTaken = true;
@@ -750,6 +756,9 @@ export const AUTO_CONTINUE_SCRIPT = `
           if (!actionTaken && hasMethod(expandControl.actionMethods, 'alt-enter')) {
               const target = document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea, [id*="chat-input"]');
               if (target) {
+                  if (document.activeElement !== target) {
+                      try { (target as HTMLElement).focus(); } catch (e) {}
+                  }
                   target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
                   target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
                   actionTaken = true;
@@ -775,6 +784,9 @@ export const AUTO_CONTINUE_SCRIPT = `
               const input = document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea');
               if (input) {
                   setTimeout(() => {
+                      if (document.activeElement !== input) {
+                          try { (input as HTMLElement).focus(); } catch (e) {}
+                      }
                       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
                       input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
                   }, submitDelay);

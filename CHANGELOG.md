@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+
+## [5.2.53] - 2026-02-21
+### Fixed
+- **Phantom Clicks / Layout Flicker**: Rigidly enforced DOM `.focus()` acquisition checks before emitting simulated `KeyboardEvent` keystrokes. This prevents rapid auto-submit loops from discharging unprotected "Enter" or "Space" keys into the workbench chrome, which natively intercepts them as window/layout command toggles.
+
 ## [5.2.52] - 2026-02-21
 ### Fixed
 - **Phantom Clicks / Layout Flicker**: Diagnosed the root cause of the "Customize Layout" dialog flickering. Confirmed via CDP spy that DOM event overrides were not to blame. The phantom toggle is triggered by a combination of loose element focus catching stray keystrokes or `vscode.commands.executeCommand` invocations (e.g., Space/Enter mapping to workbench toggles). 
