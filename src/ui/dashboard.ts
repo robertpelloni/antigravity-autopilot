@@ -218,11 +218,14 @@ export class DashboardPanel {
         ];
 
         const antigravitySelectors = [
-            'button',
-            '[role="button"]',
-            '.bg-ide-button-background',
-            'button.grow',
-            '.monaco-button'
+            '[data-testid="accept-all"]',
+            '[data-testid*="accept"]',
+            'button[aria-label*="Accept"]',
+            'button[title*="Accept"]',
+            'button[aria-label*="Allow"]',
+            'button[title*="Allow"]',
+            'button[aria-label*="Continue"]',
+            'button[title*="Continue"]'
         ];
 
         const cursorSelectors = [
@@ -478,6 +481,10 @@ export class DashboardPanel {
                 <div class="setting" title="Global toggle for the injected JavaScript automation script. If disabled, no in-browser automation (clicking, scrolling, typing) will occur, regardless of other settings.">
                     <label>Master Switch:</label>
                     <input type="checkbox" ${settings.autoContinueScriptEnabled !== false ? 'checked' : ''} onchange="updateConfig('autoContinueScriptEnabled', this.checked)">
+                </div>
+                <div class="setting" title="Require visible completion/feedback signals before bump logic is allowed to trigger.">
+                    <label>Bump Requires Visible Signals:</label>
+                    <input type="checkbox" ${config.get('automation.bump.requireVisible') !== false ? 'checked' : ''} onchange="updateConfig('automation.bump.requireVisible', this.checked)">
                 </div>
                  <div class="setting" title="Automatically click 'Run' buttons in code blocks (e.g., in Jupyter notebooks or interactive terminals).">
                     <label>Click Run (Play):</label>
@@ -852,12 +859,28 @@ export class DashboardPanel {
                 <h2>CDP & Automation</h2>
                 <div class="setting" title="Play audible sound effects for automation events like clicks, typing, and submitting.">
                     <label>Audio Feedback:</label>
-                    <input type="checkbox" ${settings.audioFeedbackEnabled ? 'checked' : ''} onchange="updateConfig('audioFeedbackEnabled', this.checked)">
+                    <input type="checkbox" ${settings.audio?.enabled ? 'checked' : ''} onchange="updateConfig('audio.enabled', this.checked)">
                     <button onclick="runCommand('antigravity.testAudio')" title="Play a test sound">Test Audio</button>
                 </div>
                 <div class="setting" title="Output verbose debug logs from the browser automation script to the extension host.">
                     <label>Verbose Debug Logging:</label>
-                    <input type="checkbox" ${settings.debugLoggingEnabled ? 'checked' : ''} onchange="updateConfig('debugLoggingEnabled', this.checked)">
+                    <input type="checkbox" ${config.get('automation.debug.verboseLogging') ? 'checked' : ''} onchange="updateConfig('automation.debug.verboseLogging', this.checked)">
+                </div>
+                <div class="setting" title="Enable embedded remote control server.">
+                    <label>Remote Control Enabled:</label>
+                    <input type="checkbox" ${settings.remoteControlEnabled ? 'checked' : ''} onchange="updateConfig('remoteControlEnabled', this.checked)">
+                </div>
+                <div class="setting" title="Port for embedded remote control server.">
+                    <label>Remote Control Port:</label>
+                    <input type="number" value="${settings.remoteControlPort ?? 8000}" min="1" max="65535" onchange="updateConfig('remoteControlPort', parseInt(this.value))">
+                </div>
+                <div class="setting" title="Allow remote control access from LAN/non-localhost hosts (security-sensitive).">
+                    <label>Allow LAN Remote Access:</label>
+                    <input type="checkbox" ${settings.remoteControlAllowLan ? 'checked' : ''} onchange="updateConfig('remoteControlAllowLan', this.checked)">
+                </div>
+                <div class="setting vertical" title="Allowed remote hosts/IPs (one per line). Used for remote access allowlisting.">
+                    <label>Remote Allowed Hosts:</label>
+                    <textarea onchange="updateConfig('remoteControlAllowedHosts', this.value.split('\n').map(v=>v.trim()).filter(Boolean))">${(settings.remoteControlAllowedHosts || ['127.0.0.1', 'localhost']).join('\n')}</textarea>
                 </div>
                 <div class="setting" title="Maximum time (in ms) to wait for a CDP command (like DOM query or click) to complete before throwing a timeout error.">
                     <label>CDP Timeout (ms):</label>

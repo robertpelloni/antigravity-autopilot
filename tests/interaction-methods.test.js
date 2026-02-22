@@ -120,7 +120,7 @@ describe('Interaction Method Registry (real module)', () => {
         assert.strictEqual(reg.getMethod('x').timingMs, 999);
     });
 
-    it('should execute methods sequentially and stop at retryCount successes', async () => {
+    it('should execute text methods sequentially and stop at first success', async () => {
         const reg = new InteractionMethodRegistry({ textInput: ['a', 'b', 'c', 'd'], retryCount: 2, timings: { a: 0, b: 0, c: 0, d: 0 } });
         reg.register(createTestMethod('a', 'text', 1, true, 0));
         reg.register(createTestMethod('b', 'text', 2, true, 0));
@@ -128,8 +128,8 @@ describe('Interaction Method Registry (real module)', () => {
         reg.register(createTestMethod('d', 'text', 4, true, 0));
 
         const results = await reg.executeCategory('text', {});
-        assert.strictEqual(results.length, 2);
-        assert.deepStrictEqual(results.map((r) => r.methodId), ['a', 'b']);
+        assert.strictEqual(results.length, 1);
+        assert.deepStrictEqual(results.map((r) => r.methodId), ['a']);
     });
 
     it('should handle failing methods and continue to next', async () => {
@@ -146,13 +146,13 @@ describe('Interaction Method Registry (real module)', () => {
         assert.strictEqual(results[2].success, true);
     });
 
-    it('should execute all methods in parallel mode regardless of retryCount', async () => {
-        const reg = new InteractionMethodRegistry({ submit: ['s1', 's2', 's3'], retryCount: 1, parallelExecution: true, timings: { s1: 0, s2: 0, s3: 0 } });
-        reg.register(createTestMethod('s1', 'submit', 1, true, 0));
-        reg.register(createTestMethod('s2', 'submit', 2, true, 0));
-        reg.register(createTestMethod('s3', 'submit', 3, true, 0));
+    it('should execute all click methods in parallel mode regardless of retryCount', async () => {
+        const reg = new InteractionMethodRegistry({ click: ['s1', 's2', 's3'], retryCount: 1, parallelExecution: true, timings: { s1: 0, s2: 0, s3: 0 } });
+        reg.register(createTestMethod('s1', 'click', 1, true, 0));
+        reg.register(createTestMethod('s2', 'click', 2, true, 0));
+        reg.register(createTestMethod('s3', 'click', 3, true, 0));
 
-        const results = await reg.executeCategory('submit', {});
+        const results = await reg.executeCategory('click', {});
         assert.strictEqual(results.length, 3);
         assert.ok(results.every((r) => r.success));
     });
