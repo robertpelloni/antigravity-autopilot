@@ -553,8 +553,8 @@
                     return false;
                 }
 
-                // Workbench Chrome Bans
-                if (current.matches('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box')) {
+                // Workbench Chrome Bans + Menus
+                if (current.matches('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menubar"]')) {
                     return false;
                 }
                 if (current.getAttribute('role') === 'tab' || current.getAttribute('role') === 'tablist') {
@@ -656,7 +656,6 @@
         const combos = [
             { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false },
             { key: 'Enter', code: 'Enter', ctrlKey: true, altKey: false, shiftKey: false, metaKey: false },
-            { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: true, shiftKey: false, metaKey: false },
             { key: 'Enter', code: 'Enter', ctrlKey: false, altKey: false, shiftKey: false, metaKey: true }
         ];
 
@@ -911,22 +910,6 @@
         const centerX = Math.round(x + (width / 2));
         const centerY = Math.round(y + (height / 2));
 
-        let isMainWindow = !!document.querySelector('.monaco-workbench');
-
-        if (isMainWindow) {
-            // Send command to Extension via Bridge (Binding preferred)
-            const payload = `__ANTIGRAVITY_CLICK__:${centerX}:${centerY}`;
-            if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
-                window.__ANTIGRAVITY_BRIDGE__(payload);
-                log(`[Bridge] Sent Click via Binding: ${centerX},${centerY}`);
-            } else {
-                console.log(payload);
-                log(`[Bridge] Sent Click via Console: ${centerX},${centerY}`);
-            }
-        } else {
-            log(`[Bridge] Sub-frame detected. Suppressing CDP coordinate click to prevent titlebar leakage.`);
-        }
-
         // ----------------------------------------------------------------
         // ROBUST NATIVE DISPATCH (Crucial for React/Monaco inside Webviews)
         // ----------------------------------------------------------------
@@ -938,11 +921,11 @@
             el.dispatchEvent(new MouseEvent('mouseup', evOpts));
         } catch (e) { }
 
-        // Also fire standard click for immediate UI feedback (hover states etc)
-        // try { el.click(); } catch (e) { } // Disabled to allow untrusted MouseEvent tracking via CDP spy
-        if (!isMainWindow) {
-            try { el.click(); } catch (e) { }
-        }
+        // ALWAYS fire standard click to guarantee execution. 
+        // We have completely retired the __ANTIGRAVITY_CLICK__ CDP fallback because 
+        // window.devicePixelRatio and VS Code Zoom levels cause hardware coordinate offsets,
+        // resulting in the browser clicking the top titlebar instead of the target element.
+        try { el.click(); } catch (e) { }
         playSound('click');
 
         // Emit ACTION event for sound effects
@@ -1422,12 +1405,11 @@
         }
 
         // Use configured patterns from state if available, otherwise use defaults
-        const state = window.__autoAllState || {};
         const defaultPatterns = ['accept', 'accept all', 'keep', 'run in terminal', 'run command', 'execute command', 'retry', 'apply', 'confirm', 'allow once', 'allow', 'proceed', 'continue', 'yes', 'ok', 'save', 'approve', 'overwrite'];
 
         const patterns = state.acceptPatterns || defaultPatterns;
 
-        const defaultRejects = ['skip', 'reject', 'cancel', 'close', 'refine', 'deny', 'no', 'dismiss', 'abort', 'ask every time', 'always run', 'always allow', 'stop', 'pause', 'disconnect', 'install', 'uninstall', 'enable', 'disable', 'marketplace', 'extension', 'plugin'];
+        const defaultRejects = ['skip', 'reject', 'cancel', 'close', 'refine', 'deny', 'no', 'dismiss', 'abort', 'ask every time', 'always run', 'always allow', 'auto proceed', 'auto-proceed', 'stop', 'pause', 'disconnect', 'install', 'uninstall', 'enable', 'disable', 'marketplace', 'extension', 'plugin'];
         const rejects = state.rejectPatterns ? [...defaultRejects, ...state.rejectPatterns] : defaultRejects;
 
         if (rejects.some(r => text.includes(r))) return false;

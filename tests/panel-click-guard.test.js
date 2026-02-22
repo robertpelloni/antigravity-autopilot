@@ -14,8 +14,8 @@ test('Injected automation excludes workbench chrome/tab controls from click targ
     const script = readScript();
 
     await t.test('isValidInteractionTarget excludes role tab/tablist surfaces', () => {
-        assert.match(script, /role\s*=\s*\(el\.getAttribute[^\n]*\|\|\s*''\)\.toLowerCase\(\)/);
-        assert.match(script, /role\s*===\s*'tab'\s*\|\|\s*el\.closest\('\[role="tablist"\]'\)/);
+        assert.match(script, /current\.getAttribute\('role'\)\s*===\s*'tab'/);
+        assert.match(script, /current\.getAttribute\('role'\)\s*===\s*'tablist'/);
     });
 
     await t.test('isValidInteractionTarget excludes panel/chrome containers', () => {
@@ -25,7 +25,7 @@ test('Injected automation excludes workbench chrome/tab controls from click targ
         assert.match(script, /\.tabs-and-actions-container/);
         assert.match(script, /\.part\.activitybar/);
         assert.match(script, /\.part\.statusbar/);
-        assert.match(script, /\.part\.sidebar/);
+        assert.match(script, /\.part\.titlebar/);
     });
 });
 
@@ -46,4 +46,23 @@ test('Default click-action patterns avoid broad run token and keep explicit run 
         assert.ok(/'run command'/.test(rawList), 'defaultPatterns should include "run command"');
         assert.ok(/'execute command'/.test(rawList), 'defaultPatterns should include "execute command"');
     });
+});
+
+test('Submit keyboard fallback blocks Alt+Enter and keeps safe input targeting', () => {
+    const script = readScript();
+
+    const submitWithKeysBlock = script.match(/async function submitWithKeys\([\s\S]*?return false;[\r\n]+\s*}/);
+    assert.ok(submitWithKeysBlock, 'submitWithKeys function should exist');
+
+    const submitWithKeysSource = submitWithKeysBlock[0];
+    assert.ok(!/altKey:\s*true/.test(submitWithKeysSource), 'submitWithKeys must not include Alt+Enter combo');
+});
+
+test('Auto-continue submit uses safe chat input helper', () => {
+    const autoContinuePath = path.join(ROOT, 'src', 'scripts', 'auto-continue.ts');
+    const autoContinue = fs.readFileSync(autoContinuePath, 'utf-8');
+
+    assert.match(autoContinue, /function getSafeChatInput\(\)/, 'auto-continue should define getSafeChatInput helper');
+    assert.match(autoContinue, /const input = getSafeChatInput\(\);/, 'submit path should use getSafeChatInput instead of broad document.querySelector');
+    assert.match(autoContinue, /Composer is empty\. Suppressing submit key dispatch\./, 'submit path should suppress empty composer Enter dispatches');
 });

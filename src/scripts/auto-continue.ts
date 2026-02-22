@@ -258,8 +258,8 @@ export const AUTO_CONTINUE_SCRIPT = `
                 return true;
             }
 
-            // Workbench Chrome Bans
-            if (current.matches('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box')) {
+            // Workbench Chrome Bans + Menus
+            if (current.matches('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menubar"]')) {
                 return true;
             }
             if (current.getAttribute('role') === 'tab' || current.getAttribute('role') === 'tablist') {
@@ -396,20 +396,53 @@ export const AUTO_CONTINUE_SCRIPT = `
       input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
   }
 
+  function getSafeChatInput() {
+      const selectors = [
+          '[id*="chat-input" i]',
+          '[aria-label*="Chat Input" i]',
+          '.interactive-input-part textarea',
+          '.chat-input-widget textarea',
+          'textarea[placeholder*="Ask" i]',
+          'textarea[placeholder*="Message" i]',
+          'vscode-text-area',
+          '[contenteditable="true"]'
+      ].join(',');
+
+      const candidates = queryShadowDOMAll(selectors);
+      for (const el of candidates) {
+          if (!el) continue;
+          if (isUnsafeContext(el) || hasUnsafeLabel(el) || isNodeBanned(el)) continue;
+          if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) continue;
+
+          const tag = (el.tagName || '').toUpperCase();
+          if (tag === 'TEXTAREA' || tag === 'VSCODE-TEXT-AREA' || el.isContentEditable || el.hasAttribute('contenteditable')) {
+              return el;
+          }
+
+          const inner = el.querySelector && el.querySelector('textarea, [contenteditable="true"]');
+          if (inner && !isUnsafeContext(inner) && !isNodeBanned(inner) && (inner.offsetParent || inner.clientWidth > 0 || inner.clientHeight > 0)) {
+              return inner;
+          }
+      }
+
+      return null;
+  }
+
   function typeAndSubmit(text) {
       const cfg = getConfig();
       const bump = getBumpConfig(cfg);
-      const rawInputs = queryShadowDOMAll('[id*="chat-input" i], [aria-label*="Chat Input" i], .interactive-input-part, .chat-input-widget, textarea[placeholder*="Ask" i], textarea[placeholder*="Message" i], vscode-text-area');
+    const rawInputs = queryShadowDOMAll('[id*="chat-input" i], [aria-label*="Chat Input" i], .interactive-input-part, .chat-input-widget, textarea[placeholder*="Ask" i], textarea[placeholder*="Message" i], vscode-text-area');
       
       let input = null;
       for (const el of rawInputs) {
+          if (isUnsafeContext(el) || hasUnsafeLabel(el) || isNodeBanned(el)) continue;
           if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) continue;
           if (el.tagName === 'TEXTAREA' || el.tagName === 'VSCODE-TEXT-AREA' || el.isContentEditable || el.hasAttribute('contenteditable')) {
               input = el;
               break;
           }
           const inner = el.querySelector('textarea, [contenteditable]');
-          if (inner && (inner.offsetParent || inner.clientWidth > 0 || inner.clientHeight > 0)) {
+          if (inner && !isUnsafeContext(inner) && !isNodeBanned(inner) && (inner.offsetParent || inner.clientWidth > 0 || inner.clientHeight > 0)) {
               input = inner;
               break;
           }
@@ -418,7 +451,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       // Fallback: just find the first visible textarea on the screen if we couldn't find a widget
       if (!input) {
           const fallbackInputs = queryShadowDOMAll('textarea, vscode-text-area');
-          input = fallbackInputs.find(el => el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0);
+          input = fallbackInputs.find(el => !isUnsafeContext(el) && !isNodeBanned(el) && (el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0));
       }
       
       if (!input) return false;
@@ -694,20 +727,7 @@ export const AUTO_CONTINUE_SCRIPT = `
               }
           }
 
-          if (!actionTaken && hasMethod(runControl.actionMethods, 'alt-enter')) {
-              const target = document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea, [id*="chat-input"]');
-              if (target) {
-                  if (document.activeElement !== target) {
-                      try { (target as HTMLElement).focus(); } catch (e) {}
-                  }
-                  target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
-                  target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
-                  actionTaken = true;
-                  lastActionByControl.run = now;
-                  log('Triggered Run fallback via Alt+Enter');
-                  emitAction('alt-enter', 'run fallback alt-enter');
-              }
-          }
+          // (alt-enter fallback removed: simulated Alt events trigger Windows Native Menu bar focusing)
       }
 
       // 3. Auto-Accept
@@ -777,20 +797,7 @@ export const AUTO_CONTINUE_SCRIPT = `
               }
           }
 
-          if (!actionTaken && hasMethod(expandControl.actionMethods, 'alt-enter')) {
-              const target = document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea, [id*="chat-input"]');
-              if (target) {
-                  if (document.activeElement !== target) {
-                      try { (target as HTMLElement).focus(); } catch (e) {}
-                  }
-                  target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
-                  target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
-                  actionTaken = true;
-                  lastActionByControl.expand = now;
-                  log('Triggered Expand fallback via Alt+Enter');
-                  emitAction('alt-enter', 'expand fallback alt-enter');
-              }
-          }
+          // (alt-enter fallback removed: simulated Alt events trigger Windows Native Menu bar focusing)
       }
       
       // 5. Auto-Submit
@@ -805,9 +812,17 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
 
           if (!actionTaken && hasMethod(submitControl.actionMethods, 'enter-key')) {
-              const input = document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea');
+              const input = getSafeChatInput();
               if (input) {
                   setTimeout(() => {
+                      const textValue = (input.value !== undefined && input.value !== null)
+                          ? String(input.value || '').trim()
+                          : String(input.textContent || '').trim();
+                      if (!textValue) {
+                          logAction('[SubmitGuard] ABORT: Composer is empty. Suppressing submit key dispatch.');
+                          return;
+                      }
+
                       if (document.activeElement !== input) {
                           try { (input as HTMLElement).focus(); } catch (e) {}
                       }
