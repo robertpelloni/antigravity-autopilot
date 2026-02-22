@@ -335,8 +335,45 @@
 
     const queryAll = (selector) => {
         const results = [];
+        const bannedCache = new WeakSet();
+
+        const isNodeBanned = (node) => {
+            if (!node || node.nodeType !== 1) return false;
+            if (bannedCache.has(node)) return true;
+
+            const bannedIcons = '.codicon-plus, .codicon-attach, .codicon-paperclip, .codicon-add, [class*="codicon-layout"], .codicon-settings-gear, .codicon-gear';
+
+            // Instantly ban dangerous context nodes
+            if (node.matches(bannedIcons)) {
+                bannedCache.add(node);
+                return true;
+            }
+
+            // Check if it HAS dangerous children
+            if (node.querySelector && node.querySelector(bannedIcons)) {
+                bannedCache.add(node);
+                return true;
+            }
+
+            // Text / Label checks (Extremely strict)
+            const attrs = ((node.getAttribute('aria-label') || '') + ' ' + (node.getAttribute('title') || '') + ' ' + (node.textContent || '')).toLowerCase();
+            if (/(customize layout|layout control|add context|attach context|attach a file|new chat|clear chat|clear session)/i.test(attrs)) {
+                bannedCache.add(node);
+                return true;
+            }
+
+            return false;
+        };
+
         getDocuments().forEach(doc => {
-            try { results.push(...Array.from(doc.querySelectorAll(selector))); } catch (e) { }
+            try {
+                const nodes = Array.from(doc.querySelectorAll(selector));
+                for (const node of nodes) {
+                    if (!isNodeBanned(node)) {
+                        results.push(node);
+                    }
+                }
+            } catch (e) { }
         });
         return results;
     };
@@ -392,8 +429,6 @@
                 '[role="button"]',
                 '.bg-ide-button-background',
                 'button.grow',
-                '.monaco-list-row.collapsed',
-                '.codicon-chevron-right',
                 '[data-testid="accept-all"]',
                 '[data-testid*="accept"]'
             ],
@@ -413,9 +448,7 @@
                 '#workbench\\.parts\\.auxiliarybar button',
                 '#workbench\\.parts\\.auxiliarybar [role="button"]',
                 '.chat-session-item [role="button"]',
-                '[class*="anysphere"]',
-                '.monaco-list-row.collapsed',
-                '.codicon-chevron-right'
+                '[class*="anysphere"]'
             ],
             sendButtons: [
                 '#workbench\\.parts\\.auxiliarybar button[aria-label*="Send"]',
@@ -436,9 +469,7 @@
                 '.monaco-dialog-box button',
                 '.monaco-notification-list button',
                 '.interactive-editor button',
-                '.chat-input-container button',
-                '.monaco-list-row.collapsed',
-                '.codicon-chevron-right'
+                '.chat-input-container button'
             ],
             sendButtons: [
                 '.interactive-editor button[aria-label*="Send"]',
@@ -480,33 +511,6 @@
     function getUnifiedFeedbackSelectors(mode = getCurrentMode()) {
         return mergeSelectorSets(mode, 'feedback');
     }
-
-    // --- Active UI Nuke (Nuclear Option) ---
-    function nukeUnsafeUIElements(root) {
-        if (!root) return;
-        const allNodes = root.querySelectorAll ? Array.from(root.querySelectorAll('*')) : [];
-        for (const node of allNodes) {
-            if (node.nodeType === 1) { // ELEMENT_NODE
-                const attrs = ((node.getAttribute('aria-label') || '') + ' ' + (node.getAttribute('title') || '')).toLowerCase();
-                if (/(customize layout|layout control|attach context|new chat|clear chat|clear session)/i.test(attrs)) {
-                    try {
-                        node.style.display = 'none'; // Fast hide
-                        node.remove(); // Nuke
-                    } catch (e) { }
-                }
-                if (node.shadowRoot) nukeUnsafeUIElements(node.shadowRoot);
-            }
-        }
-    }
-
-    try {
-        const nukeObserver = new MutationObserver((mutations) => {
-            for (let m of mutations) {
-                if (m.addedNodes.length) nukeUnsafeUIElements(document);
-            }
-        });
-        nukeObserver.observe(document, { childList: true, subtree: true });
-    } catch (e) { }
 
     function shadowClosest(el, selector) {
         let current = el;
@@ -625,7 +629,7 @@
 
     async function submitWithKeys(targetOverride) {
         sendCommandToBridge('__ANTIGRAVITY_ACTION__:submit|keys');
-        const target = targetOverride || document.activeElement;
+        const target = targetOverride || document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea, [id*="chat-input"]');
         if (!target) return false;
 
         const beforeText = readComposerValue(target);
@@ -1367,6 +1371,9 @@
 
         if (text.length === 0 || text.length > 120) return false;
 
+        // Hardcoded safety lock: explicitly reject "Add Context", "Attach", and "Layout"
+        if (/(add context|attach|layout)/i.test(text)) return false;
+
         // Safety: Never interact with marketplace / extension management / plugin surfaces
         // These are frequent sources of destructive misclicks and UI thrashing.
         if (el.closest) {
@@ -1377,6 +1384,12 @@
                 log(`[SAFETY] Skipping button in Extensions/Marketplace context: "${text}"`);
                 return false;
             }
+        }
+
+        // Hardcore icon checks inside the button
+        const badIcons = '.codicon-settings-gear, .codicon-gear, .codicon-layout, .codicon-attach, .codicon-paperclip, .codicon-add, .codicon-plus';
+        if (el.matches(badIcons) || (el.querySelector && el.querySelector(badIcons))) {
+            return false;
         }
 
         // Use configured patterns from state if available, otherwise use defaults
@@ -1521,13 +1534,12 @@
         let clicked = 0;
 
         // Scope: broad search within the active editor/workbench area
-        // We look for any element with aria-expanded="false" that is inside a relevant container
-        const workbench = document.querySelector('.monaco-workbench') || document.body;
-
         // 1. Generic aria-expanded check (most reliable)
-        const candidates = workbench.querySelectorAll('[aria-expanded="false"]');
+        // Use queryAll to benefit from shadow dom traversal and our banned node cache
+        const candidates = queryAll('[aria-expanded="false"]');
         for (const el of candidates) {
             if (!isElementVisible(el)) continue;
+            if (!isValidInteractionTarget(el)) continue; // MASSIVE: Do not click banned items like Layout or Add Context
 
             // Filter out obvious noise (like file explorer trees if we are not focused there)
             // But keep it broad enough to catch chat response toggles
@@ -1538,8 +1550,19 @@
                     expandTargets.push(el);
                 }
             } else {
-                // Chevrons/Buttons
-                expandTargets.push(el);
+                // DANGER ZONE FIX: Never blindly click aria-expanded="false" elements!
+                // Only click if it has text proving it is an AI reasoning block or expansion UI
+                const text = (el.textContent || '').toLowerCase();
+                const label = (el.getAttribute('aria-label') || '').toLowerCase();
+                const title = (el.getAttribute('title') || '').toLowerCase();
+
+                if (text.includes('requires input') || text.includes('expand') || (text.includes('step') && text.includes('input')) ||
+                    label.includes('expand') || title.includes('expand')) {
+
+                    if (!text.includes('explorer') && !label.includes('explorer')) {
+                        expandTargets.push(el);
+                    }
+                }
             }
         }
 

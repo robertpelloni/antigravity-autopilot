@@ -1,8 +1,24 @@
 export const AUTO_CONTINUE_SCRIPT = `
-(function(){
-  if (window.__antigravityAutoContinueRunning) return;
-  window.__antigravityAutoContinueRunning = true;
+(function() {
+  if (window.__antigravityAutoContinueRunning && !window.stopAutoContinue) {
+      console.log('Auto-Continue already running.');
+      return;
+  }
 
+  // 1. ZOMBIE SLAYER: Unique Instance ID to kill old closure loops
+  const THIS_INSTANCE = Math.random();
+  window.__antigravityActiveInstance = THIS_INSTANCE;
+
+  // 2. Kill any existing visible timers on the window object
+  if (window.stopAutoContinue) {
+      window.stopAutoContinue();
+  }
+  if (window.__antigravityPollTimer) {
+      clearTimeout(window.__antigravityPollTimer);
+  }
+
+  window.__antigravityAutoContinueRunning = true;
+  
   // Defaults
   const defaults = {
      clickRun: true,
@@ -44,55 +60,9 @@ export const AUTO_CONTINUE_SCRIPT = `
   };
 
   let lastAction = Date.now(); 
-    const lastActionByControl = { run: 0, expand: 0, accept: 0, acceptAll: 0, continue: 0, submit: 0, feedback: 0, bump: 0 };
-    let lastStateSignature = '';
-  let pollTimer = null;
-
-  // --- Active UI Nuke (Nuclear Option) ---
-  function nukeUnsafeUIElements(root) {
-      if (!root) return;
-      // Because VSCode relies heavily on aria-labels on generic .codicon containers, 
-      // these elements often bypass simple CSS selector exclusions before their full DOM renders.
-      // We physically delete them from the chat interface to guarantee the automation script cannot click them.
-      const nukeSelectors = [
-          '[aria-label*="Customize Layout" i]', '[title*="Customize Layout" i]', 
-          '[aria-label*="Layout Control" i]', '[title*="Layout Control" i]',
-          '[aria-label*="Attach Context" i]', '[title*="Attach Context" i]',
-          '[aria-label*="New Chat" i]', '[title*="New Chat" i]',
-          '[aria-label*="Clear Chat" i]', '[title*="Clear Chat" i]',
-          '[aria-label*="Clear Session" i]', '[title*="Clear Session" i]'
-      ];
-      
-      let allNodes;
-      if (root.querySelectorAll) {
-          allNodes = Array.from(root.querySelectorAll('*'));
-      } else {
-          allNodes = [];
-      }
-      
-      for (const node of allNodes) {
-          if (node.nodeType === 1) { // ELEMENT_NODE
-              const attrs = ((node.getAttribute('aria-label') || '') + ' ' + (node.getAttribute('title') || '')).toLowerCase();
-              if (/(customize layout|layout control|attach context|new chat|clear chat|clear session)/i.test(attrs)) {
-                  try {
-                      node.style.display = 'none'; // Fast hide
-                      node.remove(); // Nuke
-                  } catch (e) {}
-              }
-              if (node.shadowRoot) nukeUnsafeUIElements(node.shadowRoot);
-          }
-      }
-  }
-
-  // Set up the nuclear observer on the document root
-  try {
-      const nukeObserver = new MutationObserver((mutations) => {
-          for (let m of mutations) {
-              if (m.addedNodes.length) nukeUnsafeUIElements(document);
-          }
-      });
-      nukeObserver.observe(document, { childList: true, subtree: true });
-  } catch (e) {}
+  const lastActionByControl = { run: 0, expand: 0, accept: 0, acceptAll: 0, continue: 0, submit: 0, feedback: 0, bump: 0 };
+  let lastStateSignature = '';
+  let pollTimer;
 
   // --- Configuration Helpers ---
   function getConfig() {
@@ -187,11 +157,45 @@ export const AUTO_CONTINUE_SCRIPT = `
       return true;
   }
 
+  const bannedCache = new WeakSet();
+  function isNodeBanned(node: Element): boolean {
+      if (!node || node.nodeType !== 1) return false;
+      if (bannedCache.has(node)) return true;
+
+      const bannedIcons = '.codicon-plus, .codicon-attach, .codicon-paperclip, .codicon-add, [class*="codicon-layout"], .codicon-settings-gear, .codicon-gear';
+
+      // Instantly ban dangerous context nodes
+      if (node.matches(bannedIcons)) {
+          bannedCache.add(node);
+          return true;
+      }
+
+      // Check if it HAS dangerous children
+      if (node.querySelector && node.querySelector(bannedIcons)) {
+          bannedCache.add(node);
+          return true;
+      }
+
+      // Text / Label checks (Extremely strict)
+      const attrs = ((node.getAttribute('aria-label') || '') + ' ' + (node.getAttribute('title') || '') + ' ' + (node.textContent || '')).toLowerCase();
+      if (/(customize layout|layout control|add context|attach context|attach a file|new chat|clear chat|clear session)/i.test(attrs)) {
+          bannedCache.add(node);
+          return true;
+      }
+
+      return false;
+  }
+
   function queryShadowDOMAll(selector, root) {
       root = root || document;
       let results = [];
       if (root.querySelectorAll) {
-          results = Array.from(root.querySelectorAll(selector));
+          const raw = Array.from(root.querySelectorAll(selector));
+          for (const node of raw) {
+              if (!isNodeBanned(node)) {
+                  results.push(node);
+              }
+          }
       }
       const all = root.querySelectorAll ? root.querySelectorAll('*') : [];
       for (let i = 0; i < all.length; i++) {
@@ -520,6 +524,12 @@ export const AUTO_CONTINUE_SCRIPT = `
   }
 
   function runLoop() {
+    if (window.__antigravityActiveInstance !== THIS_INSTANCE) return;
+    // 3. SUICIDE PILL: If we are not the active instance, immediately terminate the recursion.
+    if (window.__antigravityActiveInstance !== THIS_INSTANCE) {
+        return;
+    }
+
     try {
       const cfg = getConfig();
       const now = Date.now();
@@ -655,7 +665,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
 
           if (!actionTaken && hasMethod(runControl.actionMethods, 'alt-enter')) {
-              const target = document.activeElement || document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea');
+              const target = document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea, [id*="chat-input"]');
               if (target) {
                   target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
                   target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
@@ -736,7 +746,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
 
           if (!actionTaken && hasMethod(expandControl.actionMethods, 'alt-enter')) {
-              const target = document.activeElement || document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea');
+              const target = document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea, [id*="chat-input"]');
               if (target) {
                   target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
                   target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true }));
@@ -884,12 +894,19 @@ export const AUTO_CONTINUE_SCRIPT = `
   }
 
   function scheduleNext() {
+      if (window.__antigravityActiveInstance !== THIS_INSTANCE) return;
+      // 4. SUICIDE PILL: Do not schedule next if a newer script has taken over
+      if (window.__antigravityActiveInstance !== THIS_INSTANCE) {
+          return;
+      }
+
       const cfg = getConfig();
       const interval = cfg.timing?.pollIntervalMs ?? 800;
-      pollTimer = setTimeout(() => {
+      window.__antigravityPollTimer = setTimeout(() => {
           runLoop();
           scheduleNext();
       }, interval);
+      pollTimer = window.__antigravityPollTimer; // Keep local ref just in case
   }
 
   scheduleNext();
@@ -898,7 +915,8 @@ export const AUTO_CONTINUE_SCRIPT = `
   window.__antigravityGetState = analyzeChatState;
 
   window.stopAutoContinue = () => {
-    clearTimeout(pollTimer);
+    if (pollTimer) clearTimeout(pollTimer);
+    if (window.__antigravityPollTimer) clearTimeout(window.__antigravityPollTimer);
     window.__antigravityAutoContinueRunning = false;
     log('stopped.');
   };

@@ -227,6 +227,16 @@ export class CDPHandler extends EventEmitter {
                     await this.sendCommand(page.id, 'Runtime.enable');
                     await this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' });
 
+                    // 1a. Kill any Zombie Loops from previous Extension reloads
+                    await this.sendCommand(page.id, 'Runtime.evaluate', {
+                        expression: `
+                            if (window.__autoAllStop) { window.__autoAllStop(); }
+                            if (window.__autoAllState) { window.__autoAllState.isRunning = false; window.__autoAllState.sessionID = null; }
+                            if (window.stopAutoContinue) { window.stopAutoContinue(); }
+                        `,
+                        awaitPromise: false
+                    });
+
                     // 1b. Inject Auto-Continue Script (if enabled)
                     if (config.get<boolean>('autoContinueScriptEnabled') !== false) {
                         const getArr = (key: string, defItems: string[]) => {
