@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.64] - 2026-02-22
+### Changed
+- Release bump for fresh VSIX packaging and manual validation on Antigravity + VS Code Insiders Copilot.
+
 ## [5.2.63] - 2026-02-22
 ### Fixed
 - **Antigravity Target Isolation (Dual VS Code Fork Safety)**: Hardened injected Antigravity click routing to remove broad selectors (`button`, `[role="button"]`, `button.grow`) and block run-labeled send-button matching in Antigravity mode.
