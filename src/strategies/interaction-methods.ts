@@ -399,22 +399,16 @@ export class CDPMouseEvent implements IInteractionMethod {
     name = 'CDP Mouse Event';
     description = 'Dispatches Input.dispatchMouseEvent at coordinates via CDP';
     category = 'click' as const;
-    enabled = true;
+    enabled = false; // PERMANENTLY DISABLED DUE TO ZOOM SCALING OFFSETS
     priority = 2;
     timingMs = 50;
     requiresCDP = true;
 
     async execute(ctx: InteractionContext): Promise<boolean> {
-        if (!ctx.cdpHandler || !ctx.coordinates) return false;
-        const { x, y } = ctx.coordinates;
-        await ctx.cdpHandler.dispatchMouseEventToAll({
-            type: 'mousePressed', x, y, button: 'left', clickCount: 1
-        });
-        await delay(30);
-        await ctx.cdpHandler.dispatchMouseEventToAll({
-            type: 'mouseReleased', x, y, button: 'left', clickCount: 1
-        });
-        return true;
+        // PERMANENTLY NEUTERED: window.devicePixelRatio and VS Code Zoom Levels 
+        // cause raw integer coordinates to map incorrectly in Chromium's physical viewport.
+        // This is the true root cause of the "Customize Layout" ghost clicks.
+        return false;
     }
 }
 
@@ -423,7 +417,7 @@ export class BridgeCoordinateClick implements IInteractionMethod {
     name = 'Bridge Coordinate Click';
     description = 'Finds target element and sends __ANTIGRAVITY_CLICK__ through bridge';
     category = 'click' as const;
-    enabled = true;
+    enabled = false; // PERMANENTLY DISABLED DUE TO ZOOM SCALING OFFSETS
     priority = 3;
     timingMs = 50;
     requiresCDP = true;
@@ -431,20 +425,15 @@ export class BridgeCoordinateClick implements IInteractionMethod {
     async execute(ctx: InteractionContext): Promise<boolean> {
         if (!ctx.cdpHandler || !ctx.selector) return false;
         const escapedSelector = escapeJsSingleQuoted(ctx.selector);
+
+        // Instead of sending raw dimensional coordinates back to the Node host,
+        // we execute a strict, inline, scale-agnostic DOM click here.
         const script = `
             (function() {
                 const el = document.querySelector('${escapedSelector}');
                 if (!el) return false;
-                const rect = el.getBoundingClientRect();
-                if (!rect || rect.width <= 0 || rect.height <= 0) return false;
-                const x = Math.round(rect.left + (rect.width / 2));
-                const y = Math.round(rect.top + (rect.height / 2));
-                const payload = '__ANTIGRAVITY_CLICK__:' + x + ':' + y;
-                if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
-                    window.__ANTIGRAVITY_BRIDGE__(payload);
-                } else {
-                    console.log(payload);
-                }
+                
+                try { el.click(); } catch(e) {}
                 return true;
             })()
         `;
@@ -621,31 +610,15 @@ export class CoordinateClick implements IInteractionMethod {
     name = 'Coordinate Click (Native)';
     description = 'Clicks at absolute coordinates — requires native module or CDP Input domain';
     category = 'click' as const;
-    enabled = false; // Disabled by default (requires additional setup)
+    enabled = false; // PERMANENTLY DISABLED DUE TO ZOOM SCALING OFFSETS
     priority = 5;
     timingMs = 100;
     requiresCDP = true;
 
     async execute(ctx: InteractionContext): Promise<boolean> {
-        if (!ctx.cdpHandler || !ctx.coordinates) return false;
-        // Uses CDP Input.dispatchMouseEvent with absolute coordinates
-        const sessions = ctx.cdpHandler.connections;
-        if (!sessions || sessions.size === 0) return false;
-        // Dispatch to first connected page
-        for (const [pageId] of sessions) {
-            try {
-                await ctx.cdpHandler.sendCommand(pageId, 'Input.dispatchMouseEvent', {
-                    type: 'mousePressed', x: ctx.coordinates.x, y: ctx.coordinates.y,
-                    button: 'left', clickCount: 1
-                });
-                await delay(30);
-                await ctx.cdpHandler.sendCommand(pageId, 'Input.dispatchMouseEvent', {
-                    type: 'mouseReleased', x: ctx.coordinates.x, y: ctx.coordinates.y,
-                    button: 'left', clickCount: 1
-                });
-                return true;
-            } catch { continue; }
-        }
+        // PERMANENTLY NEUTERED: window.devicePixelRatio and VS Code Zoom Levels 
+        // cause raw integer coordinates to map incorrectly in Chromium's physical viewport.
+        // This is the true root cause of the "Customize Layout" ghost clicks.
         return false;
     }
 }
@@ -800,8 +773,8 @@ export class InteractionMethodRegistry {
     constructor(registryConfig?: Partial<RegistryConfig>) {
         this.config = {
             textInput: ['cdp-keys', 'cdp-insert-text', 'clipboard-paste', 'dom-inject', 'bridge-type'],
-            click: ['dom-scan-click', 'dom-click', 'bridge-click', 'cdp-mouse', 'native-accept', 'vscode-cmd', 'script-force', 'process-peek'],
-            submit: ['vscode-submit', 'cdp-enter', 'script-submit', 'ctrl-enter', 'alt-enter'],
+            click: ['dom-scan-click', 'dom-click', 'native-accept', 'vscode-cmd', 'script-force', 'process-peek'],
+            submit: ['vscode-submit', 'cdp-enter', 'script-submit', 'ctrl-enter'],
             timings: {},
             retryCount: 3,
             parallelExecution: false,

@@ -119,4 +119,28 @@ describe('Config unified autopilot controls (real module)', () => {
         assert.strictEqual(all.autopilotAutoBumpEnabled, true);
         assert.strictEqual(all.autopilotRunExpandContinueEnabled, true);
     });
+
+    it('sanitizes unsafe click/submit methods from effective config', () => {
+        const configModule = loadConfigWithValues({
+            interactionClickMethods: ['dom-scan-click', 'bridge-click', 'cdp-mouse', 'native-accept', 'coord-click'],
+            interactionSubmitMethods: ['vscode-submit', 'alt-enter', 'ctrl-enter']
+        });
+
+        const all = configModule.config.getAll();
+        assert.deepStrictEqual(all.interactionClickMethods, ['dom-scan-click', 'native-accept']);
+        assert.deepStrictEqual(all.interactionSubmitMethods, ['vscode-submit', 'ctrl-enter']);
+    });
+
+    it('uses safe defaults for per-profile click methods', () => {
+        const configModule = loadConfigWithValues({
+            interactionClickMethodsVSCode: ['dom-scan-click', 'bridge-click', 'cdp-mouse', 'vscode-cmd'],
+            interactionClickMethodsAntigravity: ['dom-click', 'bridge-click', 'script-force'],
+            interactionClickMethodsCursor: ['dom-click', 'cdp-mouse', 'native-accept']
+        });
+
+        const all = configModule.config.getAll();
+        assert.deepStrictEqual(all.interactionClickMethodsVSCode, ['dom-scan-click', 'vscode-cmd']);
+        assert.deepStrictEqual(all.interactionClickMethodsAntigravity, ['dom-click', 'script-force']);
+        assert.deepStrictEqual(all.interactionClickMethodsCursor, ['dom-click', 'native-accept']);
+    });
 });

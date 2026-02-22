@@ -161,6 +161,54 @@ export class ConfigManager {
     getAll(): AntigravityConfig {
         const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 
+        const sanitizeMethods = (
+            methods: unknown,
+            fallback: string[],
+            blocked: ReadonlySet<string>
+        ): string[] => {
+            const source = Array.isArray(methods) ? methods : fallback;
+            return source
+                .map(m => String(m || '').trim())
+                .filter(Boolean)
+                .filter(m => !blocked.has(m));
+        };
+
+        const blockedClickMethods = new Set(['bridge-click', 'cdp-mouse', 'coord-click']);
+        const blockedSubmitMethods = new Set(['alt-enter']);
+
+        const safeDefaultClickMethods = ['dom-scan-click', 'dom-click', 'native-accept', 'vscode-cmd', 'script-force', 'process-peek'];
+        const safeDefaultSubmitMethods = ['vscode-submit', 'cdp-enter', 'script-submit', 'ctrl-enter'];
+
+        const interactionClickMethods = sanitizeMethods(
+            config.get('interactionClickMethods', safeDefaultClickMethods),
+            safeDefaultClickMethods,
+            blockedClickMethods
+        );
+
+        const interactionSubmitMethods = sanitizeMethods(
+            config.get('interactionSubmitMethods', safeDefaultSubmitMethods),
+            safeDefaultSubmitMethods,
+            blockedSubmitMethods
+        );
+
+        const interactionClickMethodsVSCode = sanitizeMethods(
+            config.get('interactionClickMethodsVSCode', ['dom-scan-click', 'native-accept', 'process-peek', 'vscode-cmd']),
+            ['dom-scan-click', 'native-accept', 'process-peek', 'vscode-cmd'],
+            blockedClickMethods
+        );
+
+        const interactionClickMethodsAntigravity = sanitizeMethods(
+            config.get('interactionClickMethodsAntigravity', ['dom-scan-click', 'dom-click', 'script-force', 'native-accept']),
+            ['dom-scan-click', 'dom-click', 'script-force', 'native-accept'],
+            blockedClickMethods
+        );
+
+        const interactionClickMethodsCursor = sanitizeMethods(
+            config.get('interactionClickMethodsCursor', ['dom-scan-click', 'dom-click', 'script-force', 'native-accept']),
+            ['dom-scan-click', 'dom-click', 'script-force', 'native-accept'],
+            blockedClickMethods
+        );
+
         // Backward compatibility migration logic for runtime values
         const legacyBumpMessage = config.get<string>('bumpMessage', 'bump');
         const legacyAutoBumpEnabled = config.get<boolean>('autopilotAutoBumpEnabled', true);
@@ -292,8 +340,8 @@ export class ConfigManager {
             acceptPatterns: config.get('acceptPatterns', []),
             rejectPatterns: config.get('rejectPatterns', []),
             interactionTextMethods: config.get('interactionTextMethods', ['cdp-keys', 'cdp-insert-text', 'dom-inject']),
-            interactionClickMethods: config.get('interactionClickMethods', ['dom-scan-click', 'dom-click', 'bridge-click', 'cdp-mouse', 'native-accept', 'vscode-cmd', 'script-force', 'process-peek']),
-            interactionSubmitMethods: config.get('interactionSubmitMethods', ['vscode-submit', 'cdp-enter', 'script-submit', 'ctrl-enter', 'alt-enter']),
+            interactionClickMethods,
+            interactionSubmitMethods,
             interactionTimings: config.get('interactionTimings', {
                 'vscode-cmd': 100,
                 'native-accept': 60,
@@ -302,9 +350,9 @@ export class ConfigManager {
             interactionRetryCount: config.get('interactionRetryCount', 3),
             interactionParallel: config.get('interactionParallel', false),
             interactionVisualDiffThreshold: config.get('interactionVisualDiffThreshold', 0.001),
-            interactionClickMethodsVSCode: config.get('interactionClickMethodsVSCode', ['dom-scan-click', 'native-accept', 'process-peek', 'vscode-cmd', 'cdp-mouse', 'bridge-click']),
-            interactionClickMethodsAntigravity: config.get('interactionClickMethodsAntigravity', ['dom-scan-click', 'dom-click', 'bridge-click', 'cdp-mouse', 'script-force', 'native-accept']),
-            interactionClickMethodsCursor: config.get('interactionClickMethodsCursor', ['dom-scan-click', 'dom-click', 'cdp-mouse', 'script-force', 'native-accept']),
+            interactionClickMethodsVSCode,
+            interactionClickMethodsAntigravity,
+            interactionClickMethodsCursor,
             interactionClickSelectorsVSCode: config.get('interactionClickSelectorsVSCode', [
                 'button[aria-label*="Accept"]',
                 'button[title*="Accept"]',
