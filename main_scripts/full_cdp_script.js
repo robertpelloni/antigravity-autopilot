@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '5.2.65';
+        const ANTIGRAVITY_VERSION = '5.2.66';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
@@ -567,7 +567,7 @@
                 }
 
                 // Workbench Chrome Bans + Menus
-                if (current.matches('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menubar"]')) {
+                if (current.matches('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box, .monaco-menu, .monaco-menu-container, .menubar, .menubar-menu-button, [role="menu"], [role="menuitem"], [role="menubar"]')) {
                     return false;
                 }
                 if (current.getAttribute('role') === 'tab' || current.getAttribute('role') === 'tablist') {
@@ -1786,9 +1786,7 @@
 
         if (found.length === 0) {
             const fallbackSelectors = [
-                ...getUnifiedClickSelectors('vscode'),
-                ...getUnifiedClickSelectors('antigravity'),
-                ...getUnifiedClickSelectors('cursor'),
+                ...getUnifiedClickSelectors(getCurrentMode()),
                 // User Requested "Gold Standard" coverage:
                 '[aria-label*="Allow"]', '[title*="Allow"]',
                 '[aria-label*="Accept All"]', '[title*="Accept All"]',
@@ -1813,9 +1811,7 @@
 
                 if (found.length === 0) {
                     const fallbackSelectors = [
-                        ...getUnifiedClickSelectors('vscode'),
-                        ...getUnifiedClickSelectors('antigravity'),
-                        ...getUnifiedClickSelectors('cursor')
+                        ...getUnifiedClickSelectors(getCurrentMode())
                     ];
                     [...new Set(fallbackSelectors)].forEach(s => queryAll(s).forEach(el => {
                         if (isValidInteractionTarget(el)) {
@@ -2332,7 +2328,7 @@
             const isBG = config.isBackgroundMode === true;
 
             // Visual confirmation of injection
-            window.showAutoAllToast('Antigravity v5.2.65 Active 🚀');
+            window.showAutoAllToast('Antigravity v5.2.66 Active 🚀');
 
             if (config.bannedCommands) {
                 window.__autoAllUpdateBannedCommands(config.bannedCommands);

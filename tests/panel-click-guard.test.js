@@ -73,6 +73,8 @@ test('Antigravity profile avoids broad selectors that can hit workbench chrome',
 
     assert.ok(/mode === 'antigravity' && category === 'click'/.test(script), 'mergeSelectorSets should harden antigravity click selector merging');
     assert.ok(!/queryAll\('button\.grow'\)/.test(script), 'antigravity loop tab detection must not query button.grow directly');
+    assert.ok(!/getUnifiedClickSelectors\('vscode'\),\s*\.\.\.getUnifiedClickSelectors\('antigravity'\),\s*\.\.\.getUnifiedClickSelectors\('cursor'\)/.test(script), 'performClick fallback should not merge cross-profile selectors');
+    assert.match(script, /\[role="menuitem"\]/, 'isValidInteractionTarget should block menuitem surfaces');
 });
 
 test('Auto-continue submit uses safe chat input helper', () => {
@@ -84,6 +86,7 @@ test('Auto-continue submit uses safe chat input helper', () => {
     assert.match(autoContinue, /Composer is empty\. Suppressing submit key dispatch\./, 'submit path should suppress empty composer Enter dispatches');
     assert.ok(!/actionMethods:\s*\['dom-click',\s*'native-click',\s*'alt-enter'\]/.test(autoContinue), 'run/expand defaults must not include alt-enter fallback');
     assert.ok(!/text === 'run'\s*\|\|\s*label === 'run'/.test(autoContinue), 'run matching must not allow bare "run" labels');
+    assert.ok(!/\.codicon-play|\.codicon-run/.test(autoContinue.match(/const runSelectors = \[[\s\S]*?\]\.join\(','\);/)?.[0] || ''), 'run selectors must not include broad run icon classes');
     assert.match(autoContinue, /\[role="menuitem"\]/, 'unsafe context guard should block menuitem surfaces');
 });
 

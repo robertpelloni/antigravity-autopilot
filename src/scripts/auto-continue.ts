@@ -347,7 +347,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           acceptAll: extAcceptAll + queryShadowDOMAll('[title*="Accept All" i], [aria-label*="Accept All" i], button:has(.codicon-check-all)').length,
           keep: queryShadowDOMAll('[title="Keep" i], [aria-label="Keep" i], button[title*="Keep" i], button[aria-label*="Keep" i]').length,
           allow: queryShadowDOMAll('[title*="Allow" i], [aria-label*="Allow" i], button[title*="Allow" i], button[aria-label*="Allow" i]').length,
-          run: extRun + queryShadowDOMAll('[title*="Run in Terminal" i], [aria-label*="Run in Terminal" i], button.run-action, button:has(.codicon-play), button:has(.codicon-run), .codicon-play, .codicon-run').length,
+          run: extRun + queryShadowDOMAll('[title*="Run in Terminal" i], [aria-label*="Run in Terminal" i], [title*="Run command" i], [aria-label*="Run command" i], [title*="Execute command" i], [aria-label*="Execute command" i]').length,
           expand: extExpand + queryShadowDOMAll('[title*="Expand" i], [aria-label*="Expand" i], .monaco-tl-twistie.collapsed, .expand-indicator.collapsed').length,
           continue: queryShadowDOMAll('a.monaco-button, button.monaco-button, [role="button"]').length,
           submit: queryShadowDOMAll('[title="Send" i], [aria-label="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send').length,
@@ -686,8 +686,10 @@ export const AUTO_CONTINUE_SCRIPT = `
           const runSelectors = [
               '[title*="Run in Terminal"]',
               '[aria-label*="Run in Terminal"]',
-              '.codicon-play',
-              '.codicon-run' 
+              '[title*="Run command"]',
+              '[aria-label*="Run command"]',
+              '[title*="Execute command"]',
+              '[aria-label*="Execute command"]'
           ].join(',');
 
           if (hasMethod(runControl.actionMethods, 'dom-click')) {
