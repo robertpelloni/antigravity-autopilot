@@ -50,3 +50,9 @@ When dealing with "ghost" UI actions (e.g., the window layout mysteriously toggl
 
 - **Antigravity Selector Isolation:** In mixed environments (Antigravity + VS Code Insiders/Copilot both open), broad Antigravity selectors like `button`/`button.grow` can still discover non-chat chrome surfaces. Keep Antigravity click selectors narrow and avoid merging broad shared click selectors into Antigravity mode.
 - **Remote Control Security Baseline:** Embedded remote server must default to localhost-only bind and validate HTTP/WS client host allowlist before accepting control traffic. LAN mode should remain opt-in and explicitly configured.
+
+## Recent Hardening Notes (v5.2.71)
+
+- **TypeAndSubmit Enter Fallback Risk:** Even when main submit fallback is blocked in AG mode, secondary `typeAndSubmit` key-dispatch paths can still emit Enter combos. Keep AG mode fail-closed in *all* submit paths, not only primary submit handlers.
+- **ForceAction Run/Expand Lock:** Manual/runtime `forceAction('run'|'expand')` must be blocked in AG mode; broad run/expand selector sets can reintroduce workbench chrome targeting.
+- **AG Expansion Pre-Pass:** `expandCollapsedSections()` pre-click sweeps should be disabled in AG mode unless explicitly scoped to verified chat surfaces; otherwise they can surface unstable periodic behavior.

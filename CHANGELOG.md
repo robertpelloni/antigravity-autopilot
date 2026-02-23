@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.71] - 2026-02-22
+### Fixed
+- **AG Residual Trigger Suppression (Fail-Closed++)**: Disabled `typeAndSubmit` Enter-key fallbacks in Antigravity runtime, suppressed AG keys-fallback dispatch in `auto-continue`, blocked manual `forceAction(run|expand)` in AG mode inside injected runtime, disabled AG expansion pre-pass in `performClick/expandCollapsedSections`, and removed stuck-button keypress fallback invocation from the injected click loop.
+
 ## [5.2.70] - 2026-02-22
 ### Fixed
 - **AG Emergency Lockdown (Run/Expand + Enter Fallback)**: Added explicit Antigravity runtime lock that disables run/expand automation gates in `auto-continue`, disables Enter-key submit fallback in AG runtime, and disables injected `submitWithKeys` keyboard fallback in AG mode while rejecting run/expand accept-pattern actions in AG for safety.

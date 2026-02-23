@@ -96,6 +96,8 @@ test('Auto-continue submit uses safe chat input helper', () => {
     assert.match(autoContinue, /!isChatActionSurface\(targetToClick\)/, 'tryClick should fail-closed when target is not chat-surface');
     assert.match(autoContinue, /controlName === 'run' \|\| controlName === 'expand'\) && isAntigravityRuntime\(\)/, 'run/expand should be disabled in antigravity runtime');
     assert.match(autoContinue, /AG runtime: enter-key submit fallback disabled for safety\./, 'enter-key fallback should be disabled in antigravity runtime');
+    assert.match(autoContinue, /AG runtime: typeAndSubmit enter-key fallback disabled for safety\./, 'typeAndSubmit enter-key fallback should be disabled in antigravity runtime');
+    assert.match(autoContinue, /AG runtime: suppressed keys-fallback dispatch in typeAndSubmit\./, 'typeAndSubmit keys fallback should be suppressed in antigravity runtime');
 });
 
 test('Injected click classifier rejects broad generic run labels', () => {
@@ -105,6 +107,9 @@ test('Injected click classifier rejects broad generic run labels', () => {
     assert.match(script, /text\.includes\('run'\)\s*&&\s*!text\.includes\('run in terminal'\)/, 'isAcceptButton should allow only explicit run intent variants');
     assert.match(script, /function isChatActionSurface\(el\)/, 'injected script should define chat-surface gate helper');
     assert.match(script, /if \(!isChatActionSurface\(el\)\)/, 'performClick should skip non-chat action surfaces');
+    assert.match(script, /AG mode: blocked forceAction\(\$\{action\}\) for safety\./, 'forceAction should hard-block run/expand in AG mode');
+    assert.match(script, /AG mode: expansion pass disabled for safety\./, 'expand pre-pass should be disabled in AG mode');
+    assert.ok(!/triggerKeypressFallback\(el\)/.test(script), 'stuck guard should not invoke undefined keypress fallback handler');
 });
 
 test('CDP bridge blocks unsafe global Enter relay for submit keys', () => {

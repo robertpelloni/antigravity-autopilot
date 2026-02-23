@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '5.2.70';
+        const ANTIGRAVITY_VERSION = '5.2.71';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
@@ -191,9 +191,14 @@
 
             window.__autoAllState.forceAction = async function (action) {
                 log(`[ForceAction] Received manual trigger: ${action}`);
+                const mode = getCurrentMode();
+                if (mode === 'antigravity' && (action === 'run' || action === 'expand')) {
+                    log(`[ForceAction] AG mode: blocked forceAction(${action}) for safety.`);
+                    return false;
+                }
                 let selectors = [];
-                if (action === 'run') selectors = ['[title*="Run"]', '[aria-label*="Run"]', '[title*="Execute"]', '[aria-label*="Execute"]', '.codicon-play', '.codicon-run', '.codicon-debug-start', '.run-button', '.debug-action', '[id*="run"]'];
-                else if (action === 'expand') selectors = ['[title*="Expand"]', '[aria-label*="Expand"]', '.codicon-chevron-right', '.monaco-list-row.collapsed', '.monaco-tl-twistie'];
+                if (action === 'run') selectors = ['[title*="Run in Terminal"]', '[aria-label*="Run in Terminal"]', '[title*="Run command"]', '[aria-label*="Run command"]', '[title*="Execute command"]', '[aria-label*="Execute command"]'];
+                else if (action === 'expand') selectors = ['[title*="Expand"]', '[aria-label*="Expand"]'];
                 else if (action === 'accept') selectors = ['[title*="Accept"]', '[aria-label*="Accept"]', '[title*="Apply"]', '[aria-label*="Apply"]', '[title*="Insert"]', '[aria-label*="Insert"]', '.codicon-check', '.codicon-diff-insert', '.start-inline-chat-button'];
 
                 if (selectors.length > 0) {
@@ -1590,6 +1595,11 @@
 
 
     async function expandCollapsedSections() {
+        if (getCurrentMode() === 'antigravity') {
+            log('[Expand] AG mode: expansion pass disabled for safety.');
+            return false;
+        }
+
         // Expand collapsed sections ONLY within the chat/response area
         // IMPORTANT: Do NOT query globally — that would click file explorer, sidebar, etc.
         const expandTargets = [];
@@ -1812,8 +1822,11 @@
 
     async function performClick(selectors) {
         await detectAndDismissMCPDialog();
+        const mode = getCurrentMode();
         // PRE-CHECK: Expand any collapsed sections that might be hiding buttons
-        await expandCollapsedSections();
+        if (mode !== 'antigravity') {
+            await expandCollapsedSections();
+        }
 
         let found = [];
         selectors.forEach(s => queryAll(s).forEach(el => {
@@ -1822,9 +1835,9 @@
             }
         }));
 
-        if (found.length === 0) {
+        if (found.length === 0 && mode !== 'antigravity') {
             const fallbackSelectors = [
-                ...getUnifiedClickSelectors(getCurrentMode()),
+                ...getUnifiedClickSelectors(mode),
                 // User Requested "Gold Standard" coverage:
                 '[aria-label*="Allow"]', '[title*="Allow"]',
                 '[aria-label*="Accept All"]', '[title*="Accept All"]',
@@ -1838,7 +1851,7 @@
         }
 
         // If nothing found, try expanding ONE MORE TIME aggressively, then search again
-        if (found.length === 0) {
+        if (found.length === 0 && mode !== 'antigravity') {
             const expanded = await expandCollapsedSections();
             if (expanded) {
                 selectors.forEach(s => queryAll(s).forEach(el => {
@@ -1849,7 +1862,7 @@
 
                 if (found.length === 0) {
                     const fallbackSelectors = [
-                        ...getUnifiedClickSelectors(getCurrentMode())
+                        ...getUnifiedClickSelectors(mode)
                     ];
                     [...new Set(fallbackSelectors)].forEach(s => queryAll(s).forEach(el => {
                         if (isValidInteractionTarget(el)) {
@@ -1993,8 +2006,7 @@
                     state.clickHistory.count++;
 
                     if (state.clickHistory.count === 2) {
-                        log(`[StuckGuard] Button stubborn (2nd attempt). Trying Keypress Fallback...`);
-                        triggerKeypressFallback(el);
+                        log(`[StuckGuard] Button stubborn (2nd attempt). Skipping keypress fallback for safety.`);
                     }
 
                     if (state.clickHistory.count > 3) {
@@ -2369,7 +2381,7 @@
             const isBG = config.isBackgroundMode === true;
 
             // Visual confirmation of injection
-            window.showAutoAllToast('Antigravity v5.2.70 Active 🚀');
+            window.showAutoAllToast('Antigravity v5.2.71 Active 🚀');
 
             if (config.bannedCommands) {
                 window.__autoAllUpdateBannedCommands(config.bannedCommands);

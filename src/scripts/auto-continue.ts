@@ -597,7 +597,9 @@ export const AUTO_CONTINUE_SCRIPT = `
           };
 
           if (!submitted && hasMethod(bump.submitMethods, 'enter-key')) {
-              if (form && typeof form.requestSubmit === 'function') {
+              if (isAntigravityRuntime()) {
+                  logAction('[SubmitGuard] AG runtime: typeAndSubmit enter-key fallback disabled for safety.');
+              } else if (form && typeof form.requestSubmit === 'function') {
                    try { form.requestSubmit(); submitted = true; emitAction('submit', 'form.requestSubmit'); } catch(e) {}
               }
               if (!submitted) {
@@ -612,6 +614,10 @@ export const AUTO_CONTINUE_SCRIPT = `
                    try { form.requestSubmit(); submitted = true; emitAction('submit', 'form.requestSubmit-fallback'); } catch(e) {}
               }
               if (!submitted && !tryClick(sendSelectors, 'Submit (Auto-Reply fallback)', 'submit')) {
+                  if (isAntigravityRuntime()) {
+                      logAction('[SubmitGuard] AG runtime: suppressed keys-fallback dispatch in typeAndSubmit.');
+                      return;
+                  }
                   dispatchEnters();
                   emitAction('submit', 'keys-fallback');
               }
