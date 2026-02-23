@@ -389,7 +389,6 @@ export class DOMScanClick implements IInteractionMethod {
                     }
 
                     if (!text || text.length > 120) continue;
-                    if (/^(run|execute)$/.test(text)) continue;
                     if (!visible(el)) continue;
                     if (reject.some(p => text.includes(p))) continue;
                     if (!accept.some(p => text.includes(p))) continue;
