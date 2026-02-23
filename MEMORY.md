@@ -72,3 +72,7 @@ When dealing with "ghost" UI actions (e.g., the window layout mysteriously toggl
 ## Recent Hardening Notes (v5.2.75)
 
 - **Always-On Safety Visibility:** Dashboard/status-menu telemetry can still be missed during long unattended runs. Keep a compact safety signal (`SAFE:QUIET|ACTIVE|HOT`) in status-bar text and include a tooltip breakdown so suppression spikes remain visible in the ambient operator UI.
+
+## Recent Hardening Notes (v5.2.76)
+
+- **Alert Only on Meaningful HOT Events:** For operator warnings, gate alerts on HOT transitions or significant HOT deltas and enforce cooldown windows. This avoids reminder spam while still surfacing dangerous suppression bursts quickly.

@@ -118,6 +118,9 @@ export function activate(context: vscode.ExtensionContext) {
         let refreshStatusMenuDroppedTotal = 0;
         let refreshStatusMenuDroppedInFlight = 0;
         let refreshStatusMenuDroppedDebounce = 0;
+        let lastSafetySignal: 'QUIET' | 'ACTIVE' | 'HOT' | null = null;
+        let lastSafetyBlockedTotal: number | null = null;
+        let lastSafetyHotAlertAt = 0;
 
         updateControllerRoleStatus();
 
@@ -149,6 +152,8 @@ export function activate(context: vscode.ExtensionContext) {
                     latestRuntimeState = null;
                     waitingStateSince = null;
                     readyToResumeStreak = 0;
+                    lastSafetySignal = null;
+                    lastSafetyBlockedTotal = null;
                     statusBar.updateRuntimeState(null);
                     return;
                 }
@@ -156,6 +161,36 @@ export function activate(context: vscode.ExtensionContext) {
                 const runtimeState = await cdp.getRuntimeState();
                 latestRuntimeState = runtimeState;
                 statusBar.updateRuntimeState(runtimeState);
+                const safety = getSafetyTelemetrySummary(runtimeState);
+                const safetyNow = Date.now();
+                const previousSignal = lastSafetySignal;
+                const previousBlockedTotal = lastSafetyBlockedTotal;
+                const safetyDelta = previousBlockedTotal === null ? 0 : Math.max(0, safety.total - previousBlockedTotal);
+                const safetyHotAlertCooldownMs = 120000;
+
+                if (safety.signal === 'HOT') {
+                    const transitionedToHot = previousSignal !== 'HOT';
+                    const significantSpike = safetyDelta >= 3;
+                    const cooldownElapsed = (safetyNow - lastSafetyHotAlertAt) >= safetyHotAlertCooldownMs;
+                    if ((transitionedToHot || significantSpike) && cooldownElapsed) {
+                        lastSafetyHotAlertAt = safetyNow;
+                        log.warn(`[SafetyHot] signal=${safety.signal} blocked=${safety.total} delta=${safetyDelta} runExpand=${safety.blockedRunExpand} nonChat=${safety.blockedNonChat} submit=${safety.blockedSubmit} focusLoss=${safety.blockedFocusLoss}`);
+                        vscode.window.showWarningMessage(
+                            `Antigravity safety spike detected: HOT (${safety.total} blocked).`,
+                            'Check Runtime State',
+                            'Open Dashboard'
+                        ).then(selection => {
+                            if (selection === 'Check Runtime State') {
+                                vscode.commands.executeCommand('antigravity.checkRuntimeState');
+                            } else if (selection === 'Open Dashboard') {
+                                vscode.commands.executeCommand('antigravity.openSettings');
+                            }
+                        });
+                    }
+                }
+
+                lastSafetySignal = safety.signal;
+                lastSafetyBlockedTotal = safety.total;
 
                 const waitingEnabled = config.get<boolean>('runtimeWaitingReminderEnabled');
                 const waitingDelayMs = Math.max(5, config.get<number>('runtimeWaitingReminderDelaySec') || 60) * 1000;
@@ -320,6 +355,8 @@ export function activate(context: vscode.ExtensionContext) {
                 latestRuntimeState = null;
                 waitingStateSince = null;
                 readyToResumeStreak = 0;
+                lastSafetySignal = null;
+                lastSafetyBlockedTotal = null;
                 statusBar.updateRuntimeState(null);
             }
         };

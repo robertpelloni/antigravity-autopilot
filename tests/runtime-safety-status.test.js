@@ -33,4 +33,11 @@ test('Runtime safety telemetry is surfaced in status/diagnostics paths', async (
         assert.match(source, /const buildLastResumePayloadReport = \(state\?: any\) =>[\s\S]*?safety,/, 'last resume payload report should include safety telemetry');
         assert.match(source, /const buildEscalationDiagnosticsReport = \(state\?: any\) =>[\s\S]*?safety,/, 'escalation diagnostics report should include safety telemetry');
     });
+
+    await t.test('refresh loop emits guarded HOT safety spike alerts', () => {
+        assert.match(source, /const safetyHotAlertCooldownMs = 120000;/, 'refresh loop should define HOT alert cooldown');
+        assert.match(source, /const significantSpike = safetyDelta >= 3;/, 'refresh loop should detect meaningful HOT spikes');
+        assert.match(source, /if \(\(transitionedToHot \|\| significantSpike\) && cooldownElapsed\)/, 'refresh loop should gate HOT alerts by transition or spike and cooldown');
+        assert.match(source, /Antigravity safety spike detected: HOT/, 'refresh loop should notify operator when HOT spike alert fires');
+    });
 });

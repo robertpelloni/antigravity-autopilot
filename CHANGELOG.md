@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.76] - 2026-02-22
+### Added
+- **Guarded HOT Spike Alerts**: Runtime refresh loop now raises operator warnings when safety state transitions to HOT or experiences a significant HOT blocked-count jump, with cooldown protection to prevent notification spam.
+- **Safety Spike Diagnostics Logging**: Added structured HOT safety log line capturing total blocked actions and per-category breakdown (`run/expand`, `non-chat`, `submit`, `focus-loss`) when alerts fire.
+
 ## [5.2.75] - 2026-02-22
 ### Added
 - **Status Bar Safety Badge**: Added a live `SAFE:QUIET|ACTIVE|HOT` runtime badge in the status bar so safety suppression state is visible without opening dashboard/status menus.
