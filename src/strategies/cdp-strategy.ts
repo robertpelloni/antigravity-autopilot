@@ -202,18 +202,16 @@ export class CDPStrategy implements IStrategy {
                 break;
             case 'run':
                 SoundEffects.playActionGroup('run');
-                await clickRegistry.executeCategory('click', {
+                await this.createActionSafeClickRegistry(profile).executeCategory('click', {
                     ...ctx,
-                    selector,
-                    commandId: 'antigravity.clickRun'
+                    selector
                 });
                 break;
             case 'expand':
                 SoundEffects.playActionGroup('expand');
-                await clickRegistry.executeCategory('click', {
+                await this.createActionSafeClickRegistry(profile).executeCategory('click', {
                     ...ctx,
-                    selector,
-                    commandId: 'antigravity.clickExpand'
+                    selector
                 });
                 break;
             default:
@@ -294,6 +292,30 @@ export class CDPStrategy implements IStrategy {
             : profile === 'cursor'
                 ? (cfg.interactionClickMethodsCursor || cfg.interactionClickMethods)
                 : (cfg.interactionClickMethodsVSCode || cfg.interactionClickMethods);
+
+        return new InteractionMethodRegistry({
+            textInput: cfg.interactionTextMethods,
+            click: clickMethods,
+            submit: cfg.interactionSubmitMethods,
+            timings: cfg.interactionTimings,
+            retryCount: cfg.interactionRetryCount,
+            parallelExecution: cfg.interactionParallel
+        });
+    }
+
+    private createActionSafeClickRegistry(profile: 'vscode' | 'antigravity' | 'cursor'): InteractionMethodRegistry {
+        const cfg = config.getAll();
+        const baseMethods = profile === 'antigravity'
+            ? (cfg.interactionClickMethodsAntigravity || cfg.interactionClickMethods)
+            : profile === 'cursor'
+                ? (cfg.interactionClickMethodsCursor || cfg.interactionClickMethods)
+                : (cfg.interactionClickMethodsVSCode || cfg.interactionClickMethods);
+
+        const disallowed = new Set(['vscode-cmd', 'process-peek']);
+        const clickMethods = (Array.isArray(baseMethods) ? baseMethods : [])
+            .map(m => String(m || '').trim())
+            .filter(Boolean)
+            .filter(m => !disallowed.has(m));
 
         return new InteractionMethodRegistry({
             textInput: cfg.interactionTextMethods,

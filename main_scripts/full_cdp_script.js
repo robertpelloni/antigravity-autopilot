@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '5.2.68';
+        const ANTIGRAVITY_VERSION = '5.2.69';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
@@ -2360,7 +2360,7 @@
             const isBG = config.isBackgroundMode === true;
 
             // Visual confirmation of injection
-            window.showAutoAllToast('Antigravity v5.2.68 Active 🚀');
+            window.showAutoAllToast('Antigravity v5.2.69 Active 🚀');
 
             if (config.bannedCommands) {
                 window.__autoAllUpdateBannedCommands(config.bannedCommands);

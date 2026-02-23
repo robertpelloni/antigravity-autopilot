@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.69] - 2026-02-22
+### Fixed
+- **AG Native Command Loop Guard**: Removed native command fallbacks from `antigravity.clickRun` and `antigravity.clickExpand`, blocked command-driven click methods (`vscode-cmd`, `process-peek`) in config sanitization/defaults, and forced run/expand CDP action execution to use command-free click registries.
+
 ## [5.2.68] - 2026-02-22
 ### Fixed
 - **AG 2s Layout Toggle Regression (Fail-Closed Gate)**: Enforced chat-surface-only gating across all auto-continue click paths (`tryClick`, continue, feedback, run, expand) and injected click-loop action execution. Non-chat shell/menu/titlebar/menuitem targets are now blocked even if they pass selector matching.

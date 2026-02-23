@@ -122,7 +122,7 @@ describe('Config unified autopilot controls (real module)', () => {
 
     it('sanitizes unsafe click/submit methods from effective config', () => {
         const configModule = loadConfigWithValues({
-            interactionClickMethods: ['dom-scan-click', 'bridge-click', 'cdp-mouse', 'native-accept', 'coord-click'],
+            interactionClickMethods: ['dom-scan-click', 'bridge-click', 'cdp-mouse', 'native-accept', 'coord-click', 'vscode-cmd', 'process-peek'],
             interactionSubmitMethods: ['vscode-submit', 'script-submit', 'alt-enter', 'cdp-enter', 'ctrl-enter']
         });
 
@@ -139,7 +139,7 @@ describe('Config unified autopilot controls (real module)', () => {
         });
 
         const all = configModule.config.getAll();
-        assert.deepStrictEqual(all.interactionClickMethodsVSCode, ['dom-scan-click', 'vscode-cmd']);
+        assert.deepStrictEqual(all.interactionClickMethodsVSCode, ['dom-scan-click']);
         assert.deepStrictEqual(all.interactionClickMethodsAntigravity, ['dom-click', 'script-force']);
         assert.deepStrictEqual(all.interactionClickMethodsCursor, ['dom-click', 'native-accept']);
     });

@@ -173,10 +173,10 @@ export class ConfigManager {
                 .filter(m => !blocked.has(m));
         };
 
-        const blockedClickMethods = new Set(['bridge-click', 'cdp-mouse', 'coord-click']);
+        const blockedClickMethods = new Set(['bridge-click', 'cdp-mouse', 'coord-click', 'vscode-cmd', 'process-peek']);
         const blockedSubmitMethods = new Set(['alt-enter', 'cdp-enter', 'ctrl-enter']);
 
-        const safeDefaultClickMethods = ['dom-scan-click', 'dom-click', 'native-accept', 'vscode-cmd', 'script-force', 'process-peek'];
+        const safeDefaultClickMethods = ['dom-scan-click', 'dom-click', 'native-accept', 'script-force'];
         const safeDefaultSubmitMethods = ['vscode-submit', 'script-submit'];
 
         const interactionClickMethods = sanitizeMethods(
@@ -192,8 +192,8 @@ export class ConfigManager {
         );
 
         const interactionClickMethodsVSCode = sanitizeMethods(
-            config.get('interactionClickMethodsVSCode', ['dom-scan-click', 'native-accept', 'process-peek', 'vscode-cmd']),
-            ['dom-scan-click', 'native-accept', 'process-peek', 'vscode-cmd'],
+            config.get('interactionClickMethodsVSCode', ['dom-scan-click', 'dom-click', 'native-accept', 'script-force']),
+            ['dom-scan-click', 'dom-click', 'native-accept', 'script-force'],
             blockedClickMethods
         );
 

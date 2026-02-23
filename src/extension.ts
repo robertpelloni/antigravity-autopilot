@@ -2103,29 +2103,16 @@ export function activate(context: vscode.ExtensionContext) {
                 const cdp = resolveCDPStrategy();
                 if (cdp && await cdp.executeAction('run')) return;
 
-                const commands = [
-                    'workbench.action.debug.start',
-                    'workbench.action.debug.run',
-                    'code-runner.run'
-                ];
-                for (const cmd of commands) {
-                    try { await vscode.commands.executeCommand(cmd); } catch { }
-                }
+                // Safety-first: never fallback to native debug/run commands here.
+                // They can target IDE chrome and trigger menu/layout toggles outside chat surfaces.
+                log.warn('clickRun skipped native command fallback because CDP run action was unavailable.');
             }),
             safeRegisterCommand('antigravity.clickExpand', async () => {
                 const cdp = resolveCDPStrategy();
                 if (cdp && await cdp.executeAction('expand')) return;
 
-                // Expand often implies showing more context or opening a view
-                // For now, we try opening chat or focusing sidebar as a proxy for "expanding" interaction area
-                const commands = [
-                    'workbench.action.chat.openInSideBar',
-                    'workbench.action.chat.open',
-                    'workbench.panel.chat.view.copilot.focus'
-                ];
-                for (const cmd of commands) {
-                    try { await vscode.commands.executeCommand(cmd); } catch { }
-                }
+                // Safety-first: never fallback to native layout/view commands here.
+                log.warn('clickExpand skipped native command fallback because CDP expand action was unavailable.');
             }),
             safeRegisterCommand('antigravity.forceAcquireLeader', async () => {
                 if (controllerLease) {
