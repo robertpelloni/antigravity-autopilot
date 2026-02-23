@@ -89,10 +89,13 @@ test('Auto-continue submit uses safe chat input helper', () => {
     assert.ok(!/\.codicon-play|\.codicon-run/.test(autoContinue.match(/const runSelectors = \[[\s\S]*?\]\.join\(','\);/)?.[0] || ''), 'run selectors must not include broad run icon classes');
     assert.match(autoContinue, /\[role="menuitem"\]/, 'unsafe context guard should block menuitem surfaces');
     assert.match(autoContinue, /function isChatActionSurface\(el\)/, 'auto-continue should define chat-surface gate helper');
+    assert.match(autoContinue, /function isAntigravityRuntime\(\)/, 'auto-continue should define antigravity runtime detector');
     assert.match(autoContinue, /isChatActionSurface\(textMatch\)/, 'run/expand text matches should require chat-surface gating');
     assert.match(autoContinue, /Scoped Selector Match/, 'run/expand selector clicks should use scoped selector flow');
     assert.match(autoContinue, /Blocked non-chat click target/, 'tryClick should log blocked non-chat click targets');
     assert.match(autoContinue, /!isChatActionSurface\(targetToClick\)/, 'tryClick should fail-closed when target is not chat-surface');
+    assert.match(autoContinue, /controlName === 'run' \|\| controlName === 'expand'\) && isAntigravityRuntime\(\)/, 'run/expand should be disabled in antigravity runtime');
+    assert.match(autoContinue, /AG runtime: enter-key submit fallback disabled for safety\./, 'enter-key fallback should be disabled in antigravity runtime');
 });
 
 test('Injected click classifier rejects broad generic run labels', () => {

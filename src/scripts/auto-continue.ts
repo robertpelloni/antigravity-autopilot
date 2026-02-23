@@ -129,7 +129,11 @@ export const AUTO_CONTINUE_SCRIPT = `
       };
   }
 
-    function controlGatePass(controlName, cfg, state, now, controlLastActionTime) {
+        function controlGatePass(controlName, cfg, state, now, controlLastActionTime) {
+            if ((controlName === 'run' || controlName === 'expand') && isAntigravityRuntime()) {
+                    return false;
+            }
+
       const control = getControlConfig(cfg, controlName);
       const detect = control.detectMethods || [];
       if (!Array.isArray(detect) || detect.length === 0) return false;
@@ -306,6 +310,18 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
 
       return false;
+  }
+
+  function isAntigravityRuntime() {
+      try {
+          return !!(
+              document.querySelector('#antigravity\\.agentPanel') ||
+              document.querySelector('[id*="antigravity" i], [class*="antigravity" i]') ||
+              /antigravity/i.test(String(navigator.userAgent || ''))
+          );
+      } catch (e) {
+          return false;
+      }
   }
 
   // --- Analysis Helpers ---
@@ -871,35 +887,39 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
 
           if (!actionTaken && hasMethod(submitControl.actionMethods, 'enter-key')) {
-              const input = getSafeChatInput();
-              if (input) {
-                  setTimeout(() => {
-                      const textValue = (input.value !== undefined && input.value !== null)
-                          ? String(input.value || '').trim()
-                          : String(input.textContent || '').trim();
-                      if (!textValue) {
-                          logAction('[SubmitGuard] ABORT: Composer is empty. Suppressing submit key dispatch.');
-                          return;
-                      }
+              if (isAntigravityRuntime()) {
+                  logAction('[SubmitGuard] AG runtime: enter-key submit fallback disabled for safety.');
+              } else {
+                  const input = getSafeChatInput();
+                  if (input) {
+                      setTimeout(() => {
+                          const textValue = (input.value !== undefined && input.value !== null)
+                              ? String(input.value || '').trim()
+                              : String(input.textContent || '').trim();
+                          if (!textValue) {
+                              logAction('[SubmitGuard] ABORT: Composer is empty. Suppressing submit key dispatch.');
+                              return;
+                          }
 
-                      if (document.activeElement !== input) {
-                          try { (input as HTMLElement).focus(); } catch (e) {}
-                      }
-                      
-                      const activeEl = window.document.activeElement;
-                      const isShadowMatch = activeEl && activeEl.shadowRoot && activeEl.shadowRoot.activeElement === input;
-                      if (activeEl !== input && !isShadowMatch) {
-                          logAction('[SubmitGuard] ABORT: Focus lost to <' + (activeEl?.tagName || 'unknown') + '>. Suppressing rogue Enter key dispatch.');
-                          return;
-                      }
+                          if (document.activeElement !== input) {
+                              try { (input as HTMLElement).focus(); } catch (e) {}
+                          }
+                          
+                          const activeEl = window.document.activeElement;
+                          const isShadowMatch = activeEl && activeEl.shadowRoot && activeEl.shadowRoot.activeElement === input;
+                          if (activeEl !== input && !isShadowMatch) {
+                              logAction('[SubmitGuard] ABORT: Focus lost to <' + (activeEl?.tagName || 'unknown') + '>. Suppressing rogue Enter key dispatch.');
+                              return;
+                          }
 
-                      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-                      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-                  }, submitDelay);
-                  actionTaken = true;
-                  lastActionByControl.submit = now;
-                  log('Submitted via Enter key');
-                  emitAction('submit', 'submit enter-key');
+                          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+                          input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+                      }, submitDelay);
+                      actionTaken = true;
+                      lastActionByControl.submit = now;
+                      log('Submitted via Enter key');
+                      emitAction('submit', 'submit enter-key');
+                  }
               }
           }
       }

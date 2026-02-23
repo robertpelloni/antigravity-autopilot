@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.70] - 2026-02-22
+### Fixed
+- **AG Emergency Lockdown (Run/Expand + Enter Fallback)**: Added explicit Antigravity runtime lock that disables run/expand automation gates in `auto-continue`, disables Enter-key submit fallback in AG runtime, and disables injected `submitWithKeys` keyboard fallback in AG mode while rejecting run/expand accept-pattern actions in AG for safety.
+
 ## [5.2.69] - 2026-02-22
 ### Fixed
 - **AG Native Command Loop Guard**: Removed native command fallbacks from `antigravity.clickRun` and `antigravity.clickExpand`, blocked command-driven click methods (`vscode-cmd`, `process-peek`) in config sanitization/defaults, and forced run/expand CDP action execution to use command-free click registries.

@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '5.2.69';
+        const ANTIGRAVITY_VERSION = '5.2.70';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
@@ -664,6 +664,11 @@
     }
 
     async function submitWithKeys(targetOverride) {
+        if (getCurrentMode() === 'antigravity') {
+            log('[SubmitGuard] AG mode: keyboard submit fallback disabled for safety.');
+            return false;
+        }
+
         sendCommandToBridge('__ANTIGRAVITY_ACTION__:submit|keys');
         const target = targetOverride || document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea, [id*="chat-input"]');
         if (!target) return false;
@@ -1415,6 +1420,10 @@
         }
 
         if (text.length === 0 || text.length > 120) return false;
+
+        if (getCurrentMode() === 'antigravity' && (text.includes('run') || text.includes('expand'))) {
+            return false;
+        }
 
         // Hardcoded safety lock: explicitly reject "Add Context", "Attach", and "Layout"
         if (/(add context|attach|layout)/i.test(text)) return false;
@@ -2360,7 +2369,7 @@
             const isBG = config.isBackgroundMode === true;
 
             // Visual confirmation of injection
-            window.showAutoAllToast('Antigravity v5.2.69 Active 🚀');
+            window.showAutoAllToast('Antigravity v5.2.70 Active 🚀');
 
             if (config.bannedCommands) {
                 window.__autoAllUpdateBannedCommands(config.bannedCommands);
