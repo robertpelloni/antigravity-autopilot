@@ -89,6 +89,8 @@ test('Auto-continue submit uses safe chat input helper', () => {
     assert.ok(!/\.codicon-play|\.codicon-run/.test(autoContinue.match(/const runSelectors = \[[\s\S]*?\]\.join\(','\);/)?.[0] || ''), 'run selectors must not include broad run icon classes');
     assert.match(autoContinue, /\[role="menuitem"\]/, 'unsafe context guard should block menuitem surfaces');
     assert.match(autoContinue, /function isChatActionSurface\(el\)/, 'auto-continue should define chat-surface gate helper');
+    assert.match(autoContinue, /let hasBlockedAncestor = false;/, 'chat-surface gate should track blocked shell ancestors');
+    assert.match(autoContinue, /if \(hasBlockedAncestor\) return false;/, 'chat-surface gate should fail-closed when blocked shell ancestor exists');
     assert.match(autoContinue, /function isAntigravityRuntime\(\)/, 'auto-continue should define antigravity runtime detector');
     assert.match(autoContinue, /isChatActionSurface\(textMatch\)/, 'run/expand text matches should require chat-surface gating');
     assert.match(autoContinue, /Scoped Selector Match/, 'run/expand selector clicks should use scoped selector flow');
@@ -109,7 +111,11 @@ test('Injected click classifier rejects broad generic run labels', () => {
 
     assert.match(script, /text === 'run'\s*\|\|\s*text === 'execute'/, 'isAcceptButton should reject bare run/execute labels');
     assert.match(script, /text\.includes\('run'\)\s*&&\s*!text\.includes\('run in terminal'\)/, 'isAcceptButton should allow only explicit run intent variants');
+    assert.match(script, /\(add context\|attach\|layout\|customize\)/, 'isAcceptButton should hard reject customize/layout/context controls');
+    assert.match(script, /'customize layout', 'layout control'/, 'default reject patterns should explicitly include layout controls');
     assert.match(script, /function isChatActionSurface\(el\)/, 'injected script should define chat-surface gate helper');
+    assert.match(script, /let hasBlockedAncestor = false;/, 'injected chat-surface gate should track blocked shell ancestors');
+    assert.match(script, /if \(hasBlockedAncestor\) return false;/, 'injected chat-surface gate should fail-closed when blocked shell ancestor exists');
     assert.match(script, /if \(!isChatActionSurface\(el\)\)/, 'performClick should skip non-chat action surfaces');
     assert.match(script, /AG mode: blocked forceAction\(\$\{action\}\) for safety\./, 'forceAction should hard-block run/expand in AG mode');
     assert.match(script, /AG mode: expansion pass disabled for safety\./, 'expand pre-pass should be disabled in AG mode');
@@ -124,5 +130,6 @@ test('CDP bridge blocks unsafe global Enter relay for submit keys', () => {
     const cdpHandler = fs.readFileSync(cdpHandlerPath, 'utf-8');
 
     assert.match(cdpHandler, /Blocked unsafe CDP Enter relay for submit\|keys/, 'cdp-handler should explicitly block submit|keys Enter relay');
+    assert.ok(!/__ANTIGRAVITY_CLICK__/.test(cdpHandler), 'cdp-handler should not relay coordinate click bridge payloads');
     assert.ok(!/Fallback CDP Enter Key/.test(cdpHandler), 'cdp-handler should not use global Fallback CDP Enter Key');
 });

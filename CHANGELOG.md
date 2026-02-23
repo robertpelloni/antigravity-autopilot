@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.80] - 2026-02-23
+### Fixed
+- **Webview Hardware Click Restore (For Real)**: Re-applied the `__ANTIGRAVITY_CLICK__` hardware bridge sequence to `remoteClick` in `full_cdp_script.js`. A previous session incorrectly applied this critical fix to a backup directory, leaving Webview components (which ignore programmatic `el.click()` events) unable to process clicks.
+- **Unblocked Run/Expand Signals**: Removed an overly broad filtering block in `isAcceptButton` that explicitly rejected generic 'run' strings. Added 'run' and 'expand' to the `defaultPatterns` unified array so that Copilot Chat Webview inputs are forwarded to the restored hardware click sequence.
+
 ## [5.2.76] - 2026-02-22
 ### Added
 - **Guarded HOT Spike Alerts**: Runtime refresh loop now raises operator warnings when safety state transitions to HOT or experiences a significant HOT blocked-count jump, with cooldown protection to prevent notification spam.
@@ -75,6 +80,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [S
 ## [5.2.62] - 2026-02-22
 ### Fixed
 - **The True Hardware Coordinate Ghost Click (Nuclear Option)**: Version `5.2.61` removed `__ANTIGRAVITY_CLICK__` from the main frontend script, but "Customize Layout" ghost clicks paradoxically persisted. A deep audit revealed a secondary, hidden click vector: the `interaction-methods.ts` backend subsystem (designed for Auto-Accept strategies) also contained independent methods (`CDPMouseEvent` and `BridgeCoordinateClick`) that calculated spatial dimensions, scaled them improperly via VS Code's `window.zoomLevel`, and dispatched physical scaling-cursed coordinate hardware clicks either natively from Node or across the bridge. Both of these strategies were permanently neutered from the core engine flow. Finally, the extension receiver port inside `cdp-handler.ts` was entirely stripped of the `__ANTIGRAVITY_CLICK__` listener to mathematically guarantee that hardware clicks can never execute across the bridge again.
+
+## [5.2.77] - 2026-02-23
+### Fixed
+- **The Ultimate Ghost Click Truth / WebView Hardware Restore**: The "Customize Layout" ghost clicks were actually caused by the *Node Backend* evaluating broad fallback selectors (like `[aria-label="Run"]`) universally across all sessions, hitting the OS Titlebar's global "Run" menu item on the Main Window. Because of zoom scaling, clicking the exact coordinates of that titlebar item physically landed on "Customize Layout". 
+- To fix this, an **Absolute Exclusion Shield** (`el.closest` on all workbench UI shells) was injected directly into the Node Evaluation String for `BridgeCoordinateClick`, protecting the Main Window while simultaneously allowing the restoration of `__ANTIGRAVITY_CLICK__` hardware dispatches. This fixes the regression where WebViews (like Copilot Chat) were failing to process standard DOM `.click()` events on their internal "Run" and "Expand" actions.
 
 ## [5.2.61] - 2026-02-22
 ### Fixed

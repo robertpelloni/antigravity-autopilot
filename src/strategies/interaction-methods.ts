@@ -408,30 +408,12 @@ export class DOMScanClick implements IInteractionMethod {
     }
 }
 
-export class CDPMouseEvent implements IInteractionMethod {
-    id = 'cdp-mouse';
-    name = 'CDP Mouse Event';
-    description = 'Dispatches Input.dispatchMouseEvent at coordinates via CDP';
-    category = 'click' as const;
-    enabled = false; // PERMANENTLY DISABLED DUE TO ZOOM SCALING OFFSETS
-    priority = 2;
-    timingMs = 50;
-    requiresCDP = true;
-
-    async execute(ctx: InteractionContext): Promise<boolean> {
-        // PERMANENTLY NEUTERED: window.devicePixelRatio and VS Code Zoom Levels 
-        // cause raw integer coordinates to map incorrectly in Chromium's physical viewport.
-        // This is the true root cause of the "Customize Layout" ghost clicks.
-        return false;
-    }
-}
-
 export class BridgeCoordinateClick implements IInteractionMethod {
     id = 'bridge-click';
     name = 'Bridge Coordinate Click';
     description = 'Finds target element and sends __ANTIGRAVITY_CLICK__ through bridge';
     category = 'click' as const;
-    enabled = false; // PERMANENTLY DISABLED DUE TO ZOOM SCALING OFFSETS
+    enabled = false; // Keep disabled: coordinate relay can drift into workbench chrome
     priority = 3;
     timingMs = 50;
     requiresCDP = true;
@@ -440,14 +422,31 @@ export class BridgeCoordinateClick implements IInteractionMethod {
         if (!ctx.cdpHandler || !ctx.selector) return false;
         const escapedSelector = escapeJsSingleQuoted(ctx.selector);
 
-        // Instead of sending raw dimensional coordinates back to the Node host,
-        // we execute a strict, inline, scale-agnostic DOM click here.
+        // This is the absolute root cause fix.
+        // We inject the entire Workbench Chrome Banlist into this eval script.
+        // Without this, 'document.querySelector' executed on the Main Window CDP Session
+        // would find the OS Menu "Run" item on the global title bar, compute coordinates,
+        // and physically click Title Bar regions (hitting Customize Layout due to zoom scaling).
         const script = `
             (function() {
                 const el = document.querySelector('${escapedSelector}');
                 if (!el) return false;
                 
-                try { el.click(); } catch(e) {}
+                const isBanned = el.closest('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menubar"]');
+                if (isBanned) return false;
+
+                const rect = el.getBoundingClientRect();
+                if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+                
+                const x = Math.round(rect.left + (rect.width / 2));
+                const y = Math.round(rect.top + (rect.height / 2));
+                
+                const payload = '__ANTIGRAVITY_CLICK__:' + x + ':' + y;
+                if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
+                    window.__ANTIGRAVITY_BRIDGE__(payload);
+                } else {
+                    console.log(payload);
+                }
                 return true;
             })()
         `;
@@ -567,6 +566,9 @@ export class ScriptForceClick implements IInteractionMethod {
             (function() {
                 const el = document.querySelector('${escapedSelector}');
                 if (el) {
+                    const isBanned = el.closest('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menubar"]');
+                    if (isBanned) return false;
+
                     el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
                     el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
                     el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -811,13 +813,11 @@ export class InteractionMethodRegistry {
         this.register(new DOMScanClick());
         this.register(new DOMSelectorClick());
         this.register(new BridgeCoordinateClick());
-        this.register(new CDPMouseEvent());
         this.register(new NativeAcceptCommands());
         this.register(new VSCodeCommandClick());
         this.register(new ScriptForceClick());
         this.register(new ProcessPeekClick());
         this.register(new VisualVerifiedClick());
-        this.register(new CoordinateClick());
         // Submit
         this.register(new VSCodeSubmitCommands());
         this.register(new CDPEnterKey());

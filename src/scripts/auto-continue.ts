@@ -180,7 +180,7 @@ export const AUTO_CONTINUE_SCRIPT = `
   }
 
   const bannedCache = new WeakSet();
-  function isNodeBanned(node: Element): boolean {
+    function isNodeBanned(node) {
       if (!node || node.nodeType !== 1) return false;
       if (bannedCache.has(node)) return true;
 
@@ -316,11 +316,26 @@ export const AUTO_CONTINUE_SCRIPT = `
       const blockedShell = '.title-actions, .tabs-and-actions-container, .part.titlebar, .part.activitybar, .part.statusbar, .menubar, .menubar-menu-button, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"]';
       const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], .monaco-list-row';
 
+      let hasBlockedAncestor = false;
       let current = el;
       while (current) {
           if (current.nodeType === 1) {
               try {
-                  if (current.matches(blockedShell)) return false;
+                  if (current.matches(blockedShell)) {
+                      hasBlockedAncestor = true;
+                      break;
+                  }
+              } catch (e) {}
+          }
+          current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
+      }
+
+      if (hasBlockedAncestor) return false;
+
+      current = el;
+      while (current) {
+          if (current.nodeType === 1) {
+              try {
                   if (current.matches(chatContainers)) return true;
               } catch (e) {}
           }
@@ -931,7 +946,7 @@ export const AUTO_CONTINUE_SCRIPT = `
                           }
 
                           if (document.activeElement !== input) {
-                              try { (input as HTMLElement).focus(); } catch (e) {}
+                              try { input.focus(); } catch (e) {}
                           }
                           
                           const activeEl = window.document.activeElement;

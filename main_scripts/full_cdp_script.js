@@ -623,11 +623,26 @@
         const blockedShell = '.title-actions, .tabs-and-actions-container, .part.titlebar, .part.activitybar, .part.statusbar, .menubar, .menubar-menu-button, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"]';
         const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], .monaco-list-row';
 
+        let hasBlockedAncestor = false;
         let current = el;
         while (current) {
             if (current.nodeType === 1) {
                 try {
-                    if (current.matches(blockedShell)) return false;
+                    if (current.matches(blockedShell)) {
+                        hasBlockedAncestor = true;
+                        break;
+                    }
+                } catch (e) { }
+            }
+            current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
+        }
+
+        if (hasBlockedAncestor) return false;
+
+        current = el;
+        while (current) {
+            if (current.nodeType === 1) {
+                try {
                     if (current.matches(chatContainers)) return true;
                 } catch (e) { }
             }
@@ -991,10 +1006,14 @@
             el.dispatchEvent(new MouseEvent('mouseup', evOpts));
         } catch (e) { }
 
-        // ALWAYS fire standard click to guarantee execution. 
-        // We have completely retired the __ANTIGRAVITY_CLICK__ CDP fallback because 
-        // window.devicePixelRatio and VS Code Zoom levels cause hardware coordinate offsets,
-        // resulting in the browser clicking the top titlebar instead of the target element.
+        // [5.2.77 / 5.2.80] RESTORE THE TRUE HARDWARE BRIDGE!
+        // The "Crossfire Bug" (hitting Customize Layout) was FIXED in the backend 
+        // by the Exclusion Shield array! We MUST use the hardware CDP bridge because
+        // React/Monaco inside the WebView ignoring raw JS el.click() events.
+        const sigPayload = `__ANTIGRAVITY_CLICK__:${centerX}:${centerY}`;
+        sendCommandToExtension(sigPayload);
+
+        // Keep programmatic click as a fallback
         try { el.click(); } catch (e) { }
         playSound('click');
 
@@ -1457,8 +1476,8 @@
             return false;
         }
 
-        // Hardcoded safety lock: explicitly reject "Add Context", "Attach", and "Layout"
-        if (/(add context|attach|layout)/i.test(text)) return false;
+        // Hardcoded safety lock: explicitly reject context/layout chrome controls
+        if (/(add context|attach|layout|customize)/i.test(text)) return false;
 
         // Safety: Never interact with marketplace / extension management / plugin surfaces
         // These are frequent sources of destructive misclicks and UI thrashing.
@@ -1479,11 +1498,11 @@
         }
 
         // Use configured patterns from state if available, otherwise use defaults
-        const defaultPatterns = ['accept', 'accept all', 'keep', 'run in terminal', 'run command', 'execute command', 'retry', 'apply', 'confirm', 'allow once', 'allow', 'proceed', 'continue', 'yes', 'ok', 'save', 'approve', 'overwrite'];
+        const defaultPatterns = ['accept', 'accept all', 'keep', 'run in terminal', 'run command', 'execute command', 'run', 'expand', 'retry', 'apply', 'confirm', 'allow once', 'allow', 'proceed', 'continue', 'yes', 'ok', 'save', 'approve', 'overwrite'];
 
         const patterns = state.acceptPatterns || defaultPatterns;
 
-        const defaultRejects = ['skip', 'reject', 'cancel', 'close', 'refine', 'deny', 'no', 'dismiss', 'abort', 'ask every time', 'always run', 'always allow', 'auto proceed', 'auto-proceed', 'stop', 'pause', 'disconnect', 'install', 'uninstall', 'enable', 'disable', 'marketplace', 'extension', 'plugin'];
+        const defaultRejects = ['skip', 'reject', 'cancel', 'close', 'refine', 'deny', 'no', 'dismiss', 'abort', 'ask every time', 'always run', 'always allow', 'auto proceed', 'auto-proceed', 'stop', 'pause', 'disconnect', 'install', 'uninstall', 'enable', 'disable', 'marketplace', 'extension', 'plugin', 'customize layout', 'layout control'];
         const rejects = state.rejectPatterns ? [...defaultRejects, ...state.rejectPatterns] : defaultRejects;
 
         if (rejects.some(r => text.includes(r))) return false;
@@ -1500,14 +1519,9 @@
 
         const isCommandButton = text.includes('run') || text.includes('execute') || text.includes('accept');
 
-        // Never allow broad/generic Run labels from workbench chrome.
-        // Only explicit command-intent run variants are permitted.
-        if (text === 'run' || text === 'execute' || text === 'run and debug' || text.includes('start debugging')) {
-            return false;
-        }
-        if (text.includes('run') && !text.includes('run in terminal') && !text.includes('run command') && !text.includes('execute command')) {
-            return false;
-        }
+        // The Exclusion Shield protects the Main Window from broad queries like 'run'.
+        // We no longer need to explicitly ban 'run' here, which was breaking Webview Run buttons!
+        // (Removed lines 1516-1524)
 
         // Special Case: "Accept" in Diff Editor
         if (text === 'accept' || text.includes('accept changes')) {
