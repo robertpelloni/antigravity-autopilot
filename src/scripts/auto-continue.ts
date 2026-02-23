@@ -288,6 +288,26 @@ export const AUTO_CONTINUE_SCRIPT = `
       return false; // Deprecated - replaced by isUnsafeContext's deep check
   }
 
+  function isChatActionSurface(el) {
+      if (!el) return false;
+
+      const blockedShell = '.title-actions, .tabs-and-actions-container, .part.titlebar, .part.activitybar, .part.statusbar, .menubar, .menubar-menu-button, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"]';
+      const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], .monaco-list-row';
+
+      let current = el;
+      while (current) {
+          if (current.nodeType === 1) {
+              try {
+                  if (current.matches(blockedShell)) return false;
+                  if (current.matches(chatContainers)) return true;
+              } catch (e) {}
+          }
+          current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
+      }
+
+      return false;
+  }
+
   // --- Analysis Helpers ---
 
   function analyzeChatState() {
@@ -705,7 +725,7 @@ export const AUTO_CONTINUE_SCRIPT = `
                       || label.includes('run command')
                       || label.includes('execute command');
               });
-              if (textMatch) {
+              if (textMatch && isChatActionSurface(textMatch)) {
                   highlight(textMatch);
                   textMatch.click();
                   actionTaken = true;
@@ -715,14 +735,29 @@ export const AUTO_CONTINUE_SCRIPT = `
               }
           }
 
-          if (!actionTaken && hasMethod(runControl.actionMethods, 'dom-click') && tryClick(runSelectors, 'Run', 'run')) {
-              actionTaken = true;
-              lastActionByControl.run = now;
+          if (!actionTaken && hasMethod(runControl.actionMethods, 'dom-click')) {
+              const runCandidates = queryShadowDOMAll(runSelectors);
+              const runTarget = runCandidates.find(el => {
+                  if (!el) return false;
+                  if (isUnsafeContext(el) || hasUnsafeLabel(el) || isNodeBanned(el)) return false;
+                  if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
+                  if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) return false;
+                  return isChatActionSurface(el);
+              });
+
+              if (runTarget) {
+                  highlight(runTarget);
+                  runTarget.click();
+                  actionTaken = true;
+                  lastActionByControl.run = now;
+                  log('Clicked Run (Scoped Selector Match)');
+                  emitAction('run', 'scoped selector run');
+              }
           }
 
           if (!actionTaken && hasMethod(runControl.actionMethods, 'native-click')) {
               const candidate = Array.from(document.querySelectorAll(runSelectors)).find(el => el && !isUnsafeContext(el) && !hasUnsafeLabel(el) && (el.offsetParent || el.clientWidth > 0));
-              if (candidate) {
+              if (candidate && isChatActionSurface(candidate)) {
                   highlight(candidate);
                   candidate.click();
                   actionTaken = true;
@@ -775,7 +810,7 @@ export const AUTO_CONTINUE_SCRIPT = `
                   }
                   return false;
               });
-              if (textMatch) {
+              if (textMatch && isChatActionSurface(textMatch)) {
                   highlight(textMatch);
                   textMatch.click();
                   actionTaken = true;
@@ -785,14 +820,29 @@ export const AUTO_CONTINUE_SCRIPT = `
               }
           }
 
-          if (!actionTaken && hasMethod(expandControl.actionMethods, 'dom-click') && tryClick(expandSelectors, 'Expand', 'expand')) {
-              actionTaken = true;
-              lastActionByControl.expand = now;
+          if (!actionTaken && hasMethod(expandControl.actionMethods, 'dom-click')) {
+              const expandCandidates = queryShadowDOMAll(expandSelectors);
+              const expandTarget = expandCandidates.find(el => {
+                  if (!el) return false;
+                  if (isUnsafeContext(el) || hasUnsafeLabel(el) || isNodeBanned(el)) return false;
+                  if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
+                  if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) return false;
+                  return isChatActionSurface(el);
+              });
+
+              if (expandTarget) {
+                  highlight(expandTarget);
+                  expandTarget.click();
+                  actionTaken = true;
+                  lastActionByControl.expand = now;
+                  log('Clicked Expand (Scoped Selector Match)');
+                  emitAction('expand', 'scoped selector expand');
+              }
           }
 
           if (!actionTaken && hasMethod(expandControl.actionMethods, 'native-click')) {
               const candidate = Array.from(document.querySelectorAll(expandSelectors)).find(el => el && !isUnsafeContext(el) && !hasUnsafeLabel(el) && (el.offsetParent || el.clientWidth > 0));
-              if (candidate) {
+              if (candidate && isChatActionSurface(candidate)) {
                   highlight(candidate);
                   candidate.click();
                   actionTaken = true;

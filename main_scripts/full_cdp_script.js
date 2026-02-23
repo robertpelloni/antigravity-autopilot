@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '5.2.66';
+        const ANTIGRAVITY_VERSION = '5.2.67';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
@@ -1439,6 +1439,15 @@
 
         const isCommandButton = text.includes('run') || text.includes('execute') || text.includes('accept');
 
+        // Never allow broad/generic Run labels from workbench chrome.
+        // Only explicit command-intent run variants are permitted.
+        if (text === 'run' || text === 'execute' || text === 'run and debug' || text.includes('start debugging')) {
+            return false;
+        }
+        if (text.includes('run') && !text.includes('run in terminal') && !text.includes('run command') && !text.includes('execute command')) {
+            return false;
+        }
+
         // Special Case: "Accept" in Diff Editor
         if (text === 'accept' || text.includes('accept changes')) {
             // Check if it's the global "Accept All" in SCM title
@@ -2328,7 +2337,7 @@
             const isBG = config.isBackgroundMode === true;
 
             // Visual confirmation of injection
-            window.showAutoAllToast('Antigravity v5.2.66 Active 🚀');
+            window.showAutoAllToast('Antigravity v5.2.67 Active 🚀');
 
             if (config.bannedCommands) {
                 window.__autoAllUpdateBannedCommands(config.bannedCommands);

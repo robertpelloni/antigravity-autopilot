@@ -88,6 +88,16 @@ test('Auto-continue submit uses safe chat input helper', () => {
     assert.ok(!/text === 'run'\s*\|\|\s*label === 'run'/.test(autoContinue), 'run matching must not allow bare "run" labels');
     assert.ok(!/\.codicon-play|\.codicon-run/.test(autoContinue.match(/const runSelectors = \[[\s\S]*?\]\.join\(','\);/)?.[0] || ''), 'run selectors must not include broad run icon classes');
     assert.match(autoContinue, /\[role="menuitem"\]/, 'unsafe context guard should block menuitem surfaces');
+    assert.match(autoContinue, /function isChatActionSurface\(el\)/, 'auto-continue should define chat-surface gate helper');
+    assert.match(autoContinue, /isChatActionSurface\(textMatch\)/, 'run/expand text matches should require chat-surface gating');
+    assert.match(autoContinue, /Scoped Selector Match/, 'run/expand selector clicks should use scoped selector flow');
+});
+
+test('Injected click classifier rejects broad generic run labels', () => {
+    const script = readScript();
+
+    assert.match(script, /text === 'run'\s*\|\|\s*text === 'execute'/, 'isAcceptButton should reject bare run/execute labels');
+    assert.match(script, /text\.includes\('run'\)\s*&&\s*!text\.includes\('run in terminal'\)/, 'isAcceptButton should allow only explicit run intent variants');
 });
 
 test('CDP bridge blocks unsafe global Enter relay for submit keys', () => {

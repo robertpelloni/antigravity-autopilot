@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.67] - 2026-02-22
+### Fixed
+- **AG Residual Menu Activation (Further Reduction)**: Added explicit chat-surface gating for `run` and `expand` action execution in `auto-continue` (including scoped selector flows), and hardened injected click classification to reject broad generic run labels unless they are explicit command-intent variants (`run in terminal`, `run command`, `execute command`).
+
 ## [5.2.66] - 2026-02-22
 ### Fixed
 - **Residual Run/Menu Cross-Surface Fallbacks**: Removed cross-profile click fallback scanning from `performClick` in the injected runtime so fallback now stays scoped to the active UI mode only, expanded unsafe-menu bans to include explicit menuitem/menubar surfaces, and tightened auto-continue run signal/selectors to explicit command-intent labels (no broad run icon matching).
