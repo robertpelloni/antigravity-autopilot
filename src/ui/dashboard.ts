@@ -325,6 +325,9 @@ export class DashboardPanel {
                 .runtime-chip.event-none { background: rgba(75,85,99,0.25); color: #e5e7eb; }
                 .runtime-chip.telemetry-fresh { background: rgba(34,197,94,0.25); color: #86efac; }
                 .runtime-chip.telemetry-stale { background: rgba(239,68,68,0.25); color: #fecaca; }
+                .runtime-chip.safety-quiet { background: rgba(34,197,94,0.25); color: #86efac; }
+                .runtime-chip.safety-warn { background: rgba(245,158,11,0.28); color: #fde68a; }
+                .runtime-chip.safety-hot { background: rgba(239,68,68,0.25); color: #fecaca; }
                 .runtime-legend { margin-top: 8px; display:flex; flex-wrap: wrap; gap: 8px; align-items: center; }
                 .runtime-legend .runtime-chip { font-size: 11px; }
                 .muted { color: var(--vscode-descriptionForeground); font-size: 12px; }
@@ -384,8 +387,14 @@ export class DashboardPanel {
                     <div><strong>Waiting Chat:</strong> <span id="runtimeWaiting" class="muted">-</span></div>
                     <div><strong>Updated:</strong> <span id="runtimeUpdated" class="muted">-</span></div>
                     <div><strong>Telemetry Age:</strong> <span id="runtimeTelemetryAge" class="muted">-</span></div>
+                    <div><strong>Safety Blocks:</strong> <span id="runtimeBlockedUnsafeTotal" class="muted">-</span></div>
+                    <div><strong>Safety Signal:</strong> <span id="runtimeSafetySignal" class="runtime-chip safety-quiet">QUIET</span></div>
                     <div><strong>State Duration:</strong> <span id="runtimeStateDuration" class="muted">-</span></div>
                     <div><strong>Waiting Since:</strong> <span id="runtimeWaitingSince" class="muted">-</span></div>
+                    <div><strong>Blocked Run/Expand:</strong> <span id="runtimeSafetyBlockedRunExpand" class="muted">-</span></div>
+                    <div><strong>Blocked Non-Chat Targets:</strong> <span id="runtimeSafetyBlockedNonChat" class="muted">-</span></div>
+                    <div><strong>Blocked Submit Keys:</strong> <span id="runtimeSafetyBlockedSubmitKeys" class="muted">-</span></div>
+                    <div><strong>Blocked Focus-Loss Keys:</strong> <span id="runtimeSafetyBlockedFocusLoss" class="muted">-</span></div>
                     <div><strong>Active Coverage:</strong> <span id="runtimeCoverageActive" class="muted">-</span></div>
                     <div><strong>VS Code Coverage:</strong> <span id="runtimeCoverageVSCode" class="muted">-</span></div>
                     <div><strong>Antigravity Coverage:</strong> <span id="runtimeCoverageAntigravity" class="muted">-</span></div>
@@ -1468,6 +1477,12 @@ export class DashboardPanel {
                 }
 
                 function updateRuntimeUi(state) {
+                    function toCounter(value) {
+                        const n = Number(value ?? 0);
+                        if (!Number.isFinite(n) || n < 0) return 0;
+                        return Math.floor(n);
+                    }
+
                     const chip = document.getElementById('runtimeStatusChip');
                     const mode = document.getElementById('runtimeMode');
                     const idle = document.getElementById('runtimeIdle');
@@ -1477,8 +1492,14 @@ export class DashboardPanel {
                     const waiting = document.getElementById('runtimeWaiting');
                     const updated = document.getElementById('runtimeUpdated');
                     const telemetryAge = document.getElementById('runtimeTelemetryAge');
+                    const blockedUnsafeTotalEl = document.getElementById('runtimeBlockedUnsafeTotal');
+                    const safetySignal = document.getElementById('runtimeSafetySignal');
                     const stateDuration = document.getElementById('runtimeStateDuration');
                     const waitingSinceEl = document.getElementById('runtimeWaitingSince');
+                    const safetyBlockedRunExpand = document.getElementById('runtimeSafetyBlockedRunExpand');
+                    const safetyBlockedNonChat = document.getElementById('runtimeSafetyBlockedNonChat');
+                    const safetyBlockedSubmitKeys = document.getElementById('runtimeSafetyBlockedSubmitKeys');
+                    const safetyBlockedFocusLoss = document.getElementById('runtimeSafetyBlockedFocusLoss');
                     const coverageActive = document.getElementById('runtimeCoverageActive');
                     const coverageVSCode = document.getElementById('runtimeCoverageVSCode');
                     const coverageAntigravity = document.getElementById('runtimeCoverageAntigravity');
@@ -1530,8 +1551,15 @@ export class DashboardPanel {
                         waiting.textContent = '-';
                         updated.textContent = new Date().toLocaleTimeString();
                         telemetryAge.textContent = '-';
+                        blockedUnsafeTotalEl.textContent = '-';
+                        safetySignal.textContent = 'QUIET';
+                        safetySignal.className = 'runtime-chip safety-quiet';
                         stateDuration.textContent = '-';
                         waitingSinceEl.textContent = '-';
+                        safetyBlockedRunExpand.textContent = '-';
+                        safetyBlockedNonChat.textContent = '-';
+                        safetyBlockedSubmitKeys.textContent = '-';
+                        safetyBlockedFocusLoss.textContent = '-';
                         coverageActive.textContent = '-';
                         coverageVSCode.textContent = '-';
                         coverageAntigravity.textContent = '-';
@@ -1616,6 +1644,32 @@ export class DashboardPanel {
                     waiting.textContent = yesNo(!!state.waitingForChatMessage);
                     updated.textContent = new Date(ts).toLocaleTimeString();
                     telemetryAge.textContent = formatDurationMs(telemetryAgeMs);
+                    const host = state.hostTelemetry || null;
+                    const safetyCounters = (state.safetyCounters && typeof state.safetyCounters === 'object') ? state.safetyCounters : {};
+                    const safetyStats = (state.safetyStats && typeof state.safetyStats === 'object')
+                        ? state.safetyStats
+                        : (host?.safetyStats && typeof host.safetyStats === 'object' ? host.safetyStats : {});
+                    const blockedRunExpand = toCounter(safetyCounters.blockedForceActionRunExpand) + toCounter(safetyStats.blockedRunExpandInAgRuntime);
+                    const blockedNonChat = toCounter(safetyCounters.blockedNonChatActionSurfaceTargets) + toCounter(safetyStats.blockedNonChatTargets);
+                    const blockedSubmit = toCounter(safetyCounters.blockedStuckSubmitKeypressFallbacks) + toCounter(safetyStats.blockedSubmitKeyDispatches);
+                    const blockedFocusLoss = toCounter(safetyStats.blockedFocusLossKeyDispatches);
+                    const blockedUnsafeTotalComputed = blockedRunExpand + blockedNonChat + blockedSubmit + blockedFocusLoss;
+                    const blockedUnsafeTotal = Math.max(toCounter(state.blockedUnsafeActionsTotal), blockedUnsafeTotalComputed);
+                    blockedUnsafeTotalEl.textContent = String(blockedUnsafeTotal);
+                    safetyBlockedRunExpand.textContent = String(blockedRunExpand);
+                    safetyBlockedNonChat.textContent = String(blockedNonChat);
+                    safetyBlockedSubmitKeys.textContent = String(blockedSubmit);
+                    safetyBlockedFocusLoss.textContent = String(blockedFocusLoss);
+                    if (blockedUnsafeTotal >= 10) {
+                        safetySignal.textContent = 'HOT';
+                        safetySignal.className = 'runtime-chip safety-hot';
+                    } else if (blockedUnsafeTotal > 0) {
+                        safetySignal.textContent = 'ACTIVE';
+                        safetySignal.className = 'runtime-chip safety-warn';
+                    } else {
+                        safetySignal.textContent = 'QUIET';
+                        safetySignal.className = 'runtime-chip safety-quiet';
+                    }
                     stateDuration.textContent = formatDurationMs(ts - (currentStatusSince || ts));
                     waitingSinceEl.textContent = waitingSince ? new Date(waitingSince).toLocaleTimeString() : '-';
                     const profileCoverage = state.profileCoverage || {};
@@ -1628,8 +1682,6 @@ export class DashboardPanel {
                     guardStrict.textContent = yesNo(guard.strictPass) + (guard.requireStrict ? ' (required)' : ' (optional)');
                     guardAllowed.textContent = guard.allowed ? 'allow' : 'block';
                     guardReason.textContent = guard.reason;
-
-                    const host = state.hostTelemetry || null;
                     const timing = host && host.timing ? host.timing : null;
                     nextEligible.textContent = timing && timing.nextEligibleAt ? new Date(timing.nextEligibleAt).toLocaleTimeString() : '-';
                     cooldownLeft.textContent = timing ? formatDurationMs(timing.cooldownRemainingMs || 0) : '-';

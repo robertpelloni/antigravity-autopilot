@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.73] - 2026-02-22
+### Added
+- **Runtime Safety Counter Dashboard Visibility**: Surfaced blocked-action telemetry in the Runtime State card with explicit fields for total blocked unsafe actions, blocked run/expand actions, blocked non-chat targets, blocked submit-key dispatches, and blocked focus-loss key dispatches.
+- **Safety Severity Signal Chip**: Added a QUIET / ACTIVE / HOT runtime chip derived from blocked-action totals to make suppression spikes immediately visible during live monitoring.
+
 ## [5.2.72] - 2026-02-22
 ### Added
 - **AG Safety Telemetry Counters**: Added blocked-action counters to both runtime layers so residual unsafe trigger suppression is measurable. `auto-continue` now tracks blocked non-chat clicks, AG run/expand gate blocks, blocked submit-key dispatches, and focus-loss key-dispatch blocks.

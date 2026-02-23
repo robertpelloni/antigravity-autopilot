@@ -60,3 +60,7 @@ When dealing with "ghost" UI actions (e.g., the window layout mysteriously toggl
 ## Recent Hardening Notes (v5.2.72)
 
 - **Measure Every Blocked Path:** Safety fixes are stronger when each blocked path increments explicit counters. Expose these counters in runtime snapshots (`safetyCounters`, `blockedUnsafeActionsTotal`) so watchdog/debug tooling can correlate suppression spikes with loop behavior.
+
+## Recent Hardening Notes (v5.2.73)
+
+- **Visibility Beats Silent Safety:** Snapshot counters are only useful if operators can see them quickly. Keep Runtime State UI wired to `safetyCounters`/`safetyStats` and render a compact severity signal (`QUIET`/`ACTIVE`/`HOT`) so suppression spikes are diagnosable without opening raw JSON reports.
