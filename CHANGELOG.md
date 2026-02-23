@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.68] - 2026-02-22
+### Fixed
+- **AG 2s Layout Toggle Regression (Fail-Closed Gate)**: Enforced chat-surface-only gating across all auto-continue click paths (`tryClick`, continue, feedback, run, expand) and injected click-loop action execution. Non-chat shell/menu/titlebar/menuitem targets are now blocked even if they pass selector matching.
+
 ## [5.2.67] - 2026-02-22
 ### Fixed
 - **AG Residual Menu Activation (Further Reduction)**: Added explicit chat-surface gating for `run` and `expand` action execution in `auto-continue` (including scoped selector flows), and hardened injected click classification to reject broad generic run labels unless they are explicit command-intent variants (`run in terminal`, `run command`, `execute command`).

@@ -389,6 +389,10 @@ export const AUTO_CONTINUE_SCRIPT = `
              const targetToClick = el.closest('button, a') || el;
              if (targetToClick.hasAttribute('disabled') || targetToClick.classList.contains('disabled')) continue;
              if (isUnsafeContext(targetToClick) || isNodeBanned(targetToClick)) continue;
+                 if (!isChatActionSurface(targetToClick)) {
+                     logAction('[SafetyGate] Blocked non-chat click target for ' + name);
+                     continue;
+                 }
              
              highlight(targetToClick);
              targetToClick.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
@@ -666,7 +670,7 @@ export const AUTO_CONTINUE_SCRIPT = `
               return false;
           });
           
-          if (target && (target.offsetParent || target.clientWidth > 0)) {
+        if (target && (target.offsetParent || target.clientWidth > 0) && isChatActionSurface(target)) {
                if (hasMethod(continueControl.actionMethods, 'dom-click')) {
                     highlight(target);
                     target.click();
@@ -909,7 +913,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           if (hasMethod(feedbackControl.actionMethods, 'dom-click')) selectors.push('[title*="Helpful"]', '[aria-label*="Helpful"]', '.codicon-thumbsup');
           const selector = selectors.join(',');
           const els = selector ? Array.from(document.querySelectorAll(selector)) : [];
-          const target = els.find(el => !isUnsafeContext(el) && !hasUnsafeLabel(el) && !el.classList.contains('checked') && !el.classList.contains('selected') && (el.offsetParent || el.clientWidth>0));
+        const target = els.find(el => !isUnsafeContext(el) && !hasUnsafeLabel(el) && !el.classList.contains('checked') && !el.classList.contains('selected') && (el.offsetParent || el.clientWidth>0) && isChatActionSurface(el));
           if (target) {
                highlight(target);
                target.click();

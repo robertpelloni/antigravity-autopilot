@@ -91,6 +91,8 @@ test('Auto-continue submit uses safe chat input helper', () => {
     assert.match(autoContinue, /function isChatActionSurface\(el\)/, 'auto-continue should define chat-surface gate helper');
     assert.match(autoContinue, /isChatActionSurface\(textMatch\)/, 'run/expand text matches should require chat-surface gating');
     assert.match(autoContinue, /Scoped Selector Match/, 'run/expand selector clicks should use scoped selector flow');
+    assert.match(autoContinue, /Blocked non-chat click target/, 'tryClick should log blocked non-chat click targets');
+    assert.match(autoContinue, /!isChatActionSurface\(targetToClick\)/, 'tryClick should fail-closed when target is not chat-surface');
 });
 
 test('Injected click classifier rejects broad generic run labels', () => {
@@ -98,6 +100,8 @@ test('Injected click classifier rejects broad generic run labels', () => {
 
     assert.match(script, /text === 'run'\s*\|\|\s*text === 'execute'/, 'isAcceptButton should reject bare run/execute labels');
     assert.match(script, /text\.includes\('run'\)\s*&&\s*!text\.includes\('run in terminal'\)/, 'isAcceptButton should allow only explicit run intent variants');
+    assert.match(script, /function isChatActionSurface\(el\)/, 'injected script should define chat-surface gate helper');
+    assert.match(script, /if \(!isChatActionSurface\(el\)\)/, 'performClick should skip non-chat action surfaces');
 });
 
 test('CDP bridge blocks unsafe global Enter relay for submit keys', () => {

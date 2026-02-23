@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '5.2.67';
+        const ANTIGRAVITY_VERSION = '5.2.68';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
@@ -590,6 +590,26 @@
         }
 
         return true;
+    }
+
+    function isChatActionSurface(el) {
+        if (!el) return false;
+
+        const blockedShell = '.title-actions, .tabs-and-actions-container, .part.titlebar, .part.activitybar, .part.statusbar, .menubar, .menubar-menu-button, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"]';
+        const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], .monaco-list-row';
+
+        let current = el;
+        while (current) {
+            if (current.nodeType === 1) {
+                try {
+                    if (current.matches(blockedShell)) return false;
+                    if (current.matches(chatContainers)) return true;
+                } catch (e) { }
+            }
+            current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
+        }
+
+        return false;
     }
 
     function findVisibleElementBySelectors(selectors) {
@@ -1845,6 +1865,9 @@
 
         for (const item of uniqueFound) {
             const { el, selector, source } = item;
+            if (!isChatActionSurface(el)) {
+                continue;
+            }
             // FILTER: Only interact with buttons matching allowlist/rejectlist
             // FILTER: Only interact with buttons matching allowlist/rejectlist
             if (!isAcceptButton(el)) {
@@ -2337,7 +2360,7 @@
             const isBG = config.isBackgroundMode === true;
 
             // Visual confirmation of injection
-            window.showAutoAllToast('Antigravity v5.2.67 Active 🚀');
+            window.showAutoAllToast('Antigravity v5.2.68 Active 🚀');
 
             if (config.bannedCommands) {
                 window.__autoAllUpdateBannedCommands(config.bannedCommands);
