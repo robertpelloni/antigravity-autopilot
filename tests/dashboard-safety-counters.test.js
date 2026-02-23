@@ -16,6 +16,8 @@ test('Dashboard runtime card surfaces safety counter telemetry', async (t) => {
     await t.test('runtime grid includes safety counter fields', () => {
         assert.match(source, /id="runtimeBlockedUnsafeTotal"/, 'runtime card should include blocked unsafe total field');
         assert.match(source, /id="runtimeSafetySignal"/, 'runtime card should include safety signal chip');
+        assert.match(source, /id="runtimeSafetyTrend"/, 'runtime card should include safety trend field');
+        assert.match(source, /id="runtimeSafetyRate"/, 'runtime card should include safety rate field');
         assert.match(source, /id="runtimeSafetyBlockedRunExpand"/, 'runtime card should include run/expand blocked counter');
         assert.match(source, /id="runtimeSafetyBlockedNonChat"/, 'runtime card should include non-chat blocked counter');
         assert.match(source, /id="runtimeSafetyBlockedSubmitKeys"/, 'runtime card should include submit-key blocked counter');
@@ -30,5 +32,7 @@ test('Dashboard runtime card surfaces safety counter telemetry', async (t) => {
         assert.match(source, /blockedUnsafeTotal >= 10/, 'runtime updater should set HOT threshold for high suppression spikes');
         assert.match(source, /safetySignal\.textContent = 'ACTIVE'/, 'runtime updater should label non-zero counters as ACTIVE');
         assert.match(source, /safetySignal\.textContent = 'QUIET'/, 'runtime updater should label zero counters as QUIET');
+        assert.match(source, /const delta = previousBlockedUnsafeTotal === null \? 0 : \(blockedUnsafeTotal - previousBlockedUnsafeTotal\)/, 'runtime updater should compute blocked-action trend delta');
+        assert.match(source, /perMin/, 'runtime updater should calculate blocked-action rate per minute');
     });
 });

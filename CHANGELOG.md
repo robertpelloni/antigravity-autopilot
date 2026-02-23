@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.74] - 2026-02-22
+### Added
+- **Safety Trend Telemetry in Runtime Card**: Runtime dashboard now displays safety trend deltas and blocked-action rate (`/min`) alongside total blocked unsafe actions and per-category counters.
+- **Status Menu Safety Line Item**: Added a dedicated safety signal row (`QUIET` / `ACTIVE` / `HOT`) to the status quick menu with blocked totals broken down by run/expand, non-chat targets, submit fallbacks, and focus-loss dispatches.
+- **Safety Data in Diagnostics Reports**: Last-resume and escalation diagnostics payloads now embed a normalized safety telemetry summary for faster incident triage.
+
 ## [5.2.73] - 2026-02-22
 ### Added
 - **Runtime Safety Counter Dashboard Visibility**: Surfaced blocked-action telemetry in the Runtime State card with explicit fields for total blocked unsafe actions, blocked run/expand actions, blocked non-chat targets, blocked submit-key dispatches, and blocked focus-loss key dispatches.

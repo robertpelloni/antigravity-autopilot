@@ -64,3 +64,7 @@ When dealing with "ghost" UI actions (e.g., the window layout mysteriously toggl
 ## Recent Hardening Notes (v5.2.73)
 
 - **Visibility Beats Silent Safety:** Snapshot counters are only useful if operators can see them quickly. Keep Runtime State UI wired to `safetyCounters`/`safetyStats` and render a compact severity signal (`QUIET`/`ACTIVE`/`HOT`) so suppression spikes are diagnosable without opening raw JSON reports.
+
+## Recent Hardening Notes (v5.2.74)
+
+- **Trend Context Matters:** Point-in-time blocked totals are not enough during live debugging. Pair safety totals with trend deltas and normalized rate (`/min`) and mirror the same signal in status-menu diagnostics so operators can detect spike bursts without opening the dashboard.

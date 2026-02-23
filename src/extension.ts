@@ -486,6 +486,37 @@ export function activate(context: vscode.ExtensionContext) {
             return `${status} | tabs ${done}/${total} | pending ${pending} | waiting chat ${waiting}`;
         };
 
+        const toCounter = (value: unknown): number => {
+            const n = Number(value ?? 0);
+            if (!Number.isFinite(n) || n < 0) {
+                return 0;
+            }
+            return Math.floor(n);
+        };
+
+        const getSafetyTelemetrySummary = (state?: any) => {
+            const runtime = state || latestRuntimeState || null;
+            const counters = runtime && typeof runtime.safetyCounters === 'object' ? runtime.safetyCounters : {};
+            const stats = runtime && typeof runtime.safetyStats === 'object' ? runtime.safetyStats : {};
+
+            const blockedRunExpand = toCounter((counters as any).blockedForceActionRunExpand) + toCounter((stats as any).blockedRunExpandInAgRuntime);
+            const blockedNonChat = toCounter((counters as any).blockedNonChatActionSurfaceTargets) + toCounter((stats as any).blockedNonChatTargets);
+            const blockedSubmit = toCounter((counters as any).blockedStuckSubmitKeypressFallbacks) + toCounter((stats as any).blockedSubmitKeyDispatches);
+            const blockedFocusLoss = toCounter((stats as any).blockedFocusLossKeyDispatches);
+            const computedTotal = blockedRunExpand + blockedNonChat + blockedSubmit + blockedFocusLoss;
+            const total = Math.max(toCounter(runtime?.blockedUnsafeActionsTotal), computedTotal);
+            const signal = total >= 10 ? 'HOT' : total > 0 ? 'ACTIVE' : 'QUIET';
+
+            return {
+                total,
+                signal,
+                blockedRunExpand,
+                blockedNonChat,
+                blockedSubmit,
+                blockedFocusLoss
+            };
+        };
+
         const openNativeExtensionSettings = async () => {
             const extensionId = context.extension?.id || 'ai-dev-2024.antigravity-autopilot';
             const candidateFilters = [
@@ -940,6 +971,7 @@ export function activate(context: vscode.ExtensionContext) {
             const hostTiming = runtime
                 ? getAutoResumeTimingReport(!!completionWaiting?.readyToResume || runtime?.status === 'waiting_for_chat_message' || runtime?.waitingForChatMessage === true)
                 : null;
+            const safety = getSafetyTelemetrySummary(runtime);
 
             return {
                 timestamp: new Date().toISOString(),
@@ -966,6 +998,7 @@ export function activate(context: vscode.ExtensionContext) {
                     stablePollsRequired: Math.max(1, Math.min(10, config.get<number>('runtimeAutoResumeStabilityPolls') || 2))
                 },
                 timing: hostTiming,
+                safety,
                 configSnapshot: {
                     autoResumeEnabled: config.get<boolean>('runtimeAutoResumeEnabled'),
                     useMinimalContinue: config.get<boolean>('runtimeAutoResumeUseMinimalContinue'),
@@ -981,6 +1014,7 @@ export function activate(context: vscode.ExtensionContext) {
                 || runtime?.status === 'waiting_for_chat_message'
                 || runtime?.waitingForChatMessage === true;
             const timing = runtime ? getAutoResumeTimingReport(isWaiting) : null;
+            const safety = getSafetyTelemetrySummary(runtime);
 
             return {
                 timestamp: new Date().toISOString(),
@@ -1013,6 +1047,7 @@ export function activate(context: vscode.ExtensionContext) {
                     lastMessageProfile: lastAutoResumeMessageProfile,
                     lastSentAt: lastAutoResumeAt || null
                 },
+                safety,
                 timing,
                 configSnapshot: {
                     escalationEnabled: config.get<boolean>('runtimeAutoFixWaitingEscalationEnabled'),
@@ -1418,6 +1453,7 @@ export function activate(context: vscode.ExtensionContext) {
                     ? '$(warning) Runtime [STALE]: ' + runtimeSummary(latestRuntimeState)
                     : '$(graph) Runtime: ' + runtimeSummary(latestRuntimeState);
                 const escalationStateLabel = watchdogEscalationForceFullNext ? 'ARMED' : 'IDLE';
+                const safety = getSafetyTelemetrySummary(latestRuntimeState);
                 const items = [
                     {
                         label: runtimeHeaderLabel,
@@ -1445,6 +1481,11 @@ export function activate(context: vscode.ExtensionContext) {
                         label: '$(clear-all) Reset Refresh Counters',
                         description: 'Reset session-local status refresh guard counters to zero',
                         action: 'antigravity.resetStatusRefreshCounters'
+                    },
+                    {
+                        label: '$(shield) Safety: ' + safety.signal,
+                        description: `blocked=${safety.total} | run/expand=${safety.blockedRunExpand}, non-chat=${safety.blockedNonChat}, submit=${safety.blockedSubmit}, focus-loss=${safety.blockedFocusLoss}`,
+                        action: 'antigravity.checkRuntimeState'
                     },
                     {
                         label: '$(watch) Guard: ' + (statusGuard ? (statusGuard.allowed ? 'ALLOW' : 'BLOCK') : 'n/a'),
@@ -1618,11 +1659,12 @@ export function activate(context: vscode.ExtensionContext) {
                 const completionReady = completion?.readyToResume === true;
                 const completionConfidence = completion?.confidence ?? '-';
                 const completionConfidenceLabel = completion?.confidenceLabel || 'n/a';
+                const safety = getSafetyTelemetrySummary(state);
 
                 statusBar.updateRuntimeState(state);
                 latestRuntimeState = state;
-                log.info(`[RuntimeState] status=${status} tabs=${done}/${total} pending=${pending} waitingForChatMessage=${waiting} readyToResume=${completionReady} confidence=${completionConfidence}(${completionConfidenceLabel}) streak=${readyToResumeStreak}/${stablePollsRequired} guard=${guard.allowed ? 'allow' : 'block'} reason=${guard.reason} next=${nextIn}`);
-                vscode.window.showInformationMessage(`Antigravity Runtime: ${status} | tabs ${done}/${total} | pending ${pending} | waiting chat: ${waiting} | ready=${completionReady ? 'yes' : 'no'} (${completionConfidenceLabel}) | streak: ${readyToResumeStreak}/${stablePollsRequired} | guard: ${guard.allowed ? 'allow' : 'block'} | next eligible: ${nextIn}`);
+                log.info(`[RuntimeState] status=${status} tabs=${done}/${total} pending=${pending} waitingForChatMessage=${waiting} readyToResume=${completionReady} confidence=${completionConfidence}(${completionConfidenceLabel}) streak=${readyToResumeStreak}/${stablePollsRequired} guard=${guard.allowed ? 'allow' : 'block'} reason=${guard.reason} next=${nextIn} safety=${safety.signal} blocked=${safety.total}`);
+                vscode.window.showInformationMessage(`Antigravity Runtime: ${status} | tabs ${done}/${total} | pending ${pending} | waiting chat: ${waiting} | ready=${completionReady ? 'yes' : 'no'} (${completionConfidenceLabel}) | streak: ${readyToResumeStreak}/${stablePollsRequired} | guard: ${guard.allowed ? 'allow' : 'block'} | safety: ${safety.signal} (${safety.total}) | next eligible: ${nextIn}`);
             }),
             safeRegisterCommand('antigravity.detectCompletionWaitingState', async () => {
                 const cdp = resolveCDPStrategy();

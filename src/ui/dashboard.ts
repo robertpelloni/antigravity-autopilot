@@ -389,6 +389,8 @@ export class DashboardPanel {
                     <div><strong>Telemetry Age:</strong> <span id="runtimeTelemetryAge" class="muted">-</span></div>
                     <div><strong>Safety Blocks:</strong> <span id="runtimeBlockedUnsafeTotal" class="muted">-</span></div>
                     <div><strong>Safety Signal:</strong> <span id="runtimeSafetySignal" class="runtime-chip safety-quiet">QUIET</span></div>
+                    <div><strong>Safety Trend:</strong> <span id="runtimeSafetyTrend" class="muted">-</span></div>
+                    <div><strong>Safety Rate:</strong> <span id="runtimeSafetyRate" class="muted">-</span></div>
                     <div><strong>State Duration:</strong> <span id="runtimeStateDuration" class="muted">-</span></div>
                     <div><strong>Waiting Since:</strong> <span id="runtimeWaitingSince" class="muted">-</span></div>
                     <div><strong>Blocked Run/Expand:</strong> <span id="runtimeSafetyBlockedRunExpand" class="muted">-</span></div>
@@ -1364,6 +1366,8 @@ export class DashboardPanel {
                 let currentStatus = null;
                 let currentStatusSince = null;
                 let waitingSince = null;
+                let previousBlockedUnsafeTotal = null;
+                let previousBlockedUnsafeTs = null;
                 const telemetryStaleSec = Number(${settings.runtimeTelemetryStaleSec ?? 12});
                 const autoResumeMinScore = Number(${settings.runtimeAutoResumeMinScore ?? 70});
                 const autoResumeRequireStrict = ${settings.runtimeAutoResumeRequireStrictPrimary ? 'true' : 'false'};
@@ -1494,6 +1498,8 @@ export class DashboardPanel {
                     const telemetryAge = document.getElementById('runtimeTelemetryAge');
                     const blockedUnsafeTotalEl = document.getElementById('runtimeBlockedUnsafeTotal');
                     const safetySignal = document.getElementById('runtimeSafetySignal');
+                    const safetyTrend = document.getElementById('runtimeSafetyTrend');
+                    const safetyRate = document.getElementById('runtimeSafetyRate');
                     const stateDuration = document.getElementById('runtimeStateDuration');
                     const waitingSinceEl = document.getElementById('runtimeWaitingSince');
                     const safetyBlockedRunExpand = document.getElementById('runtimeSafetyBlockedRunExpand');
@@ -1554,6 +1560,8 @@ export class DashboardPanel {
                         blockedUnsafeTotalEl.textContent = '-';
                         safetySignal.textContent = 'QUIET';
                         safetySignal.className = 'runtime-chip safety-quiet';
+                        safetyTrend.textContent = '-';
+                        safetyRate.textContent = '-';
                         stateDuration.textContent = '-';
                         waitingSinceEl.textContent = '-';
                         safetyBlockedRunExpand.textContent = '-';
@@ -1660,6 +1668,24 @@ export class DashboardPanel {
                     safetyBlockedNonChat.textContent = String(blockedNonChat);
                     safetyBlockedSubmitKeys.textContent = String(blockedSubmit);
                     safetyBlockedFocusLoss.textContent = String(blockedFocusLoss);
+                    const delta = previousBlockedUnsafeTotal === null ? 0 : (blockedUnsafeTotal - previousBlockedUnsafeTotal);
+                    const elapsedMs = previousBlockedUnsafeTs === null ? 0 : Math.max(1, ts - previousBlockedUnsafeTs);
+                    const perMin = delta > 0 ? Math.round((delta * 60000) / elapsedMs) : 0;
+                    if (previousBlockedUnsafeTotal === null) {
+                        safetyTrend.textContent = 'baseline';
+                        safetyRate.textContent = '-';
+                    } else if (delta > 0) {
+                        safetyTrend.textContent = '+' + delta;
+                        safetyRate.textContent = perMin + '/min';
+                    } else if (delta < 0) {
+                        safetyTrend.textContent = String(delta);
+                        safetyRate.textContent = 'reset';
+                    } else {
+                        safetyTrend.textContent = '0';
+                        safetyRate.textContent = 'steady';
+                    }
+                    previousBlockedUnsafeTotal = blockedUnsafeTotal;
+                    previousBlockedUnsafeTs = ts;
                     if (blockedUnsafeTotal >= 10) {
                         safetySignal.textContent = 'HOT';
                         safetySignal.className = 'runtime-chip safety-hot';
