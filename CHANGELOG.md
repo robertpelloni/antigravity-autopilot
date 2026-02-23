@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.82] - 2026-02-23
+### Fixed
+- **Fallback Interaction Logic Unblocked**: Removed the same generic `/^(run|execute)$/` text filtering RegExp from the backend `DOMScanClick` fallback interaction method. When the primary CDP auto-continue script failed to inject, the fallback automation was incorrectly rejecting exact matches for 'Run', mirroring the bug fixed in 5.2.80.
+
 ## [5.2.80] - 2026-02-23
 ### Fixed
 - **Webview Hardware Click Restore (For Real)**: Re-applied the `__ANTIGRAVITY_CLICK__` hardware bridge sequence to `remoteClick` in `full_cdp_script.js`. A previous session incorrectly applied this critical fix to a backup directory, leaving Webview components (which ignore programmatic `el.click()` events) unable to process clicks.
