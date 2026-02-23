@@ -98,6 +98,10 @@ test('Auto-continue submit uses safe chat input helper', () => {
     assert.match(autoContinue, /AG runtime: enter-key submit fallback disabled for safety\./, 'enter-key fallback should be disabled in antigravity runtime');
     assert.match(autoContinue, /AG runtime: typeAndSubmit enter-key fallback disabled for safety\./, 'typeAndSubmit enter-key fallback should be disabled in antigravity runtime');
     assert.match(autoContinue, /AG runtime: suppressed keys-fallback dispatch in typeAndSubmit\./, 'typeAndSubmit keys fallback should be suppressed in antigravity runtime');
+    assert.match(autoContinue, /function getSafetyStats\(\)/, 'auto-continue should define safety stats helper');
+    assert.match(autoContinue, /safetyStats: getSafetyStats\(\)/, 'analyzeChatState should expose safetyStats payload');
+    assert.match(autoContinue, /blockedRunExpandInAgRuntime/, 'auto-continue should track AG run/expand gate blocks');
+    assert.match(autoContinue, /blockedSubmitKeyDispatches/, 'auto-continue should track blocked submit key dispatches');
 });
 
 test('Injected click classifier rejects broad generic run labels', () => {
@@ -110,6 +114,9 @@ test('Injected click classifier rejects broad generic run labels', () => {
     assert.match(script, /AG mode: blocked forceAction\(\$\{action\}\) for safety\./, 'forceAction should hard-block run/expand in AG mode');
     assert.match(script, /AG mode: expansion pass disabled for safety\./, 'expand pre-pass should be disabled in AG mode');
     assert.ok(!/triggerKeypressFallback\(el\)/.test(script), 'stuck guard should not invoke undefined keypress fallback handler');
+    assert.match(script, /function getSafetyCounters\(\)/, 'injected runtime should define safety counters helper');
+    assert.match(script, /safetyCounters,/, 'runtime snapshot should expose safetyCounters');
+    assert.match(script, /blockedUnsafeActionsTotal/, 'runtime snapshot should expose blocked unsafe action aggregate');
 });
 
 test('CDP bridge blocks unsafe global Enter relay for submit keys', () => {

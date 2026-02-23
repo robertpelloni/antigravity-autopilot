@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '5.2.71';
+        const ANTIGRAVITY_VERSION = '5.2.72';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
@@ -193,6 +193,7 @@
                 log(`[ForceAction] Received manual trigger: ${action}`);
                 const mode = getCurrentMode();
                 if (mode === 'antigravity' && (action === 'run' || action === 'expand')) {
+                    bumpSafetyCounter('blockedForceActionAg');
                     log(`[ForceAction] AG mode: blocked forceAction(${action}) for safety.`);
                     return false;
                 }
@@ -252,6 +253,25 @@
             console.log(`[autoAll] ${msg}`);
         }
     };
+
+    function getSafetyCounters() {
+        const state = window.__autoAllState || (window.__autoAllState = {});
+        if (!state.safetyCounters || typeof state.safetyCounters !== 'object') {
+            state.safetyCounters = {
+                blockedForceActionAg: 0,
+                blockedAgExpandPass: 0,
+                blockedInvalidTarget: 0,
+                blockedNonChatSurface: 0,
+                blockedStuckKeypressFallback: 0
+            };
+        }
+        return state.safetyCounters;
+    }
+
+    function bumpSafetyCounter(key) {
+        const counters = getSafetyCounters();
+        counters[key] = (counters[key] || 0) + 1;
+    }
 
     Analytics.initialize(log);
 
@@ -791,6 +811,11 @@
             vscode: getProfileCoverage('vscode'),
             cursor: getProfileCoverage('cursor')
         };
+        const safetyCounters = getSafetyCounters();
+        const blockedUnsafeActionsTotal = Object.values(safetyCounters).reduce((sum, value) => {
+            const n = Number(value || 0);
+            return sum + (Number.isFinite(n) ? n : 0);
+        }, 0);
         const activeCoverage = profileCoverage[mode] || getProfileCoverage(mode);
         const buttonSignals = collectButtonSignals();
 
@@ -887,6 +912,8 @@
                 }
             },
             buttonSignals,
+            safetyCounters,
+            blockedUnsafeActionsTotal,
             profileCoverage,
             lastClickTime,
             lastBumpTime,
@@ -1596,6 +1623,7 @@
 
     async function expandCollapsedSections() {
         if (getCurrentMode() === 'antigravity') {
+            bumpSafetyCounter('blockedAgExpandPass');
             log('[Expand] AG mode: expansion pass disabled for safety.');
             return false;
         }
@@ -1832,6 +1860,8 @@
         selectors.forEach(s => queryAll(s).forEach(el => {
             if (isValidInteractionTarget(el)) {
                 found.push({ el, selector: s, source: 'Primary' });
+            } else {
+                bumpSafetyCounter('blockedInvalidTarget');
             }
         }));
 
@@ -1846,6 +1876,8 @@
             [...new Set(fallbackSelectors)].forEach(s => queryAll(s).forEach(el => {
                 if (isValidInteractionTarget(el)) {
                     found.push({ el, selector: s, source: 'Fallback' });
+                } else {
+                    bumpSafetyCounter('blockedInvalidTarget');
                 }
             }));
         }
@@ -1857,6 +1889,8 @@
                 selectors.forEach(s => queryAll(s).forEach(el => {
                     if (isValidInteractionTarget(el)) {
                         found.push({ el, selector: s, source: 'Expanded-Primary' });
+                    } else {
+                        bumpSafetyCounter('blockedInvalidTarget');
                     }
                 }));
 
@@ -1867,6 +1901,8 @@
                     [...new Set(fallbackSelectors)].forEach(s => queryAll(s).forEach(el => {
                         if (isValidInteractionTarget(el)) {
                             found.push({ el, selector: s, source: 'Expanded-Fallback' });
+                        } else {
+                            bumpSafetyCounter('blockedInvalidTarget');
                         }
                     }));
                 }
@@ -1888,6 +1924,7 @@
         for (const item of uniqueFound) {
             const { el, selector, source } = item;
             if (!isChatActionSurface(el)) {
+                bumpSafetyCounter('blockedNonChatSurface');
                 continue;
             }
             // FILTER: Only interact with buttons matching allowlist/rejectlist
@@ -2006,6 +2043,7 @@
                     state.clickHistory.count++;
 
                     if (state.clickHistory.count === 2) {
+                        bumpSafetyCounter('blockedStuckKeypressFallback');
                         log(`[StuckGuard] Button stubborn (2nd attempt). Skipping keypress fallback for safety.`);
                     }
 
@@ -2381,7 +2419,7 @@
             const isBG = config.isBackgroundMode === true;
 
             // Visual confirmation of injection
-            window.showAutoAllToast('Antigravity v5.2.71 Active 🚀');
+            window.showAutoAllToast('Antigravity v5.2.72 Active 🚀');
 
             if (config.bannedCommands) {
                 window.__autoAllUpdateBannedCommands(config.bannedCommands);
@@ -2414,6 +2452,13 @@
             state.isBackgroundMode = isBG;
             state.sessionID++;
             const sid = state.sessionID;
+            state.safetyCounters = {
+                blockedForceActionAg: 0,
+                blockedAgExpandPass: 0,
+                blockedInvalidTarget: 0,
+                blockedNonChatSurface: 0,
+                blockedStuckKeypressFallback: 0
+            };
 
             // Store user config in state for bump/loops to use
             state.bumpMessage = config.bumpMessage || '';

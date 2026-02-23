@@ -64,6 +64,23 @@ export const AUTO_CONTINUE_SCRIPT = `
   let lastStateSignature = '';
   let pollTimer;
 
+  function getSafetyStats() {
+      if (!window.__antigravitySafetyStats || typeof window.__antigravitySafetyStats !== 'object') {
+          window.__antigravitySafetyStats = {
+              blockedNonChatTargetClicks: 0,
+              blockedRunExpandInAgRuntime: 0,
+              blockedSubmitKeyDispatches: 0,
+              blockedFocusLostKeyDispatches: 0
+          };
+      }
+      return window.__antigravitySafetyStats;
+  }
+
+  function bumpSafetyCounter(key) {
+      const stats = getSafetyStats();
+      stats[key] = (stats[key] || 0) + 1;
+  }
+
   // --- Configuration Helpers ---
   function getConfig() {
     return window.__antigravityConfig || defaults;
@@ -131,6 +148,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
         function controlGatePass(controlName, cfg, state, now, controlLastActionTime) {
             if ((controlName === 'run' || controlName === 'expand') && isAntigravityRuntime()) {
+                bumpSafetyCounter('blockedRunExpandInAgRuntime');
                     return false;
             }
 
@@ -392,7 +410,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       const feedbackVisible = buttonSignals.feedback > 0;
 
-      return { isGenerating, lastSender, lastText, rowCount, hasInputReady, feedbackVisible, buttonSignals };
+      return { isGenerating, lastSender, lastText, rowCount, hasInputReady, feedbackVisible, buttonSignals, safetyStats: getSafetyStats() };
   }
 
   // --- Actions ---
@@ -406,6 +424,7 @@ export const AUTO_CONTINUE_SCRIPT = `
              if (targetToClick.hasAttribute('disabled') || targetToClick.classList.contains('disabled')) continue;
              if (isUnsafeContext(targetToClick) || isNodeBanned(targetToClick)) continue;
                  if (!isChatActionSurface(targetToClick)) {
+                     bumpSafetyCounter('blockedNonChatTargetClicks');
                      logAction('[SafetyGate] Blocked non-chat click target for ' + name);
                      continue;
                  }
@@ -572,6 +591,7 @@ export const AUTO_CONTINUE_SCRIPT = `
               const activeEl = window.document.activeElement;
               const isShadowMatch = activeEl && activeEl.shadowRoot && activeEl.shadowRoot.activeElement === input;
               if (activeEl !== input && !isShadowMatch) {
+                  bumpSafetyCounter('blockedFocusLostKeyDispatches');
                   logAction('[SubmitGuard] ABORT: Focus lost to <' + (activeEl?.tagName || 'unknown') + '>. Suppressing rogue Enter key dispatch.');
                   return;
               }
@@ -598,6 +618,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
           if (!submitted && hasMethod(bump.submitMethods, 'enter-key')) {
               if (isAntigravityRuntime()) {
+                  bumpSafetyCounter('blockedSubmitKeyDispatches');
                   logAction('[SubmitGuard] AG runtime: typeAndSubmit enter-key fallback disabled for safety.');
               } else if (form && typeof form.requestSubmit === 'function') {
                    try { form.requestSubmit(); submitted = true; emitAction('submit', 'form.requestSubmit'); } catch(e) {}
@@ -615,6 +636,7 @@ export const AUTO_CONTINUE_SCRIPT = `
               }
               if (!submitted && !tryClick(sendSelectors, 'Submit (Auto-Reply fallback)', 'submit')) {
                   if (isAntigravityRuntime()) {
+                      bumpSafetyCounter('blockedSubmitKeyDispatches');
                       logAction('[SubmitGuard] AG runtime: suppressed keys-fallback dispatch in typeAndSubmit.');
                       return;
                   }
@@ -894,6 +916,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
           if (!actionTaken && hasMethod(submitControl.actionMethods, 'enter-key')) {
               if (isAntigravityRuntime()) {
+                  bumpSafetyCounter('blockedSubmitKeyDispatches');
                   logAction('[SubmitGuard] AG runtime: enter-key submit fallback disabled for safety.');
               } else {
                   const input = getSafeChatInput();
@@ -914,6 +937,7 @@ export const AUTO_CONTINUE_SCRIPT = `
                           const activeEl = window.document.activeElement;
                           const isShadowMatch = activeEl && activeEl.shadowRoot && activeEl.shadowRoot.activeElement === input;
                           if (activeEl !== input && !isShadowMatch) {
+                              bumpSafetyCounter('blockedFocusLostKeyDispatches');
                               logAction('[SubmitGuard] ABORT: Focus lost to <' + (activeEl?.tagName || 'unknown') + '>. Suppressing rogue Enter key dispatch.');
                               return;
                           }

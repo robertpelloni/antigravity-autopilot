@@ -56,3 +56,7 @@ When dealing with "ghost" UI actions (e.g., the window layout mysteriously toggl
 - **TypeAndSubmit Enter Fallback Risk:** Even when main submit fallback is blocked in AG mode, secondary `typeAndSubmit` key-dispatch paths can still emit Enter combos. Keep AG mode fail-closed in *all* submit paths, not only primary submit handlers.
 - **ForceAction Run/Expand Lock:** Manual/runtime `forceAction('run'|'expand')` must be blocked in AG mode; broad run/expand selector sets can reintroduce workbench chrome targeting.
 - **AG Expansion Pre-Pass:** `expandCollapsedSections()` pre-click sweeps should be disabled in AG mode unless explicitly scoped to verified chat surfaces; otherwise they can surface unstable periodic behavior.
+
+## Recent Hardening Notes (v5.2.72)
+
+- **Measure Every Blocked Path:** Safety fixes are stronger when each blocked path increments explicit counters. Expose these counters in runtime snapshots (`safetyCounters`, `blockedUnsafeActionsTotal`) so watchdog/debug tooling can correlate suppression spikes with loop behavior.

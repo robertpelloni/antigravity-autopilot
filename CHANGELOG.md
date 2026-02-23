@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.72] - 2026-02-22
+### Added
+- **AG Safety Telemetry Counters**: Added blocked-action counters to both runtime layers so residual unsafe trigger suppression is measurable. `auto-continue` now tracks blocked non-chat clicks, AG run/expand gate blocks, blocked submit-key dispatches, and focus-loss key-dispatch blocks.
+- **Injected Runtime Safety Snapshot Metrics**: Added `safetyCounters` and `blockedUnsafeActionsTotal` to runtime state snapshots from `full_cdp_script.js`, including counters for AG forceAction blocks, AG expansion-pass suppression, invalid target filtering, non-chat surface filtering, and stuck-keypress fallback suppression.
+
 ## [5.2.71] - 2026-02-22
 ### Fixed
 - **AG Residual Trigger Suppression (Fail-Closed++)**: Disabled `typeAndSubmit` Enter-key fallbacks in Antigravity runtime, suppressed AG keys-fallback dispatch in `auto-continue`, blocked manual `forceAction(run|expand)` in AG mode inside injected runtime, disabled AG expansion pre-pass in `performClick/expandCollapsedSections`, and removed stuck-button keypress fallback invocation from the injected click loop.
