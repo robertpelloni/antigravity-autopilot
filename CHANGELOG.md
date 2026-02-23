@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.75] - 2026-02-22
+### Added
+- **Status Bar Safety Badge**: Added a live `SAFE:QUIET|ACTIVE|HOT` runtime badge in the status bar so safety suppression state is visible without opening dashboard/status menus.
+- **Status Bar Safety Tooltip Breakdown**: Status bar tooltips now include blocked-action totals and category breakdown (run/expand, non-chat targets, submit fallback, focus-loss dispatch).
+
 ## [5.2.74] - 2026-02-22
 ### Added
 - **Safety Trend Telemetry in Runtime Card**: Runtime dashboard now displays safety trend deltas and blocked-action rate (`/min`) alongside total blocked unsafe actions and per-category counters.

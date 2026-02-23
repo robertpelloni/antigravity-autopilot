@@ -17,6 +17,8 @@ export class StatusBarManager {
     private statusMain: vscode.StatusBarItem;
     private statusSettings: vscode.StatusBarItem;
     private runtimeStateLabel: string | null = null;
+    private runtimeSafetyLabel: string | null = null;
+    private runtimeSafetyTooltip: string | null = null;
     private controllerRoleLabel: string | null = null;
     private controllerRoleTooltip: string | null = null;
     private disposed = false;
@@ -48,7 +50,8 @@ export class StatusBarManager {
     update(state: StatusBarState): void {
         if (this.disposed) return;
 
-        const runtimeSuffix = this.runtimeStateLabel ? ` • ${this.runtimeStateLabel}` : '';
+        const runtimeParts = [this.runtimeStateLabel, this.runtimeSafetyLabel].filter(Boolean);
+        const runtimeSuffix = runtimeParts.length > 0 ? ` • ${runtimeParts.join(' ')}` : '';
         const controllerSuffix = this.controllerRoleLabel ? ` • ${this.controllerRoleLabel}` : '';
         const statusSuffix = `${runtimeSuffix}${controllerSuffix}`;
 
@@ -56,21 +59,31 @@ export class StatusBarManager {
 
         if (state.autonomousEnabled) {
             this.statusMain.text = screenReader ? `Antigravity: Running (${state.loopCount})` : `$(sync~spin) Yoke: ${state.loopCount}${statusSuffix}`;
+            const safetySuffix = this.runtimeSafetyTooltip ? ` | ${this.runtimeSafetyTooltip}` : '';
             this.statusMain.tooltip = this.controllerRoleTooltip
-                ? `Autonomous Mode Running - Click to Stop (${this.controllerRoleTooltip})`
-                : 'Autonomous Mode Running - Click to Stop';
+                ? `Autonomous Mode Running - Click to Stop (${this.controllerRoleTooltip})${safetySuffix}`
+                : `Autonomous Mode Running - Click to Stop${safetySuffix}`;
             this.statusMain.backgroundColor = new vscode.ThemeColor('statusBarItem.prominentBackground');
         } else if (state.autoAllEnabled) {
             this.statusMain.text = screenReader ? `Antigravity: Monitoring` : `$(rocket) Yoke: CDP${statusSuffix}`;
+            const safetySuffix = this.runtimeSafetyTooltip ? ` | ${this.runtimeSafetyTooltip}` : '';
             this.statusMain.tooltip = this.runtimeStateLabel
-                ? `CDP Auto-All Enabled (${this.runtimeStateLabel})${this.controllerRoleTooltip ? ` | ${this.controllerRoleTooltip}` : ''}`
-                : `CDP Auto-All Enabled${this.controllerRoleTooltip ? ` | ${this.controllerRoleTooltip}` : ''}`;
+                ? `CDP Auto-All Enabled (${this.runtimeStateLabel})${this.controllerRoleTooltip ? ` | ${this.controllerRoleTooltip}` : ''}${safetySuffix}`
+                : `CDP Auto-All Enabled${this.controllerRoleTooltip ? ` | ${this.controllerRoleTooltip}` : ''}${safetySuffix}`;
             this.statusMain.backgroundColor = undefined;
         } else {
             this.statusMain.text = screenReader ? `Antigravity: Off` : `$(circle-slash) Yoke: OFF${statusSuffix}`;
             this.statusMain.tooltip = `Antigravity Paused - Click to Enable${this.controllerRoleTooltip ? ` | ${this.controllerRoleTooltip}` : ''}`;
             this.statusMain.backgroundColor = undefined;
         }
+    }
+
+    private toCounter(value: unknown): number {
+        const n = Number(value ?? 0);
+        if (!Number.isFinite(n) || n < 0) {
+            return 0;
+        }
+        return Math.floor(n);
     }
 
     updateControllerRole(isLeader: boolean, leaderWorkspace?: string | null): void {
@@ -89,6 +102,8 @@ export class StatusBarManager {
     updateRuntimeState(runtimeState: any | null): void {
         if (!runtimeState || !runtimeState.status) {
             this.runtimeStateLabel = null;
+            this.runtimeSafetyLabel = null;
+            this.runtimeSafetyTooltip = null;
             return;
         }
 
@@ -108,6 +123,23 @@ export class StatusBarManager {
         } else {
             this.runtimeStateLabel = status.toUpperCase();
         }
+
+        const counters = runtimeState && typeof runtimeState.safetyCounters === 'object' ? runtimeState.safetyCounters : {};
+        const stats = runtimeState && typeof runtimeState.safetyStats === 'object'
+            ? runtimeState.safetyStats
+            : (runtimeState?.hostTelemetry && typeof runtimeState.hostTelemetry.safetyStats === 'object'
+                ? runtimeState.hostTelemetry.safetyStats
+                : {});
+        const blockedRunExpand = this.toCounter(counters.blockedForceActionRunExpand) + this.toCounter(stats.blockedRunExpandInAgRuntime);
+        const blockedNonChat = this.toCounter(counters.blockedNonChatActionSurfaceTargets) + this.toCounter(stats.blockedNonChatTargets);
+        const blockedSubmit = this.toCounter(counters.blockedStuckSubmitKeypressFallbacks) + this.toCounter(stats.blockedSubmitKeyDispatches);
+        const blockedFocusLoss = this.toCounter(stats.blockedFocusLossKeyDispatches);
+        const computedTotal = blockedRunExpand + blockedNonChat + blockedSubmit + blockedFocusLoss;
+        const blockedTotal = Math.max(this.toCounter(runtimeState.blockedUnsafeActionsTotal), computedTotal);
+        const signal = blockedTotal >= 10 ? 'HOT' : blockedTotal > 0 ? 'ACTIVE' : 'QUIET';
+
+        this.runtimeSafetyLabel = `SAFE:${signal}`;
+        this.runtimeSafetyTooltip = `Safety ${signal} | blocked=${blockedTotal} | run/expand=${blockedRunExpand}, non-chat=${blockedNonChat}, submit=${blockedSubmit}, focus-loss=${blockedFocusLoss}`;
     }
 
     dispose(): void {

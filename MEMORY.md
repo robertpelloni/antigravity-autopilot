@@ -68,3 +68,7 @@ When dealing with "ghost" UI actions (e.g., the window layout mysteriously toggl
 ## Recent Hardening Notes (v5.2.74)
 
 - **Trend Context Matters:** Point-in-time blocked totals are not enough during live debugging. Pair safety totals with trend deltas and normalized rate (`/min`) and mirror the same signal in status-menu diagnostics so operators can detect spike bursts without opening the dashboard.
+
+## Recent Hardening Notes (v5.2.75)
+
+- **Always-On Safety Visibility:** Dashboard/status-menu telemetry can still be missed during long unattended runs. Keep a compact safety signal (`SAFE:QUIET|ACTIVE|HOT`) in status-bar text and include a tooltip breakdown so suppression spikes remain visible in the ambient operator UI.
