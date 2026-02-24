@@ -709,7 +709,7 @@
             return false;
         }
 
-        sendCommandToBridge('__ANTIGRAVITY_ACTION__:submit|keys');
+        sendCommandToExtension('__ANTIGRAVITY_ACTION__:submit|keys');
         const target = targetOverride || document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea, [id*="chat-input"]');
         if (!target) return false;
 

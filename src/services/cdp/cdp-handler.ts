@@ -25,10 +25,10 @@ export class CDPHandler extends EventEmitter {
         const configuredPortRaw = config.get<number | string>('cdpPort');
         let configuredPort = typeof configuredPortRaw === 'string' ? parseInt(configuredPortRaw, 10) : configuredPortRaw;
 
-        // If everything fails, use 9333 as a safe terminal fallback strictly to prevent NaN loops
+        // If everything fails, use 0 to indicate no valid config port exists
         if (typeof configuredPort !== 'number' || isNaN(configuredPort)) {
-            console.warn(`[CDPHandler] cdpPort setting could not be cleanly parsed: ${configuredPortRaw}. Defaulting to 9333 internally.`);
-            configuredPort = 9333;
+            console.warn(`[CDPHandler] cdpPort setting could not be cleanly parsed: ${configuredPortRaw}. No fallback port will be scanned unless auto-discovered.`);
+            configuredPort = 0;
         }
 
         this.startPort = startPort ?? configuredPort;
@@ -102,8 +102,10 @@ export class CDPHandler extends EventEmitter {
             portsToCheck.add(this.discoveredPort);
         }
 
-        // Also check the configured port range as fallback (only if different)
-        for (let p = this.startPort; p <= this.endPort; p++) portsToCheck.add(p);
+        // Also check the configured port range as fallback (only if valid)
+        if (this.startPort > 0 && this.endPort > 0) {
+            for (let p = this.startPort; p <= this.endPort; p++) portsToCheck.add(p);
+        }
 
         logToOutput(`[CDPHandler] Scanning CDP on ports: ${[...portsToCheck].join(', ')}...`);
 

@@ -60,8 +60,10 @@ export class CDPStrategy implements IStrategy {
     private shouldRunBlindBump(): boolean {
         const cfg = config.getAll();
         const bumpText = (cfg.actions.bump.text || '').trim();
-        // Only run blind bump if frontend script is EXPLICITLY disabled (backend fallback)
-        return cfg.actions.bump.enabled && cfg.autoContinueScriptEnabled === false && bumpText.length > 0;
+        // The backend Blind Bump MUST ONLY RUN if the frontend auto-continue script is explicitly toggled OFF by the user.
+        // If it is true, or undefined (defaulting to true), the frontend `auto-continue.ts` handles the smart resume typing.
+        const isFrontendExplicitlyDisabled = cfg.autoContinueScriptEnabled === false;
+        return cfg.actions.bump.enabled && isFrontendExplicitlyDisabled && bumpText.length > 0;
     }
 
     private syncBlindBumpHandlerState(): void {
@@ -122,7 +124,8 @@ export class CDPStrategy implements IStrategy {
             || config.get<number>('autoAcceptPollIntervalMs')
             || config.get<number>('pollFrequency')
             || 1000;
-        this.pollTimer = setInterval(async () => {
+
+        const pollLoop = async () => {
             if (!this.isActive) return;
 
             this.syncBlindBumpHandlerState();
@@ -143,7 +146,13 @@ export class CDPStrategy implements IStrategy {
                     await this.executeAutoAccept();
                 } catch { /* ignore */ }
             }
-        }, frequency);
+
+            if (this.isActive) {
+                this.pollTimer = setTimeout(pollLoop, frequency);
+            }
+        };
+
+        this.pollTimer = setTimeout(pollLoop, frequency);
 
         vscode.window.showInformationMessage('Antigravity: CDP Strategy ON');
     }

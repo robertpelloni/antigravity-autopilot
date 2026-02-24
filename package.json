@@ -2,7 +2,7 @@
   "name": "antigravity-autopilot",
   "displayName": "Antigravity Autopilot (Unified)",
   "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-  "version": "5.2.82",
+  "version": "5.2.90",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -203,14 +203,6 @@
         "title": "Antigravity: Test Audio Feedback"
       },
       {
-        "command": "antigravity.clearAutoAll",
-        "title": "Antigravity: Clear Accept All"
-      },
-      {
-        "command": "antigravity.writeAndSubmitBump",
-        "title": "Antigravity: Write and Submit Bump"
-      },
-      {
         "command": "antigravity.startRemoteServer",
         "title": "Antigravity: Start Remote Control Server"
       }
@@ -225,16 +217,6 @@
         "command": "antigravity.testAudio",
         "key": "ctrl+alt+shift+t",
         "mac": "cmd+alt+shift+t"
-      },
-      {
-        "command": "antigravity.clearAutoAll",
-        "key": "ctrl+alt+shift+k",
-        "mac": "cmd+alt+shift+k"
-      },
-      {
-        "command": "antigravity.writeAndSubmitBump",
-        "key": "ctrl+alt+shift+b",
-        "mac": "cmd+alt+shift+b"
       },
       {
         "command": "antigravity.panicStop",

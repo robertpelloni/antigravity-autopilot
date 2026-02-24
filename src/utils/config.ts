@@ -173,7 +173,7 @@ export class ConfigManager {
                 .filter(m => !blocked.has(m));
         };
 
-        const blockedClickMethods = new Set(['bridge-click', 'cdp-mouse', 'coord-click', 'vscode-cmd', 'process-peek']);
+        const blockedClickMethods = new Set(['bridge-click', 'cdp-mouse', 'coord-click', 'process-peek']);
         const blockedSubmitMethods = new Set(['alt-enter', 'cdp-enter', 'ctrl-enter']);
 
         const safeDefaultClickMethods = ['dom-scan-click', 'dom-click', 'native-accept', 'script-force'];

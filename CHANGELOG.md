@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.84] - 2026-02-23
+### Fixed
+* Fixed a bug where the native command-based click fallback (`NativeAcceptCommands`) could hang the Interaction Method Registry for upwards of 22 seconds if a VS Code command payload was unhandled or blocked. Injected a strict 500ms `Promise.race` timeout wrapper for all naive UI command dispatches (`interactive.acceptChanges`, `workbench.action.chat.submit`, etc.).
+
+## [5.2.83] - 2026-02-23
+### Fixed
+* Fixed an infinite loop bug in `AutonomousLoop` where repeated `CDP not available` connection failures (such as those caused by system memory exhaustion) would spam the console and loop instantly. `executeTask` now correctly triggers exponential backoff instead of treating the failure as a completed pass.
+
 ## [5.2.82] - 2026-02-23
 ### Fixed
 - **Fallback Interaction Logic Unblocked**: Removed the same generic `/^(run|execute)$/` text filtering RegExp from the backend `DOMScanClick` fallback interaction method. When the primary CDP auto-continue script failed to inject, the fallback automation was incorrectly rejecting exact matches for 'Run', mirroring the bug fixed in 5.2.80.

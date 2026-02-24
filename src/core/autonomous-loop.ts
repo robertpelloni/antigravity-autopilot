@@ -229,7 +229,8 @@ export class AutonomousLoop {
             const connected = await cdpClient.connect();
             if (!connected) {
                 log.warn('CDP not available, waiting...');
-                return true;
+                this.lastErrorType = 'transport';
+                return false;
             }
         }
 

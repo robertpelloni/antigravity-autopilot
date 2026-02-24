@@ -14,7 +14,7 @@ export class CDPClient {
         if (!port) {
             console.warn('[CDPClient] cdpPort not configured in settings.');
         }
-        this.handler = new CDPHandler(port ?? 9333, port ?? 9333);
+        this.handler = new CDPHandler(port, port);
     }
 
     getHandler(): CDPHandler {
@@ -40,8 +40,6 @@ export class CDPClient {
 
                 if (page.url.includes('editor') || page.title.includes('Cursor') || page.title.includes('Visual Studio Code')) {
                     const script = `(function() {
-                        if (!document.hasFocus()) return { skipped: true, reason: 'not focused' };
-
                         function findChatInput() {
                             // 1. Try common selectors
                             const selectors = [
@@ -141,14 +139,9 @@ export class CDPClient {
 
                     try {
                         const result = await this.handler.sendCommand(page.id, 'Runtime.evaluate', { expression: script, returnByValue: true });
-                        if (result && result.result && result.result.value) {
-                            const val = result.result.value;
-                            if (val === true || (typeof val === 'object' && val.skipped !== true)) { // Backward compat + new format
-                                log.info('Sent message: ' + text);
-                                return true;
-                            } else if (val.skipped) {
-                                log.debug('Skipped page (not focused): ' + page.title);
-                            }
+                        if (result && result.result && result.result.value === true) {
+                            log.info('Sent message: ' + text);
+                            return true;
                         }
                     } catch (e: any) {
                         log.error('Failed to send message: ' + e.message);

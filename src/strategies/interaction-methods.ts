@@ -86,18 +86,19 @@ export class CDPKeyDispatch implements IInteractionMethod {
     async execute(ctx: InteractionContext): Promise<boolean> {
         if (!ctx.cdpHandler || !ctx.text) return false;
         for (const char of ctx.text) {
+            const vkCode = char.toUpperCase().charCodeAt(0);
             await ctx.cdpHandler.dispatchKeyEventToAll({
                 type: 'keyDown', text: char, unmodifiedText: char,
                 keyIdentifier: char, code: 'Key' + char.toUpperCase(),
-                windowsVirtualKeyCode: char.charCodeAt(0),
-                nativeVirtualKeyCode: char.charCodeAt(0)
+                windowsVirtualKeyCode: vkCode,
+                nativeVirtualKeyCode: vkCode
             });
             await delay(this.timingMs);
             await ctx.cdpHandler.dispatchKeyEventToAll({
                 type: 'keyUp', text: char, unmodifiedText: char,
                 keyIdentifier: char, code: 'Key' + char.toUpperCase(),
-                windowsVirtualKeyCode: char.charCodeAt(0),
-                nativeVirtualKeyCode: char.charCodeAt(0)
+                windowsVirtualKeyCode: vkCode,
+                nativeVirtualKeyCode: vkCode
             });
             await delay(this.timingMs);
         }
@@ -479,7 +480,7 @@ export class NativeAcceptCommands implements IInteractionMethod {
     name = 'Native Accept Commands';
     description = 'Attempts native/extension command-based acceptance for editor, terminal, and chat';
     category = 'click' as const;
-    enabled = true;
+    enabled = false;
     priority = 4;
     timingMs = 60;
     requiresCDP = false;
@@ -497,9 +498,16 @@ export class NativeAcceptCommands implements IInteractionMethod {
         if (!commandsApi) return false;
         let atLeastOneSuccess = false;
 
+        const executeWithTimeout = (cmd: string, ms: number): Promise<any> => {
+            return Promise.race([
+                commandsApi.executeCommand(cmd),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms))
+            ]);
+        };
+
         for (const cmd of NativeAcceptCommands.COMMANDS) {
             try {
-                await commandsApi.executeCommand(cmd);
+                await executeWithTimeout(cmd, 500);
                 atLeastOneSuccess = true;
             } catch {
                 // try next
@@ -515,13 +523,21 @@ export class ProcessPeekClick implements IInteractionMethod {
     name = 'Process Peek + Command Click';
     description = 'Discovers available commands at runtime and executes best accept/submit candidates';
     category = 'click' as const;
-    enabled = true;
+    enabled = false;
     priority = 5;
     timingMs = 80;
     requiresCDP = false;
 
     async execute(ctx: InteractionContext): Promise<boolean> {
         if (!ctx.vscodeCommands) return false;
+
+        const executeWithTimeout = (cmd: string, ms: number): Promise<any> => {
+            return Promise.race([
+                ctx.vscodeCommands!.executeCommand(cmd),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms))
+            ]);
+        };
+
         try {
             const available: string[] = await ctx.vscodeCommands.getCommands(true);
             const candidates = available.filter(cmd =>
@@ -534,7 +550,7 @@ export class ProcessPeekClick implements IInteractionMethod {
 
             for (const command of candidates.slice(0, 6)) {
                 try {
-                    await ctx.vscodeCommands.executeCommand(command);
+                    await executeWithTimeout(command, 500);
                     return true;
                 } catch {
                     // keep trying
@@ -843,7 +859,7 @@ export class InteractionMethodRegistry {
                 : this.config.submit;
 
         return Array.from(this.methods.values())
-            .filter(m => m.category === category && enabledIds.includes(m.id))
+            .filter(m => m.enabled && m.category === category && enabledIds.includes(m.id))
             .sort((a, b) => a.priority - b.priority);
     }
 

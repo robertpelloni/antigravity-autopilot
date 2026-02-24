@@ -258,7 +258,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     try {
         const text = ((el.textContent || '') + ' ' + (el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')).toLowerCase();
         if (/(extension|marketplace|plugin|install|uninstall|customize layout|layout control|add context|attach context|attach a file|new chat|clear chat|clear session|view as|open in)/i.test(text)) {
-            return true;
+      Bump Text Proceed Bump Text Proceed ProceedBump Text Proceed Bump Text Proceed      return true;
         }
     } catch(e) {}
 
@@ -269,7 +269,7 @@ export const AUTO_CONTINUE_SCRIPT = `
             return true;
         }
     } catch(e) {}
-
+ProceedProceed
     // 3. Walk up the tree and check all ancestors for unsafe attributes and banned classes
     let current = el;
     while (current) {
@@ -1002,7 +1002,7 @@ export const AUTO_CONTINUE_SCRIPT = `
               // Idle state logic
               let computedDelay = cfg.timing?.autoReplyDelayMs ?? 7000;
               let shouldBump = false;
-              let bumpText = cfg.autoReplyText || 'Proceed';
+              let bumpText = bump.text || 'bump';
 
               if (hasMethod(detectMethods, 'not-generating')) {
                   shouldBump = true;

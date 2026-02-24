@@ -88,7 +88,7 @@ export class BlindBumpHandler {
             rejectPatterns: config.get<string[]>('rejectPatterns') || [],
             visualDiffThreshold: config.get<number>('interactionVisualDiffThreshold') || 0.001
         };
-        const openResults = await this.registry.executeCategory('click', ctx);
+        const openResults = [(await this.registry.executeMethod('vscode-cmd', ctx))];
         allResults.push(...openResults);
         await new Promise(r => setTimeout(r, 500));
 
