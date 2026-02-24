@@ -234,8 +234,8 @@ export class CDPHandler extends EventEmitter {
                     // 1a. Kill any Zombie Loops from previous Extension reloads
                     await this.sendCommand(page.id, 'Runtime.evaluate', {
                         expression: `
-                            if (window.__autoAllStop) { window.__autoAllStop(); }
-                            if (window.__autoAllState) { window.__autoAllState.isRunning = false; window.__autoAllState.sessionID = null; }
+                            if (window.__autopilotStop) { window.__autopilotStop(); }
+                            if (window.__autopilotState) { window.__autopilotState.isRunning = false; window.__autopilotState.sessionID = null; }
                             if (window.stopAutoContinue) { window.stopAutoContinue(); }
                         `,
                         awaitPromise: false
@@ -492,7 +492,7 @@ export class CDPHandler extends EventEmitter {
         try {
             // Check existence
             const check = await this.sendCommand(pageId, 'Runtime.evaluate', {
-                expression: "typeof window.__autoAllStart",
+                expression: "typeof window.__autopilotStart",
                 returnByValue: true
             }, 1000, sessionId);
 
@@ -766,8 +766,8 @@ export class CDPHandler extends EventEmitter {
         try {
             const expression = `
                 (function() {
-                    if (window.__autoAllGetRuntimeState) {
-                        return window.__autoAllGetRuntimeState();
+                    if (window.__autopilotGetRuntimeState) {
+                        return window.__autopilotGetRuntimeState();
                     }
                     return null;
                 })()

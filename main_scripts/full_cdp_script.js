@@ -33,11 +33,11 @@
         }
 
         function getStats() {
-            return window.__autoAllState?.stats || createDefaultStats();
+            return window.__autopilotState?.stats || createDefaultStats();
         }
 
         function getStatsMutable() {
-            return window.__autoAllState.stats;
+            return window.__autopilotState.stats;
         }
 
         function categorizeClick(buttonText) {
@@ -121,7 +121,7 @@
         }
 
         function initializeFocusState(log) {
-            const state = window.__autoAllState;
+            const state = window.__autopilotState;
             if (state && state.stats) {
 
                 state.stats.isWindowFocused = true;
@@ -130,8 +130,8 @@
         }
 
         function initialize(log) {
-            if (!window.__autoAllState) {
-                window.__autoAllState = {
+            if (!window.__autopilotState) {
+                window.__autopilotState = {
                     isRunning: false,
                     tabNames: [],
                     completionStatus: {},
@@ -148,11 +148,11 @@
                     bumpMessage: 'bump'
                 };
                 log('[Analytics] State initialized');
-            } else if (!window.__autoAllState.stats) {
-                window.__autoAllState.stats = createDefaultStats();
+            } else if (!window.__autopilotState.stats) {
+                window.__autopilotState.stats = createDefaultStats();
                 log('[Analytics] Stats added to existing state');
             } else {
-                const s = window.__autoAllState.stats;
+                const s = window.__autopilotState.stats;
                 if (s.actionsWhileAway === undefined) s.actionsWhileAway = 0;
                 if (s.isWindowFocused === undefined) s.isWindowFocused = true;
                 if (s.fileEditsThisSession === undefined) s.fileEditsThisSession = 0;
@@ -161,14 +161,14 @@
 
             initializeFocusState(log);
 
-            if (!window.__autoAllState.stats.sessionStartTime) {
-                window.__autoAllState.stats.sessionStartTime = Date.now();
+            if (!window.__autopilotState.stats.sessionStartTime) {
+                window.__autopilotState.stats.sessionStartTime = Date.now();
             }
 
             log('[Analytics] Initialized');
 
             // Phase 39: Manual Trigger API
-            window.__autoAllState.forceSubmit = async function () {
+            window.__autopilotState.forceSubmit = async function () {
                 log(`[ForceSubmit] Triggering direct DOM submission...`);
                 const profile = getCurrentMode();
                 const sendSelectors = getUnifiedSendButtonSelectors(profile);
@@ -189,7 +189,7 @@
                 return false;
             };
 
-            window.__autoAllState.forceAction = async function (action) {
+            window.__autopilotState.forceAction = async function (action) {
                 log(`[ForceAction] Received manual trigger: ${action}`);
                 const mode = getCurrentMode();
                 if (mode === 'antigravity' && (action === 'run' || action === 'expand')) {
@@ -209,7 +209,7 @@
                 return false;
             };
 
-            window.__autoAllState.forceSubmit = async function () {
+            window.__autopilotState.forceSubmit = async function () {
                 log('[ForceSubmit] Attempting to click submit button...');
                 const selectors = ['[title*="Send"]', '[aria-label*="Send"]', '.codicon-send', 'button[aria-label="Send"]'];
                 await performClick(selectors);
@@ -219,7 +219,7 @@
 
 
         function setFocusState(isFocused, log) {
-            const state = window.__autoAllState;
+            const state = window.__autopilotState;
             if (!state || !state.stats) return;
 
             const wasAway = !state.stats.isWindowFocused;
@@ -255,7 +255,7 @@
     };
 
     function getSafetyCounters() {
-        const state = window.__autoAllState || (window.__autoAllState = {});
+        const state = window.__autopilotState || (window.__autopilotState = {});
         if (!state.safetyCounters || typeof state.safetyCounters !== 'object') {
             state.safetyCounters = {
                 blockedForceActionAg: 0,
@@ -518,7 +518,7 @@
     };
 
     function getCurrentMode() {
-        const mode = (window.__autoAllState?.currentMode || 'cursor').toLowerCase();
+        const mode = (window.__autopilotState?.currentMode || 'cursor').toLowerCase();
         if (mode === 'antigravity' || mode === 'cursor' || mode === 'vscode') return mode;
         return 'vscode';
     }
@@ -819,7 +819,7 @@
     }
 
     function getRuntimeStateSnapshot() {
-        const state = window.__autoAllState || {};
+        const state = window.__autopilotState || {};
         const mode = getCurrentMode();
         const profileCoverage = {
             antigravity: getProfileCoverage('antigravity'),
@@ -1127,18 +1127,18 @@
         const rawNames = Array.from(tabs).map(tab => stripTimeSuffix(tab.textContent));
         const tabNames = deduplicateNames(rawNames);
 
-        if (JSON.stringify(window.__autoAllState.tabNames) !== JSON.stringify(tabNames)) {
+        if (JSON.stringify(window.__autopilotState.tabNames) !== JSON.stringify(tabNames)) {
             log(`updateTabNames: Detected ${tabNames.length} tabs: ${tabNames.join(', ')}`);
-            window.__autoAllState.tabNames = tabNames;
+            window.__autopilotState.tabNames = tabNames;
         }
     };
 
     const updateConversationCompletionState = (rawTabName, status) => {
         const tabName = stripTimeSuffix(rawTabName);
-        const current = window.__autoAllState.completionStatus[tabName];
+        const current = window.__autopilotState.completionStatus[tabName];
         if (current !== status) {
             log(`[State] ${tabName}: ${current} → ${status}`);
-            window.__autoAllState.completionStatus[tabName] = status;
+            window.__autopilotState.completionStatus[tabName] = status;
         }
     };
 
@@ -1165,7 +1165,7 @@
         }
 
         log('[Overlay] Creating overlay...');
-        const state = window.__autoAllState;
+        const state = window.__autopilotState;
 
         if (!document.getElementById(STYLE_ID)) {
             const style = document.createElement('style');
@@ -1219,7 +1219,7 @@
     }
 
     function updateOverlay() {
-        const state = window.__autoAllState;
+        const state = window.__autopilotState;
         const container = document.getElementById('aab-c');
 
         if (!container) {
@@ -1422,7 +1422,7 @@
     }
 
     function isCommandBanned(commandText) {
-        const state = window.__autoAllState;
+        const state = window.__autopilotState;
         const bannedList = state.bannedCommands || [];
 
         if (bannedList.length === 0) return false;
@@ -1851,7 +1851,7 @@
 
     async function autoBump() {
         sendCommandToExtension('__AUTOPILOT_ACTION__:bump|auto');
-        const state = window.__autoAllState;
+        const state = window.__autopilotState;
         const bumpMsg = state.bumpMessage;
         if (!bumpMsg || !state.bumpEnabled) return false;
 
@@ -1972,7 +1972,7 @@
             }
 
             // Stuck Button Detection
-            const state = window.__autoAllState;
+            const state = window.__autopilotState;
             if (!state.clickHistory) state.clickHistory = { signature: '', count: 0 };
 
             if (isAcceptButton(el)) {
@@ -2117,7 +2117,7 @@
     }
 
     function updateProfileCoverage() {
-        const state = window.__autoAllState;
+        const state = window.__autopilotState;
         if (!state) return;
 
         const evaluateProfile = (profileName) => {
@@ -2149,7 +2149,7 @@
         log('[Loop] cursorLoop STARTED');
         let index = 0;
         let cycle = 0;
-        while (window.__autoAllState.isRunning && window.__autoAllState.sessionID === sid) {
+        while (window.__autopilotState.isRunning && window.__autopilotState.sessionID === sid) {
             try {
                 const timing = window.__antigravityConfig?.timing || {};
                 const pollInterval = timing.pollIntervalMs || 800;
@@ -2224,12 +2224,12 @@
                     index++;
                 }
 
-                const state = window.__autoAllState;
+                const state = window.__autopilotState;
                 log(`[Loop] Cycle ${cycle}: State = { tabs: ${state.tabNames?.length || 0}, isRunning: ${state.isRunning}, sid: ${state.sessionID} }`);
 
                 updateOverlay();
 
-                const waitTime = window.__autoAllState.threadWaitInterval || 5000;
+                const waitTime = window.__autopilotState.threadWaitInterval || 5000;
                 log(`[Loop] Cycle ${cycle}: Overlay updated, waiting ${waitTime}ms...`);
                 await workerDelay(waitTime);
             } catch (loopErr) {
@@ -2245,7 +2245,7 @@
         let index = 0;
         let cycle = 0;
 
-        while (window.__autoAllState.isRunning && window.__autoAllState.sessionID === sid) {
+        while (window.__autopilotState.isRunning && window.__autopilotState.sessionID === sid) {
             try {
                 cycle++;
                 log(`[Loop] Cycle ${cycle}: Starting...`);
@@ -2316,7 +2316,7 @@
                         const targetTab = tabs[index % tabs.length];
                         const tabName = stripTimeSuffix(targetTab.textContent);
 
-                        const state = window.__autoAllState;
+                        const state = window.__autopilotState;
                         if (state.completionStatus[tabName] !== 'done') {
                             log(`[Loop] Cycle ${cycle}: Switching to tab "${tabName}"`);
                             targetTab.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
@@ -2345,7 +2345,7 @@
 
                 updateOverlay();
 
-                const waitTime = window.__autoAllState.threadWaitInterval || 5000;
+                const waitTime = window.__autopilotState.threadWaitInterval || 5000;
                 await workerDelay(waitTime);
             } catch (loopErr) {
                 log(`[Loop] antigravityLoop Cycle ${cycle}: ERROR - ${loopErr.message}`);
@@ -2356,7 +2356,7 @@
     }
 
     window.__autoAllUpdateBannedCommands = function (bannedList) {
-        const state = window.__autoAllState;
+        const state = window.__autopilotState;
         state.bannedCommands = Array.isArray(bannedList) ? bannedList : [];
         log(`[Config] Updated banned commands list: ${state.bannedCommands.length} patterns`);
         if (state.bannedCommands.length > 0) {
@@ -2365,13 +2365,13 @@
     };
 
     window.__autoAllUpdateAcceptPatterns = function (patternList) {
-        const state = window.__autoAllState;
+        const state = window.__autopilotState;
         state.acceptPatterns = Array.isArray(patternList) && patternList.length > 0 ? patternList : null;
         log(`[Config] Updated accept patterns: ${state.acceptPatterns ? state.acceptPatterns.length + ' patterns' : 'using defaults'}`);
     };
 
     window.__autoAllUpdateRejectPatterns = function (patternList) {
-        const state = window.__autoAllState;
+        const state = window.__autopilotState;
         state.rejectPatterns = Array.isArray(patternList) ? patternList : [];
         log(`[Config] Updated reject patterns: ${state.rejectPatterns.length} patterns`);
     };
@@ -2400,14 +2400,14 @@
         return Analytics.consumeAwayActions(log);
     };
 
-    window.__autoAllGetRuntimeState = function () {
+    window.__autopilotGetRuntimeState = function () {
         try {
             return getRuntimeStateSnapshot();
         } catch (e) {
             log(`[State] Failed to compute runtime state: ${e.message}`);
             return {
                 status: 'error',
-                isRunning: !!window.__autoAllState?.isRunning,
+                isRunning: !!window.__autopilotState?.isRunning,
                 error: String(e.message || e),
                 timestamp: Date.now()
             };
@@ -2416,11 +2416,10 @@
 
     window.__autoAllSetFocusState = function (isFocused) {
         Analytics.setFocusState(isFocused, log);
-        k
     };
 
- ok ok    // Helper for visual feedback
-    window.__autoAllState.forceSubmit = async function () {
+    // Helper for visual feedback
+    window.__autopilotState.forceSubmit = async function () {
         const selectors = getUnifiedSendButtonSelectors(getCurrentMode());
         const button = findVisibleElementBySelectors(selectors);
 
@@ -2442,7 +2441,7 @@
         setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 1000); }, duration);
     };
 
-    window.__autoAllStart = async function (config) {
+    window.__autopilotStart = async function (config) {
         try {
             const ide = (config.ide || 'cursor').toLowerCase();
             const isPro = config.isPro !== false;
@@ -2461,9 +2460,9 @@
                 window.__autoAllUpdateRejectPatterns(config.rejectPatterns);
             }
 
-            log(`__autoAllStart called: ide=${ide}, isPro=${isPro}, isBG=${isBG}`);
+            log(`__autopilotStart called: ide=${ide}, isPro=${isPro}, isBG=${isBG}`);
 
-            const state = window.__autoAllState;
+            const state = window.__autopilotState;
 
             // If already running, just update config and return — do NOT restart
             // The 5-second poll timer calls this repeatedly; restarting would kill the loop
@@ -2534,20 +2533,20 @@
                 })();
             }
         } catch (e) {
-            log(`ERROR in __autoAllStart: ${e.message}`);
+            log(`ERROR in __autopilotStart: ${e.message}`);
             console.error('[autoAll] Start error:', e);
         }
     };
 
-    window.__autoAllStop = function () {
-        window.__autoAllState.isRunning = false;
+    window.__autopilotStop = function () {
+        window.__autopilotState.isRunning = false;
         hideOverlay();
         log("Agent Stopped.");
     };
 
     // --- Heartbeat Loop (Watchdog) ---
     (function heartbeatLoop() {
-        if (window.__autoAllState?.isRunning) {
+        if (window.__autopilotState?.isRunning) {
             const timestamp = Date.now();
             window.__antigravityHeartbeat = timestamp;
 

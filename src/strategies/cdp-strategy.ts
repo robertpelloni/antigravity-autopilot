@@ -291,7 +291,7 @@ export class CDPStrategy implements IStrategy {
                 : (config.get<string[]>('interactionClickSelectorsVSCode') || []);
 
         const filtered = selectors.map(s => s.trim()).filter(Boolean);
-        return filtered.length > 0 ? filtered.join(', ') : 'button, [role="button"], .monaco-button';
+        return filtered.length > 0 ? filtered.join(', ') : '';
     }
 
     private createRegistryForProfile(profile: 'vscode' | 'antigravity' | 'cursor'): InteractionMethodRegistry {

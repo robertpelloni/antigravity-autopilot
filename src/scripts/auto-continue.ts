@@ -17,16 +17,16 @@ export const AUTO_CONTINUE_SCRIPT = `
       clearTimeout(window.__antigravityPollTimer);
   }
 
-  // 3. LEGACY ZOMBIE KILLER (Temporarily DISABLED for layout bug testing)
-  /*
+  // 3. LEGACY ZOMBIE KILLER: Neutralize the legacy frontend loop
+  // Now that our extension uses __autopilotState, we can safely kill __autoAllState
+  // to permanently terminate the legacy google.antigravity ghost loops.
   setInterval(() => {
       window.__antigravityHeartbeat = Date.now();
       if (window.__autoAllState) {
           window.__autoAllState.isRunning = false;
           window.__autoAllState.sessionID = -1;
       }
-  }, 1000);
-  */
+  }, 100);
 
   // 4. BRIDGE INTERCEPTOR (The Ultimate Ghost Click Defense)
   // The legacy frontend script defines 'sendCommandToBridge' within a closure and attaches permanent DOM listeners.

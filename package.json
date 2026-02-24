@@ -2,7 +2,7 @@
   "name": "antigravity-autopilot",
   "displayName": "Antigravity Autopilot (Unified)",
   "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-  "version": "5.2.106",
+  "version": "5.2.113",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -39,6 +39,21 @@
       {
         "command": "antigravity.resetConnection",
         "title": "AG: Reset Connection",
+        "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.agent.acceptAgentStep",
+        "title": "AG: Legacy Accept Agent Step",
+        "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.terminal.accept",
+        "title": "AG: Legacy Terminal Accept",
+        "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.testMethod",
+        "title": "AG: Legacy Test Method",
         "category": "Antigravity"
       },
       {
@@ -1130,11 +1145,8 @@
           "type": "array",
           "default": [
             "dom-scan-click",
-            "dom-click",
             "bridge-click",
             "cdp-mouse",
-            "native-accept",
-            "vscode-cmd",
             "script-force"
           ],
           "description": "Enabled click methods (IDs). Options: dom-scan-click, dom-click, bridge-click, cdp-mouse, native-accept, vscode-cmd, script-force, process-peek, visual-verify-click, coord-click"
@@ -1213,10 +1225,7 @@
             "button[aria-label*=\"Accept\"]",
             "button[title*=\"Accept\"]",
             "button[aria-label*=\"Apply\"]",
-            "button[title*=\"Apply\"]",
-            ".monaco-button",
-            ".monaco-dialog-box button",
-            ".monaco-notification-list button"
+            "button[title*=\"Apply\"]"
           ],
           "description": "CSS selector list used for VS Code UI element discovery."
         },
@@ -1239,8 +1248,7 @@
           "default": [
             "#workbench\\.parts\\.auxiliarybar button",
             "#workbench\\.parts\\.auxiliarybar [role=\"button\"]",
-            ".chat-session-item [role=\"button\"]",
-            ".monaco-button"
+            ".chat-session-item [role=\"button\"]"
           ],
           "description": "CSS selector list used for Cursor UI element discovery."
         },
@@ -1285,6 +1293,7 @@
     }
   },
   "scripts": {
+    "vscode:prepublish": "npm run compile",
     "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --platform=node --format=cjs --sourcemap",
     "watch": "npm run compile -- --watch",
     "test": "node --test tests/**/*.test.js",

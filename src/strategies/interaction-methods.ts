@@ -269,7 +269,7 @@ export class DOMSelectorClick implements IInteractionMethod {
     name = 'DOM Selector Click';
     description = 'Finds element by CSS selector and dispatches click event via CDP';
     category = 'click' as const;
-    enabled = true;
+    enabled = false; // PERMANENTLY DISABLED: Extremely unsafe generic match that bypassed ban logic. Use DOMScanClick instead.
     priority = 1;
     timingMs = 50;
     requiresCDP = true;
@@ -315,13 +315,7 @@ export class DOMScanClick implements IInteractionMethod {
                     ? selectorCsv.split(',').map(s => s.trim()).filter(Boolean)
                     : [];
 
-                const fallbackSelectors = [
-                    '.monaco-button.monaco-text-button.monaco-button-accept',
-                    'button.monaco-button[aria-label="Accept"]',
-                    '.codicon-play',
-                    '.codicon-run',
-                    '.codicon-debug-start'
-                ];
+                const fallbackSelectors = [];
 
                 const allSelectors = Array.from(new Set([...selectorParts, ...fallbackSelectors]));
 
@@ -513,40 +507,10 @@ export class ProcessPeekClick implements IInteractionMethod {
     requiresCDP = false;
 
     async execute(ctx: InteractionContext): Promise<boolean> {
-        if (!ctx.vscodeCommands) return false;
-
-        const executeWithTimeout = (cmd: string, ms: number): Promise<any> => {
-            return Promise.race([
-                ctx.vscodeCommands!.executeCommand(cmd),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms))
-            ]);
-        };
-
-        try {
-            const available: string[] = await ctx.vscodeCommands.getCommands(true);
-            const candidates = available.filter(cmd =>
-                !cmd.startsWith('antigravity.') && (
-                    cmd.includes('accept') ||
-                    cmd.includes('submit') ||
-                    cmd.includes('chat.send') ||
-                    cmd.includes('chat.submit') ||
-                    cmd.includes('terminal.accept')
-                )
-            );
-
-            for (const command of candidates.slice(0, 6)) {
-                try {
-                    await executeWithTimeout(command, 500);
-                    return true;
-                } catch {
-                    // keep trying
-                }
-            }
-
-            return false;
-        } catch {
-            return false;
-        }
+        // PERMANENTLY NEUTERED: 
+        // Dynamic command fuzzing finds layout aliases on the Antigravity fork.
+        // Even if enabled in user settings, this method must never run.
+        return false;
     }
 }
 
@@ -676,26 +640,15 @@ export class CDPEnterKey implements IInteractionMethod {
     requiresCDP = true;
 
     async execute(ctx: InteractionContext): Promise<boolean> {
-        if (!ctx.cdpHandler) return false;
-        await ctx.cdpHandler.dispatchKeyEventToAll({
-            type: 'keyDown', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
-            windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
-            text: '\r', unmodifiedText: '\r'
-        });
-        await delay(50);
-        await ctx.cdpHandler.dispatchKeyEventToAll({
-            type: 'keyUp', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
-            windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
-            text: '\r', unmodifiedText: '\r'
-        });
-        return true;
+        // PERMANENTLY NEUTERED: global Enter broadcasts toggle Layout
+        return false;
     }
 }
 
 export class ScriptForceSubmit implements IInteractionMethod {
     id = 'script-submit';
     name = 'Script Force Submit';
-    description = 'Calls window.__autoAllState.forceSubmit() via injected bridge';
+    description = 'Calls window.__autopilotState.forceSubmit() via injected bridge';
     category = 'submit' as const;
     enabled = true;
     priority = 0; // Highest priority (runs first)
@@ -706,8 +659,8 @@ export class ScriptForceSubmit implements IInteractionMethod {
         if (!ctx.cdpHandler) return false;
         const script = `
             (async function() {
-                if (window.__autoAllState && window.__autoAllState.forceSubmit) {
-                    return await window.__autoAllState.forceSubmit();
+                if (window.__autopilotState && window.__autopilotState.forceSubmit) {
+                    return await window.__autopilotState.forceSubmit();
                 }
                 return false;
             })()
@@ -728,22 +681,8 @@ export class AltEnterShortcut implements IInteractionMethod {
     requiresCDP = true;
 
     async execute(ctx: InteractionContext): Promise<boolean> {
-        if (!ctx.cdpHandler) return false;
-        SoundEffects.play('alt-enter');
-        await ctx.cdpHandler.dispatchKeyEventToAll({
-            type: 'keyDown', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
-            windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
-            modifiers: 1, // Alt modifier
-            text: '\r', unmodifiedText: '\r'
-        });
-        await delay(50);
-        await ctx.cdpHandler.dispatchKeyEventToAll({
-            type: 'keyUp', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
-            windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
-            modifiers: 1,
-            text: '\r', unmodifiedText: '\r'
-        });
-        return true;
+        // PERMANENTLY NEUTERED: global Alt+Enter broadcasts are unsafe
+        return false;
     }
 }
 
@@ -758,21 +697,8 @@ export class CtrlEnterShortcut implements IInteractionMethod {
     requiresCDP = true;
 
     async execute(ctx: InteractionContext): Promise<boolean> {
-        if (!ctx.cdpHandler) return false;
-        await ctx.cdpHandler.dispatchKeyEventToAll({
-            type: 'keyDown', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
-            windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
-            modifiers: 2,
-            text: '\r', unmodifiedText: '\r'
-        });
-        await delay(50);
-        await ctx.cdpHandler.dispatchKeyEventToAll({
-            type: 'keyUp', keyIdentifier: 'Enter', code: 'Enter', key: 'Enter',
-            windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
-            modifiers: 2,
-            text: '\r', unmodifiedText: '\r'
-        });
-        return true;
+        // PERMANENTLY NEUTERED: global broadcasts toggle Layout
+        return false;
     }
 }
 
@@ -785,7 +711,7 @@ export class InteractionMethodRegistry {
     constructor(registryConfig?: Partial<RegistryConfig>) {
         this.config = {
             textInput: ['cdp-keys', 'cdp-insert-text', 'clipboard-paste', 'dom-inject', 'bridge-type'],
-            click: ['dom-scan-click', 'dom-click', 'native-accept', 'vscode-cmd', 'script-force', 'process-peek'],
+            click: ['dom-scan-click', 'native-accept', 'vscode-cmd', 'script-force'],
             submit: ['vscode-submit', 'script-submit'],
             timings: {},
             retryCount: 3,

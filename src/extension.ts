@@ -2161,6 +2161,11 @@ export function activate(context: vscode.ExtensionContext) {
                     try { await vscode.commands.executeCommand(cmd); } catch { }
                 }
             }),
+            // LEGACY COMMAND SINKHOLES: The old google.antigravity backend is still running and trying to execute these natively!
+            // If we don't register them here, VS Code falls back to a global layout toggle alias.
+            safeRegisterCommand('antigravity.agent.acceptAgentStep', async () => { /* legacy backend sinkhole */ }),
+            safeRegisterCommand('antigravity.terminal.accept', async () => { /* legacy backend sinkhole */ }),
+            safeRegisterCommand('antigravity.testMethod', async () => { /* legacy backend sinkhole */ }),
             safeRegisterCommand('antigravity.clickRun', async () => {
                 const cdp = resolveCDPStrategy();
                 if (cdp && await cdp.executeAction('run')) return;
