@@ -69,14 +69,20 @@ export class ControllerLease {
     tryAcquire(force: boolean = false): boolean {
         const existing = this.readLease();
         if (!force && existing && !this.isStale(existing) && existing.ownerId !== this.ownerId) {
-            let isAlive = true;
-            try {
-                process.kill(existing.pid, 0);
-            } catch (e) {
-                isAlive = false;
-            }
-            if (isAlive) {
-                return false;
+            // If the lease belongs to the same workspace, allow takeover immediately.
+            // This handles extension restarts where the old PID lingers for a few seconds.
+            if (existing.workspace === this.workspace) {
+                // Same workspace restarting — take over the lease.
+            } else {
+                let isAlive = true;
+                try {
+                    process.kill(existing.pid, 0);
+                } catch (e) {
+                    isAlive = false;
+                }
+                if (isAlive) {
+                    return false;
+                }
             }
         }
 

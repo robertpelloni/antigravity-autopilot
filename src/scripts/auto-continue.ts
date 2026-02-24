@@ -17,6 +17,40 @@ export const AUTO_CONTINUE_SCRIPT = `
       clearTimeout(window.__antigravityPollTimer);
   }
 
+  // 3. LEGACY ZOMBIE KILLER (Temporarily DISABLED for layout bug testing)
+  /*
+  setInterval(() => {
+      window.__antigravityHeartbeat = Date.now();
+      if (window.__autoAllState) {
+          window.__autoAllState.isRunning = false;
+          window.__autoAllState.sessionID = -1;
+      }
+  }, 1000);
+  */
+
+  // 4. BRIDGE INTERCEPTOR (The Ultimate Ghost Click Defense)
+  // The legacy frontend script defines 'sendCommandToBridge' within a closure and attaches permanent DOM listeners.
+  // Because it runs concurrently, it WILL intercept valid clicks and send 'workbench.action.terminal.chat.accept'.
+  // We cannot kill its closures, but we CAN hijack the global bridge it uses to communicate with the legacy backend.
+  if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function' && !window.__ANTIGRAVITY_BRIDGE__isHijacked) {
+      const originalBridge = window.__ANTIGRAVITY_BRIDGE__;
+      window.__ANTIGRAVITY_BRIDGE__ = function(payload) {
+          if (typeof payload === 'string') {
+              // Block legacy execution payloads: native VS Code commands, scaled coordinate clicks, and global keyboard dispatches
+              if (/^__ANTIGRAVITY_(COMMAND|CLICK|TYPE)__/.test(payload)) {
+                  // WARNING: DO NOT LOG THE RAW PAYLOAD TO CONSOLE!
+                  // The legacy extension uses Runtime.consoleAPICalled as a fallback bridge 
+                  // and parses ALL console arguments for "__ANTIGRAVITY_COMMAND__"!
+                  // Logging the payload here literally hands the execution trigger back to the legacy backend!
+                  console.warn('[ZOMBIE KILLER] Blocked legacy extension bridge payload: ', payload.replace(/__ANTIGRAVITY_(COMMAND|CLICK|TYPE)__/g, 'BLOCKED'));
+                  return; // Silently drop it into the void. The legacy backend will never receive it.
+              }
+          }
+          return originalBridge.apply(this, arguments);
+      };
+      window.__ANTIGRAVITY_BRIDGE__isHijacked = true;
+  }
+
   window.__antigravityAutoContinueRunning = true;
   
   // Defaults
@@ -95,8 +129,8 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   function emitBridge(payload) {
       try {
-          if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
-              window.__ANTIGRAVITY_BRIDGE__(payload);
+          if (typeof window.__AUTOPILOT_BRIDGE__ === 'function') {
+              window.__AUTOPILOT_BRIDGE__(payload);
           } else {
               console.log(payload);
           }
@@ -109,13 +143,13 @@ export const AUTO_CONTINUE_SCRIPT = `
           console.log('[auto-continue] ' + msg);
       }
       if (cfg.debug?.logToExtension !== false) {
-          emitBridge('__ANTIGRAVITY_LOG__:' + msg);
+          emitBridge('__AUTOPILOT_LOG__:' + msg);
       }
   }
 
   function emitAction(group, detail) {
       logAction('action=' + group + ' detail=' + detail);
-      emitBridge('__ANTIGRAVITY_ACTION__:' + String(group || 'click') + '|' + String(detail || 'triggered'));
+      emitBridge('__AUTOPILOT_ACTION__:' + String(group || 'click') + '|' + String(detail || 'triggered'));
   }
 
   function hasMethod(methods, id) {
@@ -258,7 +292,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     try {
         const text = ((el.textContent || '') + ' ' + (el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')).toLowerCase();
         if (/(extension|marketplace|plugin|install|uninstall|customize layout|layout control|add context|attach context|attach a file|new chat|clear chat|clear session|view as|open in)/i.test(text)) {
-      Bump Text Proceed Bump Text Proceed ProceedBump Text Proceed Bump Text Proceed      return true;
+            return true;
         }
     } catch(e) {}
 
@@ -269,7 +303,6 @@ export const AUTO_CONTINUE_SCRIPT = `
             return true;
         }
     } catch(e) {}
-ProceedProceed
     // 3. Walk up the tree and check all ancestors for unsafe attributes and banned classes
     let current = el;
     while (current) {
@@ -838,18 +871,11 @@ ProceedProceed
           const acceptControl = getControlConfig(cfg, 'accept');
 
           if (!actionTaken && hasMethod(acceptControl.actionMethods, 'accept-single')) {
-              if (tryClick('[title="Accept"], [aria-label="Accept"], [title="Apply"], .codicon-check', 'Accept', 'accept')) {
+              // Strict matches only to avoid Layout Apply buttons
+              if (tryClick('[title="Accept"], [aria-label="Accept"], .codicon-check', 'Accept', 'accept')) {
                   actionTaken = true;
                   lastActionByControl.accept = now;
               }
-          }
-
-          if (!actionTaken && hasMethod(acceptControl.actionMethods, 'dom-click')) {
-              if (tryClick('[title*="Accept"], [aria-label*="Accept"], [title*="Apply"], [aria-label*="Apply"]', 'Accept (DOM)', 'accept')) {
-                  actionTaken = true;
-                  lastActionByControl.accept = now;
-              }
-          }
       }
 
       // 4. Auto-Expand

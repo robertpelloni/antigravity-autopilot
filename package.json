@@ -2,7 +2,7 @@
   "name": "antigravity-autopilot",
   "displayName": "Antigravity Autopilot (Unified)",
   "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-  "version": "5.2.90",
+  "version": "5.2.106",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -1135,8 +1135,7 @@
             "cdp-mouse",
             "native-accept",
             "vscode-cmd",
-            "script-force",
-            "process-peek"
+            "script-force"
           ],
           "description": "Enabled click methods (IDs). Options: dom-scan-click, dom-click, bridge-click, cdp-mouse, native-accept, vscode-cmd, script-force, process-peek, visual-verify-click, coord-click"
         },

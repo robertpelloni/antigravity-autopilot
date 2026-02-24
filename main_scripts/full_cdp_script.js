@@ -246,9 +246,9 @@
     })();
 
     const log = (msg, isSuccess = false) => {
-        const payload = `__ANTIGRAVITY_LOG__:${msg}`;
-        if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
-            window.__ANTIGRAVITY_BRIDGE__(payload);
+        const payload = `__AUTOPILOT_LOG__:${msg}`;
+        if (typeof window.__AUTOPILOT_BRIDGE__ === 'function') {
+            window.__AUTOPILOT_BRIDGE__(payload);
         } else {
             console.log(`[autoAll] ${msg}`);
         }
@@ -709,7 +709,7 @@
             return false;
         }
 
-        sendCommandToExtension('__ANTIGRAVITY_ACTION__:submit|keys');
+        sendCommandToExtension('__AUTOPILOT_ACTION__:submit|keys');
         const target = targetOverride || document.querySelector('.monaco-editor textarea, [aria-label*="Chat Input"], .interactive-input-part textarea, [id*="chat-input"]');
         if (!target) return false;
 
@@ -1010,7 +1010,7 @@
         // The "Crossfire Bug" (hitting Customize Layout) was FIXED in the backend 
         // by the Exclusion Shield array! We MUST use the hardware CDP bridge because
         // React/Monaco inside the WebView ignoring raw JS el.click() events.
-        const sigPayload = `__ANTIGRAVITY_CLICK__:${centerX}:${centerY}`;
+        const sigPayload = `__AUTOPILOT_CLICK__:${centerX}:${centerY}`;
         sendCommandToExtension(sigPayload);
 
         // Keep programmatic click as a fallback
@@ -1026,7 +1026,7 @@
         else if (txt.includes('allow') || txt.includes('yes')) actionGroup = 'allow';
         else if (txt.includes('send') || txt.includes('submit')) actionGroup = 'submit';
 
-        sendCommandToExtension(`__ANTIGRAVITY_ACTION__:${actionGroup}|${txt.substring(0, 20)}`);
+        sendCommandToExtension(`__AUTOPILOT_ACTION__:${actionGroup}|${txt.substring(0, 20)}`);
 
         const timing = window.__antigravityConfig?.timing || {};
         const throttle = timing.actionThrottleMs || 100;
@@ -1036,7 +1036,7 @@
 
     async function remoteType(text) {
         if (!text) return;
-        sendCommandToExtension(`__ANTIGRAVITY_TYPE__:${text}`);
+        sendCommandToExtension(`__AUTOPILOT_TYPE__:${text}`);
         playSound('type');
         await workerDelay(50);
     }
@@ -1070,12 +1070,23 @@
         return false;
     }
 
+
+
     function sendCommandToBridge(commandId, args) {
-        let payload = `__ANTIGRAVITY_COMMAND__:${commandId}`;
-        if (args) {
-            payload += `|${JSON.stringify(args)}`;
+        // Leave command as ___ANTIGRAVITY_COMMAND__ if it's somehow triggering a legacy command for legacy fallback wait.
+        let payload = `__AUTOPILOT_COMMAND__:${commandId}`;
+        if (commandId === 'antigravity.agent.acceptAgentStep') {
+            // Let it sinkhole.
+            payload = `__ANTIGRAVITY_COMMAND__:${commandId}`;
         }
-        sendCommandToExtension(payload);
+
+        if (typeof window.__AUTOPILOT_BRIDGE__ === 'function') {
+            window.__AUTOPILOT_BRIDGE__(payload);
+            log(`[Bridge] Sent: ${payload}`);
+        } else {
+            console.log(payload);
+            log(`[Bridge] Console: ${payload}`);
+        }
     }
 
     function sendCommandToExtension(payload) {
@@ -1829,8 +1840,8 @@
 
         // Method C: CDP Bridge (Ultimate Fallback)
         log('[Chat] Falling back to hybrid CDP bridge strategy');
-        sendCommandToExtension('__ANTIGRAVITY_HYBRID_BUMP__:' + text);
-        // IMPORTANT: do not also send __ANTIGRAVITY_TYPE__ here;
+        sendCommandToExtension('__AUTOPILOT_HYBRID_BUMP__:' + text);
+        // IMPORTANT: do not also send __AUTOPILOT_TYPE__ here;
         // it causes duplicate bump text with no guaranteed submit.
         return true; // We assume bridge handles it
     }
@@ -1839,7 +1850,7 @@
     let lastClickTime = 0;
 
     async function autoBump() {
-        sendCommandToExtension('__ANTIGRAVITY_ACTION__:bump|auto');
+        sendCommandToExtension('__AUTOPILOT_ACTION__:bump|auto');
         const state = window.__autoAllState;
         const bumpMsg = state.bumpMessage;
         if (!bumpMsg || !state.bumpEnabled) return false;
@@ -1957,7 +1968,7 @@
                     submitConfig: !!findVisibleElementBySelectors(SELECTORS.SUBMIT_BUTTONS),
                     feedback: !!document.querySelector('.chat-input-container .feedback-icon, .chat-input-container .thumbs-up, .chat-input-container .thumbs-down')
                 };
-                console.log(`__ANTIGRAVITY_DIAGNOSTICS__:${JSON.stringify(diag)}`);
+                console.log(`__AUTOPILOT_DIAGNOSTICS__:${JSON.stringify(diag)}`);
             }
 
             // Stuck Button Detection
@@ -2145,6 +2156,8 @@
                 const throttle = timing.actionThrottleMs || 100;
                 const cooldown = timing.cooldownMs || 3000;
 
+                // Dismiss stray Customize Layout dialog
+
                 // Gold Standard: Update Coverage Metrics for Self-Test
                 updateProfileCoverage();
 
@@ -2236,6 +2249,8 @@
             try {
                 cycle++;
                 log(`[Loop] Cycle ${cycle}: Starting...`);
+
+                // Dismiss stray Customize Layout dialog
 
                 // Expand any collapsed sections (e.g. "Step Requires Input")
                 await expandCollapsedSections();
@@ -2401,9 +2416,10 @@
 
     window.__autoAllSetFocusState = function (isFocused) {
         Analytics.setFocusState(isFocused, log);
+        k
     };
 
-    // Helper for visual feedback
+ ok ok    // Helper for visual feedback
     window.__autoAllState.forceSubmit = async function () {
         const selectors = getUnifiedSendButtonSelectors(getCurrentMode());
         const button = findVisibleElementBySelectors(selectors);
@@ -2536,7 +2552,7 @@
             window.__antigravityHeartbeat = timestamp;
 
             // Send heartbeat via bridge if available
-            if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
+            if (typeof window.__AUTOPILOT_BRIDGE__ === 'function') {
                 // Too noisy for console, just update global var or send specific heartbeat msg if needed.
                 // For now, we'll rely on CDP Runtime.evaluate of window.__antigravityHeartbeat
             }

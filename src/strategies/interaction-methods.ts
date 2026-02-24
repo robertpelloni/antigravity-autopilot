@@ -187,13 +187,12 @@ export class BridgeType implements IInteractionMethod {
         if (!ctx.cdpHandler || !ctx.text) return false;
         const escapedText = escapeJsSingleQuoted(ctx.text);
         const script = `
-            (function() {
-                const payload = '__ANTIGRAVITY_TYPE__:${escapedText}';
-                if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
-                    window.__ANTIGRAVITY_BRIDGE__(payload);
-                    return true;
+                const payload = '__AUTOPILOT_TYPE__:${escapedText}';
+                if (typeof window.__AUTOPILOT_BRIDGE__ === 'function') {
+                    window.__AUTOPILOT_BRIDGE__(payload);
+                } else {
+                    console.log(payload);
                 }
-                console.log(payload);
                 return true;
             })()
         `;
@@ -317,19 +316,8 @@ export class DOMScanClick implements IInteractionMethod {
                     : [];
 
                 const fallbackSelectors = [
-                    '.monaco-button',
-                    '[title*="Accept"]',
-                    '[aria-label*="Accept"]',
-                    '[title*="Allow"]',
-                    '[aria-label*="Allow"]',
-                    '[title*="Continue"]',
-                    '[aria-label*="Continue"]',
-                    '[title*="Run in Terminal"]',
-                    '[aria-label*="Run in Terminal"]',
-                    '[title*="Run command"]',
-                    '[aria-label*="Run command"]',
-                    '[title*="Execute command"]',
-                    '[aria-label*="Execute command"]',
+                    '.monaco-button.monaco-text-button.monaco-button-accept',
+                    'button.monaco-button[aria-label="Accept"]',
                     '.codicon-play',
                     '.codicon-run',
                     '.codicon-debug-start'
@@ -441,9 +429,9 @@ export class BridgeCoordinateClick implements IInteractionMethod {
                 const x = Math.round(rect.left + (rect.width / 2));
                 const y = Math.round(rect.top + (rect.height / 2));
                 
-                const payload = '__ANTIGRAVITY_CLICK__:' + x + ':' + y;
-                if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
-                    window.__ANTIGRAVITY_BRIDGE__(payload);
+                const payload = '__AUTOPILOT_CLICK__:' + x + ':' + y;
+                if (typeof window.__AUTOPILOT_BRIDGE__ === 'function') {
+                    window.__AUTOPILOT_BRIDGE__(payload);
                 } else {
                     console.log(payload);
                 }
@@ -485,12 +473,8 @@ export class NativeAcceptCommands implements IInteractionMethod {
     timingMs = 60;
     requiresCDP = false;
 
-    private static readonly COMMANDS = [
-        'antigravity.agent.acceptAgentStep',
-        'antigravity.terminal.accept',
-        'workbench.action.chat.submit',
-        'workbench.action.chat.send',
-        'interactive.acceptChanges'
+    private static readonly COMMANDS: string[] = [
+        // NOTE: ALL accept commands REMOVED — trigger Customize Layout on Antigravity fork
     ];
 
     async execute(ctx: InteractionContext): Promise<boolean> {
@@ -541,11 +525,13 @@ export class ProcessPeekClick implements IInteractionMethod {
         try {
             const available: string[] = await ctx.vscodeCommands.getCommands(true);
             const candidates = available.filter(cmd =>
-                cmd.includes('accept') ||
-                cmd.includes('submit') ||
-                cmd.includes('chat.send') ||
-                cmd.includes('chat.submit') ||
-                cmd.includes('terminal.accept')
+                !cmd.startsWith('antigravity.') && (
+                    cmd.includes('accept') ||
+                    cmd.includes('submit') ||
+                    cmd.includes('chat.send') ||
+                    cmd.includes('chat.submit') ||
+                    cmd.includes('terminal.accept')
+                )
             );
 
             for (const command of candidates.slice(0, 6)) {
@@ -666,13 +652,8 @@ export class VSCodeSubmitCommands implements IInteractionMethod {
     timingMs = 50;
     requiresCDP = false;
 
-    static readonly SUBMIT_COMMANDS = [
-        'workbench.action.chat.submit',
-        'workbench.action.chat.send',
-        'interactive.acceptChanges',
-        'workbench.action.terminal.chat.accept',
-        'inlineChat.accept',
-        'aipopup.action.submit'
+    static readonly SUBMIT_COMMANDS: string[] = [
+        // NOTE: ALL accept commands REMOVED — trigger Customize Layout on Antigravity fork
     ];
 
     async execute(ctx: InteractionContext): Promise<boolean> {
@@ -689,7 +670,7 @@ export class CDPEnterKey implements IInteractionMethod {
     name = 'CDP Enter Key';
     description = 'Dispatches Enter keyDown/keyUp via Chrome DevTools Protocol';
     category = 'submit' as const;
-    enabled = true;
+    enabled = false; // DISABLED: Global broadcasts trigger Customize Layout if focus is lost
     priority = 2;
     timingMs = 50;
     requiresCDP = true;
@@ -771,7 +752,7 @@ export class CtrlEnterShortcut implements IInteractionMethod {
     name = 'Ctrl+Enter Shortcut';
     description = 'Dispatches Ctrl+Enter key combination for submit variants';
     category = 'submit' as const;
-    enabled = true;
+    enabled = false; // DISABLED: Global broadcasts trigger Customize Layout if focus is lost
     priority = 4;
     timingMs = 50;
     requiresCDP = true;

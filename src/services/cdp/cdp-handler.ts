@@ -227,8 +227,10 @@ export class CDPHandler extends EventEmitter {
                 try {
                     // 1. Enable Runtime on Main Page
                     await this.sendCommand(page.id, 'Runtime.enable');
-                    await this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' });
-
+                    if (page.type === 'page') {
+                        await this.sendCommand(page.id, 'Runtime.addBinding', { name: '__AUTOPILOT_BRIDGE__' });
+                        await this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' }); // Still register fake legacy bridge to block it
+                    }
                     // 1a. Kill any Zombie Loops from previous Extension reloads
                     await this.sendCommand(page.id, 'Runtime.evaluate', {
                         expression: `
@@ -402,7 +404,10 @@ export class CDPHandler extends EventEmitter {
                         }
                         this.sendCommand(page.id, 'Page.enable', {}, undefined, sessionId).catch(() => { });
                         this.sendCommand(page.id, 'Runtime.enable', {}, undefined, sessionId).catch(() => { });
-                        this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' }, undefined, sessionId).catch(() => { });
+                        if (page.type === 'page') {
+                            this.sendCommand(page.id, 'Runtime.addBinding', { name: '__AUTOPILOT_BRIDGE__' }, undefined, sessionId).catch(() => { });
+                            this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' }, undefined, sessionId).catch(() => { }); // legacy sinkhole
+                        }
                         this.sendCommand(page.id, 'DOM.enable', {}, undefined, sessionId).catch(() => { });
                         this.emit('sessionAttached', { pageId: page.id, sessionId, type: targetInfo?.type, url: targetInfo?.url });
                     }
@@ -417,10 +422,10 @@ export class CDPHandler extends EventEmitter {
                         const { resolve: res, reject: rej } = this.pendingMessages.get(msg.id)!;
                         this.pendingMessages.delete(msg.id);
                         msg.error ? rej(new Error(msg.error.message)) : res(msg.result);
+                    } else if (msg.method === 'Runtime.bindingCalled' && msg.params.name === '__AUTOPILOT_BRIDGE__') {
+                        this.handleBridgeMessage(page.id, msg.params.payload, msg.sessionId);
                     } else if (msg.method === 'Runtime.bindingCalled' && msg.params.name === '__ANTIGRAVITY_BRIDGE__') {
-                        const payload = msg.params.payload;
-                        const originSessionId = msg.sessionId;
-                        this.handleBridgeMessage(page.id, payload, originSessionId);
+                        // Sinkhole legacy bridge calls to prevent legacy UI ghost loops
                     } else if (msg.method === 'Runtime.consoleAPICalled') {
                         // Fallback Console Bridge
                         const text = msg.params.args[0]?.value || '';
@@ -571,57 +576,31 @@ export class CDPHandler extends EventEmitter {
         if (typeof text !== 'string') return;
 
         try {
-            if (text.startsWith('__ANTIGRAVITY_TYPE__:')) {
-                const content = text.substring('__ANTIGRAVITY_TYPE__:'.length);
-                if (content) {
-                    await this.sendCommand(pageId, 'Input.insertText', { text: content }, undefined, sessionId);
-                }
+            // Text input routing
+            if (text.startsWith('__AUTOPILOT_TYPE__:')) {
+                const content = text.substring('__AUTOPILOT_TYPE__:'.length);
+                this.insertTextToAll(content).catch(() => { });
             } else if (text.startsWith('__ANTIGRAVITY_COMMAND__:')) {
-                const raw = text.substring('__ANTIGRAVITY_COMMAND__:'.length).trim();
-                if (raw) {
-                    // Format: "commandId|jsonArgs"
-                    const pipeIndex = raw.indexOf('|');
-                    let commandId = raw;
-                    let args = undefined;
-
-                    if (pipeIndex > 0) {
-                        commandId = raw.substring(0, pipeIndex).trim();
-                        try {
-                            args = JSON.parse(raw.substring(pipeIndex + 1));
-                        } catch (e) {
-                            console.error('[Bridge] Failed to parse args for command ' + commandId);
-                        }
-                    }
-
-                    if (commandId) {
-                        console.log(`[Bridge] Executing Command: ${commandId}`, args);
-                        const vscode = require('vscode');
-                        try {
-                            const blockedCommandPattern = /(extensions?|marketplace|install|uninstall|show\s*extensions|workbench\.view\.extensions)/i;
-                            if (blockedCommandPattern.test(commandId)) {
-                                logToOutput(`[Bridge] Blocked unsafe command: ${commandId}`);
-                                return;
-                            }
-                            if (args) await vscode.commands.executeCommand(commandId, args);
-                            else await vscode.commands.executeCommand(commandId);
-                        } catch (e: any) {
-                            console.error(`[Bridge] Command execution failed: ${e.message}`);
-                        }
-                    }
-                }
-            } else if (text.startsWith('__ANTIGRAVITY_PLAY_SOUND__:')) {
-                const effect = text.substring('__ANTIGRAVITY_PLAY_SOUND__:'.length).trim() as any;
+                // [LEGACY ZOMBIE KILLER]
+                // The legacy `full_cdp_script.js` sends `__ANTIGRAVITY_COMMAND__:workbench.action.terminal.chat.accept` 
+                // which aliases to "Customize Layout" on the Antigravity fork.
+                // The modern extension never uses `__ANTIGRAVITY_COMMAND__`. It uses `__AUTOPILOT_ACTION__`.
+                // Severing this bridge permanently stops the ghost clicks.
+                const raw = text.substring('__ANTIGRAVITY_COMMAND__:'.length);
+                logToOutput(`[Bridge] Blocked legacy command execution: ${raw}`);
+            } else if (text.startsWith('__AUTOPILOT_PLAY_SOUND__:')) {
+                const effect = text.substring('__AUTOPILOT_PLAY_SOUND__:'.length).trim() as any;
                 if (config.get<boolean>('audioFeedbackEnabled')) {
                     SoundEffects.play(effect);
                 }
-            } else if (text.startsWith('__ANTIGRAVITY_DEBUG_LOG__:')) {
-                const logMsg = text.substring('__ANTIGRAVITY_DEBUG_LOG__:'.length).trim();
+            } else if (text.startsWith('__AUTOPILOT_DEBUG_LOG__:')) {
+                const logMsg = text.substring('__AUTOPILOT_DEBUG_LOG__:'.length).trim();
                 if (config.get<boolean>('debugLoggingEnabled')) {
                     console.log(`[Browser Debug] ${logMsg}`);
                 }
-            } else if (text.startsWith('__ANTIGRAVITY_HYBRID_BUMP__:')) {
+            } else if (text.startsWith('__AUTOPILOT_HYBRID_BUMP__:')) {
                 // Phase 52: Hybrid Bump Strategy
-                const bumpText = text.substring('__ANTIGRAVITY_HYBRID_BUMP__:'.length);
+                const bumpText = text.substring('__AUTOPILOT_HYBRID_BUMP__:'.length);
                 const vscode = require('vscode');
 
                 if (bumpText) {
@@ -639,18 +618,8 @@ export class CDPHandler extends EventEmitter {
                         logToOutput(`[Bump-Step] 1. Writing to Clipboard`);
                         await vscode.env.clipboard.writeText(bumpText);
 
-                        if (shouldOpenChat) {
-                            logToOutput(`[Bump-Step] 2. Executing 'workbench.action.chat.open'`);
-                            await vscode.commands.executeCommand('workbench.action.chat.open');
-                            await new Promise((r: any) => setTimeout(r, Math.max(100, typingDelay * 6))); // Open -> Focus delay
-                        } else {
-                            logToOutput(`[Bump-Step] 2. Skipping 'workbench.action.chat.open' (Configured)`);
-                        }
-
-                        // Try specific focus command for GitHub Copilot Chat if available, or fallback to generic
-                        logToOutput(`[Bump-Step] 3. Focusing Input ('workbench.action.chat.focusInput')`);
-                        await vscode.commands.executeCommand('workbench.action.chat.focusInput');
-                        await new Promise((r: any) => setTimeout(r, Math.max(100, typingDelay * 4))); // Focus -> Paste delay
+                        // NOTE: chat.open / chat.focusInput REMOVED — triggers Customize Layout on Antigravity fork
+                        logToOutput(`[Bump-Step] 2-3. Skipping all chat.* commands (Antigravity fork safety)`);
 
                         logToOutput(`[Bump-Step] 4. Pasting Clipboard`);
                         await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
@@ -659,31 +628,17 @@ export class CDPHandler extends EventEmitter {
                     }
                 }
 
-                // 2. Submit (Multi-Strategy)
-                await new Promise((r: any) => setTimeout(r, submitDelay));
-                const commands = [
-                    'workbench.action.chat.submit',
-                    'workbench.action.chat.send',
-                    'interactive.acceptChanges',
-                    'workbench.action.terminal.chat.accept',
-                    'inlineChat.accept'
-                ];
-
-                logToOutput(`[Bump-Step] 5. Submitting via Commands`);
-                for (const cmd of commands) {
-                    try {
-                        // logToOutput(`[Bump-Trace] Trying submit command: ${cmd}`);
-                        await vscode.commands.executeCommand(cmd);
-                    } catch (e) { }
-                }
+                // NO COMMANDS! We rely purely on the frontend CDP script to click the submit button.
+                // Any command we execute here (even interactive.acceptChanges) might be aliased to Customize Layout on the fork.
+                logToOutput(`[Bump-Step] 5. Skipping command-based submits (Safety)`);
 
                 // 3. Safety: Do NOT emit global CDP Enter fallback.
                 // It can target non-chat UI focus and trigger native menu/layout actions.
                 await new Promise(r => setTimeout(r, Math.max(100, submitDelay / 2)));
                 logToOutput(`[Bump-Step] 6. Skipping unsafe global CDP Enter fallback`);
                 logToOutput(`[Bump-End] Hybrid Bump Sequence Complete`);
-            } else if (text.startsWith('__ANTIGRAVITY_ACTION__:')) {
-                const raw = text.substring('__ANTIGRAVITY_ACTION__:'.length);
+            } else if (text.startsWith('__AUTOPILOT_ACTION__:')) {
+                const raw = text.substring('__AUTOPILOT_ACTION__:'.length);
                 const [groupRaw, detailRaw] = raw.split('|');
                 const group = (groupRaw || 'click').trim() as ActionSoundGroup;
                 const detail = (detailRaw || '').trim();
@@ -695,8 +650,8 @@ export class CDPHandler extends EventEmitter {
                     // Focus drift here can activate Run menu / Customize Layout instead of chat submit.
                     logToOutput(`[AutoAction:submit] Blocked unsafe CDP Enter relay for submit|keys`);
                 }
-            } else if (text.startsWith('__ANTIGRAVITY_LOG__:')) {
-                const raw = text.substring('__ANTIGRAVITY_LOG__:'.length);
+            } else if (text.startsWith('__AUTOPILOT_LOG__:')) {
+                const raw = text.substring('__AUTOPILOT_LOG__:'.length);
                 logToOutput(`[AutoContinue] ${raw}`);
             }
         } catch (e) {
@@ -838,10 +793,10 @@ export class CDPHandler extends EventEmitter {
         const expression = `
             (function() {
                 const msg = ${safe};
-                const payload = '__ANTIGRAVITY_HYBRID_BUMP__:' + msg;
-                if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
-                    window.__ANTIGRAVITY_BRIDGE__(payload);
-                } else {
+                const payload = '__AUTOPILOT_HYBRID_BUMP__:' + msg;
+                if (typeof window.__AUTOPILOT_BRIDGE__ === 'function') {
+                    window.__AUTOPILOT_BRIDGE__(payload);
+                } else if (typeof console.log === 'function') {
                     console.log(payload);
                 }
                 return true;
@@ -878,7 +833,7 @@ export class CDPHandler extends EventEmitter {
                         if (diff > timeoutMs) {
                             console.log(`[Watchdog] Script dead on ${pageId} (Last heartbeat: ${diff}ms ago). Re-injecting...`);
                             // Force re-injection
-                            await this.injectScript(pageId, require('fs').readFileSync(require('path').join(__dirname, '../../../main_scripts/full_cdp_script.js'), 'utf8'), true);
+                            await this.injectScript(pageId, AUTO_CONTINUE_SCRIPT, true);
                         }
                     } else {
                         // No heartbeat found (maybe page reloaded?)
@@ -888,7 +843,7 @@ export class CDPHandler extends EventEmitter {
                         const readyState = await this.sendCommand(pageId, 'Runtime.evaluate', { expression: 'document.readyState', returnByValue: true });
                         if (readyState?.result?.value === 'complete') {
                             console.log(`[Watchdog] No heartbeat on ready page ${pageId}. Injecting...`);
-                            await this.injectScript(pageId, require('fs').readFileSync(require('path').join(__dirname, '../../../main_scripts/full_cdp_script.js'), 'utf8'), true);
+                            await this.injectScript(pageId, AUTO_CONTINUE_SCRIPT, true);
                         }
                     }
                 } catch (e) {

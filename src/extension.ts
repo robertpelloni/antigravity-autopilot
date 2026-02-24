@@ -733,9 +733,13 @@ export function activate(context: vscode.ExtensionContext) {
                     }
                     return { handled: false, detail: 'missing model parameter' };
                 case 'approve':
-                    // Check if we have an active chat session to accept
-                    await vscode.commands.executeCommand('interactive.acceptChanges');
-                    return { handled: true };
+                    // Relay to CDP frontend since Native commands are blocked
+                    const acceptCdp = resolveCDPStrategy() as any;
+                    if (acceptCdp && typeof acceptCdp.executeAction === 'function') {
+                        await acceptCdp.executeAction('accept');
+                        return { handled: true };
+                    }
+                    return { handled: false, detail: 'CDP strategy not active' };
                 case 'bump':
                     // Attempt to send a bump via CDP
                     const cdp = resolveCDPStrategy() as any;
@@ -841,14 +845,8 @@ export function activate(context: vscode.ExtensionContext) {
                 try {
                     await vscode.env.clipboard.writeText(message);
                     const commands = [
-                        'workbench.action.chat.open',
-                        'workbench.action.chat.focusInput',
-                        'editor.action.clipboardPasteAction',
-                        'workbench.action.chat.submit',
-                        'workbench.action.chat.send',
-                        'interactive.acceptChanges',
-                        'workbench.action.terminal.chat.accept',
-                        'inlineChat.accept'
+                        // NOTE: ALL commands REMOVED — trigger Customize Layout on Antigravity fork
+                        'editor.action.clipboardPasteAction'
                     ];
 
                     for (const cmd of commands) {
@@ -902,22 +900,11 @@ export function activate(context: vscode.ExtensionContext) {
         };
 
         const runAutoResumeReadinessFix = async (options?: { skipRefresh?: boolean }) => {
-            const attemptedCommands = [
-                'workbench.action.chat.open',
-                'workbench.action.chat.focusInput',
-                'workbench.panel.chat.view.copilot.focus',
-                'workbench.action.chat.openInSideBar'
-            ];
-
+            // NOTE: Do NOT execute workbench.action.chat.* commands here!
+            // On the Antigravity fork, these command IDs map to
+            // Customize Layout instead of chat, causing a persistent dialog loop.
+            // CDP handles chat interaction directly — no VS Code commands needed.
             const commandResults: Array<{ command: string; ok: boolean; error?: string }> = [];
-            for (const command of attemptedCommands) {
-                try {
-                    await vscode.commands.executeCommand(command);
-                    commandResults.push({ command, ok: true });
-                } catch (error: any) {
-                    commandResults.push({ command, ok: false, error: String(error?.message || error || 'unknown error') });
-                }
-            }
 
             await new Promise(resolve => setTimeout(resolve, 350));
 
@@ -971,7 +958,7 @@ export function activate(context: vscode.ExtensionContext) {
 
             return {
                 timestamp: new Date().toISOString(),
-                attemptedCommands,
+                attemptedCommands: [] as string[],  // All chat.* commands removed for Antigravity fork safety
                 commandResults,
                 before: beforeGuard ? {
                     status: beforeState?.status || 'unknown',
@@ -2166,11 +2153,7 @@ export function activate(context: vscode.ExtensionContext) {
                 if (cdp && await cdp.executeAction('accept')) return;
 
                 const commands = [
-                    'interactive.acceptChanges',
-                    'workbench.action.terminal.chat.accept',
-                    'inlineChat.accept',
-                    'workbench.action.chat.submit', // Fallback
-                    'workbench.action.chat.send',
+                    // NOTE: NO accept commands here, rely on CDP frontend
                     'notifications.acceptAction',
                     'workbench.action.acceptSelectedQuickOpenItem'
                 ];

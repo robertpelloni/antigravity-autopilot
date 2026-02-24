@@ -80,21 +80,16 @@ export class BlindBumpHandler {
         const allResults: InteractionResult[] = [];
 
         // Step 1: Open chat (click method)
+        // NOTE: Skip workbench.action.chat.open/focusInput — they trigger
+        // Customize Layout on the Antigravity fork. Use CDP method instead.
         const ctx: InteractionContext = {
-            commandId: 'workbench.action.chat.open',
-            vscodeCommands: vscode.commands,
             cdpHandler: this.cdp,
+            vscodeCommands: vscode.commands,
             acceptPatterns: config.get<string[]>('acceptPatterns') || [],
             rejectPatterns: config.get<string[]>('rejectPatterns') || [],
             visualDiffThreshold: config.get<number>('interactionVisualDiffThreshold') || 0.001
         };
-        const openResults = [(await this.registry.executeMethod('vscode-cmd', ctx))];
-        allResults.push(...openResults);
         await new Promise(r => setTimeout(r, 500));
-
-        // Focus chat input
-        try { await vscode.commands.executeCommand('workbench.action.chat.focusInput'); }
-        catch { /* ignore */ }
 
         // Step 2: Type message (text input method)
         const typeCtx: InteractionContext = {

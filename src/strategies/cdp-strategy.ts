@@ -261,8 +261,8 @@ export class CDPStrategy implements IStrategy {
             selector,
             acceptPatterns: config.get<string[]>('acceptPatterns') || [],
             rejectPatterns,
-            visualDiffThreshold: config.get<number>('interactionVisualDiffThreshold') || 0.001,
-            commandId: 'antigravity.agent.acceptAgentStep'
+            visualDiffThreshold: config.get<number>('interactionVisualDiffThreshold') || 0.001
+            // DISABLED: commandId: 'antigravity.agent.acceptAgentStep' -> This command aliases to Customize Layout!
         };
 
         const success = await clickRegistry.executeCategory('click', ctx);

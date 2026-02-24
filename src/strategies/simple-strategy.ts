@@ -23,6 +23,10 @@ export class SimpleStrategy implements IStrategy {
 
         this.intervalParams = setInterval(async () => {
             if (!this.isActive) return;
+            // DISABLED: Blindly polling `antigravity.agent.acceptAgentStep` every 500ms 
+            // is triggering "Customize Layout" on the Antigravity fork because the IDE
+            // aliases unknown or legacy chat-accept commands to the layout menu.
+            /*
             try {
                 // Try executing the standard Antigravity accept command
                 await vscode.commands.executeCommand('antigravity.agent.acceptAgentStep');
@@ -33,6 +37,7 @@ export class SimpleStrategy implements IStrategy {
                 // Also try accepting terminal commands if any
                 await vscode.commands.executeCommand('antigravity.terminal.accept');
             } catch (e) { }
+            */
         }, frequency);
 
         vscode.window.showInformationMessage('Antigravity: Auto-Accept ON (Simple Mode)');

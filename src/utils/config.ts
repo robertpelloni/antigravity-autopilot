@@ -364,9 +364,7 @@ export class ConfigManager {
             ]),
             interactionClickSelectorsAntigravity: config.get('interactionClickSelectorsAntigravity', [
                 '#antigravity\\.agentPanel button',
-                '#antigravity\\.agentPanel [role="button"]',
-                '.bg-ide-button-background',
-                'button.grow'
+                '#antigravity\\.agentPanel [role="button"]'
             ]),
             interactionClickSelectorsCursor: config.get('interactionClickSelectorsCursor', [
                 '#workbench\\.parts\\.auxiliarybar button',
