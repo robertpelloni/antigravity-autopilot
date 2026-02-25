@@ -40,6 +40,11 @@ export class CDPClient {
 
                 if (page.url.includes('editor') || page.title.includes('Cursor') || page.title.includes('Visual Studio Code')) {
                     const script = `(function() {
+                        if (typeof window.__antigravityTypeAndSubmit === 'function') {
+                            window.__antigravityTypeAndSubmit(${JSON.stringify(text)});
+                            return true;
+                        }
+
                         function findChatInput() {
                             // 1. Try common selectors
                             const selectors = [
@@ -103,6 +108,14 @@ export class CDPClient {
                                 input.dispatchEvent(new Event('change', { bubbles: true }));
                             }
                             
+                            function dispatchEnters(target) {
+                                if (!target) return;
+                                try {
+                                    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true }));
+                                    target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true }));
+                                } catch(e) {}
+                            }
+
                             // Wait a split second for UI to update, then click send
                             setTimeout(() => {
                                 // Look for button near input with "send" icon or label
@@ -110,7 +123,7 @@ export class CDPClient {
                                 let sendBtn = null;
                                 
                                 if (container) {
-                                    const buttons = Array.from(container.querySelectorAll('button, [role="button"], .codicon-send, .monaco-button'));
+                                    const buttons = Array.from(container.querySelectorAll('button, .codicon-send'));
                                     sendBtn = buttons.find(b => {
                                         const label = (b.getAttribute('aria-label') || b.textContent || '').toLowerCase();
                                         const cls = (b.className || '').toLowerCase();
@@ -122,13 +135,9 @@ export class CDPClient {
                                 if (sendBtn) {
                                     sendBtn.click();
                                 } else {
-                                    // Fallback: Enter key (and Shift+Enter just in case, but usually Enter sends)
-                                    // Fallback: Enter key sequence (keydown -> keypress -> keyup)
-                                    const opts = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, view: window };
-                                    input.dispatchEvent(new KeyboardEvent('keydown', opts));
-                                    input.dispatchEvent(new KeyboardEvent('keypress', opts));
-                                    input.dispatchEvent(new KeyboardEvent('keyup', opts));
-
+                                    // Removed dangerous global KeyboardEvent dispatches.
+                                    // Use localized dispatch instead
+                                    dispatchEnters(input);
                                 }
                             }, 200);
 

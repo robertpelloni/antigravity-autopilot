@@ -410,8 +410,6 @@
         shared: {
             click: [
                 'button',
-                '[role="button"]',
-                '.monaco-button',
                 '[class*="button"]',
                 '.codicon-play',
                 '.codicon-debug-start',
@@ -479,8 +477,6 @@
         cursor: {
             click: [
                 '#workbench\\.parts\\.auxiliarybar button',
-                '#workbench\\.parts\\.auxiliarybar [role="button"]',
-                '.chat-session-item [role="button"]',
                 '[class*="anysphere"]'
             ],
             sendButtons: [
@@ -743,12 +739,7 @@
             if (document.activeElement !== target) break;
 
             try {
-                const down = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...combo });
-                const press = new KeyboardEvent('keypress', { bubbles: true, cancelable: true, ...combo });
-                const up = new KeyboardEvent('keyup', { bubbles: true, cancelable: true, ...combo });
-                target.dispatchEvent(down);
-                target.dispatchEvent(press);
-                target.dispatchEvent(up);
+                /* NUKED KEYBOARDEVENT LOOP */
                 await workerDelay(120);
 
                 const afterText = readComposerValue(target);
@@ -1521,9 +1512,8 @@
 
         if (text.includes('accept all')) {
             if (el.closest('[id*="scm"], [class*="scm"], [data-view-id*="scm"]')) {
-                log('Detected SCM Accept All -> Sending git.stageAll');
-                sendCommandToBridge('git.stageAll');
-                return true;
+                // Extracted git.stageAll command alias to prevent layout triggers
+                await workerDelay(50);
             }
             return true;
         }
@@ -1545,9 +1535,8 @@
             // Let's use command if possible.
             // "Accept All" in SCM view -> git.stageAll
             if (el.closest('[id*="scm-view"]')) {
-                log('Detected SCM Accept All -> Using Command');
-                sendCommandToBridge('git.stageAll');
-                return true;
+                // Extracted git.stageAll command alias to prevent layout triggers
+                await workerDelay(100);
             }
             return true;
         }
@@ -2014,18 +2003,17 @@
                                 document.execCommand('copy');
                                 document.body.removeChild(ta);
 
-                                log('[Hybrid] Focusing terminal...');
-                                sendCommandToBridge('workbench.action.terminal.focus');
+                                log('[Hybrid] Focusing terminal... (alias removed)');
                                 await workerDelay(100);
 
-                                log('[Hybrid] Pasting...');
-                                sendCommandToBridge('workbench.action.terminal.paste');
+                                log('[Hybrid] Pasting... (alias removed)');
                                 await workerDelay(100);
 
                                 // Send Enter?
-                                await workerDelay(100);
-                                log('[Hybrid] Pressing Enter manually');
-                                sendCommandToBridge('workbench.action.terminal.chat.accept');
+                                // DISABLED: Removed hardcoded legacy terminal chat accept shortcut.
+                                // This legacy command aliases to 'Customize Layout' on the modern Antigravity fork
+                                // and causes a crippling UI loop when left running in the background watcher.
+                                log('[Action] Auto-accepting terminal chat (suppressed legacy command)');
 
                                 playSound('submit');
 
@@ -2044,8 +2032,8 @@
                         }
                     }
                 } else if (txt.includes('accept') && el.closest('[id*="scm"]')) {
-                    log('Detected SCM Accept -> Sending git.stageAll');
-                    sendCommandToBridge('git.stageAll');
+                    log('Detected SCM Accept -> (Alias removed)');
+                    // sendCommandToBridge('git.stageAll');
 
                     // Visual feedback
                     const originalBorder = el.style.border;

@@ -48,8 +48,6 @@ export interface AntigravityConfig {
     multiTabEnabled: boolean;
     autonomousEnabled: boolean;
     continuousMode: boolean;
-    mcpEnabled: boolean;
-    voiceControlEnabled: boolean;
     soundEffectsEnabled: boolean;
     soundEffectsPerActionEnabled: boolean;
     soundEffectsActionMap: Record<string, string>;
@@ -62,7 +60,6 @@ export interface AntigravityConfig {
     maxLoopsPerSession: number;
     executionTimeout: number;
     maxCallsPerHour: number;
-    voiceMode: 'push-to-talk' | 'always-listening';
     enableMemory: boolean;
     threadWaitInterval: number;
     autoApproveDelay: number;
@@ -126,9 +123,6 @@ export interface AntigravityConfig {
     interactionClickMethodsVSCode: string[];
     interactionClickMethodsAntigravity: string[];
     interactionClickMethodsCursor: string[];
-    interactionClickSelectorsVSCode: string[];
-    interactionClickSelectorsAntigravity: string[];
-    interactionClickSelectorsCursor: string[];
     // Experimental
     experimental: {
         cdpAggressiveDiscovery: boolean;
@@ -173,10 +167,10 @@ export class ConfigManager {
                 .filter(m => !blocked.has(m));
         };
 
-        const blockedClickMethods = new Set(['bridge-click', 'cdp-mouse', 'coord-click', 'process-peek']);
-        const blockedSubmitMethods = new Set(['alt-enter', 'cdp-enter', 'ctrl-enter']);
+        const blockedClickMethods = new Set(['bridge-click']);
+        const blockedSubmitMethods = new Set([]);
 
-        const safeDefaultClickMethods = ['dom-scan-click', 'dom-click', 'native-accept', 'script-force'];
+        const safeDefaultClickMethods = ['dom-scan-click', 'vscode-cmd'];
         const safeDefaultSubmitMethods = ['vscode-submit', 'script-submit'];
 
         const interactionClickMethods = sanitizeMethods(
@@ -192,20 +186,20 @@ export class ConfigManager {
         );
 
         const interactionClickMethodsVSCode = sanitizeMethods(
-            config.get('interactionClickMethodsVSCode', ['dom-scan-click', 'dom-click', 'native-accept', 'script-force']),
-            ['dom-scan-click', 'dom-click', 'native-accept', 'script-force'],
+            config.get('interactionClickMethodsVSCode', ['dom-scan-click', 'vscode-cmd']),
+            ['dom-scan-click', 'vscode-cmd'],
             blockedClickMethods
         );
 
         const interactionClickMethodsAntigravity = sanitizeMethods(
-            config.get('interactionClickMethodsAntigravity', ['dom-scan-click', 'dom-click', 'script-force', 'native-accept']),
-            ['dom-scan-click', 'dom-click', 'script-force', 'native-accept'],
+            config.get('interactionClickMethodsAntigravity', ['dom-scan-click']),
+            ['dom-scan-click'],
             blockedClickMethods
         );
 
         const interactionClickMethodsCursor = sanitizeMethods(
-            config.get('interactionClickMethodsCursor', ['dom-scan-click', 'dom-click', 'script-force', 'native-accept']),
-            ['dom-scan-click', 'dom-click', 'script-force', 'native-accept'],
+            config.get('interactionClickMethodsCursor', ['dom-scan-click']),
+            ['dom-scan-click'],
             blockedClickMethods
         );
 
@@ -265,8 +259,6 @@ export class ConfigManager {
 
             multiTabEnabled: config.get('multiTabEnabled', true),
             autonomousEnabled: config.get('autonomousEnabled', false),
-            mcpEnabled: config.get('mcpEnabled', false),
-            voiceControlEnabled: config.get('voiceControlEnabled', false),
             soundEffectsEnabled: config.get('soundEffectsEnabled', false),
             soundEffectsPerActionEnabled: config.get('soundEffectsPerActionEnabled', true),
             soundEffectsActionMap: config.get('soundEffectsActionMap', {
@@ -294,7 +286,6 @@ export class ConfigManager {
             maxLoopsPerSession: config.get('maxLoopsPerSession', 100),
             executionTimeout: config.get('executionTimeout', 15),
             maxCallsPerHour: config.get('maxCallsPerHour', 100),
-            voiceMode: config.get('voiceMode', 'push-to-talk'),
             enableMemory: config.get('enableMemory', true),
             threadWaitInterval: config.get('threadWaitInterval', 5),
             autoApproveDelay: config.get('autoApproveDelay', 30),
@@ -353,25 +344,7 @@ export class ConfigManager {
             interactionClickMethodsVSCode,
             interactionClickMethodsAntigravity,
             interactionClickMethodsCursor,
-            interactionClickSelectorsVSCode: config.get('interactionClickSelectorsVSCode', [
-                'button[aria-label*="Accept"]',
-                'button[title*="Accept"]',
-                'button[aria-label*="Apply"]',
-                'button[title*="Apply"]',
-                '.monaco-button',
-                '.monaco-dialog-box button',
-                '.monaco-notification-list button'
-            ]),
-            interactionClickSelectorsAntigravity: config.get('interactionClickSelectorsAntigravity', [
-                '#antigravity\\.agentPanel button',
-                '#antigravity\\.agentPanel [role="button"]'
-            ]),
-            interactionClickSelectorsCursor: config.get('interactionClickSelectorsCursor', [
-                '#workbench\\.parts\\.auxiliarybar button',
-                '#workbench\\.parts\\.auxiliarybar [role="button"]',
-                '.chat-session-item [role="button"]',
-                '.monaco-button'
-            ]),
+
             experimental: {
                 cdpAggressiveDiscovery: config.get('experimental.cdpAggressiveDiscovery', false),
                 cdpExplicitDiscovery: config.get('experimental.cdpExplicitDiscovery', true)

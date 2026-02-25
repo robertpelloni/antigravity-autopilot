@@ -6,9 +6,7 @@ import { createLogger } from './utils/logger';
 import { autonomousLoop } from './core/autonomous-loop';
 // import { circuitBreaker } from './core/circuit-breaker'; // Removed unused import
 import { progressTracker } from './core/progress-tracker';
-import { mcpServer } from './modules/mcp/server';
-import { activateRemoteServer, RemoteServer } from './modules/remote';
-import { voiceControl } from './modules/voice/control';
+
 import { CDPHandler } from './services/cdp/cdp-handler';
 import { diagnoseCdp } from './commands/diagnose-cdp';
 
@@ -99,7 +97,6 @@ export function activate(context: vscode.ExtensionContext) {
         let lastWaitingReminderAt = 0;
         let lastAutoResumeAt = 0;
         let readyToResumeStreak = 0;
-        let remoteServer: RemoteServer | null = null;
         let lastAutoResumeOutcome: 'none' | 'sent' | 'blocked' | 'send-failed' = 'none';
         let lastAutoResumeBlockedReason = 'not evaluated';
         let lastAutoResumeMessageKind: 'none' | 'full' | 'minimal' = 'none';
@@ -370,14 +367,6 @@ export function activate(context: vscode.ExtensionContext) {
                 await strategyManager.stop();
             } catch { }
 
-            try {
-                await mcpServer.stop();
-            } catch { }
-
-            try {
-                await voiceControl.stop();
-            } catch { }
-
             // Persist hard-off state across all known autonomy controls.
             const updates: Array<[string, any]> = [
                 ['autonomousEnabled', false],
@@ -388,8 +377,6 @@ export function activate(context: vscode.ExtensionContext) {
                 ['actions.bump.enabled', false],
                 ['actions.run.enabled', false],
                 ['actions.expand.enabled', false],
-                ['mcpEnabled', false],
-                ['voiceControlEnabled', false],
                 ['autoContinueScriptEnabled', false]
             ];
 
@@ -662,22 +649,6 @@ export function activate(context: vscode.ExtensionContext) {
             );
         };
 
-        const confirmDestructiveVoiceIntent = async (command: { intent: string; raw: string }): Promise<boolean> => {
-            const destructiveIntents = new Set(['reject', 'pause', 'deploy']);
-            if (!destructiveIntents.has(command.intent)) {
-                return true;
-            }
-
-            const decision = await vscode.window.showWarningMessage(
-                `Voice command "${command.intent}" is potentially destructive. Confirm execution?\nTranscript: ${command.raw}`,
-                { modal: true },
-                'Confirm',
-                'Cancel'
-            );
-
-            return decision === 'Confirm';
-        };
-
         context.subscriptions.push(
             safeRegisterCommand('antigravity.diagnoseCdp', diagnoseCdp),
             safeRegisterCommand('antigravity.testMethod', async (methodId: string, text: string) => {
@@ -691,71 +662,6 @@ export function activate(context: vscode.ExtensionContext) {
         );
 
 
-        voiceControl.setIntentExecutor(async (command) => {
-            if (!await confirmDestructiveVoiceIntent(command)) {
-                return { handled: false, detail: 'user cancelled destructive action' };
-            }
-
-            switch (command.intent) {
-                case 'status':
-                    await vscode.commands.executeCommand('antigravity.checkRuntimeState');
-                    return { handled: true };
-                case 'diagnose':
-                    await vscode.commands.executeCommand('antigravity.diagnoseCdp');
-                    return { handled: true };
-                case 'pause':
-                    if (autonomousLoop.isRunning()) {
-                        autonomousLoop.stop('Voice command: pause');
-                        await config.update('autonomousEnabled', false);
-                    }
-                    return { handled: true };
-                case 'resume':
-                    if (!autonomousLoop.isRunning()) {
-                        await autonomousLoop.start();
-                        await config.update('autonomousEnabled', true);
-                    }
-                    return { handled: true };
-                case 'open_dashboard':
-                    await vscode.commands.executeCommand('antigravity.openSettings');
-                    return { handled: true };
-                case 'run_tests':
-                    try {
-                        await vscode.commands.executeCommand('workbench.action.tasks.test');
-                    } catch {
-                        // Fallback command path
-                        await vscode.commands.executeCommand('testing.runAll');
-                    }
-                    return { handled: true };
-                case 'switch_model':
-                    if (command.params?.model) {
-                        await config.update('preferredModelForQuick', command.params.model);
-                        return { handled: true };
-                    }
-                    return { handled: false, detail: 'missing model parameter' };
-                case 'approve':
-                    // Relay to CDP frontend since Native commands are blocked
-                    const acceptCdp = resolveCDPStrategy() as any;
-                    if (acceptCdp && typeof acceptCdp.executeAction === 'function') {
-                        await acceptCdp.executeAction('accept');
-                        return { handled: true };
-                    }
-                    return { handled: false, detail: 'CDP strategy not active' };
-                case 'bump':
-                    // Attempt to send a bump via CDP
-                    const cdp = resolveCDPStrategy() as any;
-                    if (cdp && typeof cdp.sendHybridBump === 'function') {
-                        await cdp.sendHybridBump('continue');
-                        return { handled: true };
-                    }
-                    return { handled: false, detail: 'CDP strategy not active' };
-                case 'reject':
-                    return { handled: false, detail: 'reject intent not mapped to a safe runtime action' };
-                case 'deploy':
-                    return { handled: false, detail: 'deploy intent confirmed but no direct deploy action is configured' };
-                default:
-                    return { handled: false, detail: 'intent not supported' };
-            }
-        });
 
         const formatDurationShort = (ms: number) => {
             if (!Number.isFinite(ms) || ms < 0) return '-';
@@ -1359,54 +1265,7 @@ export function activate(context: vscode.ExtensionContext) {
             safeRegisterCommand('antigravity.checkSettingsSurfacesHealth', async () => {
                 await runSettingsSurfaceHealthCheck();
             }),
-            safeRegisterCommand('antigravity.toggleMcp', async () => {
-                const current = config.get<boolean>('mcpEnabled');
-                if (current) {
-                    await mcpServer.stop();
-                } else {
-                    if (!ensureControllerLeader('toggleMcp enable', true)) {
-                        return;
-                    }
-                    await mcpServer.start();
-                }
-                await config.update('mcpEnabled', !current);
-            }),
-            safeRegisterCommand('antigravity.toggleVoice', async () => {
-                const current = config.get<boolean>('voiceControlEnabled');
-                if (current) {
-                    await voiceControl.stop();
-                } else {
-                    if (!ensureControllerLeader('toggleVoice enable', true)) {
-                        return;
-                    }
-                    await voiceControl.start();
-                }
-                await config.update('voiceControlEnabled', !current);
-            }),
-            safeRegisterCommand('antigravity.processVoiceTranscript', async () => {
-                const transcript = await vscode.window.showInputBox({
-                    prompt: 'Voice Transcript Debug',
-                    placeHolder: 'Type the transcribed voice command, e.g. "open dashboard" or "resume"'
-                });
 
-                if (!transcript || !transcript.trim()) {
-                    return;
-                }
-
-                const outcome = await voiceControl.processAndExecuteTranscription(transcript, { force: true });
-                if (!outcome.command) {
-                    vscode.window.showWarningMessage('Voice Debug: no command parsed from transcript.');
-                    return;
-                }
-
-                if (outcome.handled) {
-                    vscode.window.showInformationMessage(`Voice Debug: executed intent "${outcome.command.intent}".`);
-                    return;
-                }
-
-                const reason = outcome.error ? ` (${outcome.error})` : '';
-                vscode.window.showWarningMessage(`Voice Debug: intent "${outcome.command.intent}" not executed${reason}.`);
-            }),
             safeRegisterCommand('antigravity.generateTests', async () => {
                 const editor = vscode.window.activeTextEditor;
                 if (editor) {
@@ -2152,14 +2011,7 @@ export function activate(context: vscode.ExtensionContext) {
                 const cdp = resolveCDPStrategy();
                 if (cdp && await cdp.executeAction('accept')) return;
 
-                const commands = [
-                    // NOTE: NO accept commands here, rely on CDP frontend
-                    'notifications.acceptAction',
-                    'workbench.action.acceptSelectedQuickOpenItem'
-                ];
-                for (const cmd of commands) {
-                    try { await vscode.commands.executeCommand(cmd); } catch { }
-                }
+                log.warn('clickAccept skipped native command fallback because CDP accept action was unavailable.');
             }),
             // LEGACY COMMAND SINKHOLES: The old google.antigravity backend is still running and trying to execute these natively!
             // If we don't register them here, VS Code falls back to a global layout toggle alias.
@@ -2188,13 +2040,7 @@ export function activate(context: vscode.ExtensionContext) {
                     vscode.window.showInformationMessage('Antigravity: Forcibly acquired Leader role for this window.');
                 }
             }),
-            safeRegisterCommand('antigravity.startRemoteServer', async () => {
-                if (remoteServer) {
-                    remoteServer.toggle();
-                } else {
-                    remoteServer = await activateRemoteServer(context);
-                }
-            })
+
         );
 
         const runtimeStateTimer = setInterval(() => {
@@ -2220,28 +2066,10 @@ export function activate(context: vscode.ExtensionContext) {
                     autonomousLoop.start().catch(e => log.error(`Failed to start autonomous loop: ${e.message}`));
                 }
 
-                // 3. Modules
-                if (config.get('mcpEnabled')) {
-                    mcpServer.start().catch(e => log.error(`MCP start failed: ${e.message}`));
-                }
-                if (config.get('voiceControlEnabled')) {
-                    voiceControl.start().catch(e => log.error(`Voice start failed: ${e.message}`));
-                }
-
-                if (config.get('remoteControlEnabled')) {
-                    if (!remoteServer) {
-                        activateRemoteServer(context).then((server: RemoteServer) => {
-                            remoteServer = server;
-                        }).catch((e: Error) => log.error(`RemoteServer start failed: ${e.message}`));
-                    }
-                }
-
                 log.info('Antigravity Autopilot: Brain ACTIVE as controller leader.');
             } else {
                 // Follower mode: stop high-level services but KEEP decentralized automation (StrategyManager) running
                 autonomousLoop.stop('Follower mode bootstrap');
-                mcpServer.stop().catch(() => { });
-                voiceControl.stop().catch(() => { });
                 log.info('Antigravity Autopilot: Brain PASSIVE (Leader in another workspace). UI automation ACTIVE.');
             }
         }
@@ -2254,8 +2082,6 @@ export function deactivate() {
     controllerLease?.stop();
     controllerLease = null;
     autonomousLoop.stop('Deactivating');
-    mcpServer.stop();
-    voiceControl.stop();
     if (statusBar) statusBar.dispose();
     log.info('Antigravity Autopilot deactivated');
 }

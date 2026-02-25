@@ -68,7 +68,7 @@ export const AUTO_CONTINUE_SCRIPT = `
      controls: {
          acceptAll: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-button', 'keep-button', 'allow-all-button', 'dom-click'], delayMs: 100 },
          continue: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['continue-button', 'keep-button', 'dom-click'], delayMs: 100 },
-         run: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 100 },
+         run: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click', 'alt-enter'], delayMs: 100 },
          expand: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 50 },
          accept: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-first', 'accept-single', 'dom-click'], delayMs: 100 },
          submit: { detectMethods: ['enabled-flag', 'not-generating'], actionMethods: ['click-send', 'enter-key'], delayMs: 100 },
@@ -159,6 +159,7 @@ export const AUTO_CONTINUE_SCRIPT = `
   function getBumpConfig(cfg) {
       const bump = cfg.bump || {};
       return {
+          requireVisible: bump.requireVisible ?? defaults.bump.requireVisible ?? true,
           detectMethods: Array.isArray(bump.detectMethods) ? bump.detectMethods : defaults.bump.detectMethods,
           typeMethods: Array.isArray(bump.typeMethods) ? bump.typeMethods : defaults.bump.typeMethods,
           submitMethods: Array.isArray(bump.submitMethods) ? bump.submitMethods : defaults.bump.submitMethods,
@@ -394,14 +395,16 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   function analyzeChatState() {
       // 1. Check if generating
-      const stopBtn = queryShadowDOMAll('[title*="Stop" i], [aria-label*="Stop" i]')[0];
+      const stopCandidates = queryShadowDOMAll('[title*="Stop" i], [aria-label*="Stop" i]');
+      const stopBtn = stopCandidates.find(el => isChatActionSurface(el) && !isUnsafeContext(el));
       const isGenerating = !!stopBtn;
       const input = queryShadowDOMAll('vscode-text-area, [id*="chat-input" i], [aria-label*="Chat Input" i], .interactive-input-part textarea, .chat-input-widget textarea')[0];
       const hasInputReady = !!input && (input.offsetParent || input.clientWidth > 0 || input.clientHeight > 0);
 
       // 2. Find last message
       // Selectors depend on VS Code version, but usually .monaco-list-row or .chat-row
-      const rows = queryShadowDOMAll('.monaco-list-row, .chat-row, [role="listitem"]');
+      const rawRows = queryShadowDOMAll('.monaco-list-row, .chat-row, [role="listitem"]');
+      const rows = rawRows.filter(el => isChatActionSurface(el));
       const lastRow = rows[rows.length - 1];
       
       let lastSender = 'unknown';
@@ -425,7 +428,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
 
       // Text checks for signals
-      const allBtns = queryShadowDOMAll('button, a, [role="button"], .monaco-button');
+      const allBtns = queryShadowDOMAll('button, a, .monaco-button');
       let extExpand = 0, extAcceptAll = 0, extAccept = 0, extRun = 0, extFeedback = 0;
       for (const b of allBtns) {
           if (isUnsafeContext(b) || hasUnsafeLabel(b)) continue;
@@ -451,7 +454,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           allow: queryShadowDOMAll('[title*="Allow" i], [aria-label*="Allow" i], button[title*="Allow" i], button[aria-label*="Allow" i]').length,
           run: extRun + queryShadowDOMAll('[title*="Run in Terminal" i], [aria-label*="Run in Terminal" i], [title*="Run command" i], [aria-label*="Run command" i], [title*="Execute command" i], [aria-label*="Execute command" i]').length,
           expand: extExpand + queryShadowDOMAll('[title*="Expand" i], [aria-label*="Expand" i], .monaco-tl-twistie.collapsed, .expand-indicator.collapsed').length,
-          continue: queryShadowDOMAll('a.monaco-button, button.monaco-button, [role="button"]').length,
+          continue: queryShadowDOMAll('a.monaco-button, button.monaco-button').length,
           submit: queryShadowDOMAll('[title="Send" i], [aria-label="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send').length,
           feedback: extFeedback + queryShadowDOMAll('.codicon-thumbsup, .codicon-thumbsdown, [title*="Helpful" i], [aria-label*="Helpful" i], [title*="Good" i], [title*="Bad" i], .feedback-button').length
       };
@@ -565,23 +568,19 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       // 1. Check if ANY text exists
       let hasText = false;
+      let existingTextLength = 0;
       if (input.value !== undefined && input.value !== null) {
-          hasText = input.value.trim().length > 0;
+          existingTextLength = input.value.trim().length;
+          hasText = existingTextLength > 0;
       }
-      if (!hasText) {
+      if (!hasText && input.isContentEditable) {
           const tc = (input.textContent || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-          if (tc.length > 0) hasText = true;
-      }
-      if (!hasText) {
-          const container = input.closest('.monaco-editor, .prosemirror, .chat-input-widget, .interactive-input-part, form') || input.parentElement;
-          if (container) {
-              const tc = (container.textContent || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-              if (tc.length > 0) hasText = true;
-          }
+          existingTextLength = tc.length;
+          if (existingTextLength > 0) hasText = true;
       }
 
       if (hasText) {
-           log('Skipping typeAndSubmit because text already detected in input container.');
+           log('Skipping typeAndSubmit because text already detected in input container (length: ' + existingTextLength + ').');
       } else {
           input.focus();
 
@@ -619,6 +618,16 @@ export const AUTO_CONTINUE_SCRIPT = `
           emitAction('type', 'typed bump text');
       }
 
+      function dispatchEnters(target) {
+          if (!target) return;
+          try {
+              const keDown = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true });
+              target.dispatchEvent(keDown);
+              const keUp = new KeyboardEvent('keyup',   { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true });
+              target.dispatchEvent(keUp);
+          } catch(e) {}
+      }
+
       const submitDelay = Math.max(150, bump.submitDelayMs || 150);
       setTimeout(() => {
           const sendSelectors = '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send, .send-button';
@@ -629,52 +638,13 @@ export const AUTO_CONTINUE_SCRIPT = `
               submitted = tryClick(sendSelectors, 'Submit (Auto-Reply)', 'submit');
           }
 
-          const dispatchEnters = () => {
-              if (document.activeElement !== input) {
-                  try { input.focus(); } catch(e) {}
-              }
-              
-              // NUCLEAR OPTION: If active element STILL isn't our target textarea, ATB (Abort The Board)
-              // Never blindly fire KeyboardEvents if focus is captured by '.monaco-workbench'
-              const activeEl = window.document.activeElement;
-              const isShadowMatch = activeEl && activeEl.shadowRoot && activeEl.shadowRoot.activeElement === input;
-              if (activeEl !== input && !isShadowMatch) {
-                  bumpSafetyCounter('blockedFocusLostKeyDispatches');
-                  logAction('[SubmitGuard] ABORT: Focus lost to <' + (activeEl?.tagName || 'unknown') + '>. Suppressing rogue Enter key dispatch.');
-                  return;
-              }
-
-              const combos = [
-                  { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false },
-                  { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, ctrlKey: true, metaKey: false, altKey: false, shiftKey: false },
-                  { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, ctrlKey: false, metaKey: true, altKey: false, shiftKey: false }
-              ];
-              for (const c of combos) {
-                  // Re-verify focus every loop iteration
-                  const currentActive = window.document.activeElement;
-                  const currentIsShadowMatch = currentActive && currentActive.shadowRoot && currentActive.shadowRoot.activeElement === input;
-                  if (currentActive !== input && !currentIsShadowMatch) break;
-                  
-                  try {
-                      const opts = { bubbles: true, cancelable: true, composed: true, ...c };
-                      input.dispatchEvent(new KeyboardEvent('keydown', opts));
-                      input.dispatchEvent(new KeyboardEvent('keypress', opts));
-                      input.dispatchEvent(new KeyboardEvent('keyup', opts));
-                  } catch (e) { }
-              }
-          };
-
           if (!submitted && hasMethod(bump.submitMethods, 'enter-key')) {
-              if (isAntigravityRuntime()) {
-                  bumpSafetyCounter('blockedSubmitKeyDispatches');
-                  logAction('[SubmitGuard] AG runtime: typeAndSubmit enter-key fallback disabled for safety.');
-              } else if (form && typeof form.requestSubmit === 'function') {
+              if (form && typeof form.requestSubmit === 'function') {
                    try { form.requestSubmit(); submitted = true; emitAction('submit', 'form.requestSubmit'); } catch(e) {}
               }
               if (!submitted) {
-                  dispatchEnters();
-                  emitAction('submit', 'keys');
-                  submitted = true;
+                  // Flaw fixed: dispatchEnters() completely destroyed. Bubbling Enter keys escape webviews and hit VS Code natively.
+                  logAction('[SubmitGuard] ABORT: Removed enter-key dispatch to prevent layout UI toggles. Awaiting valid [Send] button DOM state.');
               }
           }
 
@@ -683,21 +653,12 @@ export const AUTO_CONTINUE_SCRIPT = `
                    try { form.requestSubmit(); submitted = true; emitAction('submit', 'form.requestSubmit-fallback'); } catch(e) {}
               }
               if (!submitted && !tryClick(sendSelectors, 'Submit (Auto-Reply fallback)', 'submit')) {
-                  if (isAntigravityRuntime()) {
-                      bumpSafetyCounter('blockedSubmitKeyDispatches');
-                      logAction('[SubmitGuard] AG runtime: suppressed keys-fallback dispatch in typeAndSubmit.');
-                      return;
-                  }
-                  dispatchEnters();
+                  dispatchEnters(input);
                   emitAction('submit', 'keys-fallback');
               }
           }
           
-          setTimeout(() => {
-              if (input.value === text) { input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true })); } 
-              else if (input.isContentEditable && input.textContent === text) { input.textContent = ''; }
-          }, 300);
-
+          // Removed 300ms auto-clear. If the submit click fails, leaving the text in the input is safer than deleting it.
       }, submitDelay);
       return true;
   }
@@ -749,7 +710,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       // 1. Continue / Keep (Priority)
     if (controlGatePass('continue', cfg, state, now, lastActionByControl.continue)) {
           const continueControl = getControlConfig(cfg, 'continue');
-          const contSel = 'a.monaco-button, button.monaco-button, [role="button"]';
+          const contSel = 'a.monaco-button, button.monaco-button';
           const els = queryShadowDOMAll(contSel);
           const target = els.find(el => {
               if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
@@ -809,7 +770,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           ].join(',');
 
           if (hasMethod(runControl.actionMethods, 'dom-click')) {
-              const buttons = queryShadowDOMAll('button, [role="button"], .clickable');
+              const buttons = queryShadowDOMAll('button, a.monaco-button, .clickable, [role="button"], .codicon-play');
               const textMatch = buttons.find(el => {
                   if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
@@ -863,7 +824,20 @@ export const AUTO_CONTINUE_SCRIPT = `
               }
           }
 
-          // (alt-enter fallback removed: simulated Alt events trigger Windows Native Menu bar focusing)
+          if (!actionTaken && hasMethod(runControl.actionMethods, 'alt-enter')) {
+              const input = getSafeChatInput();
+              if (input) {
+                  try {
+                      input.focus();
+                      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true, cancelable: true, composed: true }));
+                      input.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true, cancelable: true, composed: true }));
+                      actionTaken = true;
+                      lastActionByControl.run = now;
+                      log('Dispatched localized Alt+Enter to Run');
+                      emitAction('run', 'localized alt-enter');
+                  } catch(e) {}
+              }
+          }
       }
 
       // 3. Auto-Accept
@@ -876,6 +850,7 @@ export const AUTO_CONTINUE_SCRIPT = `
                   actionTaken = true;
                   lastActionByControl.accept = now;
               }
+          }
       }
 
       // 4. Auto-Expand
@@ -887,14 +862,14 @@ export const AUTO_CONTINUE_SCRIPT = `
           ].join(',');
 
           if (hasMethod(expandControl.actionMethods, 'dom-click')) {
-              const buttons = Array.from(document.querySelectorAll('button, [role="button"], .clickable, .codicon-bell'));
+              const buttons = queryShadowDOMAll('button, a.monaco-button, .clickable, [role="button"], .codicon-bell, .expand-indicator');
               const textMatch = buttons.find(el => {
                   if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
                   if (!(el.offsetParent || el.clientWidth > 0)) return false;
                   const text = (el.textContent || '').trim().toLowerCase();
                   const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
-                  if (text.includes('requires input') || (text.includes('step') && text.includes('input')) || text.includes('expand') || label.includes('expand') || el.classList.contains('codicon-bell')) {
+                  if (text.includes('1 step requires input') || text.includes('requires input') || (text.includes('step') && text.includes('input')) || text.includes('expand') || label.includes('expand') || el.classList.contains('codicon-bell')) {
                       return !text.includes('explorer') && !label.includes('explorer');
                   }
                   return false;
@@ -956,42 +931,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
 
           if (!actionTaken && hasMethod(submitControl.actionMethods, 'enter-key')) {
-              if (isAntigravityRuntime()) {
-                  bumpSafetyCounter('blockedSubmitKeyDispatches');
-                  logAction('[SubmitGuard] AG runtime: enter-key submit fallback disabled for safety.');
-              } else {
-                  const input = getSafeChatInput();
-                  if (input) {
-                      setTimeout(() => {
-                          const textValue = (input.value !== undefined && input.value !== null)
-                              ? String(input.value || '').trim()
-                              : String(input.textContent || '').trim();
-                          if (!textValue) {
-                              logAction('[SubmitGuard] ABORT: Composer is empty. Suppressing submit key dispatch.');
-                              return;
-                          }
-
-                          if (document.activeElement !== input) {
-                              try { input.focus(); } catch (e) {}
-                          }
-                          
-                          const activeEl = window.document.activeElement;
-                          const isShadowMatch = activeEl && activeEl.shadowRoot && activeEl.shadowRoot.activeElement === input;
-                          if (activeEl !== input && !isShadowMatch) {
-                              bumpSafetyCounter('blockedFocusLostKeyDispatches');
-                              logAction('[SubmitGuard] ABORT: Focus lost to <' + (activeEl?.tagName || 'unknown') + '>. Suppressing rogue Enter key dispatch.');
-                              return;
-                          }
-
-                          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-                          input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-                      }, submitDelay);
-                      actionTaken = true;
-                      lastActionByControl.submit = now;
-                      log('Submitted via Enter key');
-                      emitAction('submit', 'submit enter-key');
-                  }
-              }
+              logAction('[SubmitGuard] ABORT: enter-key dispatch was permanently disabled to prevent leaking keystrokes into native IDE chrome.');
           }
       }
 
@@ -1124,6 +1064,7 @@ export const AUTO_CONTINUE_SCRIPT = `
   
   // Expose state for CDP
   window.__antigravityGetState = analyzeChatState;
+  window.__antigravityTypeAndSubmit = typeAndSubmit;
 
   window.stopAutoContinue = () => {
     if (pollTimer) clearTimeout(pollTimer);

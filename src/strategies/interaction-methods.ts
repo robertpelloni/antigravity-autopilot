@@ -264,30 +264,6 @@ export class VSCodeTypeCommand implements IInteractionMethod {
 
 // ============ Click Methods ============
 
-export class DOMSelectorClick implements IInteractionMethod {
-    id = 'dom-click';
-    name = 'DOM Selector Click';
-    description = 'Finds element by CSS selector and dispatches click event via CDP';
-    category = 'click' as const;
-    enabled = false; // PERMANENTLY DISABLED: Extremely unsafe generic match that bypassed ban logic. Use DOMScanClick instead.
-    priority = 1;
-    timingMs = 50;
-    requiresCDP = true;
-
-    async execute(ctx: InteractionContext): Promise<boolean> {
-        if (!ctx.cdpHandler || !ctx.selector) return false;
-        const escapedSelector = escapeJsSingleQuoted(ctx.selector);
-        const script = `
-            (function() {
-                const el = document.querySelector('${escapedSelector}');
-                if (el) { el.click(); return true; }
-                return false;
-            })()
-        `;
-        await ctx.cdpHandler.executeScriptInAllSessions(script);
-        return true;
-    }
-}
 
 export class DOMScanClick implements IInteractionMethod {
     id = 'dom-scan-click';
@@ -457,115 +433,6 @@ export class VSCodeCommandClick implements IInteractionMethod {
     }
 }
 
-export class NativeAcceptCommands implements IInteractionMethod {
-    id = 'native-accept';
-    name = 'Native Accept Commands';
-    description = 'Attempts native/extension command-based acceptance for editor, terminal, and chat';
-    category = 'click' as const;
-    enabled = false;
-    priority = 4;
-    timingMs = 60;
-    requiresCDP = false;
-
-    private static readonly COMMANDS: string[] = [
-        // NOTE: ALL accept commands REMOVED — trigger Customize Layout on Antigravity fork
-    ];
-
-    async execute(ctx: InteractionContext): Promise<boolean> {
-        const commandsApi = ctx.vscodeCommands;
-        if (!commandsApi) return false;
-        let atLeastOneSuccess = false;
-
-        const executeWithTimeout = (cmd: string, ms: number): Promise<any> => {
-            return Promise.race([
-                commandsApi.executeCommand(cmd),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms))
-            ]);
-        };
-
-        for (const cmd of NativeAcceptCommands.COMMANDS) {
-            try {
-                await executeWithTimeout(cmd, 500);
-                atLeastOneSuccess = true;
-            } catch {
-                // try next
-            }
-        }
-
-        return atLeastOneSuccess;
-    }
-}
-
-export class ProcessPeekClick implements IInteractionMethod {
-    id = 'process-peek';
-    name = 'Process Peek + Command Click';
-    description = 'Discovers available commands at runtime and executes best accept/submit candidates';
-    category = 'click' as const;
-    enabled = false;
-    priority = 5;
-    timingMs = 80;
-    requiresCDP = false;
-
-    async execute(ctx: InteractionContext): Promise<boolean> {
-        // PERMANENTLY NEUTERED: 
-        // Dynamic command fuzzing finds layout aliases on the Antigravity fork.
-        // Even if enabled in user settings, this method must never run.
-        return false;
-    }
-}
-
-export class ScriptForceClick implements IInteractionMethod {
-    id = 'script-force';
-    name = 'Script Force Click';
-    description = 'Injects JS that calls element.click() directly via injected bridge';
-    category = 'click' as const;
-    enabled = true;
-    priority = 4;
-    timingMs = 50;
-    requiresCDP = true;
-
-    async execute(ctx: InteractionContext): Promise<boolean> {
-        // PERMANENTLY NEUTERED: 
-        // This method blindly executes clicks against the first match of the wildcard user selector configs.
-        // It bypasses the text-matching protections of DOMScanClick. If the UI forks, the banlist fails,
-        // resulting in the shotgunning of the Layout toggle button on every loop!
-        return false;
-    }
-}
-
-export class VisualVerifiedClick implements IInteractionMethod {
-    id = 'visual-verify-click';
-    name = 'Visual Verification Click';
-    description = 'Captures screenshots before/after click and verifies a visual diff';
-    category = 'click' as const;
-    enabled = true;
-    priority = 7;
-    timingMs = 120;
-    requiresCDP = true;
-
-    async execute(ctx: InteractionContext): Promise<boolean> {
-        // PERMANENTLY NEUTERED: Bypasses ban lists and text match protections
-        return false;
-    }
-}
-
-export class CoordinateClick implements IInteractionMethod {
-    id = 'coord-click';
-    name = 'Coordinate Click (Native)';
-    description = 'Clicks at absolute coordinates — requires native module or CDP Input domain';
-    category = 'click' as const;
-    enabled = false; // PERMANENTLY DISABLED DUE TO ZOOM SCALING OFFSETS
-    priority = 5;
-    timingMs = 100;
-    requiresCDP = true;
-
-    async execute(ctx: InteractionContext): Promise<boolean> {
-        // PERMANENTLY NEUTERED: window.devicePixelRatio and VS Code Zoom Levels 
-        // cause raw integer coordinates to map incorrectly in Chromium's physical viewport.
-        // This is the true root cause of the "Customize Layout" ghost clicks.
-        return false;
-    }
-}
 
 // ============ Submit Methods ============
 
@@ -592,21 +459,6 @@ export class VSCodeSubmitCommands implements IInteractionMethod {
     }
 }
 
-export class CDPEnterKey implements IInteractionMethod {
-    id = 'cdp-enter';
-    name = 'CDP Enter Key';
-    description = 'Dispatches Enter keyDown/keyUp via Chrome DevTools Protocol';
-    category = 'submit' as const;
-    enabled = false; // DISABLED: Global broadcasts trigger Customize Layout if focus is lost
-    priority = 2;
-    timingMs = 50;
-    requiresCDP = true;
-
-    async execute(ctx: InteractionContext): Promise<boolean> {
-        // PERMANENTLY NEUTERED: global Enter broadcasts toggle Layout
-        return false;
-    }
-}
 
 export class ScriptForceSubmit implements IInteractionMethod {
     id = 'script-submit';
@@ -633,37 +485,6 @@ export class ScriptForceSubmit implements IInteractionMethod {
     }
 }
 
-export class AltEnterShortcut implements IInteractionMethod {
-    id = 'alt-enter';
-    name = 'Alt+Enter Shortcut';
-    description = 'Dispatches Alt+Enter key combination for agents that use it';
-    category = 'submit' as const;
-    enabled = false; // Disabled by default
-    priority = 4;
-    timingMs = 50;
-    requiresCDP = true;
-
-    async execute(ctx: InteractionContext): Promise<boolean> {
-        // PERMANENTLY NEUTERED: global Alt+Enter broadcasts are unsafe
-        return false;
-    }
-}
-
-export class CtrlEnterShortcut implements IInteractionMethod {
-    id = 'ctrl-enter';
-    name = 'Ctrl+Enter Shortcut';
-    description = 'Dispatches Ctrl+Enter key combination for submit variants';
-    category = 'submit' as const;
-    enabled = false; // DISABLED: Global broadcasts trigger Customize Layout if focus is lost
-    priority = 4;
-    timingMs = 50;
-    requiresCDP = true;
-
-    async execute(ctx: InteractionContext): Promise<boolean> {
-        // PERMANENTLY NEUTERED: global broadcasts toggle Layout
-        return false;
-    }
-}
 
 // ============ Registry ============
 
@@ -674,7 +495,7 @@ export class InteractionMethodRegistry {
     constructor(registryConfig?: Partial<RegistryConfig>) {
         this.config = {
             textInput: ['cdp-keys', 'cdp-insert-text', 'clipboard-paste', 'dom-inject', 'bridge-type'],
-            click: ['dom-scan-click', 'native-accept', 'vscode-cmd', 'script-force'],
+            click: ['dom-scan-click', 'native-accept', 'vscode-cmd'],
             submit: ['vscode-submit', 'script-submit'],
             timings: {},
             retryCount: 3,
@@ -696,19 +517,11 @@ export class InteractionMethodRegistry {
         this.register(new VSCodeTypeCommand());
         // Click
         this.register(new DOMScanClick());
-        this.register(new DOMSelectorClick());
         this.register(new BridgeCoordinateClick());
-        this.register(new NativeAcceptCommands());
         this.register(new VSCodeCommandClick());
-        this.register(new ScriptForceClick());
-        this.register(new ProcessPeekClick());
-        this.register(new VisualVerifiedClick());
         // Submit
         this.register(new VSCodeSubmitCommands());
-        this.register(new CDPEnterKey());
         this.register(new ScriptForceSubmit());
-        this.register(new CtrlEnterShortcut());
-        this.register(new AltEnterShortcut());
     }
 
     register(method: IInteractionMethod) {

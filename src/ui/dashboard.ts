@@ -68,15 +68,6 @@ export class DashboardPanel {
                         }
                         return;
                     }
-                    case 'voice-transcription': {
-                        if (message.text) {
-                            // Dynamic import to avoid circular dependency issues if any
-                            const { voiceControl } = require('../modules/voice/control');
-                            await voiceControl.processAndExecuteTranscription(message.text, { force: true });
-                            vscode.window.setStatusBarMessage(`🎤 Recognized: "${message.text}"`, 3000);
-                        }
-                        return;
-                    }
                     case 'testInteractionMethod': {
                         const { methodId, text } = message;
                         vscode.window.withProgress({
@@ -230,8 +221,6 @@ export class DashboardPanel {
 
         const cursorSelectors = [
             '#workbench\\.parts\\.auxiliarybar button',
-            '#workbench\\.parts\\.auxiliarybar [role="button"]',
-            '.chat-session-item [role="button"]',
             '[class*="anysphere"]',
             '.monaco-list-row.collapsed',
             '.codicon-chevron-right'
@@ -267,7 +256,7 @@ export class DashboardPanel {
 
         if (preset === 'aggressive') {
             return {
-                methods: ['dom-scan-click', 'dom-click', 'bridge-click', 'cdp-mouse', 'native-accept', 'vscode-cmd', 'script-force', 'process-peek', 'visual-verify-click', 'coord-click'],
+                methods: ['dom-scan-click', 'vscode-cmd'],
                 selectors,
                 parallel: true,
                 retryCount: 8
@@ -275,7 +264,7 @@ export class DashboardPanel {
         }
 
         return {
-            methods: ['dom-scan-click', 'dom-click', 'bridge-click', 'cdp-mouse', 'native-accept', 'vscode-cmd', 'script-force', 'process-peek'],
+            methods: ['dom-scan-click', 'vscode-cmd'],
             selectors,
             parallel: false,
             retryCount: 4
@@ -495,84 +484,84 @@ export class DashboardPanel {
                 </div>
                 <div class="setting" title="Require visible completion/feedback signals before bump logic is allowed to trigger.">
                     <label>Bump Requires Visible Signals:</label>
-                    <input type="checkbox" ${config.get('automation.bump.requireVisible') !== false ? 'checked' : ''} onchange="updateConfig('automation.bump.requireVisible', this.checked)">
+                    <input type="checkbox" ${config.get<string[]>('automation.bump.requireVisible') !== false ? 'checked' : ''} onchange="updateConfig('automation.bump.requireVisible', this.checked)">
                 </div>
                  <div class="setting" title="Automatically click 'Run' buttons in code blocks (e.g., in Jupyter notebooks or interactive terminals).">
                     <label>Click Run (Play):</label>
-                    <input type="checkbox" ${config.get('automation.actions.clickRun') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickRun', this.checked)">
+                    <input type="checkbox" ${config.get<string[]>('automation.actions.clickRun') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickRun', this.checked)">
                 </div>
                 <div class="setting" title="Automatically click to expand truncated code blocks or long output sections.">
                     <label>Click Expand:</label>
-                    <input type="checkbox" ${config.get('automation.actions.clickExpand') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickExpand', this.checked)">
+                    <input type="checkbox" ${config.get<string[]>('automation.actions.clickExpand') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickExpand', this.checked)">
                 </div>
                 <div class="setting" title="Automatically click 'Accept' or checkmark buttons to apply code suggestions.">
                     <label>Click Accept (Check):</label>
-                    <input type="checkbox" ${config.get('automation.actions.clickAccept') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickAccept', this.checked)">
+                    <input type="checkbox" ${config.get<string[]>('automation.actions.clickAccept') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickAccept', this.checked)">
                 </div>
                 <div class="setting" title="Automatically click 'Accept All' buttons to apply bulk changes or multiple suggestions at once.">
                     <label>Click Accept All:</label>
-                    <input type="checkbox" ${config.get('automation.actions.clickAcceptAll') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickAcceptAll', this.checked)">
+                    <input type="checkbox" ${config.get<string[]>('automation.actions.clickAcceptAll') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickAcceptAll', this.checked)">
                 </div>
                 <div class="setting" title="Automatically click 'Continue', 'Keep', or 'Next' buttons to proceed through multi-step generation flows.">
                     <label>Click Continue/Keep:</label>
-                    <input type="checkbox" ${config.get('automation.actions.clickContinue') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickContinue', this.checked)">
+                    <input type="checkbox" ${config.get<string[]>('automation.actions.clickContinue') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickContinue', this.checked)">
                 </div>
                 <div class="setting" title="Automatically click the submit/send button in the chat input area to send your message.">
                     <label>Click Submit (Send):</label>
-                    <input type="checkbox" ${config.get('automation.actions.clickSubmit') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickSubmit', this.checked)">
+                    <input type="checkbox" ${config.get<string[]>('automation.actions.clickSubmit') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickSubmit', this.checked)">
                 </div>
                 <div class="setting" title="Automatically scroll the chat view to keep the latest content visible.">
                     <label>Auto Scroll:</label>
-                    <input type="checkbox" ${config.get('automation.actions.autoScroll') ? 'checked' : ''} onchange="updateConfig('automation.actions.autoScroll', this.checked)">
+                    <input type="checkbox" ${config.get<string[]>('automation.actions.autoScroll') ? 'checked' : ''} onchange="updateConfig('automation.actions.autoScroll', this.checked)">
                 </div>
                 <div class="setting" title="Automatically click positive feedback / thumbs up buttons to reinforce good AI responses.">
                     <label>Auto Feedback:</label>
-                    <input type="checkbox" ${config.get('automation.actions.clickFeedback') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickFeedback', this.checked)">
+                    <input type="checkbox" ${config.get<string[]>('automation.actions.clickFeedback') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickFeedback', this.checked)">
                 </div>
                 <!-- Auto-Reply Options -->
                 <div class="setting" title="Enable the 'Smart Resume' feature. The script will analyze if the AI has stopped generating and automatically send a bump message to keep it going.">
                     <label>Auto Reply (Bump):</label>
-                    <input type="checkbox" ${config.get('automation.actions.autoReply') ? 'checked' : ''} onchange="updateConfig('automation.actions.autoReply', this.checked)">
+                    <input type="checkbox" ${config.get<string[]>('automation.actions.autoReply') ? 'checked' : ''} onchange="updateConfig('automation.actions.autoReply', this.checked)">
                 </div>
                 <div class="setting" title="The specific text message to send when bumping the AI (e.g., 'continue', 'next', 'go on').">
                     <label>Auto Reply Text:</label>
-                    <input type="text" value="${config.get('automation.actions.autoReplyText') ?? 'Proceed'}" onchange="updateConfig('automation.actions.autoReplyText', this.value)">
+                    <input type="text" value="${config.get<string[]>('automation.actions.autoReplyText') ?? 'Proceed'}" onchange="updateConfig('automation.actions.autoReplyText', this.value)">
                 </div>
                 <div class="setting" title="The delay in milliseconds to wait after the AI stops generating before sending the auto-reply bump. Prevents spamming the chat.">
                     <label>Auto Reply Delay (ms):</label>
-                    <input type="number" value="${config.get('automation.timing.autoReplyDelayMs') ?? 7000}" onchange="updateConfig('automation.timing.autoReplyDelayMs', parseInt(this.value))">
+                    <input type="number" value="${config.get<string[]>('automation.timing.autoReplyDelayMs') ?? 7000}" onchange="updateConfig('automation.timing.autoReplyDelayMs', parseInt(this.value))">
                 </div>
                  <div class="setting" title="How frequently (in milliseconds) the script checks the page state for buttons, generation status, and new elements. Lower values are more responsive but use more CPU.">
                     <label>Poll Interval (ms):</label>
-                    <input type="number" value="${config.get('automation.timing.pollIntervalMs') ?? 800}" min="100" onchange="updateConfig('automation.timing.pollIntervalMs', parseInt(this.value))">
+                    <input type="number" value="${config.get<string[]>('automation.timing.pollIntervalMs') ?? 800}" min="100" onchange="updateConfig('automation.timing.pollIntervalMs', parseInt(this.value))">
                 </div>
                 <div class="setting" title="Minimum delay between automation actions. Increase if actions feel too aggressive; decrease for faster response.">
                     <label>Action Throttle (ms):</label>
-                    <input type="number" value="${config.get('automation.timing.actionThrottleMs') ?? 1000}" min="0" onchange="updateConfig('automation.timing.actionThrottleMs', parseInt(this.value))">
+                    <input type="number" value="${config.get<string[]>('automation.timing.actionThrottleMs') ?? 1000}" min="0" onchange="updateConfig('automation.timing.actionThrottleMs', parseInt(this.value))">
                 </div>
                 <div class="setting" title="Global settle cooldown applied after heavier actions (like bump/submit) before the next cycle can execute.">
                     <label>Global Cooldown (ms):</label>
-                    <input type="number" value="${config.get('automation.timing.cooldownMs') ?? 2500}" min="0" onchange="updateConfig('automation.timing.cooldownMs', parseInt(this.value))">
+                    <input type="number" value="${config.get<string[]>('automation.timing.cooldownMs') ?? 2500}" min="0" onchange="updateConfig('automation.timing.cooldownMs', parseInt(this.value))">
                 </div>
                 <div class="setting" title="Random jitter added to action scheduling to reduce deterministic cadence. Set 0 for strict machine timing.">
                     <label>Timing Randomness (ms):</label>
-                    <input type="number" value="${config.get('automation.timing.randomness') ?? 100}" min="0" onchange="updateConfig('automation.timing.randomness', parseInt(this.value))">
+                    <input type="number" value="${config.get<string[]>('automation.timing.randomness') ?? 100}" min="0" onchange="updateConfig('automation.timing.randomness', parseInt(this.value))">
                 </div>
                  <div class="setting" title="Draws a visual border or highlight around elements that the automation script is interacting with. Useful for debugging and verifying behavior.">
                     <label>Debug Highlight:</label>
-                    <input type="checkbox" ${config.get('automation.debug.highlightClicks') ? 'checked' : ''} onchange="updateConfig('automation.debug.highlightClicks', this.checked)">
+                    <input type="checkbox" ${config.get<string[]>('automation.debug.highlightClicks') ? 'checked' : ''} onchange="updateConfig('automation.debug.highlightClicks', this.checked)">
                 </div>
                 <div class="setting" title="Enable verbose browser-side runtime logging. Recommended ON while troubleshooting detection/click decisions.">
                     <label>Verbose Runtime Logs:</label>
-                    <input type="checkbox" ${config.get('automation.debug.verboseLogging') ? 'checked' : ''} onchange="updateConfig('automation.debug.verboseLogging', this.checked)">
+                    <input type="checkbox" ${config.get<string[]>('automation.debug.verboseLogging') ? 'checked' : ''} onchange="updateConfig('automation.debug.verboseLogging', this.checked)">
                 </div>
                 <div class="setting" title="Log every noteworthy detection/action transition from the injected script.">
                     <label>Log All Actions:</label>
-                    <input type="checkbox" ${config.get('automation.debug.logAllActions') !== false ? 'checked' : ''} onchange="updateConfig('automation.debug.logAllActions', this.checked)">
+                    <input type="checkbox" ${config.get<string[]>('automation.debug.logAllActions') !== false ? 'checked' : ''} onchange="updateConfig('automation.debug.logAllActions', this.checked)">
                 </div>
                 <div class="setting" title="Forward browser automation logs into the Antigravity Debug output channel.">
                     <label>Forward Logs To Debug:</label>
-                    <input type="checkbox" ${config.get('automation.debug.logToExtension') !== false ? 'checked' : ''} onchange="updateConfig('automation.debug.logToExtension', this.checked)">
+                    <input type="checkbox" ${config.get<string[]>('automation.debug.logToExtension') !== false ? 'checked' : ''} onchange="updateConfig('automation.debug.logToExtension', this.checked)">
                 </div>
             </div>
 
@@ -597,31 +586,31 @@ export class DashboardPanel {
 
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components (checkboxes)</summary>
-                    <div class="setting" title="Triggers bump when rating/feedback affordances appear, indicating assistant output likely completed."><label>Feedback Visible (Good/Bad/Helpful):</label><input type="checkbox" ${(config.get('automation.bump.detectMethods') || []).includes('feedback-visible') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'feedback-visible', this.checked)"></div>
-                    <div class="setting" title="Requires generation to be idle before bump, preventing overlap with in-flight model output."><label>Not Generating Signal:</label><input type="checkbox" ${(config.get('automation.bump.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'not-generating', this.checked)"></div>
-                    <div class="setting" title="Prioritizes bump when the latest visible sender appears to be the user and no assistant follow-up arrived yet."><label>Last Sender = User:</label><input type="checkbox" ${(config.get('automation.bump.detectMethods') || []).includes('last-sender-user') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'last-sender-user', this.checked)"></div>
-                    <div class="setting" title="Looks for transient network failure wording and issues a retry-style bump sooner."><label>Network Error Retry Detection:</label><input type="checkbox" ${(config.get('automation.bump.detectMethods') || []).includes('network-error-retry') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'network-error-retry', this.checked)"></div>
-                    <div class="setting" title="Suppresses bump when assistant ends with a direct question, reducing accidental interruptions."><label>Skip if AI Ends with Question:</label><input type="checkbox" ${(config.get('automation.bump.detectMethods') || []).includes('skip-ai-question') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'skip-ai-question', this.checked)"></div>
+                    <div class="setting" title="Triggers bump when rating/feedback affordances appear, indicating assistant output likely completed."><label>Feedback Visible (Good/Bad/Helpful):</label><input type="checkbox" ${(config.get<string[]>('automation.bump.detectMethods') || []).includes('feedback-visible') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'feedback-visible', this.checked)"></div>
+                    <div class="setting" title="Requires generation to be idle before bump, preventing overlap with in-flight model output."><label>Not Generating Signal:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'not-generating', this.checked)"></div>
+                    <div class="setting" title="Prioritizes bump when the latest visible sender appears to be the user and no assistant follow-up arrived yet."><label>Last Sender = User:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.detectMethods') || []).includes('last-sender-user') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'last-sender-user', this.checked)"></div>
+                    <div class="setting" title="Looks for transient network failure wording and issues a retry-style bump sooner."><label>Network Error Retry Detection:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.detectMethods') || []).includes('network-error-retry') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'network-error-retry', this.checked)"></div>
+                    <div class="setting" title="Suppresses bump when assistant ends with a direct question, reducing accidental interruptions."><label>Skip if AI Ends with Question:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.detectMethods') || []).includes('skip-ai-question') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'skip-ai-question', this.checked)"></div>
                 </details>
 
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Typing Components (checkboxes)</summary>
-                    <div class="setting" title="Uses document.execCommand('insertText'). Works in some editors but may be ignored in hardened contexts."><label>execCommand insertText:</label><input type="checkbox" ${(config.get('automation.bump.typeMethods') || []).includes('exec-command') ? 'checked' : ''} onchange="toggleMethod('automation.bump.typeMethods', 'exec-command', this.checked)"></div>
-                    <div class="setting" title="Sets textarea value via native setter to align with framework-controlled inputs."><label>Native Value Setter:</label><input type="checkbox" ${(config.get('automation.bump.typeMethods') || []).includes('native-setter') ? 'checked' : ''} onchange="toggleMethod('automation.bump.typeMethods', 'native-setter', this.checked)"></div>
-                    <div class="setting" title="Dispatches input/change events after text injection so UI listeners detect the new message."><label>Dispatch Input/Change Events:</label><input type="checkbox" ${(config.get('automation.bump.typeMethods') || []).includes('dispatch-events') ? 'checked' : ''} onchange="toggleMethod('automation.bump.typeMethods', 'dispatch-events', this.checked)"></div>
+                    <div class="setting" title="Uses document.execCommand('insertText'). Works in some editors but may be ignored in hardened contexts."><label>execCommand insertText:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.typeMethods') || []).includes('exec-command') ? 'checked' : ''} onchange="toggleMethod('automation.bump.typeMethods', 'exec-command', this.checked)"></div>
+                    <div class="setting" title="Sets textarea value via native setter to align with framework-controlled inputs."><label>Native Value Setter:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.typeMethods') || []).includes('native-setter') ? 'checked' : ''} onchange="toggleMethod('automation.bump.typeMethods', 'native-setter', this.checked)"></div>
+                    <div class="setting" title="Dispatches input/change events after text injection so UI listeners detect the new message."><label>Dispatch Input/Change Events:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.typeMethods') || []).includes('dispatch-events') ? 'checked' : ''} onchange="toggleMethod('automation.bump.typeMethods', 'dispatch-events', this.checked)"></div>
                 </details>
 
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Submit Components (checkboxes)</summary>
-                    <div class="setting" title="Attempts explicit click on send/submit affordance after typing bump text."><label>Click Send Button:</label><input type="checkbox" ${(config.get('automation.bump.submitMethods') || []).includes('click-send') ? 'checked' : ''} onchange="toggleMethod('automation.bump.submitMethods', 'click-send', this.checked)"></div>
-                    <div class="setting" title="Fallback submit path using keyboard Enter event when button click is unavailable."><label>Enter Key Submit:</label><input type="checkbox" ${(config.get('automation.bump.submitMethods') || []).includes('enter-key') ? 'checked' : ''} onchange="toggleMethod('automation.bump.submitMethods', 'enter-key', this.checked)"></div>
+                    <div class="setting" title="Attempts explicit click on send/submit affordance after typing bump text."><label>Click Send Button:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.submitMethods') || []).includes('click-send') ? 'checked' : ''} onchange="toggleMethod('automation.bump.submitMethods', 'click-send', this.checked)"></div>
+                    <div class="setting" title="Fallback submit path using keyboard Enter event when button click is unavailable."><label>Enter Key Submit:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.submitMethods') || []).includes('enter-key') ? 'checked' : ''} onchange="toggleMethod('automation.bump.submitMethods', 'enter-key', this.checked)"></div>
                 </details>
 
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Timing</summary>
-                    <div class="setting" title="Default idle wait before auto-bump executes when no specialized path is selected."><label>Base Idle Delay (ms):</label><input type="number" value="${config.get('automation.timing.autoReplyDelayMs') ?? 7000}" min="250" onchange="updateConfig('automation.timing.autoReplyDelayMs', parseInt(this.value))"></div>
-                    <div class="setting" title="Accelerated delay used for user-waiting conditions (faster than base idle delay)."><label>User-Wait Delay (ms):</label><input type="number" value="${config.get('automation.bump.userDelayMs') ?? 3000}" min="250" onchange="updateConfig('automation.bump.userDelayMs', parseInt(this.value))"></div>
-                    <div class="setting" title="Retry path delay for recoverable network-error scenarios."><label>Retry Delay (ms):</label><input type="number" value="${config.get('automation.bump.retryDelayMs') ?? 2000}" min="250" onchange="updateConfig('automation.bump.retryDelayMs', parseInt(this.value))"></div>
+                    <div class="setting" title="Default idle wait before auto-bump executes when no specialized path is selected."><label>Base Idle Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.timing.autoReplyDelayMs') ?? 7000}" min="250" onchange="updateConfig('automation.timing.autoReplyDelayMs', parseInt(this.value))"></div>
+                    <div class="setting" title="Accelerated delay used for user-waiting conditions (faster than base idle delay)."><label>User-Wait Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.bump.userDelayMs') ?? 3000}" min="250" onchange="updateConfig('automation.bump.userDelayMs', parseInt(this.value))"></div>
+                    <div class="setting" title="Retry path delay for recoverable network-error scenarios."><label>Retry Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.bump.retryDelayMs') ?? 2000}" min="250" onchange="updateConfig('automation.bump.retryDelayMs', parseInt(this.value))"></div>
                     <div class="setting" title="Per-character or method pacing used by host-side bump send helper."><label>Typing Delay (ms):</label><input type="number" value="${settings.actions.bump.typingDelayMs ?? 50}" min="0" onchange="updateConfig('actions.bump.typingDelayMs', parseInt(this.value))"></div>
                     <div class="setting" title="Delay between typing and submit action to allow UI state to settle."><label>Submit Delay (ms):</label><input type="number" value="${settings.actions.bump.submitDelayMs ?? 100}" min="0" onchange="updateConfig('actions.bump.submitDelayMs', parseInt(this.value))"></div>
                 </details>
@@ -629,127 +618,127 @@ export class DashboardPanel {
 
             <div class="card">
                 <h2>Control Group: Accept</h2>
-                <div class="setting" title="Enables single-item acceptance actions (check/apply buttons)."><label>Accept Enabled:</label><input type="checkbox" ${config.get('automation.actions.clickAccept') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickAccept', this.checked)"></div>
+                <div class="setting" title="Enables single-item acceptance actions (check/apply buttons)."><label>Accept Enabled:</label><input type="checkbox" ${config.get<string[]>('automation.actions.clickAccept') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickAccept', this.checked)"></div>
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components</summary>
-                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get('automation.controls.accept.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.detectMethods', 'enabled-flag', this.checked)"></div>
-                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get('automation.controls.accept.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.detectMethods', 'not-generating', this.checked)"></div>
-                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get('automation.controls.accept.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.detectMethods', 'action-cooldown', this.checked)"></div>
+                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.accept.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.detectMethods', 'enabled-flag', this.checked)"></div>
+                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.accept.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.detectMethods', 'not-generating', this.checked)"></div>
+                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.accept.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.detectMethods', 'action-cooldown', this.checked)"></div>
                 </details>
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
-                    <div class="setting" title="Attempts bulk acceptance first when both bulk and single options are present."><label>Accept All First:</label><input type="checkbox" ${(config.get('automation.controls.accept.actionMethods') || []).includes('accept-all-first') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.actionMethods', 'accept-all-first', this.checked)"></div>
-                    <div class="setting" title="Targets single accept/apply controls for per-change confirmation flows."><label>Accept Single:</label><input type="checkbox" ${(config.get('automation.controls.accept.actionMethods') || []).includes('accept-single') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.actionMethods', 'accept-single', this.checked)"></div>
-                    <div class="setting" title="Generic selector-based click fallback for accept actions."><label>DOM Click:</label><input type="checkbox" ${(config.get('automation.controls.accept.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.actionMethods', 'dom-click', this.checked)"></div>
+                    <div class="setting" title="Attempts bulk acceptance first when both bulk and single options are present."><label>Accept All First:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.accept.actionMethods') || []).includes('accept-all-first') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.actionMethods', 'accept-all-first', this.checked)"></div>
+                    <div class="setting" title="Targets single accept/apply controls for per-change confirmation flows."><label>Accept Single:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.accept.actionMethods') || []).includes('accept-single') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.actionMethods', 'accept-single', this.checked)"></div>
+                    <div class="setting" title="Generic selector-based click fallback for accept actions."><label>DOM Click:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.accept.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.actionMethods', 'dom-click', this.checked)"></div>
                 </details>
-                <div class="setting"><label>Accept Delay (ms):</label><input type="number" value="${config.get('automation.controls.accept.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.accept.delayMs', parseInt(this.value))"></div>
+                <div class="setting"><label>Accept Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.controls.accept.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.accept.delayMs', parseInt(this.value))"></div>
             </div>
 
             <div class="card">
                 <h2>Control Group: Accept All / Keep</h2>
-                <div class="setting" title="Enables bulk-apply acceptance behavior, including VS Code flows that expose Keep instead of Accept All."><label>Accept All Enabled:</label><input type="checkbox" ${config.get('automation.actions.clickAcceptAll') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickAcceptAll', this.checked)"></div>
+                <div class="setting" title="Enables bulk-apply acceptance behavior, including VS Code flows that expose Keep instead of Accept All."><label>Accept All Enabled:</label><input type="checkbox" ${config.get<string[]>('automation.actions.clickAcceptAll') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickAcceptAll', this.checked)"></div>
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components</summary>
-                    <div class="setting" title="Master gate for this group. If OFF, Accept All/Keep clicks are blocked even if matching buttons are visible."><label>Enabled Flag:</label><input type="checkbox" ${(config.get('automation.controls.acceptAll.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.detectMethods', 'enabled-flag', this.checked)"></div>
-                    <div class="setting" title="Only allow clicks after model generation has stopped. Prevents interfering while assistant is still streaming."><label>Not Generating:</label><input type="checkbox" ${(config.get('automation.controls.acceptAll.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.detectMethods', 'not-generating', this.checked)"></div>
-                    <div class="setting" title="Enforces delayMs spacing between clicks to avoid double-click storms and accidental repeated acceptance."><label>Action Cooldown:</label><input type="checkbox" ${(config.get('automation.controls.acceptAll.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.detectMethods', 'action-cooldown', this.checked)"></div>
+                    <div class="setting" title="Master gate for this group. If OFF, Accept All/Keep clicks are blocked even if matching buttons are visible."><label>Enabled Flag:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.acceptAll.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.detectMethods', 'enabled-flag', this.checked)"></div>
+                    <div class="setting" title="Only allow clicks after model generation has stopped. Prevents interfering while assistant is still streaming."><label>Not Generating:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.acceptAll.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.detectMethods', 'not-generating', this.checked)"></div>
+                    <div class="setting" title="Enforces delayMs spacing between clicks to avoid double-click storms and accidental repeated acceptance."><label>Action Cooldown:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.acceptAll.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.detectMethods', 'action-cooldown', this.checked)"></div>
                 </details>
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
-                    <div class="setting" title="Targets explicit Accept All controls (title/aria-label/codicon-check-all) for bulk acceptance flows."><label>Accept-All Button:</label><input type="checkbox" ${(config.get('automation.controls.acceptAll.actionMethods') || []).includes('accept-all-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'accept-all-button', this.checked)"></div>
-                    <div class="setting" title="Treats VS Code 'Keep' button as semantic equivalent of Accept All. Enable this to capture Keep-first UX variants."><label>Keep Button (VS Code):</label><input type="checkbox" ${(config.get('automation.controls.acceptAll.actionMethods') || []).includes('keep-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'keep-button', this.checked)"></div>
-                    <div class="setting" title="Targets 'Allow/Allow All' style approvals that appear in some flows instead of Accept All."><label>Allow-All Button:</label><input type="checkbox" ${(config.get('automation.controls.acceptAll.actionMethods') || []).includes('allow-all-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'allow-all-button', this.checked)"></div>
-                    <div class="setting" title="Generic fallback click mode. Useful when labels/icons drift, but keep it ON with safety filters enabled."><label>DOM Click:</label><input type="checkbox" ${(config.get('automation.controls.acceptAll.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'dom-click', this.checked)"></div>
+                    <div class="setting" title="Targets explicit Accept All controls (title/aria-label/codicon-check-all) for bulk acceptance flows."><label>Accept-All Button:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.acceptAll.actionMethods') || []).includes('accept-all-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'accept-all-button', this.checked)"></div>
+                    <div class="setting" title="Treats VS Code 'Keep' button as semantic equivalent of Accept All. Enable this to capture Keep-first UX variants."><label>Keep Button (VS Code):</label><input type="checkbox" ${(config.get<string[]>('automation.controls.acceptAll.actionMethods') || []).includes('keep-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'keep-button', this.checked)"></div>
+                    <div class="setting" title="Targets 'Allow/Allow All' style approvals that appear in some flows instead of Accept All."><label>Allow-All Button:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.acceptAll.actionMethods') || []).includes('allow-all-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'allow-all-button', this.checked)"></div>
+                    <div class="setting" title="Generic fallback click mode. Useful when labels/icons drift, but keep it ON with safety filters enabled."><label>DOM Click:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.acceptAll.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'dom-click', this.checked)"></div>
                 </details>
-                <div class="setting" title="Per-action cooldown window for Accept All/Keep. Higher values reduce misfires; lower values improve responsiveness."><label>Accept All Delay (ms):</label><input type="number" value="${config.get('automation.controls.acceptAll.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.acceptAll.delayMs', parseInt(this.value))"></div>
+                <div class="setting" title="Per-action cooldown window for Accept All/Keep. Higher values reduce misfires; lower values improve responsiveness."><label>Accept All Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.controls.acceptAll.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.acceptAll.delayMs', parseInt(this.value))"></div>
             </div>
 
             <div class="card">
                 <h2>Control Group: Continue / Keep</h2>
-                <div class="setting" title="Enables continuation controls (Continue/Keep) used to advance paused assistant flows."><label>Continue Enabled:</label><input type="checkbox" ${config.get('automation.actions.clickContinue') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickContinue', this.checked)"></div>
+                <div class="setting" title="Enables continuation controls (Continue/Keep) used to advance paused assistant flows."><label>Continue Enabled:</label><input type="checkbox" ${config.get<string[]>('automation.actions.clickContinue') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickContinue', this.checked)"></div>
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components</summary>
-                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get('automation.controls.continue.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.detectMethods', 'enabled-flag', this.checked)"></div>
-                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get('automation.controls.continue.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.detectMethods', 'not-generating', this.checked)"></div>
-                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get('automation.controls.continue.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.detectMethods', 'action-cooldown', this.checked)"></div>
+                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.continue.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.detectMethods', 'enabled-flag', this.checked)"></div>
+                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.continue.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.detectMethods', 'not-generating', this.checked)"></div>
+                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.continue.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.detectMethods', 'action-cooldown', this.checked)"></div>
                 </details>
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
-                    <div class="setting" title="Targets controls labeled Continue."><label>Continue Button:</label><input type="checkbox" ${(config.get('automation.controls.continue.actionMethods') || []).includes('continue-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.actionMethods', 'continue-button', this.checked)"></div>
-                    <div class="setting" title="Targets VS Code Keep button in continuation contexts."><label>Keep Button:</label><input type="checkbox" ${(config.get('automation.controls.continue.actionMethods') || []).includes('keep-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.actionMethods', 'keep-button', this.checked)"></div>
-                    <div class="setting" title="Fallback selector click when explicit Continue/Keep labels vary by UI build."><label>DOM Click:</label><input type="checkbox" ${(config.get('automation.controls.continue.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.actionMethods', 'dom-click', this.checked)"></div>
+                    <div class="setting" title="Targets controls labeled Continue."><label>Continue Button:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.continue.actionMethods') || []).includes('continue-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.actionMethods', 'continue-button', this.checked)"></div>
+                    <div class="setting" title="Targets VS Code Keep button in continuation contexts."><label>Keep Button:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.continue.actionMethods') || []).includes('keep-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.actionMethods', 'keep-button', this.checked)"></div>
+                    <div class="setting" title="Fallback selector click when explicit Continue/Keep labels vary by UI build."><label>DOM Click:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.continue.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.actionMethods', 'dom-click', this.checked)"></div>
                 </details>
-                <div class="setting"><label>Continue Delay (ms):</label><input type="number" value="${config.get('automation.controls.continue.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.continue.delayMs', parseInt(this.value))"></div>
+                <div class="setting"><label>Continue Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.controls.continue.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.continue.delayMs', parseInt(this.value))"></div>
             </div>
 
             <div class="card">
                 <h2>Control Group: Feedback</h2>
-                <div class="setting" title="Enables automatic positive feedback interactions when matching UI elements are detected."><label>Feedback Enabled:</label><input type="checkbox" ${config.get('automation.actions.clickFeedback') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickFeedback', this.checked)"></div>
+                <div class="setting" title="Enables automatic positive feedback interactions when matching UI elements are detected."><label>Feedback Enabled:</label><input type="checkbox" ${config.get<string[]>('automation.actions.clickFeedback') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickFeedback', this.checked)"></div>
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components</summary>
-                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get('automation.controls.feedback.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.detectMethods', 'enabled-flag', this.checked)"></div>
-                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get('automation.controls.feedback.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.detectMethods', 'not-generating', this.checked)"></div>
-                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get('automation.controls.feedback.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.detectMethods', 'action-cooldown', this.checked)"></div>
+                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.feedback.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.detectMethods', 'enabled-flag', this.checked)"></div>
+                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.feedback.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.detectMethods', 'not-generating', this.checked)"></div>
+                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.feedback.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.detectMethods', 'action-cooldown', this.checked)"></div>
                 </details>
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
-                    <div class="setting" title="Targets icon-based thumbs-up controls."><label>Thumbs Up Icon:</label><input type="checkbox" ${(config.get('automation.controls.feedback.actionMethods') || []).includes('thumbs-up') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.actionMethods', 'thumbs-up', this.checked)"></div>
-                    <div class="setting" title="Targets textual Helpful feedback buttons."><label>Helpful Button:</label><input type="checkbox" ${(config.get('automation.controls.feedback.actionMethods') || []).includes('helpful-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.actionMethods', 'helpful-button', this.checked)"></div>
-                    <div class="setting" title="Fallback selector click for feedback controls."><label>DOM Click:</label><input type="checkbox" ${(config.get('automation.controls.feedback.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.actionMethods', 'dom-click', this.checked)"></div>
+                    <div class="setting" title="Targets icon-based thumbs-up controls."><label>Thumbs Up Icon:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.feedback.actionMethods') || []).includes('thumbs-up') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.actionMethods', 'thumbs-up', this.checked)"></div>
+                    <div class="setting" title="Targets textual Helpful feedback buttons."><label>Helpful Button:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.feedback.actionMethods') || []).includes('helpful-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.actionMethods', 'helpful-button', this.checked)"></div>
+                    <div class="setting" title="Fallback selector click for feedback controls."><label>DOM Click:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.feedback.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.actionMethods', 'dom-click', this.checked)"></div>
                 </details>
-                <div class="setting"><label>Feedback Delay (ms):</label><input type="number" value="${config.get('automation.controls.feedback.delayMs') ?? 150}" min="0" onchange="updateConfig('automation.controls.feedback.delayMs', parseInt(this.value))"></div>
+                <div class="setting"><label>Feedback Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.controls.feedback.delayMs') ?? 150}" min="0" onchange="updateConfig('automation.controls.feedback.delayMs', parseInt(this.value))"></div>
             </div>
 
             <div class="card">
                 <h2>Control Group: Run</h2>
-                <div class="setting" title="Enables automatic execution of Run-in-Terminal or equivalent run affordances."><label>Run Enabled:</label><input type="checkbox" ${config.get('automation.actions.clickRun') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickRun', this.checked)"></div>
+                <div class="setting" title="Enables automatic execution of Run-in-Terminal or equivalent run affordances."><label>Run Enabled:</label><input type="checkbox" ${config.get<string[]>('automation.actions.clickRun') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickRun', this.checked)"></div>
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components</summary>
-                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get('automation.controls.run.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.detectMethods', 'enabled-flag', this.checked)"></div>
-                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get('automation.controls.run.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.detectMethods', 'not-generating', this.checked)"></div>
-                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get('automation.controls.run.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.detectMethods', 'action-cooldown', this.checked)"></div>
+                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.run.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.detectMethods', 'enabled-flag', this.checked)"></div>
+                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.run.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.detectMethods', 'not-generating', this.checked)"></div>
+                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.run.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.detectMethods', 'action-cooldown', this.checked)"></div>
                 </details>
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
-                    <div class="setting" title="Primary selector-driven click strategy for run controls."><label>DOM Click:</label><input type="checkbox" ${(config.get('automation.controls.run.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.actionMethods', 'dom-click', this.checked)"></div>
-                    <div class="setting" title="Direct click path on resolved candidate element when DOM strategy needs a fallback."><label>Native Click:</label><input type="checkbox" ${(config.get('automation.controls.run.actionMethods') || []).includes('native-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.actionMethods', 'native-click', this.checked)"></div>
-                    <div class="setting" title="Keyboard fallback for Run flows that bind execution to Alt+Enter."><label>Alt+Enter:</label><input type="checkbox" ${(config.get('automation.controls.run.actionMethods') || []).includes('alt-enter') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.actionMethods', 'alt-enter', this.checked)"></div>
+                    <div class="setting" title="Primary selector-driven click strategy for run controls."><label>DOM Click:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.run.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.actionMethods', 'dom-click', this.checked)"></div>
+                    <div class="setting" title="Direct click path on resolved candidate element when DOM strategy needs a fallback."><label>Native Click:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.run.actionMethods') || []).includes('native-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.actionMethods', 'native-click', this.checked)"></div>
+                    <div class="setting" title="Keyboard fallback for Run flows that bind execution to Alt+Enter."><label>Alt+Enter:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.run.actionMethods') || []).includes('alt-enter') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.actionMethods', 'alt-enter', this.checked)"></div>
                 </details>
-                <div class="setting"><label>Run Delay (ms):</label><input type="number" value="${config.get('automation.controls.run.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.run.delayMs', parseInt(this.value))"></div>
+                <div class="setting"><label>Run Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.controls.run.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.run.delayMs', parseInt(this.value))"></div>
             </div>
 
             <div class="card">
                 <h2>Control Group: Expand</h2>
-                <div class="setting" title="Enables automatic expansion of collapsed output/steps/code panes."><label>Expand Enabled:</label><input type="checkbox" ${config.get('automation.actions.clickExpand') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickExpand', this.checked)"></div>
+                <div class="setting" title="Enables automatic expansion of collapsed output/steps/code panes."><label>Expand Enabled:</label><input type="checkbox" ${config.get<string[]>('automation.actions.clickExpand') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickExpand', this.checked)"></div>
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components</summary>
-                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get('automation.controls.expand.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.detectMethods', 'enabled-flag', this.checked)"></div>
-                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get('automation.controls.expand.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.detectMethods', 'not-generating', this.checked)"></div>
-                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get('automation.controls.expand.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.detectMethods', 'action-cooldown', this.checked)"></div>
+                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.expand.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.detectMethods', 'enabled-flag', this.checked)"></div>
+                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.expand.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.detectMethods', 'not-generating', this.checked)"></div>
+                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.expand.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.detectMethods', 'action-cooldown', this.checked)"></div>
                 </details>
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
-                    <div class="setting" title="Primary selector-based click strategy for expansion toggles."><label>DOM Click:</label><input type="checkbox" ${(config.get('automation.controls.expand.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.actionMethods', 'dom-click', this.checked)"></div>
-                    <div class="setting" title="Element-level fallback click when DOM strategy cannot settle a stable selector path."><label>Native Click:</label><input type="checkbox" ${(config.get('automation.controls.expand.actionMethods') || []).includes('native-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.actionMethods', 'native-click', this.checked)"></div>
-                    <div class="setting" title="Keyboard fallback for expansion flows that are bound to Alt+Enter in chat/editor contexts."><label>Alt+Enter:</label><input type="checkbox" ${(config.get('automation.controls.expand.actionMethods') || []).includes('alt-enter') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.actionMethods', 'alt-enter', this.checked)"></div>
+                    <div class="setting" title="Primary selector-based click strategy for expansion toggles."><label>DOM Click:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.expand.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.actionMethods', 'dom-click', this.checked)"></div>
+                    <div class="setting" title="Element-level fallback click when DOM strategy cannot settle a stable selector path."><label>Native Click:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.expand.actionMethods') || []).includes('native-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.actionMethods', 'native-click', this.checked)"></div>
+                    <div class="setting" title="Keyboard fallback for expansion flows that are bound to Alt+Enter in chat/editor contexts."><label>Alt+Enter:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.expand.actionMethods') || []).includes('alt-enter') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.actionMethods', 'alt-enter', this.checked)"></div>
                 </details>
-                <div class="setting"><label>Expand Delay (ms):</label><input type="number" value="${config.get('automation.controls.expand.delayMs') ?? 50}" min="0" onchange="updateConfig('automation.controls.expand.delayMs', parseInt(this.value))"></div>
+                <div class="setting"><label>Expand Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.controls.expand.delayMs') ?? 50}" min="0" onchange="updateConfig('automation.controls.expand.delayMs', parseInt(this.value))"></div>
             </div>
 
             <div class="card">
                 <h2>Control Group: Submit</h2>
-                <div class="setting" title="Enables auto-submit behavior after input is present or response continuation is needed."><label>Submit Enabled:</label><input type="checkbox" ${config.get('automation.actions.clickSubmit') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickSubmit', this.checked)"></div>
+                <div class="setting" title="Enables auto-submit behavior after input is present or response continuation is needed."><label>Submit Enabled:</label><input type="checkbox" ${config.get<string[]>('automation.actions.clickSubmit') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickSubmit', this.checked)"></div>
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components</summary>
-                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get('automation.controls.submit.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.submit.detectMethods', 'enabled-flag', this.checked)"></div>
-                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get('automation.controls.submit.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.submit.detectMethods', 'not-generating', this.checked)"></div>
+                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.submit.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.submit.detectMethods', 'enabled-flag', this.checked)"></div>
+                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.submit.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.submit.detectMethods', 'not-generating', this.checked)"></div>
                 </details>
                 <details open>
                     <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
-                    <div class="setting" title="Clicks explicit send/submit controls when available."><label>Click Send:</label><input type="checkbox" ${(config.get('automation.controls.submit.actionMethods') || []).includes('click-send') ? 'checked' : ''} onchange="toggleMethod('automation.controls.submit.actionMethods', 'click-send', this.checked)"></div>
-                    <div class="setting" title="Keyboard fallback path for submit when buttons are hidden/disabled/unresolved."><label>Enter Key:</label><input type="checkbox" ${(config.get('automation.controls.submit.actionMethods') || []).includes('enter-key') ? 'checked' : ''} onchange="toggleMethod('automation.controls.submit.actionMethods', 'enter-key', this.checked)"></div>
+                    <div class="setting" title="Clicks explicit send/submit controls when available."><label>Click Send:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.submit.actionMethods') || []).includes('click-send') ? 'checked' : ''} onchange="toggleMethod('automation.controls.submit.actionMethods', 'click-send', this.checked)"></div>
+                    <div class="setting" title="Keyboard fallback path for submit when buttons are hidden/disabled/unresolved."><label>Enter Key:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.submit.actionMethods') || []).includes('enter-key') ? 'checked' : ''} onchange="toggleMethod('automation.controls.submit.actionMethods', 'enter-key', this.checked)"></div>
                 </details>
-                <div class="setting"><label>Submit Delay (ms):</label><input type="number" value="${config.get('automation.controls.submit.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.submit.delayMs', parseInt(this.value))"></div>
+                <div class="setting"><label>Submit Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.controls.submit.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.submit.delayMs', parseInt(this.value))"></div>
             </div>
 
             <!-- MODULES -->
@@ -760,20 +749,6 @@ export class DashboardPanel {
                     <label>Autonomous Mode (Yoke):</label>
                     <input type="checkbox" ${settings.autonomousEnabled ? 'checked' : ''} onchange="updateConfig('autonomousEnabled', this.checked)">
                 </div>
-                 <div class="setting" title="Enables the Model Context Protocol (MCP) server integration. Allows Antigravity to act as an MCP server or client, facilitating tool usage and memory sharing.">
-                    <label>MCP Server:</label>
-                    <input type="checkbox" ${settings.mcpEnabled ? 'checked' : ''} onchange="updateConfig('mcpEnabled', this.checked)">
-                </div>
-                <div class="setting" title="Enables voice command processing. Shows the microphone button and processes spoken intents like 'approve', 'bump', 'pause'.">
-                    <label>Voice Control:</label>
-                    <input type="checkbox" ${settings.voiceControlEnabled ? 'checked' : ''} onchange="updateConfig('voiceControlEnabled', this.checked)">
-                </div>
-                <div class="setting" title="Select how voice commands are triggered. 'Push to Talk' requires clicking the mic button. 'Always Listening' keeps the mic open (requires browser permission persistence).">
-                    <label>Voice Mode:</label>
-                    <select onchange="updateConfig('voiceMode', this.value)">
-                        <option value="push-to-talk" ${settings.voiceMode === 'push-to-talk' ? 'selected' : ''}>Push to Talk</option>
-                        <option value="always-listening" ${settings.voiceMode === 'always-listening' ? 'selected' : ''}>Always Listening</option>
-                    </select>
                 </div>
                 <div class="setting" title="Master toggle for sound effects.">
                     <label>Audio Enabled:</label>
@@ -844,7 +819,7 @@ export class DashboardPanel {
                     <button class="secondary" onclick="runTest('native-accept')">Test Native Accept</button>
                     <button class="secondary" onclick="runTest('dom-scan-click')">Test DOM Scan Click</button>
                     <button class="secondary" onclick="runTest('bridge-click')">Test Bridge Click</button>
-                    <button class="secondary" onclick="runTest('visual-verify-click')">Test Visual Verify Click</button>
+
                 </div>
 
                 <h3>Submit Methods</h3>
@@ -875,23 +850,7 @@ export class DashboardPanel {
                 </div>
                 <div class="setting" title="Output verbose debug logs from the browser automation script to the extension host.">
                     <label>Verbose Debug Logging:</label>
-                    <input type="checkbox" ${config.get('automation.debug.verboseLogging') ? 'checked' : ''} onchange="updateConfig('automation.debug.verboseLogging', this.checked)">
-                </div>
-                <div class="setting" title="Enable embedded remote control server.">
-                    <label>Remote Control Enabled:</label>
-                    <input type="checkbox" ${settings.remoteControlEnabled ? 'checked' : ''} onchange="updateConfig('remoteControlEnabled', this.checked)">
-                </div>
-                <div class="setting" title="Port for embedded remote control server.">
-                    <label>Remote Control Port:</label>
-                    <input type="number" value="${settings.remoteControlPort ?? 8000}" min="1" max="65535" onchange="updateConfig('remoteControlPort', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Allow remote control access from LAN/non-localhost hosts (security-sensitive).">
-                    <label>Allow LAN Remote Access:</label>
-                    <input type="checkbox" ${settings.remoteControlAllowLan ? 'checked' : ''} onchange="updateConfig('remoteControlAllowLan', this.checked)">
-                </div>
-                <div class="setting vertical" title="Allowed remote hosts/IPs (one per line). Used for remote access allowlisting.">
-                    <label>Remote Allowed Hosts:</label>
-                    <textarea onchange="updateConfig('remoteControlAllowedHosts', this.value.split('\n').map(v=>v.trim()).filter(Boolean))">${(settings.remoteControlAllowedHosts || ['127.0.0.1', 'localhost']).join('\n')}</textarea>
+                    <input type="checkbox" ${config.get<string[]>('automation.debug.verboseLogging') ? 'checked' : ''} onchange="updateConfig('automation.debug.verboseLogging', this.checked)">
                 </div>
                 <div class="setting" title="Maximum time (in ms) to wait for a CDP command (like DOM query or click) to complete before throwing a timeout error.">
                     <label>CDP Timeout (ms):</label>
@@ -1106,18 +1065,6 @@ export class DashboardPanel {
                         <label>Cursor Click Methods (one per line):</label>
                         <textarea onchange="updateConfig('interactionClickMethodsCursor', this.value.split('\n').map(v=>v.trim()).filter(Boolean))">${(settings.interactionClickMethodsCursor || []).join('\n')}</textarea>
                     </div>
-                    <div class="setting vertical">
-                        <label>VS Code Click Selectors (one per line):</label>
-                        <textarea onchange="updateConfig('interactionClickSelectorsVSCode', this.value.split('\n').map(v=>v.trim()).filter(Boolean))">${(settings.interactionClickSelectorsVSCode || []).join('\n')}</textarea>
-                    </div>
-                    <div class="setting vertical">
-                        <label>Antigravity Click Selectors (one per line):</label>
-                        <textarea onchange="updateConfig('interactionClickSelectorsAntigravity', this.value.split('\n').map(v=>v.trim()).filter(Boolean))">${(settings.interactionClickSelectorsAntigravity || []).join('\n')}</textarea>
-                    </div>
-                    <div class="setting vertical">
-                        <label>Cursor Click Selectors (one per line):</label>
-                        <textarea onchange="updateConfig('interactionClickSelectorsCursor', this.value.split('\n').map(v=>v.trim()).filter(Boolean))">${(settings.interactionClickSelectorsCursor || []).join('\n')}</textarea>
-                    </div>
                 </details>
 
                 <details open>
@@ -1154,42 +1101,12 @@ export class DashboardPanel {
                         <label>DOM Scan + Click (dom-scan-click):</label>
                         <input type="checkbox" ${(settings.interactionClickMethods || []).includes('dom-scan-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'dom-scan-click', this.checked)">
                     </div>
-                    <div class="setting">
-                        <label>DOM Selector Click (dom-click):</label>
-                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'dom-click', this.checked)">
-                    </div>
-                    <div class="setting">
-                        <label>Bridge Coordinate Click (bridge-click):</label>
-                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('bridge-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'bridge-click', this.checked)">
-                    </div>
-                    <div class="setting">
-                        <label>CDP Mouse Event (cdp-mouse):</label>
-                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('cdp-mouse') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'cdp-mouse', this.checked)">
-                    </div>
-                    <div class="setting">
-                        <label>Native Accept Commands (native-accept):</label>
-                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('native-accept') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'native-accept', this.checked)">
-                    </div>
+
                     <div class="setting">
                         <label>VS Code Command (vscode-cmd):</label>
                         <input type="checkbox" ${(settings.interactionClickMethods || []).includes('vscode-cmd') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'vscode-cmd', this.checked)">
                     </div>
-                    <div class="setting">
-                        <label>Script Force Click (script-force):</label>
-                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('script-force') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'script-force', this.checked)">
-                    </div>
-                    <div class="setting">
-                        <label>Process Peek + Command (process-peek):</label>
-                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('process-peek') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'process-peek', this.checked)">
-                    </div>
-                    <div class="setting">
-                        <label>Visual Verify Click (visual-verify-click):</label>
-                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('visual-verify-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'visual-verify-click', this.checked)">
-                    </div>
-                    <div class="setting">
-                        <label>Coordinate Click (coord-click):</label>
-                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('coord-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'coord-click', this.checked)">
-                    </div>
+
                 </details>
 
                 <details open>
@@ -1766,7 +1683,7 @@ export class DashboardPanel {
                         }
                     }
                     if (btnMatches) {
-                        const pollMs = Number(state.hostTelemetry?.timing?.pollIntervalMs || state.pollIntervalMs || ${config.get('automation.timing.pollIntervalMs') ?? 800});
+                        const pollMs = Number(state.hostTelemetry?.timing?.pollIntervalMs || state.pollIntervalMs || ${config.get<string[]>('automation.timing.pollIntervalMs') ?? 800});
                         btnMatches.textContent = buttonSignals
                             ? (JSON.stringify(buttonSignals) + ' | poll=' + pollMs + 'ms')
                             : ('poll=' + pollMs + 'ms');

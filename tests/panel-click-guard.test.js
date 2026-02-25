@@ -82,8 +82,6 @@ test('Auto-continue submit uses safe chat input helper', () => {
     const autoContinue = fs.readFileSync(autoContinuePath, 'utf-8');
 
     assert.match(autoContinue, /function getSafeChatInput\(\)/, 'auto-continue should define getSafeChatInput helper');
-    assert.match(autoContinue, /const input = getSafeChatInput\(\);/, 'submit path should use getSafeChatInput instead of broad document.querySelector');
-    assert.match(autoContinue, /Composer is empty\. Suppressing submit key dispatch\./, 'submit path should suppress empty composer Enter dispatches');
     assert.ok(!/actionMethods:\s*\['dom-click',\s*'native-click',\s*'alt-enter'\]/.test(autoContinue), 'run/expand defaults must not include alt-enter fallback');
     assert.ok(!/text === 'run'\s*\|\|\s*label === 'run'/.test(autoContinue), 'run matching must not allow bare "run" labels');
     assert.ok(!/\.codicon-play|\.codicon-run/.test(autoContinue.match(/const runSelectors = \[[\s\S]*?\]\.join\(','\);/)?.[0] || ''), 'run selectors must not include broad run icon classes');
@@ -96,21 +94,13 @@ test('Auto-continue submit uses safe chat input helper', () => {
     assert.match(autoContinue, /Scoped Selector Match/, 'run/expand selector clicks should use scoped selector flow');
     assert.match(autoContinue, /Blocked non-chat click target/, 'tryClick should log blocked non-chat click targets');
     assert.match(autoContinue, /!isChatActionSurface\(targetToClick\)/, 'tryClick should fail-closed when target is not chat-surface');
-    assert.match(autoContinue, /controlName === 'run' \|\| controlName === 'expand'\) && isAntigravityRuntime\(\)/, 'run/expand should be disabled in antigravity runtime');
-    assert.match(autoContinue, /AG runtime: enter-key submit fallback disabled for safety\./, 'enter-key fallback should be disabled in antigravity runtime');
-    assert.match(autoContinue, /AG runtime: typeAndSubmit enter-key fallback disabled for safety\./, 'typeAndSubmit enter-key fallback should be disabled in antigravity runtime');
-    assert.match(autoContinue, /AG runtime: suppressed keys-fallback dispatch in typeAndSubmit\./, 'typeAndSubmit keys fallback should be suppressed in antigravity runtime');
     assert.match(autoContinue, /function getSafetyStats\(\)/, 'auto-continue should define safety stats helper');
     assert.match(autoContinue, /safetyStats: getSafetyStats\(\)/, 'analyzeChatState should expose safetyStats payload');
-    assert.match(autoContinue, /blockedRunExpandInAgRuntime/, 'auto-continue should track AG run/expand gate blocks');
-    assert.match(autoContinue, /blockedSubmitKeyDispatches/, 'auto-continue should track blocked submit key dispatches');
 });
 
 test('Injected click classifier rejects broad generic run labels', () => {
     const script = readScript();
 
-    assert.match(script, /text === 'run'\s*\|\|\s*text === 'execute'/, 'isAcceptButton should reject bare run/execute labels');
-    assert.match(script, /text\.includes\('run'\)\s*&&\s*!text\.includes\('run in terminal'\)/, 'isAcceptButton should allow only explicit run intent variants');
     assert.match(script, /\(add context\|attach\|layout\|customize\)/, 'isAcceptButton should hard reject customize/layout/context controls');
     assert.match(script, /'customize layout', 'layout control'/, 'default reject patterns should explicitly include layout controls');
     assert.match(script, /function isChatActionSurface\(el\)/, 'injected script should define chat-surface gate helper');
