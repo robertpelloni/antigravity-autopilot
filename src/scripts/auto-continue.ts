@@ -234,7 +234,9 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
 
       // Text / Label checks (Extremely strict)
-      const attrs = ((node.getAttribute('aria-label') || '') + ' ' + (node.getAttribute('title') || '') + ' ' + (node.textContent || '')).toLowerCase();
+      // DANGER: We NEVER include node.textContent here, as it permanently bans the Chat Input
+      // if the user types "add context" into the box!
+      const attrs = ((node.getAttribute('aria-label') || '') + ' ' + (node.getAttribute('title') || '')).toLowerCase();
       if (/(customize layout|layout control|add context|attach context|attach a file|new chat|clear chat|clear session)/i.test(attrs)) {
           bannedCache.add(node);
           return true;
@@ -291,9 +293,9 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     // 1. Check the element itself for unsafe text
     try {
-        const text = ((el.textContent || '') + ' ' + (el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')).toLowerCase();
-        if (/(extension|marketplace|plugin|install|uninstall|customize layout|layout control|add context|attach context|attach a file|new chat|clear chat|clear session|view as|open in)/i.test(text)) {
-            return true;
+        const attrs = ((el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')).toLowerCase();
+        if (/(extension|marketplace|plugin|install|uninstall|customize layout|layout control|add context|attach context|attach a file|new chat|clear chat|clear session|view as|open in)/i.test(attrs)) {
+            return "unsafe-attributes";
         }
     } catch(e) {}
 
@@ -301,7 +303,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     try {
         const bannedIcons = '[class*="codicon-settings-gear"], [class*="codicon-gear"], [class*="codicon-attach"], [class*="codicon-paperclip"], [class*="codicon-link"], [class*="codicon-layout"], [class*="codicon-clear-all"], [class*="codicon-trash"], [class*="codicon-add"], [class*="codicon-plus"], [class*="codicon-more"], [class*="codicon-history"]';
         if (el.matches(bannedIcons) || el.querySelector(bannedIcons)) {
-            return true;
+            return "banned-icon-descendant";
         }
     } catch(e) {}
     // 3. Walk up the tree and check all ancestors for unsafe attributes and banned classes
@@ -311,29 +313,29 @@ export const AUTO_CONTINUE_SCRIPT = `
             // Text/Attribute bans on parents
             const attrs = ((current.getAttribute('aria-label') || '') + ' ' + (current.getAttribute('title') || '')).toLowerCase();
             if (/(customize layout|layout control|add context|attach context|new chat|clear chat|clear session)/i.test(attrs)) {
-                return true;
+                return "banned-ancestor-attrs";
             }
 
             // Workbench Chrome Bans + Menus
             if (current.matches('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box, .monaco-menu, .monaco-menu-container, .menubar, .menubar-menu-button, [role="menu"], [role="menuitem"], [role="menubar"]')) {
-                return true;
+                return "banned-ancestor-class";
             }
             if (current.getAttribute('role') === 'tab' || current.getAttribute('role') === 'tablist') {
-                return true;
+                return "banned-ancestor-role-tab";
             }
             
             // Icon Class Bans
             if (current.matches('.codicon-settings-gear, .codicon-attach, [class*="codicon-layout"], .codicon-clear-all, .codicon-trash, .codicon-add, .codicon-plus, .codicon-more, .codicon-history')) {
-                return true;
+                return "banned-ancestor-icon";
             }
         }
         current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
     }
 
-    // 3. Global Workbench safety lock (Prevent clicking native IDE elements)
+    // 4. Global Workbench safety lock (Prevent clicking native IDE elements)
     if (window === window.top) {
         if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview')) {
-            return true;
+            return "native-workbench-guard";
         }
     }
 
@@ -347,8 +349,8 @@ export const AUTO_CONTINUE_SCRIPT = `
   function isChatActionSurface(el) {
       if (!el) return false;
 
-      const blockedShell = '.title-actions, .tabs-and-actions-container, .part.titlebar, .part.activitybar, .part.statusbar, .menubar, .menubar-menu-button, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"]';
-      const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], .monaco-list-row';
+      const blockedShell = '.part.titlebar, .part.activitybar, .part.statusbar, .menubar, .menubar-menu-button, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"]';
+      const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], .monaco-list-row, .pane-body';
 
       let hasBlockedAncestor = false;
       let current = el;
@@ -398,8 +400,8 @@ export const AUTO_CONTINUE_SCRIPT = `
       const stopCandidates = queryShadowDOMAll('[title*="Stop" i], [aria-label*="Stop" i]');
       const stopBtn = stopCandidates.find(el => isChatActionSurface(el) && !isUnsafeContext(el));
       const isGenerating = !!stopBtn;
-      const input = queryShadowDOMAll('vscode-text-area, [id*="chat-input" i], [aria-label*="Chat Input" i], .interactive-input-part textarea, .chat-input-widget textarea')[0];
-      const hasInputReady = !!input && (input.offsetParent || input.clientWidth > 0 || input.clientHeight > 0);
+      const input = getSafeChatInput();
+      const hasInputReady = !!input;
 
       // 2. Find last message
       // Selectors depend on VS Code version, but usually .monaco-list-row or .chat-row
@@ -442,9 +444,9 @@ export const AUTO_CONTINUE_SCRIPT = `
               if (!t.includes('explorer') && !attr.includes('explorer')) extExpand++;
           }
           if (t.includes('accept all')) extAcceptAll++;
-          if (t === 'accept' || t === 'apply') extAccept++;
+          if (t === 'accept' || t === 'apply' || (t.includes('accept') && t.includes('code'))) extAccept++;
           if (t === 'run' || (t.includes('run') && t.includes('terminal'))) extRun++;
-          if (t === 'good' || t === 'bad' || t === 'helpful' || t === 'unhelpful') extFeedback++;
+          if (t === 'good' || t === 'bad' || t === 'helpful' || t === 'unhelpful' || t === 'upvote' || t === 'downvote' || attr.includes('upvote') || attr.includes('downvote')) extFeedback++;
       }
 
       const rowCount = rows.length;
@@ -456,7 +458,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           expand: extExpand + queryShadowDOMAll('[title*="Expand" i], [aria-label*="Expand" i], .monaco-tl-twistie.collapsed, .expand-indicator.collapsed').length,
           continue: queryShadowDOMAll('a.monaco-button, button.monaco-button').length,
           submit: queryShadowDOMAll('[title="Send" i], [aria-label="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send').length,
-          feedback: extFeedback + queryShadowDOMAll('.codicon-thumbsup, .codicon-thumbsdown, [title*="Helpful" i], [aria-label*="Helpful" i], [title*="Good" i], [title*="Bad" i], .feedback-button').length
+          feedback: extFeedback + queryShadowDOMAll('.codicon-thumbsup, .codicon-thumbsdown, [title*="Helpful" i], [aria-label*="Helpful" i], [title*="Good" i], [title*="Bad" i], [title*="Upvote" i], [aria-label*="Upvote" i], [title*="Downvote" i], [aria-label*="Downvote" i], .feedback-button').length
       };
 
       const feedbackVisible = buttonSignals.feedback > 0;
@@ -521,8 +523,17 @@ export const AUTO_CONTINUE_SCRIPT = `
       const candidates = queryShadowDOMAll(selectors);
       for (const el of candidates) {
           if (!el) continue;
-          if (isUnsafeContext(el) || hasUnsafeLabel(el) || isNodeBanned(el)) continue;
-          if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) continue;
+          if (isNodeBanned(el)) { log('getSafeChatInput: Rejected banned node ' + (el.tagName||'')); continue; }
+          const unsafeReason = isUnsafeContext(el);
+          if (unsafeReason && unsafeReason !== 'native-workbench-guard') { 
+              log('getSafeChatInput: Rejected unsafe context ' + (el.tagName||'') + ' reason: ' + unsafeReason); 
+              continue; 
+          }
+
+          if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) { 
+             log('getSafeChatInput: Rejected invisible element ' + (el.tagName||'')); 
+             continue; 
+          }
 
           const tag = (el.tagName || '').toUpperCase();
           if (tag === 'TEXTAREA' || tag === 'VSCODE-TEXT-AREA' || el.isContentEditable || el.hasAttribute('contenteditable')) {
@@ -530,54 +541,49 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
 
           const inner = el.querySelector && el.querySelector('textarea, [contenteditable="true"]');
-          if (inner && !isUnsafeContext(inner) && !isNodeBanned(inner) && (inner.offsetParent || inner.clientWidth > 0 || inner.clientHeight > 0)) {
+          if (inner && !isNodeBanned(inner) && (inner.offsetParent || inner.clientWidth > 0 || inner.clientHeight > 0)) {
               return inner;
           }
       }
 
+      // Fallback: just find the first visible textarea on the screen if we couldn't find a widget
+      const fallbackInputs = queryShadowDOMAll('textarea, vscode-text-area');
+      for (const el of fallbackInputs) {
+          if (isNodeBanned(el)) { log('getSafeChatInput(fallback): Rejected banned node ' + (el.tagName||'')); continue; }
+          if (!isChatActionSurface(el)) { log('getSafeChatInput(fallback): Rejected not in chat surface ' + (el.tagName||'')); continue; }
+          const unsafeReason = isUnsafeContext(el);
+          if (unsafeReason && unsafeReason !== 'native-workbench-guard') { 
+              log('getSafeChatInput(fallback): Rejected unsafe context ' + (el.tagName||'') + ' reason: ' + unsafeReason); 
+              continue; 
+          }
+
+          if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) { 
+             log('getSafeChatInput(fallback): Rejected invisible element ' + (el.tagName||'')); 
+             continue; 
+          }
+          return el;
+      }
       return null;
   }
 
   function typeAndSubmit(text) {
       const cfg = getConfig();
       const bump = getBumpConfig(cfg);
-    const rawInputs = queryShadowDOMAll('[id*="chat-input" i], [aria-label*="Chat Input" i], .interactive-input-part, .chat-input-widget, textarea[placeholder*="Ask" i], textarea[placeholder*="Message" i], vscode-text-area');
       
-      let input = null;
-      for (const el of rawInputs) {
-          if (isUnsafeContext(el) || hasUnsafeLabel(el) || isNodeBanned(el)) continue;
-          if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) continue;
-          if (el.tagName === 'TEXTAREA' || el.tagName === 'VSCODE-TEXT-AREA' || el.isContentEditable || el.hasAttribute('contenteditable')) {
-              input = el;
-              break;
-          }
-          const inner = el.querySelector('textarea, [contenteditable]');
-          if (inner && !isUnsafeContext(inner) && !isNodeBanned(inner) && (inner.offsetParent || inner.clientWidth > 0 || inner.clientHeight > 0)) {
-              input = inner;
-              break;
-          }
-      }
-      
-      // Fallback: just find the first visible textarea on the screen if we couldn't find a widget
-      if (!input) {
-          const fallbackInputs = queryShadowDOMAll('textarea, vscode-text-area');
-          input = fallbackInputs.find(el => !isUnsafeContext(el) && !isNodeBanned(el) && (el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0));
-      }
+      let input = getSafeChatInput();
       
       if (!input) return false;
 
-      // 1. Check if ANY text exists
-      let hasText = false;
-      let existingTextLength = 0;
-      if (input.value !== undefined && input.value !== null) {
-          existingTextLength = input.value.trim().length;
-          hasText = existingTextLength > 0;
+      let val = '';
+      const tag = (input.tagName || '').toUpperCase();
+      if (tag === 'TEXTAREA' || tag === 'VSCODE-TEXT-AREA') {
+          val = input.value || '';
+      } else {
+          val = input.innerText || input.textContent || '';
       }
-      if (!hasText && input.isContentEditable) {
-          const tc = (input.textContent || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-          existingTextLength = tc.length;
-          if (existingTextLength > 0) hasText = true;
-      }
+
+      const hasText = val.trim().length > 0;
+      const existingTextLength = val.length;
 
       if (hasText) {
            log('Skipping typeAndSubmit because text already detected in input container (length: ' + existingTextLength + ').');
@@ -740,16 +746,16 @@ export const AUTO_CONTINUE_SCRIPT = `
           const acceptAllControl = getControlConfig(cfg, 'acceptAll');
           const acceptAllSelectors = [];
           if (hasMethod(acceptAllControl.actionMethods, 'accept-all-button')) {
-              acceptAllSelectors.push('[title*="Accept All"]', '[aria-label*="Accept All"]', '.codicon-check-all');
+              acceptAllSelectors.push('[title*="Accept All" i]', '[aria-label*="Accept All" i]', '.codicon-check-all');
           }
           if (hasMethod(acceptAllControl.actionMethods, 'keep-button')) {
-              acceptAllSelectors.push('[title="Keep"]', '[aria-label="Keep"]', 'button[title*="Keep"]', 'button[aria-label*="Keep"]');
+              acceptAllSelectors.push('[title="Keep" i]', '[aria-label="Keep" i]', 'button[title*="Keep" i]', 'button[aria-label*="Keep" i]');
           }
           if (hasMethod(acceptAllControl.actionMethods, 'allow-all-button')) {
-              acceptAllSelectors.push('[title*="Allow"]', '[aria-label*="Allow"]', 'button[title*="Allow"]', 'button[aria-label*="Allow"]');
+              acceptAllSelectors.push('[title*="Allow" i]', '[aria-label*="Allow" i]', 'button[title*="Allow" i]', 'button[aria-label*="Allow" i]');
           }
           if (hasMethod(acceptAllControl.actionMethods, 'dom-click') && acceptAllSelectors.length === 0) {
-              acceptAllSelectors.push('[title*="Accept All"]', '[aria-label*="Accept All"]', '[title="Keep"]', '[aria-label="Keep"]', '[title*="Allow"]', '[aria-label*="Allow"]', '.codicon-check-all');
+              acceptAllSelectors.push('[title*="Accept All" i]', '[aria-label*="Accept All" i]', '[title="Keep" i]', '[aria-label="Keep" i]', '[title*="Allow" i]', '[aria-label*="Allow" i]', '.codicon-check-all');
           }
           if (acceptAllSelectors.length > 0 && tryClick(acceptAllSelectors.join(', '), 'Accept All/Keep', 'accept-all')) {
               actionTaken = true;
@@ -761,12 +767,12 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (!actionTaken && controlGatePass('run', cfg, state, now, lastActionByControl.run)) {
           const runControl = getControlConfig(cfg, 'run');
           const runSelectors = [
-              '[title*="Run in Terminal"]',
-              '[aria-label*="Run in Terminal"]',
-              '[title*="Run command"]',
-              '[aria-label*="Run command"]',
-              '[title*="Execute command"]',
-              '[aria-label*="Execute command"]'
+              '[title*="Run in Terminal" i]',
+              '[aria-label*="Run in Terminal" i]',
+              '[title*="Run command" i]',
+              '[aria-label*="Run command" i]',
+              '[title*="Execute command" i]',
+              '[aria-label*="Execute command" i]'
           ].join(',');
 
           if (hasMethod(runControl.actionMethods, 'dom-click')) {
@@ -775,11 +781,14 @@ export const AUTO_CONTINUE_SCRIPT = `
                   if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
                   if (!(el.offsetParent || el.clientWidth > 0)) return false;
-                  const text = (el.textContent || '').trim().toLowerCase();
+                  const text = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
                   const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
-                  return text === 'run in terminal'
+                  return text.includes('run in terminal')
+                      || (text.includes('run') && (text.includes('alt') || text.includes('opt') || text.includes('enter') || text === 'run'))
                       || label.includes('run in terminal')
                       || label.includes('run command')
+                      || label.includes('run (alt')
+                      || label.includes('run (opt')
                       || label.includes('execute command');
               });
               if (textMatch && isChatActionSurface(textMatch)) {
@@ -846,7 +855,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
           if (!actionTaken && hasMethod(acceptControl.actionMethods, 'accept-single')) {
               // Strict matches only to avoid Layout Apply buttons
-              if (tryClick('[title="Accept"], [aria-label="Accept"], .codicon-check', 'Accept', 'accept')) {
+              if (tryClick('[title="Accept" i], [aria-label="Accept" i], .codicon-check', 'Accept', 'accept')) {
                   actionTaken = true;
                   lastActionByControl.accept = now;
               }
@@ -857,8 +866,8 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (!actionTaken && controlGatePass('expand', cfg, state, now, lastActionByControl.expand)) {
           const expandControl = getControlConfig(cfg, 'expand');
           const expandSelectors = [
-              '[title*="Expand"]',
-              '[aria-label*="Expand"]'
+              '[title*="Expand" i]',
+              '[aria-label*="Expand" i]'
           ].join(',');
 
           if (hasMethod(expandControl.actionMethods, 'dom-click')) {
@@ -972,22 +981,27 @@ export const AUTO_CONTINUE_SCRIPT = `
 
               if (hasMethod(detectMethods, 'not-generating')) {
                   shouldBump = true;
+                  log('Smart Resume: Will bump (not-generating)');
               }
 
               if (hasMethod(detectMethods, 'waiting-for-input') && state.hasInputReady && !state.isGenerating) {
                   shouldBump = true;
+                  log('Smart Resume: Will bump (waiting-for-input)');
               }
 
               if (hasMethod(detectMethods, 'new-conversation') && state.rowCount <= 1 && state.hasInputReady) {
                   shouldBump = true;
+                  log('Smart Resume: Will bump (new-conversation)');
               }
 
               if (hasMethod(detectMethods, 'loaded-conversation') && state.rowCount > 0 && state.hasInputReady) {
                   shouldBump = true;
+                  log('Smart Resume: Will bump (loaded-conversation)');
               }
 
               if (hasMethod(detectMethods, 'completed-all-tasks') && /(all\s+tasks\s+complete|all\s+tasks\s+completed|task\s+complete|completed|done)/i.test(state.lastText || '')) {
                   shouldBump = true;
+                  log('Smart Resume: Will bump (completed-all-tasks)');
               }
 
               if (hasMethod(detectMethods, 'last-sender-user') && state.lastSender === 'user') {
@@ -995,30 +1009,38 @@ export const AUTO_CONTINUE_SCRIPT = `
                   computedDelay = Math.max(250, bump.userDelayMs || 3000);
                   shouldBump = true;
                   bumpText = '...'; // Nudge
+                  log('Smart Resume: Will bump (user waiting nudging)');
               } else if (state.lastSender === 'ai') {
                   // AI finished text
                   const text = state.lastText.trim();
                   if (hasMethod(detectMethods, 'skip-ai-question') && text.endsWith('?')) {
                       // AI asking question -> Do NOT bump
                       shouldBump = false;
+                      log('Smart Resume: SKIPPING bump (AI asked a question)');
                   } else if (hasMethod(detectMethods, 'network-error-retry') && (text.toLowerCase().includes('network error') || text.toLowerCase().includes('connection lost'))) {
                       // Network error -> Retry
                       computedDelay = Math.max(250, bump.retryDelayMs || 2000);
                       shouldBump = true;
                       bumpText = 'retry';
+                      log('Smart Resume: Will retry (network error)');
                   } else if (state.feedbackVisible || hasMethod(detectMethods, 'feedback-visible')) {
                       shouldBump = true;
                       computedDelay = Math.max(250, bump.retryDelayMs || 2000);
+                      log('Smart Resume: Will bump (feedback visible)');
                   } else {
                       // Standard completion -> Standard Bump
                       // Heuristic: If it looks incomplete (no period, or code block open), bump.
                       // For now, assume simple "continue" loop
                       shouldBump = true;
+                      log('Smart Resume: Will bump (standard completion)');
                   }
               } else {
                   // Unknown sender -> Standard Bump
                   shouldBump = true;
+                  log('Smart Resume: Will bump (unknown sender)');
               }
+
+              log('Smart Resume State: shouldBump=' + shouldBump + ' elapsed=' + (now - lastAction) + ' delay=' + computedDelay);
 
               if (shouldBump && (now - lastAction > computedDelay)) {
                   // Only bump if the tab is visible to avoid ghost typing in every open tab (unless configured otherwise)
