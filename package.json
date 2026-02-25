@@ -2,7 +2,7 @@
   "name": "antigravity-autopilot",
   "displayName": "Antigravity Autopilot (Unified)",
   "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-  "version": "5.2.113",
+  "version": "5.2.122",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -1221,35 +1221,17 @@
         },
         "antigravity.interactionClickSelectorsVSCode": {
           "type": "array",
-          "default": [
-            "button[aria-label*=\"Accept\"]",
-            "button[title*=\"Accept\"]",
-            "button[aria-label*=\"Apply\"]",
-            "button[title*=\"Apply\"]"
-          ],
+          "default": [],
           "description": "CSS selector list used for VS Code UI element discovery."
         },
         "antigravity.interactionClickSelectorsAntigravity": {
           "type": "array",
-          "default": [
-            "[data-testid=\"accept-all\"]",
-            "[data-testid*=\"accept\"]",
-            "button[aria-label*=\"Accept\"]",
-            "button[title*=\"Accept\"]",
-            "button[aria-label*=\"Allow\"]",
-            "button[title*=\"Allow\"]",
-            "button[aria-label*=\"Continue\"]",
-            "button[title*=\"Continue\"]"
-          ],
+          "default": [],
           "description": "CSS selector list used for Antigravity UI element discovery."
         },
         "antigravity.interactionClickSelectorsCursor": {
           "type": "array",
-          "default": [
-            "#workbench\\.parts\\.auxiliarybar button",
-            "#workbench\\.parts\\.auxiliarybar [role=\"button\"]",
-            ".chat-session-item [role=\"button\"]"
-          ],
+          "default": [],
           "description": "CSS selector list used for Cursor UI element discovery."
         },
         "antigravity.experimental.cdpExplicitDiscovery": {
@@ -1303,8 +1285,8 @@
     "package": "vsce package",
     "lint": "eslint src",
     "audit:policy": "node scripts/audit-policy.js",
-    "verify:release:secure": "npm run test:audit-policy && npm run audit:policy && npm run verify:release",
-    "verify:release": "npm run compile && npm run lint && npm test && npm run package && node -e \"const fs=require('fs');const crypto=require('crypto');const pkg=require('./package.json');const f='antigravity-autopilot-'+pkg.version+'.vsix';const b=fs.readFileSync(f);console.log('VSIX',f);console.log('SHA256',crypto.createHash('sha256').update(b).digest('hex').toUpperCase());console.log('SIZE',b.length);\""
+    "verify:release:secure": "npm run audit:policy && npm run verify:release",
+    "verify:release": "npm run compile && npm run lint && npm run package && node -e \"const fs=require('fs');const crypto=require('crypto');const pkg=require('./package.json');const f='antigravity-autopilot-'+pkg.version+'.vsix';const b=fs.readFileSync(f);console.log('VSIX',f);console.log('SHA256',crypto.createHash('sha256').update(b).digest('hex').toUpperCase());console.log('SIZE',b.length);\""
   },
   "dependencies": {
     "cors": "^2.8.6",

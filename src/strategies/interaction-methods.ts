@@ -525,25 +525,11 @@ export class ScriptForceClick implements IInteractionMethod {
     requiresCDP = true;
 
     async execute(ctx: InteractionContext): Promise<boolean> {
-        if (!ctx.cdpHandler || !ctx.selector) return false;
-        const escapedSelector = escapeJsSingleQuoted(ctx.selector);
-        const script = `
-            (function() {
-                const el = document.querySelector('${escapedSelector}');
-                if (el) {
-                    const isBanned = el.closest('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menubar"]');
-                    if (isBanned) return false;
-
-                    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-                    el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-                    el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-                    return true;
-                }
-                return false;
-            })()
-        `;
-        await ctx.cdpHandler.executeScriptInAllSessions(script);
-        return true;
+        // PERMANENTLY NEUTERED: 
+        // This method blindly executes clicks against the first match of the wildcard user selector configs.
+        // It bypasses the text-matching protections of DOMScanClick. If the UI forks, the banlist fails,
+        // resulting in the shotgunning of the Layout toggle button on every loop!
+        return false;
     }
 }
 
@@ -558,31 +544,8 @@ export class VisualVerifiedClick implements IInteractionMethod {
     requiresCDP = true;
 
     async execute(ctx: InteractionContext): Promise<boolean> {
-        if (!ctx.cdpHandler || !ctx.selector) return false;
-
-        if (typeof ctx.cdpHandler.captureScreenshots !== 'function') {
-            return false;
-        }
-
-        const before: string[] = await ctx.cdpHandler.captureScreenshots();
-
-        const escapedSelector = escapeJsSingleQuoted(ctx.selector);
-        const clickScript = `
-            (function() {
-                const el = document.querySelector('${escapedSelector}');
-                if (!el) return false;
-                el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-                el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-                return true;
-            })()
-        `;
-        await ctx.cdpHandler.executeScriptInAllSessions(clickScript);
-        await delay(75);
-
-        const after: string[] = await ctx.cdpHandler.captureScreenshots();
-        const threshold = Math.max(0, Math.min(1, ctx.visualDiffThreshold ?? 0.001));
-        return visualDiffExceeded(before, after, threshold);
+        // PERMANENTLY NEUTERED: Bypasses ban lists and text match protections
+        return false;
     }
 }
 
