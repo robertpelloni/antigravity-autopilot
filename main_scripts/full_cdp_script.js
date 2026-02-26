@@ -452,13 +452,6 @@
         antigravity: {
             click: [
                 '[data-testid="accept-all"]',
-                '.codicon-play',
-                '.codicon-debug-start',
-                '.codicon-run',
-                '[aria-label*="Run"]',
-                '[title*="Run"]',
-                '[aria-label*="Expand"]',
-                '[title*="Expand"]',
                 '[data-testid*="accept"]',
                 'button[aria-label*="Accept"]',
                 'button[title*="Accept"]',
@@ -1481,6 +1474,10 @@
 
         if (text.length === 0 || text.length > 120) return false;
 
+        if (getCurrentMode() === 'antigravity' && (text.includes('run') || text.includes('expand'))) {
+            return false;
+        }
+
         // Hardcoded safety lock: explicitly reject context/layout chrome controls
         if (/(add context|attach|layout|customize)/i.test(text)) return false;
 
@@ -1639,6 +1636,11 @@
 
 
     async function expandCollapsedSections() {
+        if (getCurrentMode() === 'antigravity') {
+            bumpSafetyCounter('blockedAgExpandPass');
+            log('[Expand] AG mode: expansion pass disabled for safety.');
+            return false;
+        }
 
         // Expand collapsed sections ONLY within the chat/response area
         // IMPORTANT: Do NOT query globally — that would click file explorer, sidebar, etc.

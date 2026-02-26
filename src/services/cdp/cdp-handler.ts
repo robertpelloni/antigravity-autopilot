@@ -299,6 +299,7 @@ export class CDPHandler extends EventEmitter {
                                 }
                             },
                             bump: {
+                                text: config.get<string>('actions.bump.text') ?? config.get<string>('automation.actions.autoReplyText') ?? config.get<string>('bumpMessage') ?? 'Proceed',
                                 requireVisible: config.get<boolean>('automation.bump.requireVisible') ?? true,
                                 detectMethods: getArr('automation.bump.detectMethods', ['feedback-visible', 'not-generating', 'last-sender-user', 'network-error-retry', 'waiting-for-input', 'loaded-conversation', 'completed-all-tasks', 'skip-ai-question']),
                                 typeMethods: getArr('automation.bump.typeMethods', ['exec-command', 'native-setter', 'dispatch-events']),

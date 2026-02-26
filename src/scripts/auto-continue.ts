@@ -68,7 +68,7 @@ export const AUTO_CONTINUE_SCRIPT = `
      controls: {
          acceptAll: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-button', 'keep-button', 'allow-all-button', 'dom-click'], delayMs: 100 },
          continue: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['continue-button', 'keep-button', 'dom-click'], delayMs: 100 },
-         run: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 100 },
+         run: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click', 'alt-enter'], delayMs: 100 },
          expand: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 50 },
          accept: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-first', 'accept-single', 'dom-click'], delayMs: 100 },
          submit: { detectMethods: ['enabled-flag', 'not-generating'], actionMethods: ['click-send', 'enter-key'], delayMs: 100 },
@@ -182,6 +182,10 @@ export const AUTO_CONTINUE_SCRIPT = `
   }
 
         function controlGatePass(controlName, cfg, state, now, controlLastActionTime) {
+            if ((controlName === 'run' || controlName === 'expand') && isAntigravityRuntime()) {
+                bumpSafetyCounter('blockedRunExpandInAgRuntime');
+                    return false;
+            }
 
       const control = getControlConfig(cfg, controlName);
       const detect = control.detectMethods || [];
@@ -330,7 +334,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     // 4. Global Workbench safety lock (Prevent clicking native IDE elements)
     if (window === window.top) {
-        if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview, .pane-body, .chat-list, .interactive-session, [class*="chat" i]')) {
+        if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview')) {
             return "native-workbench-guard";
         }
     }
