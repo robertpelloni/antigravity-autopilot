@@ -2,7 +2,7 @@
   "name": "antigravity-autopilot",
   "displayName": "Antigravity Autopilot (Unified)",
   "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-  "version": "5.2.146",
+  "version": "5.2.147",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -691,11 +691,6 @@
           "default": true,
           "description": "Automatically type and send a reply (e.g. 'continue') if the chat is idle. Useful for keeping the agent working."
         },
-        "antigravity.automation.actions.autoReplyText": {
-          "type": "string",
-          "default": "Proceed",
-          "description": "The text to type when auto-replying (e.g. 'continue', 'next', 'review')."
-        },
         "antigravity.automation.bump.detectMethods": {
           "type": "array",
           "default": [
@@ -898,12 +893,6 @@
           "type": "number",
           "default": 9333,
           "description": "Port to use for Chrome DevTools Protocol (CDP)."
-        },
-        "antigravity.bumpMessage": {
-          "type": "string",
-          "default": "Proceed",
-          "deprecationMessage": "Use antigravity.actions.bump.text instead.",
-          "description": "Deprecated: Message to post to bump the thread."
         },
         "antigravity.actions.bump.enabled": {
           "type": "boolean",
