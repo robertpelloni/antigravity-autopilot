@@ -173,6 +173,7 @@ export const AUTO_CONTINUE_SCRIPT = `
   function getBumpConfig(cfg) {
       const bump = cfg.bump || {};
       return {
+          text: bump.text,
           requireVisible: bump.requireVisible ?? defaults.bump.requireVisible ?? true,
           detectMethods: Array.isArray(bump.detectMethods) ? bump.detectMethods : defaults.bump.detectMethods,
           typeMethods: Array.isArray(bump.typeMethods) ? bump.typeMethods : defaults.bump.typeMethods,
@@ -195,11 +196,11 @@ export const AUTO_CONTINUE_SCRIPT = `
       };
   }
 
-        function controlGatePass(controlName, cfg, state, now, controlLastActionTime) {
-            if ((controlName === 'run' || controlName === 'expand') && isAntigravityRuntime()) {
-                bumpSafetyCounter('blockedRunExpandInAgRuntime');
-                    return false;
-            }
+  function controlGatePass(controlName, cfg, state, now, controlLastActionTime) {
+      if ((controlName === 'run' || controlName === 'expand') && isAntigravityRuntime()) {
+          bumpSafetyCounter('blockedRunExpandInAgRuntime');
+          return false;
+      }
 
       const control = getControlConfig(cfg, controlName);
       const detect = control.detectMethods || [];
@@ -396,13 +397,10 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   function isAntigravityRuntime() {
       try {
-          // Only return true if we are specifically inside the Antigravity extension's own webviews
-          // or the Antigravity app itself, not just any VS Code window running the extension.
-          return !!(
-              document.querySelector('#antigravity-panel-root') ||
-              document.querySelector('[data-vscode-context*="antigravity" i]') ||
-              document.title.toLowerCase().includes('antigravity dev')
-          );
+          // Strict check: Only return true if we are rendering the React dashboard itself.
+          // Native VS Code chat windows may contain buttons with 'data-vscode-context' matching "antigravity",
+          // and document.title can match the workspace folder name.
+          return !!document.getElementById('antigravity-panel-root');
       } catch (e) {
           return false;
       }
