@@ -772,7 +772,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
           // Text-content matching first (catches buttons without title/aria-label)
           if (hasMethod(acceptAllControl.actionMethods, 'accept-all-button') || hasMethod(acceptAllControl.actionMethods, 'dom-click')) {
-              const buttons = queryShadowDOMAll('button, a.monaco-button, .clickable, [role="button"]');
+              const buttons = queryShadowDOMAll('button, a, [role="button"], [tabindex], .clickable, .action-item, .codicon, [class*="action" i], [class*="button" i]');
               const textMatch = buttons.find(el => {
                   if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
@@ -829,7 +829,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           ].join(',');
 
           if (hasMethod(runControl.actionMethods, 'dom-click')) {
-              const buttons = queryShadowDOMAll('button, a.monaco-button, .clickable, [role="button"], .codicon-play');
+              const buttons = queryShadowDOMAll('button, a, [role="button"], [tabindex], .clickable, .action-item, .codicon, .codicon-play, .codicon-run, .codicon-terminal, [class*="action" i], [class*="button" i]');
               const textMatch = buttons.find(el => {
                   if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
