@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.166] - 2026-02-26
+### Added
+* **Comprehensive DOMScanClick Safety Test Suite**: Added 22 new unit tests for `interaction-methods.ts` (35 total, all green). New coverage spans: ban-list completeness (icons, ancestor classes, attribute phrases, tab/tablist roles), wildcard/regex injection via accept/reject patterns, selector injection safety via JSON.stringify escaping, icon-only button classification (play→run, chevron→expand, check→accept), reject-pattern precedence over accept, default pattern safety (no dangerous terms like `install`/`delete`), BridgeCoordinateClick ban-list and disabled-by-default assertion, default config sanitization (dom-scan-click as solitary click method), fallbackSelector emptiness, text length filter, mousedown+mouseup+click dispatch, and visibility check completeness.
+### Fixed
+* **Pre-existing Phantom Method Test**: Fixed `should support expanded method ID combinations` test that referenced phantom method IDs (`native-accept`, `process-peek`, `visual-verify-click`, `cdp-enter`, `ctrl-enter`, `alt-enter`) never registered in the registry. Updated to reference only actually-registered methods.
+
 ## [5.2.84] - 2026-02-23
 ### Fixed
 * Fixed a bug where the native command-based click fallback (`NativeAcceptCommands`) could hang the Interaction Method Registry for upwards of 22 seconds if a VS Code command payload was unhandled or blocked. Injected a strict 500ms `Promise.race` timeout wrapper for all naive UI command dispatches (`interactive.acceptChanges`, `workbench.action.chat.submit`, etc.).

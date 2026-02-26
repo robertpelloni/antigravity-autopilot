@@ -1,6 +1,6 @@
 # Antigravity Autopilot — Master TODO 
 
-Last updated: **2026-02-25**
+Last updated: **2026-02-26**
 
 This file represents the immediate backlog for the dramatically simplified, ultra-stable Auto-Clicker extension.
 
@@ -10,11 +10,11 @@ This file represents the immediate backlog for the dramatically simplified, ultr
 - [x] Eradicate remaining legacy wildcard click interaction methods from `interaction-methods.ts`
 - [x] Safely enforce `dom-scan-click` as the solitary default in `config.ts` fallback behavior
 - [x] Purge dashboard UI of obsolete textareas for generic CSS selectors
-- [ ] Remove any dead code related to MCP, Voice, or Network serving if missed in initial sweeps
+- [x] Remove any dead code related to MCP, Voice, or Network serving if missed in initial sweeps
 
 ## Core Stability P0
-- [ ] Ensure that `DOMScanClick` evaluates purely visually and adheres strictly to ban lists.
-- [ ] Extend unit test suite explicitly for `strategies/interaction-methods.ts` to assert that no wildcards can be parsed maliciously.
+- [x] Ensure that `DOMScanClick` evaluates purely visually and adheres strictly to ban lists.
+- [x] Extend unit test suite explicitly for `strategies/interaction-methods.ts` to assert that no wildcards can be parsed maliciously.
 - [ ] Complete robust QA on specific IDE forks (VS Code vs Cursor vs Antigravity).
 
 ## Testing Architecture P1
@@ -25,3 +25,4 @@ This file represents the immediate backlog for the dramatically simplified, ultr
 ## Documentation Sync
 - [x] Keep `README.md`, `ROADMAP.md`, `TODO.md` strictly synchronized with "auto-clicker only" scope
 - [ ] Revise `VISION.md` assuming it previously advertised Voice/Remote/MCP capabilities.
+
