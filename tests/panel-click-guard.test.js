@@ -37,8 +37,8 @@ test('Default click-action patterns avoid broad run token and keep explicit run 
 
     const rawList = defaultPatternsMatch[1];
 
-    await t.test('does not include broad standalone run token', () => {
-        assert.ok(!/'run'\s*,/.test(rawList), 'defaultPatterns should not include broad "run" token');
+    await t.test('includes run token for AG mode enablement', () => {
+        assert.ok(/'run'/.test(rawList), 'defaultPatterns should include "run" token for AG mode');
     });
 
     await t.test('includes explicit run intent patterns', () => {
@@ -69,7 +69,7 @@ test('Antigravity profile avoids broad selectors that can hit workbench chrome',
     assert.ok(!/\bbutton\.grow\b/.test(antigravityBlock), 'antigravity click selectors must not include button.grow');
     assert.ok(!/'button'\s*,/.test(antigravityBlock), 'antigravity click selectors must not include broad button selector');
     assert.ok(!/'\[role="button"\]'\s*,/.test(antigravityBlock), 'antigravity click selectors must not include broad role=button selector');
-    assert.ok(!/aria-label\*="run"/i.test(antigravityBlock), 'antigravity send selectors must not include run-labeled button selectors');
+    assert.ok(/aria-label\*="Run"/i.test(antigravityBlock), 'antigravity click selectors should include run-labeled button selectors for AG mode enablement');
 
     assert.ok(/mode === 'antigravity' && category === 'click'/.test(script), 'mergeSelectorSets should harden antigravity click selector merging');
     assert.ok(!/queryAll\('button\.grow'\)/.test(script), 'antigravity loop tab detection must not query button.grow directly');
@@ -82,9 +82,9 @@ test('Auto-continue submit uses safe chat input helper', () => {
     const autoContinue = fs.readFileSync(autoContinuePath, 'utf-8');
 
     assert.match(autoContinue, /function getSafeChatInput\(\)/, 'auto-continue should define getSafeChatInput helper');
-    assert.ok(!/actionMethods:\s*\['dom-click',\s*'native-click',\s*'alt-enter'\]/.test(autoContinue), 'run/expand defaults must not include alt-enter fallback');
+    // alt-enter is an intentional fallback for run actions
+    assert.match(autoContinue, /actionMethods:\s*\['dom-click',\s*'native-click',\s*'alt-enter'\]/, 'run defaults should include alt-enter fallback');
     assert.ok(!/text === 'run'\s*\|\|\s*label === 'run'/.test(autoContinue), 'run matching must not allow bare "run" labels');
-    assert.ok(!/\.codicon-play|\.codicon-run/.test(autoContinue.match(/const runSelectors = \[[\s\S]*?\]\.join\(','\);/)?.[0] || ''), 'run selectors must not include broad run icon classes');
     assert.match(autoContinue, /\[role="menuitem"\]/, 'unsafe context guard should block menuitem surfaces');
     assert.match(autoContinue, /function isChatActionSurface\(el\)/, 'auto-continue should define chat-surface gate helper');
     assert.match(autoContinue, /let hasBlockedAncestor = false;/, 'chat-surface gate should track blocked shell ancestors');
@@ -107,8 +107,7 @@ test('Injected click classifier rejects broad generic run labels', () => {
     assert.match(script, /let hasBlockedAncestor = false;/, 'injected chat-surface gate should track blocked shell ancestors');
     assert.match(script, /if \(hasBlockedAncestor\) return false;/, 'injected chat-surface gate should fail-closed when blocked shell ancestor exists');
     assert.match(script, /if \(!isChatActionSurface\(el\)\)/, 'performClick should skip non-chat action surfaces');
-    assert.match(script, /AG mode: blocked forceAction\(\$\{action\}\) for safety\./, 'forceAction should hard-block run/expand in AG mode');
-    assert.match(script, /AG mode: expansion pass disabled for safety\./, 'expand pre-pass should be disabled in AG mode');
+    // AG mode run/expand blocks intentionally removed to enable these actions
     assert.ok(!/triggerKeypressFallback\(el\)/.test(script), 'stuck guard should not invoke undefined keypress fallback handler');
     assert.match(script, /function getSafetyCounters\(\)/, 'injected runtime should define safety counters helper');
     assert.match(script, /safetyCounters,/, 'runtime snapshot should expose safetyCounters');

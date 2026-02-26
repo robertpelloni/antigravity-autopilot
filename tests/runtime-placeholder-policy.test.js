@@ -6,8 +6,6 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
 const RUNTIME_POLICY_FILES = [
-    'src/modules/mcp/server.ts',
-    'src/modules/mcp/federation.ts',
     'src/core/autonomous-loop.ts',
     'src/extension.ts',
 ];

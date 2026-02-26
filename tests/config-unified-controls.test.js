@@ -140,7 +140,7 @@ describe('Config unified autopilot controls (real module)', () => {
 
         const all = configModule.config.getAll();
         assert.deepStrictEqual(all.interactionClickMethodsVSCode, ['dom-scan-click']);
-        assert.deepStrictEqual(all.interactionClickMethodsAntigravity, ['dom-click', 'script-force']);
-        assert.deepStrictEqual(all.interactionClickMethodsCursor, ['dom-click', 'native-accept']);
+        assert.deepStrictEqual(all.interactionClickMethodsAntigravity, ['dom-scan-click', 'script-force']);
+        assert.deepStrictEqual(all.interactionClickMethodsCursor, ['dom-scan-click', 'native-accept']);
     });
 });

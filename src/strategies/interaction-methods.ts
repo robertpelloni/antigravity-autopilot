@@ -316,17 +316,25 @@ export class DOMScanClick implements IInteractionMethod {
 
                 function isNodeBanned(el) {
                     if (!el) return false;
-                    const banned = '.codicon-settings-gear, .codicon-gear, .codicon-layout, .codicon-attach, .codicon-paperclip, .codicon-add, .codicon-plus';
+                    const banned = '.codicon-settings-gear, .codicon-gear, .codicon-layout, .codicon-attach, .codicon-paperclip, .codicon-add, .codicon-plus, .codicon-history, .codicon-trash, .codicon-clear-all';
                     if (el.matches && el.matches(banned)) return true;
                     if (el.querySelector && el.querySelector(banned)) return true;
                     let current = el;
                     while(current) {
-                        if (current.nodeType === 1) {
+                        if (current.nodeType === 1) { // ELEMENT_NODE
                              const attrs = ((current.getAttribute('aria-label') || '') + ' ' + (current.getAttribute('title') || '')).toLowerCase();
-                             if (/(customize layout|layout control|add context|attach context|new chat|clear chat|clear session)/i.test(attrs)) return true;
-                             if (current.matches && current.matches('.title-actions, .tabs-and-actions-container, .part.titlebar, .part.activitybar, .part.statusbar, .menubar, .menubar-menu-button, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"]')) return true;
+                             if (/(customize layout|layout control|add context|attach context|attach a file|new chat|clear chat|clear session|view as|open in)/i.test(attrs)) return true;
+                             if (current.matches && current.matches('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box, .monaco-menu, .monaco-menu-container, .menubar, .menubar-menu-button, [role="menu"], [role="menuitem"], [role="menubar"]')) return true;
+                             if (current.getAttribute('role') === 'tab' || current.getAttribute('role') === 'tablist') return true;
                         }
                         current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
+                    }
+                    
+                    // Global Workbench safety lock (Prevent clicking native IDE elements outside of safe embedded content like webviews)
+                    if (window === window.top) {
+                        if (el.closest && el.closest('.monaco-workbench') && !el.closest('iframe, webview, .webview, #webview')) {
+                             return true;
+                        }
                     }
                     return false;
                 }
@@ -344,6 +352,8 @@ export class DOMScanClick implements IInteractionMethod {
                         } else if (classList.includes('codicon-chevron-right') || classList.includes('monaco-tl-twistie')) { 
                             // chevron-right usually means collapsed/expandable
                             text = 'expand';
+                        } else if (classList.includes('codicon-check') || classList.includes('codicon-check-all')) {
+                            text = 'accept';
                         }
                     }
 

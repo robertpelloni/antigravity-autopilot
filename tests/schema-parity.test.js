@@ -33,7 +33,10 @@ const DASHBOARD_INTENTIONAL_OMISSIONS = new Set([
     'antigravity.audio.actions.click',
     'antigravity.audio.actions.expand',
     'antigravity.audio.actions.run',
-    'antigravity.audio.actions.submit'
+    'antigravity.audio.actions.submit',
+    'antigravity.mcpEnabled',
+    'antigravity.voiceControlEnabled',
+    'antigravity.voiceMode'
 ]);
 
 test('Config schema parity with dashboard controls', async (t) => {

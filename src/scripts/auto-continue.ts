@@ -182,10 +182,6 @@ export const AUTO_CONTINUE_SCRIPT = `
   }
 
         function controlGatePass(controlName, cfg, state, now, controlLastActionTime) {
-            if ((controlName === 'run' || controlName === 'expand') && isAntigravityRuntime()) {
-                bumpSafetyCounter('blockedRunExpandInAgRuntime');
-                    return false;
-            }
 
       const control = getControlConfig(cfg, controlName);
       const detect = control.detectMethods || [];
@@ -334,7 +330,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     // 4. Global Workbench safety lock (Prevent clicking native IDE elements)
     if (window === window.top) {
-        if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview')) {
+        if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview, .pane-body, .chat-list, .interactive-session, [class*="chat" i]')) {
             return "native-workbench-guard";
         }
     }

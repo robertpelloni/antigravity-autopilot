@@ -225,4 +225,31 @@ describe('Interaction Method Registry (real module)', () => {
         assert.deepStrictEqual(results.map((r) => r.methodId), ['dom-scan-click', 'bridge-click', 'native-accept']);
         assert.strictEqual(results.filter((r) => r.success).length, 2);
     });
+
+    it('DOMScanClick executes correct CDP script for visual evaluation and banlists without wildcards', async () => {
+        const DOMScanClick = interactionModule.DOMScanClick;
+        const domScan = new DOMScanClick();
+
+        let executedScript = '';
+        const mockCdpHandler = {
+            executeInAllSessions: async (script, returnByValue) => {
+                executedScript = script;
+                return [true];
+            }
+        };
+
+        const result = await domScan.execute({
+            cdpHandler: mockCdpHandler,
+            acceptPatterns: ['accept me'],
+            rejectPatterns: ['reject me'],
+            selector: '.test-class'
+        });
+
+        assert.strictEqual(result, true);
+        assert.ok(executedScript.includes('const accept = ["accept me"]'), 'Should pass accept patterns');
+        assert.ok(executedScript.includes('const reject = ["reject me"]'), 'Should pass reject patterns');
+        assert.ok(executedScript.includes('.codicon-settings-gear'), 'Should include robust banlist selector');
+        assert.ok(executedScript.includes('window === window.top'), 'Should include workbench global iframe guard');
+        assert.ok(!executedScript.includes('[class*="*"]'), 'Should not contain generic asterisk wildcards that could match anything');
+    });
 });
