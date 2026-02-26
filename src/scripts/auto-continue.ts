@@ -455,7 +455,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
 
       // Text checks for signals
-      const allBtns = queryShadowDOMAll('button, a, .monaco-button');
+      const allBtns = queryShadowDOMAll('button, a, .monaco-button, [role="button"], [tabindex], .clickable, .action-item, .codicon, [class*="action" i], [class*="button" i], span.truncate, span.cursor-pointer, span[class*="opacity"], span[class*="font-"]');
       let extExpand = 0, extAcceptAll = 0, extAccept = 0, extRun = 0, extFeedback = 0;
       for (const b of allBtns) {
           if (isUnsafeContext(b) || hasUnsafeLabel(b)) continue;
@@ -725,8 +725,8 @@ export const AUTO_CONTINUE_SCRIPT = `
       const baseThrottle = cfg.timing?.actionThrottleMs ?? 500;
       const jitter = cfg.timing?.randomness ?? 50;
 
-      // DIAGNOSTIC 2: Deep DOM scan for Run/Accept text
-      if (!window.__lastDiagDump || (now - window.__lastDiagDump > 5000)) {
+      // DIAGNOSTIC REMOVED: was causing extension host unresponsiveness
+      if (false) {
           window.__lastDiagDump = now;
           const allElements = Array.from(document.body.querySelectorAll('*')).concat(queryShadowDOMAll('*'));
           const suspicious = allElements.filter(el => {
@@ -794,7 +794,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
           // Text-content matching first (catches buttons without title/aria-label)
           if (hasMethod(acceptAllControl.actionMethods, 'accept-all-button') || hasMethod(acceptAllControl.actionMethods, 'dom-click')) {
-              const buttons = queryShadowDOMAll('button, a, [role="button"], [tabindex], .clickable, .action-item, .codicon, [class*="action" i], [class*="button" i]');
+              const buttons = queryShadowDOMAll('button, a, .monaco-button, [role="button"], [tabindex], .clickable, .action-item, .codicon, [class*="action" i], [class*="button" i], span.truncate, span.cursor-pointer, span[class*="opacity"], span[class*="font-"]');
               const textMatch = buttons.find(el => {
                   if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
@@ -936,7 +936,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           ].join(',');
 
           if (hasMethod(expandControl.actionMethods, 'dom-click')) {
-              const buttons = queryShadowDOMAll('button, a.monaco-button, .clickable, [role="button"], .codicon-bell, .expand-indicator');
+              const buttons = queryShadowDOMAll('button, a, [role="button"], [tabindex], .clickable, .action-item, .codicon, .codicon-bell, .expand-indicator, [class*="action" i], [class*="button" i], span.truncate, span.cursor-pointer, span[class*="opacity"], span[class*="font-"]');
               const textMatch = buttons.find(el => {
                   if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
