@@ -346,11 +346,10 @@ export const AUTO_CONTINUE_SCRIPT = `
         current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
     }
 
-        // 4. Global Workbench safety lock (Prevent clicking native IDE elements)
-        // Allow clicks inside chat panels (.pane-body, .chat-list, .interactive-session) for Run/Expand/AcceptAll
-        if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview, .pane-body, .chat-list, .interactive-session, [class*="chat" i]')) {
-            return "native-workbench-guard";
-        }
+    // 4. Global Workbench safety lock (Prevent clicking native IDE elements)
+    // Allow clicks inside chat panels (.pane-body, .chat-list, .interactive-session) for Run/Expand/AcceptAll
+    if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview, .pane-body, .chat-list, .interactive-session, [class*="chat" i]')) {
+        return "native-workbench-guard";
     }
 
     return false;
