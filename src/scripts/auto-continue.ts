@@ -366,6 +366,12 @@ export const AUTO_CONTINUE_SCRIPT = `
       const blockedShell = '.part.titlebar, .part.activitybar, .part.statusbar, .menubar, .menubar-menu-button, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"]';
       const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], .monaco-list-row, .pane-body';
 
+      // WEBVIEW/IFRAME DETECTION: If there is no .monaco-workbench root, we are inside
+      // a webview or iframe (follower window). In this context, the VS Code host classes
+      // (.chat-list, .pane-body, etc.) don't exist, so we should allow all actions
+      // as long as no blocked ancestor is found.
+      const isWebviewContext = !document.querySelector('.monaco-workbench');
+
       let hasBlockedAncestor = false;
       let current = el;
       while (current) {
@@ -381,6 +387,9 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
 
       if (hasBlockedAncestor) return false;
+
+      // In webview/iframe contexts, allow all non-blocked surfaces
+      if (isWebviewContext) return true;
 
       current = el;
       while (current) {
@@ -847,9 +856,29 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
 
           if (!actionTaken && hasMethod(runControl.actionMethods, 'alt-enter')) {
-              // Alt-Enter is currently DISABLED as it floods the message channel and 
-              // frequently targets non-chat UI, resulting in 'ConnectError' exceptions.
-              // We rely on dom-click and native-click for run operations.
+              // Guarded Alt-Enter: Only fire if we can detect a visible Run-like button in the DOM.
+              // This prevents flooding when no Run button exists (the original cause of ConnectError).
+              const hasVisibleRunButton = queryShadowDOMAll('button, a.monaco-button, [role="button"]').some(el => {
+                  if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
+                  if (!(el.offsetParent || el.clientWidth > 0)) return false;
+                  const t = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                  const l = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
+                  return t.includes('run') || l.includes('run') || l.includes('execute');
+              });
+              if (hasVisibleRunButton) {
+                  const input = getSafeChatInput();
+                  if (input) {
+                      try {
+                          input.focus();
+                          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true, cancelable: true, composed: true }));
+                          input.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true, cancelable: true, composed: true }));
+                          actionTaken = true;
+                          lastActionByControl.run = now;
+                          log('Dispatched guarded Alt+Enter to Run (visible button detected)');
+                          emitAction('run', 'guarded alt-enter');
+                      } catch(e) {}
+                  }
+              }
           }
       }
 
