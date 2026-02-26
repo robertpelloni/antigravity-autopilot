@@ -401,7 +401,10 @@ export const AUTO_CONTINUE_SCRIPT = `
           current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
       }
 
-      return false;
+      // Default: allow clicks. blockedShell + isUnsafeContext provide sufficient safety.
+      // Previously returned false, which silently blocked ALL clicks when Antigravity's chat
+      // container class names didn't match our chatContainers selectors.
+      return true;
   }
 
   function isAntigravityRuntime() {
