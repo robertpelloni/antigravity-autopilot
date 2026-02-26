@@ -474,6 +474,27 @@ export const AUTO_CONTINUE_SCRIPT = `
           if (t === 'good' || t === 'bad' || t === 'helpful' || t === 'unhelpful' || t === 'upvote' || t === 'downvote' || attr.includes('upvote') || attr.includes('downvote')) extFeedback++;
       }
 
+      // DIAG-ACCEPT: Lightweight diagnostic for cursor-pointer span detection
+      if (cfg.debug?.verbose) {
+          try {
+              const cpSpans = document.querySelectorAll('span.cursor-pointer, [class*="button" i]');
+              const diag = [];
+              for (const s of cpSpans) {
+                  const txt = (s.textContent || '').replace(/\s+/g, ' ').trim().substring(0, 40);
+                  if (!txt || txt.length < 2) continue;
+                  const vis = !!(s.offsetParent || s.clientWidth > 0);
+                  const unsafe = isUnsafeContext(s);
+                  const banned = isNodeBanned(s);
+                  if (txt.toLowerCase().includes('accept') || txt.toLowerCase().includes('keep') || txt.toLowerCase().includes('allow') || txt.toLowerCase().includes('expand') || txt.toLowerCase().includes('run')) {
+                      diag.push('"' + txt + '" vis=' + vis + ' unsafe=' + (unsafe||false) + ' banned=' + banned);
+                  }
+              }
+              if (diag.length > 0) {
+                  console.log('[auto-continue] [DIAG-ACCEPT]', JSON.stringify(diag));
+              }
+          } catch(e) {}
+      }
+
       const rowCount = rows.length;
       const buttonSignals = {
           acceptAll: extAcceptAll + queryShadowDOMAll('[title*="Accept All" i], [aria-label*="Accept All" i], button:has(.codicon-check-all)').length,
