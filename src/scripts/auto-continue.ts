@@ -723,6 +723,36 @@ export const AUTO_CONTINUE_SCRIPT = `
       const jitter = cfg.timing?.randomness ?? 50;
       if (now - lastAction < (baseThrottle + Math.random() * jitter)) return;
 
+      // DIAGNOSTIC: Periodic dump every 5 seconds to identify click blockers
+      if (!window.__lastDiagDump || (now - window.__lastDiagDump > 5000)) {
+          window.__lastDiagDump = now;
+          const gateResults = {
+              run: controlGatePass('run', cfg, state, now, lastActionByControl.run),
+              expand: controlGatePass('expand', cfg, state, now, lastActionByControl.expand),
+              acceptAll: controlGatePass('acceptAll', cfg, state, now, lastActionByControl.acceptAll),
+              accept: controlGatePass('accept', cfg, state, now, lastActionByControl.accept),
+              continue: controlGatePass('continue', cfg, state, now, lastActionByControl.continue)
+          };
+          const allBtns = queryShadowDOMAll('button, a.monaco-button, [role="button"]');
+          const visibleBtns = allBtns.filter(el => (el.offsetParent || el.clientWidth > 0) && !el.hasAttribute('disabled'));
+          const btnTexts = visibleBtns.slice(0, 30).map(el => {
+              const t = (el.textContent || '').replace(/\s+/g, ' ').trim().substring(0, 40);
+              const l = (el.getAttribute('title') || el.getAttribute('aria-label') || '').substring(0, 40);
+              const safe = !isUnsafeContext(el);
+              const chat = isChatActionSurface(el);
+              return t + (l ? ' [' + l + ']' : '') + (safe ? '' : ' UNSAFE') + (chat ? '' : ' !CHAT');
+          });
+          logAction('[DIAG] gates=' + JSON.stringify(gateResults)
+              + ' isGen=' + state.isGenerating
+              + ' agRuntime=' + isAntigravityRuntime()
+              + ' hasWorkbench=' + !!document.querySelector('.monaco-workbench')
+              + ' clickRun=' + !!cfg.clickRun
+              + ' clickAccept=' + !!cfg.clickAccept
+              + ' clickAcceptAll=' + !!cfg.clickAcceptAll
+              + ' clickExpand=' + !!cfg.clickExpand
+              + ' btns(' + visibleBtns.length + ')=' + JSON.stringify(btnTexts));
+      }
+
       let actionTaken = false;
 
       // 0. Auto-Scroll
