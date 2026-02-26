@@ -60,7 +60,7 @@ export const AUTO_CONTINUE_SCRIPT = `
      clickAccept: true,
      clickAcceptAll: true,
      clickContinue: true,
-     clickSubmit: true,
+     clickSubmit: false, // DISABLED: Standalone Submit clicks the Send button before bump can type text, sending empty messages
      clickFeedback: false,
      autoScroll: true,
      autoReply: true,
@@ -68,7 +68,12 @@ export const AUTO_CONTINUE_SCRIPT = `
      controls: {
          acceptAll: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-button', 'keep-button', 'allow-all-button', 'dom-click'], delayMs: 100 },
          continue: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['continue-button', 'keep-button', 'dom-click'], delayMs: 100 },
-         run: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click', 'alt-enter'], delayMs: 100 },
+         // NOTES on run actionMethods:
+         // - 'dom-click': Works. Primary method. Finds button by selector and clicks.
+         // - 'native-click': Works. Fallback. Direct el.click() on matched element.
+         // - 'alt-enter': REMOVED. Sends Alt+Enter to chat input even when no Run button is visible,
+         //   waking up the AI with no message and consuming actionTaken so bump never fires.
+         run: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 100 },
          expand: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 50 },
          accept: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-first', 'accept-single', 'dom-click'], delayMs: 100 },
          submit: { detectMethods: ['enabled-flag', 'not-generating'], actionMethods: ['click-send', 'enter-key'], delayMs: 100 },
@@ -76,12 +81,21 @@ export const AUTO_CONTINUE_SCRIPT = `
      },
      bump: {
          detectMethods: ['feedback-visible', 'not-generating', 'last-sender-user', 'network-error-retry', 'waiting-for-input', 'loaded-conversation', 'completed-all-tasks', 'skip-ai-question'],
+         // NOTES on bump typeMethods:
+         // - 'exec-command': WORKS (primary). Uses document.execCommand('insertText'). Reliable in Antigravity chat input.
+         // - 'native-setter': Fallback only. Uses HTMLTextAreaElement.prototype.value setter. May not sync React state.
+         // - 'dispatch-events': Fallback only. Sets input.value directly. Least reliable.
+         // All three are tried in order; exec-command almost always succeeds.
          typeMethods: ['exec-command', 'native-setter', 'dispatch-events'],
-         submitMethods: ['click-send', 'enter-key'],
+         // NOTES on bump submitMethods:
+         // - 'click-send': WORKS (primary). Uses tryClick() to find and click the Send/Submit button.
+         // - 'enter-key': NEUTERED in code (line ~652). dispatchEvent(Enter) escapes webview and triggers
+         //   VS Code native shortcuts like Run menu / Customize Layout. Kept as config option but code blocks it.
+         submitMethods: ['click-send'],
          userDelayMs: 3000,
          retryDelayMs: 2000,
          typingDelayMs: 50,
-         submitDelayMs: 100
+         submitDelayMs: 150
      },
      debug: { highlightClicks: false, verboseLogging: false, logAllActions: true, logToExtension: true },
      timing: { 
@@ -332,9 +346,9 @@ export const AUTO_CONTINUE_SCRIPT = `
         current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
     }
 
-    // 4. Global Workbench safety lock (Prevent clicking native IDE elements)
-    if (window === window.top) {
-        if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview')) {
+        // 4. Global Workbench safety lock (Prevent clicking native IDE elements)
+        // Allow clicks inside chat panels (.pane-body, .chat-list, .interactive-session) for Run/Expand/AcceptAll
+        if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview, .pane-body, .chat-list, .interactive-session, [class*="chat" i]')) {
             return "native-workbench-guard";
         }
     }

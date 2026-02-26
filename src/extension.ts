@@ -2003,7 +2003,7 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             }),
             safeRegisterCommand('antigravity.writeAndSubmitBump', async () => {
-                const message = config.get<string>('actions.bump.text') || config.get<string>('bumpMessage') || 'bump';
+                const message = config.get<string>('actions.bump.text') || 'Proceed';
                 await sendAutoResumeMessage('manual', null, { messageOverride: message } as any);
                 vscode.window.showInformationMessage(`Antigravity: Bump message "${message}" submitted.`);
             }),

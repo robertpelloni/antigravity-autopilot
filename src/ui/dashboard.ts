@@ -523,9 +523,9 @@ export class DashboardPanel {
                     <label>Auto Reply (Bump):</label>
                     <input type="checkbox" ${config.get<string[]>('automation.actions.autoReply') ? 'checked' : ''} onchange="updateConfig('automation.actions.autoReply', this.checked)">
                 </div>
-                <div class="setting" title="The specific text message to send when bumping the AI (e.g., 'continue', 'next', 'go on').">
-                    <label>Auto Reply Text:</label>
-                    <input type="text" value="${config.get<string[]>('automation.actions.autoReplyText') ?? 'Proceed'}" onchange="updateConfig('automation.actions.autoReplyText', this.value)">
+                <div class="setting" title="The specific text message to send when bumping the AI (e.g., 'continue', 'next', 'go on'). This is the unified bump text used by all systems.">
+                    <label>Bump Text:</label>
+                    <input type="text" value="${config.get<string[]>('actions.bump.text') ?? 'Proceed'}" onchange="updateConfig('actions.bump.text', this.value)">
                 </div>
                 <div class="setting" title="The delay in milliseconds to wait after the AI stops generating before sending the auto-reply bump. Prevents spamming the chat.">
                     <label>Auto Reply Delay (ms):</label>
@@ -574,9 +574,9 @@ export class DashboardPanel {
                     <input type="checkbox" ${settings.actions.bump.enabled ? 'checked' : ''} onchange="updateConfig('actions.bump.enabled', this.checked); updateConfig('autopilotAutoBumpEnabled', this.checked)">
                 </div>
 
-                <div class="setting vertical" title="Exact text payload sent during bump. Keep it short and deterministic (for example: 'continue').">
+                <div class="setting vertical" title="Exact text payload sent during bump. This is the same Bump Text from the Browser Automation section above. Changing it here updates the same setting.">
                     <label>Bump Text:</label>
-                    <input type="text" list="bump-texts" value="${settings.actions.bump.text || 'Proceed'}" onchange="updateConfig('actions.bump.text', this.value); updateConfig('automation.actions.autoReplyText', this.value); updateConfig('bumpMessage', this.value)">
+                    <input type="text" list="bump-texts" value="${settings.actions.bump.text || 'Proceed'}" onchange="updateConfig('actions.bump.text', this.value)">
                     <datalist id="bump-texts">
                         <option value="Proceed">
                         <option value="continue">
@@ -860,9 +860,9 @@ export class DashboardPanel {
                     <label>CDP Port:</label>
                     <input type="number" value="${settings.cdpPort}" onchange="updateConfig('cdpPort', parseInt(this.value))">
                 </div>
-                <div class="setting" title="The default message sent when manually or automatically bumping the AI to continue generation.">
+                <div class="setting" title="The default message sent when bumping the AI. This is the same as Bump Text above — changing either updates the same setting.">
                     <label>Bump Message:</label>
-                    <input type="text" value="${settings.bumpMessage}" onchange="updateConfig('bumpMessage', this.value)">
+                    <input type="text" value="${config.get<string>('actions.bump.text') ?? settings.bumpMessage ?? 'Proceed'}" onchange="updateConfig('actions.bump.text', this.value)">
                 </div>
                 <div class="setting" title="Frequency (in ms) for checking if the 'Accept' button is available and visible in the UI.">
                     <label>Auto-Accept Poll (ms):</label>
