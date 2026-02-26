@@ -724,6 +724,28 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
       const baseThrottle = cfg.timing?.actionThrottleMs ?? 500;
       const jitter = cfg.timing?.randomness ?? 50;
+
+      // DIAGNOSTIC 2: Deep DOM scan for Run/Accept text
+      if (!window.__lastDiagDump || (now - window.__lastDiagDump > 5000)) {
+          window.__lastDiagDump = now;
+          const allElements = Array.from(document.body.querySelectorAll('*')).concat(queryShadowDOMAll('*'));
+          const suspicious = allElements.filter(el => {
+            if (el.children.length > 0) return false;
+            if (!(el.offsetParent || el.clientWidth > 0)) return false;
+            const text = (el.textContent || '').toLowerCase();
+            const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
+            return text.includes('run') || label.includes('run') || text.includes('accept') || label.includes('accept') || text.includes('expand') || label.includes('expand');
+          }).slice(0, 20).map(el => {
+              const tag = el.tagName.toLowerCase();
+              const cls = el.className;
+              const text = (el.textContent || '').replace(/\s+/g, ' ').trim().substring(0, 30);
+              const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').substring(0, 30);
+              const chat = isChatActionSurface(el);
+              return \`<\${tag} class="\${cls}" text="\${text}" title="\${label}"> (chat:\${chat})\`;
+          });
+          logAction('[DIAG-DEEP] Found target text in: ' + JSON.stringify(suspicious));
+      }
+
       if (now - lastAction < (baseThrottle + Math.random() * jitter)) return;
 
       let actionTaken = false;
