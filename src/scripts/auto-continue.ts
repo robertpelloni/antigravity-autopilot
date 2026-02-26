@@ -804,13 +804,14 @@ export const AUTO_CONTINUE_SCRIPT = `
                   if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
                   if (!(el.offsetParent || el.clientWidth > 0)) return false;
+                  if (!isChatActionSurface(el)) return false;
                   const text = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
                   const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
-                  return text.includes('accept all') || text === 'accept' || label.includes('accept all')
+                  return text.includes('accept') || label.includes('accept')
                       || text === 'keep' || label.includes('keep')
-                      || text.includes('allow all') || label.includes('allow');
+                      || text.includes('allow') || label.includes('allow');
               });
-              if (textMatch && isChatActionSurface(textMatch)) {
+              if (textMatch) {
                   highlight(textMatch);
                   textMatch.click();
                   actionTaken = true;
@@ -860,17 +861,13 @@ export const AUTO_CONTINUE_SCRIPT = `
                   if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
                   if (!(el.offsetParent || el.clientWidth > 0)) return false;
+                  if (!isChatActionSurface(el)) return false;
                   const text = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
                   const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
-                  return text.includes('run in terminal')
-                      || (text.includes('run') && (text.includes('alt') || text.includes('opt') || text.includes('enter') || text === 'run'))
-                      || label.includes('run in terminal')
-                      || label.includes('run command')
-                      || label.includes('run (alt')
-                      || label.includes('run (opt')
-                      || label.includes('execute command');
+                  return text.includes('run') || label.includes('run')
+                      || text.includes('execute') || label.includes('execute');
               });
-              if (textMatch && isChatActionSurface(textMatch)) {
+              if (textMatch) {
                   highlight(textMatch);
                   textMatch.click();
                   actionTaken = true;
