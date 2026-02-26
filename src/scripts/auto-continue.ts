@@ -766,22 +766,49 @@ export const AUTO_CONTINUE_SCRIPT = `
       // 2.5 Auto-Accept-All
     if (!actionTaken && controlGatePass('acceptAll', cfg, state, now, lastActionByControl.acceptAll)) {
           const acceptAllControl = getControlConfig(cfg, 'acceptAll');
-          const acceptAllSelectors = [];
-          if (hasMethod(acceptAllControl.actionMethods, 'accept-all-button')) {
-              acceptAllSelectors.push('[title*="Accept All" i]', '[aria-label*="Accept All" i]', '.codicon-check-all');
+
+          // Text-content matching first (catches buttons without title/aria-label)
+          if (hasMethod(acceptAllControl.actionMethods, 'accept-all-button') || hasMethod(acceptAllControl.actionMethods, 'dom-click')) {
+              const buttons = queryShadowDOMAll('button, a.monaco-button, .clickable, [role="button"]');
+              const textMatch = buttons.find(el => {
+                  if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
+                  if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
+                  if (!(el.offsetParent || el.clientWidth > 0)) return false;
+                  const text = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                  const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
+                  return text.includes('accept all') || text === 'accept' || label.includes('accept all')
+                      || text === 'keep' || label.includes('keep')
+                      || text.includes('allow all') || label.includes('allow');
+              });
+              if (textMatch && isChatActionSurface(textMatch)) {
+                  highlight(textMatch);
+                  textMatch.click();
+                  actionTaken = true;
+                  lastActionByControl.acceptAll = now;
+                  log('Clicked Accept All (Text Match)');
+                  emitAction('acceptAll', 'text-match accept-all');
+              }
           }
-          if (hasMethod(acceptAllControl.actionMethods, 'keep-button')) {
-              acceptAllSelectors.push('[title="Keep" i]', '[aria-label="Keep" i]', 'button[title*="Keep" i]', 'button[aria-label*="Keep" i]');
-          }
-          if (hasMethod(acceptAllControl.actionMethods, 'allow-all-button')) {
-              acceptAllSelectors.push('[title*="Allow" i]', '[aria-label*="Allow" i]', 'button[title*="Allow" i]', 'button[aria-label*="Allow" i]');
-          }
-          if (hasMethod(acceptAllControl.actionMethods, 'dom-click') && acceptAllSelectors.length === 0) {
-              acceptAllSelectors.push('[title*="Accept All" i]', '[aria-label*="Accept All" i]', '[title="Keep" i]', '[aria-label="Keep" i]', '[title*="Allow" i]', '[aria-label*="Allow" i]', '.codicon-check-all');
-          }
-          if (acceptAllSelectors.length > 0 && tryClick(acceptAllSelectors.join(', '), 'Accept All/Keep', 'accept-all')) {
-              actionTaken = true;
-              lastActionByControl.acceptAll = now;
+
+          // Selector-based fallback
+          if (!actionTaken) {
+              const acceptAllSelectors = [];
+              if (hasMethod(acceptAllControl.actionMethods, 'accept-all-button')) {
+                  acceptAllSelectors.push('[title*="Accept All" i]', '[aria-label*="Accept All" i]', '.codicon-check-all');
+              }
+              if (hasMethod(acceptAllControl.actionMethods, 'keep-button')) {
+                  acceptAllSelectors.push('[title="Keep" i]', '[aria-label="Keep" i]', 'button[title*="Keep" i]', 'button[aria-label*="Keep" i]');
+              }
+              if (hasMethod(acceptAllControl.actionMethods, 'allow-all-button')) {
+                  acceptAllSelectors.push('[title*="Allow" i]', '[aria-label*="Allow" i]', 'button[title*="Allow" i]', 'button[aria-label*="Allow" i]');
+              }
+              if (hasMethod(acceptAllControl.actionMethods, 'dom-click') && acceptAllSelectors.length === 0) {
+                  acceptAllSelectors.push('[title*="Accept All" i]', '[aria-label*="Accept All" i]', '[title="Keep" i]', '[aria-label="Keep" i]', '[title*="Allow" i]', '[aria-label*="Allow" i]', '.codicon-check-all');
+              }
+              if (acceptAllSelectors.length > 0 && tryClick(acceptAllSelectors.join(', '), 'Accept All/Keep', 'accept-all')) {
+                  actionTaken = true;
+                  lastActionByControl.acceptAll = now;
+              }
           }
       }
 
