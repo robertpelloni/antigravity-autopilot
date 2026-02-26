@@ -231,7 +231,7 @@ export class CDPHandler extends EventEmitter {
             controls: {
                 run: {
                     detectMethods: getArr('automation.controls.run.detectMethods', ['enabled-flag', 'not-generating', 'action-cooldown']),
-                    actionMethods: getArr('automation.controls.run.actionMethods', ['dom-click', 'native-click', 'alt-enter']),
+                    actionMethods: getArr('automation.controls.run.actionMethods', ['dom-click', 'native-click']),
                     delayMs: config.get<number>('automation.controls.run.delayMs') ?? 100
                 },
                 expand: {

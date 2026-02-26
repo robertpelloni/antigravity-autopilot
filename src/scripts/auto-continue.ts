@@ -912,31 +912,14 @@ export const AUTO_CONTINUE_SCRIPT = `
               }
           }
 
-          if (!actionTaken && hasMethod(runControl.actionMethods, 'alt-enter')) {
-              // Guarded Alt-Enter: Only fire if we can detect a visible Run-like button in the DOM.
-              // This prevents flooding when no Run button exists (the original cause of ConnectError).
-              const hasVisibleRunButton = queryShadowDOMAll('button, a.monaco-button, [role="button"]').some(el => {
-                  if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
-                  if (!(el.offsetParent || el.clientWidth > 0)) return false;
-                  const t = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
-                  const l = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
-                  return t.includes('run') || l.includes('run') || l.includes('execute');
-              });
-              if (hasVisibleRunButton) {
-                  const input = getSafeChatInput();
-                  if (input) {
-                      try {
-                          input.focus();
-                          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true, cancelable: true, composed: true }));
-                          input.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true, cancelable: true, composed: true }));
-                          actionTaken = true;
-                          lastActionByControl.run = now;
-                          log('Dispatched guarded Alt+Enter to Run (visible button detected)');
-                          emitAction('run', 'guarded alt-enter');
-                      } catch(e) {}
-                  }
-              }
-          }
+          // ALT-ENTER PERMANENTLY DISABLED:
+          // The Antigravity app's built-in extension (google.antigravity) intercepts ALL Alt+Enter
+          // keystrokes dispatched to the chat input and converts them into sendActionToChatPanel
+          // gRPC calls. Each call saturates the gRPC channel, causing ConnectError: channel is full.
+          // This happens regardless of guards or throttling since Antigravity's internal handler
+          // fires synchronously on every KeyboardEvent. We MUST rely on dom-click and native-click.
+          //
+          // If 'alt-enter' is in actionMethods, it is silently skipped.
       }
 
       // 3. Auto-Accept
