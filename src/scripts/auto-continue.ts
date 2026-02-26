@@ -74,7 +74,7 @@ export const AUTO_CONTINUE_SCRIPT = `
          // - 'alt-enter': REMOVED. Sends Alt+Enter to chat input even when no Run button is visible,
          //   waking up the AI with no message and consuming actionTaken so bump never fires.
          run: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 100 },
-         expand: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 50 },
+         expand: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 100 },
          accept: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-first', 'accept-single', 'dom-click'], delayMs: 100 },
          submit: { detectMethods: ['enabled-flag', 'not-generating'], actionMethods: ['click-send', 'enter-key'], delayMs: 100 },
          feedback: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['thumbs-up', 'helpful-button', 'dom-click'], delayMs: 150 }
@@ -847,18 +847,9 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
 
           if (!actionTaken && hasMethod(runControl.actionMethods, 'alt-enter')) {
-              const input = getSafeChatInput();
-              if (input) {
-                  try {
-                      input.focus();
-                      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true, cancelable: true, composed: true }));
-                      input.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true, cancelable: true, composed: true }));
-                      actionTaken = true;
-                      lastActionByControl.run = now;
-                      log('Dispatched localized Alt+Enter to Run');
-                      emitAction('run', 'localized alt-enter');
-                  } catch(e) {}
-              }
+              // Alt-Enter is currently DISABLED as it floods the message channel and 
+              // frequently targets non-chat UI, resulting in 'ConnectError' exceptions.
+              // We rely on dom-click and native-click for run operations.
           }
       }
 
