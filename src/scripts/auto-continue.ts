@@ -396,10 +396,12 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   function isAntigravityRuntime() {
       try {
+          // Only return true if we are specifically inside the Antigravity extension's own webviews
+          // or the Antigravity app itself, not just any VS Code window running the extension.
           return !!(
-              document.querySelector('#antigravity\\.agentPanel') ||
-              document.querySelector('[id*="antigravity" i], [class*="antigravity" i]') ||
-              /antigravity/i.test(String(navigator.userAgent || ''))
+              document.querySelector('#antigravity-panel-root') ||
+              document.querySelector('[data-vscode-context*="antigravity" i]') ||
+              document.title.toLowerCase().includes('antigravity dev')
           );
       } catch (e) {
           return false;
