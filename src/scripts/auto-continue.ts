@@ -1023,7 +1023,7 @@ export const AUTO_CONTINUE_SCRIPT = `
                   // User waiting for response -> Fast Bump
                   computedDelay = Math.max(250, bump.userDelayMs || 3000);
                   shouldBump = true;
-                  bumpText = '...'; // Nudge
+                  bumpText = bump.text || '...'; // Use standard text, fallback to nudge if empty
                   log('Smart Resume: Will bump (user waiting nudging)');
               } else if (state.lastSender === 'ai') {
                   // AI finished text
@@ -1036,7 +1036,7 @@ export const AUTO_CONTINUE_SCRIPT = `
                       // Network error -> Retry
                       computedDelay = Math.max(250, bump.retryDelayMs || 2000);
                       shouldBump = true;
-                      bumpText = 'retry';
+                      bumpText = bump.text || 'retry'; // Use standard text, fallback to retry if empty
                       log('Smart Resume: Will retry (network error)');
                   } else if (state.feedbackVisible || hasMethod(detectMethods, 'feedback-visible')) {
                       shouldBump = true;
