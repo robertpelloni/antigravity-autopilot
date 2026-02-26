@@ -82,8 +82,7 @@ test('Auto-continue submit uses safe chat input helper', () => {
     const autoContinue = fs.readFileSync(autoContinuePath, 'utf-8');
 
     assert.match(autoContinue, /function getSafeChatInput\(\)/, 'auto-continue should define getSafeChatInput helper');
-    // alt-enter is an intentional fallback for run actions
-    assert.match(autoContinue, /actionMethods:\s*\['dom-click',\s*'native-click',\s*'alt-enter'\]/, 'run defaults should include alt-enter fallback');
+    assert.ok(!/alt-enter/.test(autoContinue.match(/run:\s*\{[^}]+\}/)?.[0] || ''), 'run defaults must not include alt-enter fallback');
     assert.ok(!/text === 'run'\s*\|\|\s*label === 'run'/.test(autoContinue), 'run matching must not allow bare "run" labels');
     assert.match(autoContinue, /\[role="menuitem"\]/, 'unsafe context guard should block menuitem surfaces');
     assert.match(autoContinue, /function isChatActionSurface\(el\)/, 'auto-continue should define chat-surface gate helper');
