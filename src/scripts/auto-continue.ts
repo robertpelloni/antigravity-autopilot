@@ -342,11 +342,6 @@ export const AUTO_CONTINUE_SCRIPT = `
         current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
     }
 
-    // 4. Global Workbench safety lock (Prevent clicking native IDE elements)
-    // Allow clicks inside chat panels and composer for Run/Expand/AcceptAll
-    if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview, .pane-body, .chat-list, .interactive-session, [class*="chat" i], [class*="composer" i], .aichat-container, .artifact-view, .cursor-text')) {
-        return "native-workbench-guard";
-    }
 
     return false;
   }
@@ -478,6 +473,21 @@ export const AUTO_CONTINUE_SCRIPT = `
   }
 
   // --- Actions ---
+
+  function highlight(el) {
+      const cfg = getConfig();
+      if (!el || !cfg.debug || !cfg.debug.highlightClicks) return;
+      try {
+          const old = el.style.outline;
+          const oldTrans = el.style.transition;
+          el.style.transition = 'outline 0.1s ease-in-out';
+          el.style.outline = '2px solid #00ff00';
+          setTimeout(() => {
+              el.style.outline = old;
+              setTimeout(() => { if(el) el.style.transition = oldTrans; }, 100);
+          }, 300);
+      } catch(e) {}
+  }
 
     function tryClick(selector, name, group) {
       const els = queryShadowDOMAll(selector);
