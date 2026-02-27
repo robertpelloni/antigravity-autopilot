@@ -497,109 +497,7 @@ export const AUTO_CONTINUE_SCRIPT = `
              targetToClick.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
              targetToClick.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
              targetToClick.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-             log('Clicked ' + name);
-             emitAction(group || 'click', name);
-             return true; 
-          }
-      }
-      return false;
-  }
-
-  function dispatchInputEvents(input, text) {
-      input.focus();
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
-      if (nativeInputValueSetter) {
-          nativeInputValueSetter.call(input, text);
-      } else {
-          input.value = text;
-      }
-      
-      // Some React apps need this exact sequence to register
-      input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-  }
-
-  function getSafeChatInput() {
-      const selectors = [
-          '.artifact-view [contenteditable="true"]',
-          '.cursor-text[contenteditable="true"]',
-          '[class*="composer" i] textarea',
-          '[class*="composer" i] [contenteditable="true"]',
-          '[class*="composer" i] .ProseMirror',
-          '.aichat-container textarea',
-          '.aichat-container [contenteditable="true"]',
-          '[id*="chat-input" i]',
-          '[aria-label*="Chat Input" i]',
-          '.interactive-input-part textarea',
-          '.chat-input-widget textarea',
-          'textarea[placeholder*="Ask" i]',
-          'textarea[placeholder*="Message" i]',
-          'vscode-text-area',
-          '[contenteditable="true"]'
-      ].join(',');
-
-      const candidates = queryShadowDOMAll(selectors);
-      for (const el of candidates) {
-          if (!el) continue;
-          if (isNodeBanned(el)) { log('getSafeChatInput: Rejected banned node ' + (el.tagName||'')); continue; }
-          const unsafeReason = isUnsafeContext(el);
-          if (unsafeReason && unsafeReason !== 'native-workbench-guard') { 
-              log('getSafeChatInput: Rejected unsafe context ' + (el.tagName||'') + ' reason: ' + unsafeReason); 
-              continue; 
-          }
-
-          if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) { 
-             log('getSafeChatInput: Rejected invisible element ' + (el.tagName||'')); 
-             continue; 
-          }
-
-          const tag = (el.tagName || '').toUpperCase();
-          if (tag === 'TEXTAREA' || tag === 'VSCODE-TEXT-AREA' || el.isContentEditable || el.hasAttribute('contenteditable')) {
-              return el;
-          }
-
-          const inner = el.querySelector && el.querySelector('textarea, [contenteditable="true"]');
-          if (inner && !isNodeBanned(inner) && (inner.offsetParent || inner.clientWidth > 0 || inner.clientHeight > 0)) {
-              return inner;
-          }
-      }
-
-      // Fallback: just find the first visible textarea on the screen if we couldn't find a widget
-      const fallbackInputs = queryShadowDOMAll('textarea, vscode-text-area');
-      for (const el of fallbackInputs) {
-          if (isNodeBanned(el)) { log('getSafeChatInput(fallback): Rejected banned node ' + (el.tagName||'')); continue; }
-          if (!isChatActionSurface(el)) { log('getSafeChatInput(fallback): Rejected not in chat surface ' + (el.tagName||'')); continue; }
-          const unsafeReason = isUnsafeContext(el);
-          if (unsafeReason && unsafeReason !== 'native-workbench-guard') { 
-              log('getSafeChatInput(fallback): Rejected unsafe context ' + (el.tagName||'') + ' reason: ' + unsafeReason); 
-              continue; 
-          }
-
-          if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) { 
-             log('getSafeChatInput(fallback): Rejected invisible element ' + (el.tagName||'')); 
-             continue; 
-          }
-          return el;
-      }
-      return null;
-  }
-
-  function typeAndSubmit(text) {
-      const cfg = getConfig();
-      const bump = getBumpConfig(cfg);
-      
-      let input = getSafeChatInput();
-      
-      if (!input) return false;
-
-      let val = '';
-      const tag = (input.tagName || '').toUpperCase();
-      if (tag === 'TEXTAREA' || tag === 'VSCODE-TEXT-AREA') {
-          val = input.value || '';
-      } else {
-          val = input.innerText || input.textContent || '';
-      }
-
+type
       const hasText = val.trim().length > 0;
       const existingTextLength = val.length;
 
@@ -609,51 +507,53 @@ export const AUTO_CONTINUE_SCRIPT = `
           input.focus();
 
           let typed = false;
-          if (hasMethod(bump.typeMethods, 'exec-command')) {
-              try { typed = !!document.execCommand('insertText', false, text); } catch(e) {}
-          }
 
-          if (!typed && tag !== 'TEXTAREA' && tag !== 'VSCODE-TEXT-AREA') {
-              // It's a [contenteditable] element like ProseMirror. Use Paste event.
+          if (tag !== 'TEXTAREA' && tag !== 'VSCODE-TEXT-AREA') {
+              // Ensure selection is inside the contenteditable for execCommand to work natively
               try {
-                  const dataTransfer = new DataTransfer();
-                  dataTransfer.setData('text/plain', text);
-                  const pasteEvent = new ClipboardEvent('paste', {
-                      clipboardData: dataTransfer,
-                      bubbles: true,
-                      cancelable: true
-                  });
-                  input.dispatchEvent(pasteEvent);
-                  typed = true;
+                  const range = document.createRange();
+                  range.selectNodeContents(input);
+                  range.collapse(false); // Move cursor to the end
+                  const sel = window.getSelection();
+                  if (sel) {
+                      sel.removeAllRanges();
+                      sel.addRange(range);
+                  }
               } catch(e) {}
-          }
+              
+              if (hasMethod(bump.typeMethods, 'exec-command')) {
+                  try { typed = !!document.execCommand('insertText', false, text); } catch(e) {}
+              }
+              
+              if (!typed) {
+                  try { 
+                      document.execCommand('insertHTML', false, text); 
+                      typed = true; 
+                  } catch(e) {}
+              }
+          } else {
+              if (hasMethod(bump.typeMethods, 'exec-command')) {
+                  try { typed = !!document.execCommand('insertText', false, text); } catch(e) {}
+              }
 
-          if (!typed && hasMethod(bump.typeMethods, 'native-setter')) {
-              try {
-                  if (tag === 'TEXTAREA' || tag === 'VSCODE-TEXT-AREA') {
+              if (!typed && hasMethod(bump.typeMethods, 'native-setter')) {
+                  try {
                       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
                       if (nativeInputValueSetter) {
                           nativeInputValueSetter.call(input, text);
                       } else {
                           input.value = text;
                       }
-                  } else {
-                      // Fallback text injection (Dangerous for ProseMirror, but fallback)
-                      document.execCommand('insertHTML', false, text);
-                  }
-                  typed = true;
-              } catch(e) {}
-          }
-
-          if (!typed && hasMethod(bump.typeMethods, 'dispatch-events')) {
-              if (tag === 'TEXTAREA' || tag === 'VSCODE-TEXT-AREA') {
-                 input.value = input.value || text;
+                      typed = true;
+                  } catch(e) {}
               }
-              typed = true;
-          }
 
-          if (!typed) {
-              if (tag === 'TEXTAREA' || tag === 'VSCODE-TEXT-AREA') {
+              if (!typed && hasMethod(bump.typeMethods, 'dispatch-events')) {
+                  input.value = input.value || text;
+                  typed = true;
+              }
+
+              if (!typed) {
                   input.value = text;
               }
           }
