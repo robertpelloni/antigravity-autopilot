@@ -135,10 +135,15 @@ export const AUTO_CONTINUE_SCRIPT = `
   }
 
   function log(msg) {
-    const cfg = getConfig();
-    if (cfg.debug?.verboseLogging) {
-      console.log('[auto-continue] ' + msg);
-    }
+      if (window.__antigravityConfig && window.__antigravityConfig.debug.logToExtension) {
+          if (typeof window.__AUTOPILOT_BRIDGE__ === 'function') {
+              window.__AUTOPILOT_BRIDGE__('__AUTOPILOT_LOG__:' + msg);
+          } else {
+              console.log('__AUTOPILOT_LOG__:' + msg);
+          }
+      } else {
+          console.log('[AutoContinue] ' + msg);
+      }
   }
 
   function emitBridge(payload) {
@@ -250,9 +255,9 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       // Text / Label checks (Extremely strict)
       // DANGER: We NEVER include node.textContent here, as it permanently bans the Chat Input
-      // if the user types "add context" into the box!
+      // if the user types "clear chat" into the box!
       const attrs = ((node.getAttribute('aria-label') || '') + ' ' + (node.getAttribute('title') || '')).toLowerCase();
-      if (/(customize layout|layout control|add context|attach context|attach a file|new chat|clear chat|clear session)/i.test(attrs)) {
+      if (/(customize layout|layout control|new chat|clear chat|clear session)/i.test(attrs)) {
           bannedCache.add(node);
           return true;
       }
@@ -309,7 +314,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     // 1. Check the element itself for unsafe text
     try {
         const attrs = ((el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')).toLowerCase();
-        if (/(extension|marketplace|plugin|install|uninstall|customize layout|layout control|add context|attach context|attach a file|new chat|clear chat|clear session|view as|open in)/i.test(attrs)) {
+        if (/(extension|marketplace|plugin|install|uninstall|customize layout|layout control|new chat|clear chat|clear session|view as|open in)/i.test(attrs)) {
             return "unsafe-attributes";
         }
     } catch(e) {}
@@ -327,7 +332,7 @@ export const AUTO_CONTINUE_SCRIPT = `
         if (current.nodeType === 1) { // ELEMENT_NODE
             // Text/Attribute bans on parents
             const attrs = ((current.getAttribute('aria-label') || '') + ' ' + (current.getAttribute('title') || '')).toLowerCase();
-            if (/(customize layout|layout control|add context|attach context|new chat|clear chat|clear session)/i.test(attrs)) {
+            if (/(customize layout|layout control|new chat|clear chat|clear session)/i.test(attrs)) {
                 return "banned-ancestor-attrs";
             }
 
@@ -349,7 +354,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     // 4. Global Workbench safety lock (Prevent clicking native IDE elements)
     // Allow clicks inside chat panels (.pane-body, .chat-list, .interactive-session) for Run/Expand/AcceptAll
-    if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview, .pane-body, .chat-list, .interactive-session, [class*="chat" i]')) {
+    if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview, .pane-body, .chat-list, .interactive-session, [class*="chat" i], .monaco-list-row, .interactive-editor, .chat-input-widget, .interactive-input-part, .editor-instance')) {
         return "native-workbench-guard";
     }
 
@@ -1171,7 +1176,7 @@ export const AUTO_CONTINUE_SCRIPT = `
   scheduleNext();
   
   // Expose state for CDP
-  window.__antigravityGetState = analyzeChatState;
+  window.__autopilotGetRuntimeState = analyzeChatState;
   window.__antigravityTypeAndSubmit = typeAndSubmit;
 
   window.stopAutoContinue = () => {

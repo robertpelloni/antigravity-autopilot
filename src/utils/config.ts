@@ -170,7 +170,7 @@ export class ConfigManager {
         const blockedClickMethods = new Set(['bridge-click']);
         const blockedSubmitMethods = new Set([]);
 
-        const safeDefaultClickMethods = ['dom-scan-click', 'vscode-cmd'];
+        const safeDefaultClickMethods = ['dom-scan-click', 'vscode-cmd', 'script-force'];
         const safeDefaultSubmitMethods = ['vscode-submit', 'script-submit'];
 
         const interactionClickMethods = sanitizeMethods(
@@ -192,14 +192,14 @@ export class ConfigManager {
         );
 
         const interactionClickMethodsAntigravity = sanitizeMethods(
-            config.get('interactionClickMethodsAntigravity', ['dom-scan-click']),
-            ['dom-scan-click'],
+            config.get('interactionClickMethodsAntigravity', ['dom-scan-click', 'vscode-cmd']),
+            ['dom-scan-click', 'vscode-cmd'],
             blockedClickMethods
         );
 
         const interactionClickMethodsCursor = sanitizeMethods(
-            config.get('interactionClickMethodsCursor', ['dom-scan-click']),
-            ['dom-scan-click'],
+            config.get('interactionClickMethodsCursor', ['dom-scan-click', 'vscode-cmd']),
+            ['dom-scan-click', 'vscode-cmd'],
             blockedClickMethods
         );
 

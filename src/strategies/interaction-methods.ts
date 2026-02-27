@@ -323,7 +323,7 @@ export class DOMScanClick implements IInteractionMethod {
                     while(current) {
                         if (current.nodeType === 1) { // ELEMENT_NODE
                              const attrs = ((current.getAttribute('aria-label') || '') + ' ' + (current.getAttribute('title') || '')).toLowerCase();
-                             if (/(customize layout|layout control|add context|attach context|attach a file|new chat|clear chat|clear session|view as|open in)/i.test(attrs)) return true;
+                             if (/(customize layout|layout control|new chat|clear chat|clear session|view as|open in)/i.test(attrs)) return true;
                              if (current.matches && current.matches('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box, .monaco-menu, .monaco-menu-container, .menubar, .menubar-menu-button, [role="menu"], [role="menuitem"], [role="menubar"]')) return true;
                              if (current.getAttribute('role') === 'tab' || current.getAttribute('role') === 'tablist') return true;
                         }
@@ -332,7 +332,7 @@ export class DOMScanClick implements IInteractionMethod {
                     
                     // Global Workbench safety lock (Prevent clicking native IDE elements outside of safe embedded content like webviews)
                     if (window === window.top) {
-                        if (el.closest && el.closest('.monaco-workbench') && !el.closest('iframe, webview, .webview, #webview')) {
+                        if (el.closest && el.closest('.monaco-workbench') && !el.closest('iframe, webview, .webview, #webview, .pane-body, .chat-list, .interactive-session, [class*="chat" i], .monaco-list-row, .interactive-editor, .chat-input-widget, .interactive-input-part, .editor-instance')) {
                              return true;
                         }
                     }
@@ -461,11 +461,15 @@ export class VSCodeSubmitCommands implements IInteractionMethod {
     ];
 
     async execute(ctx: InteractionContext): Promise<boolean> {
-        if (!ctx.vscodeCommands) return false;
+        if (!ctx.vscodeCommands || VSCodeSubmitCommands.SUBMIT_COMMANDS.length === 0) return false;
+        let atLeastOneSuccess = false;
         for (const cmd of VSCodeSubmitCommands.SUBMIT_COMMANDS) {
-            try { await ctx.vscodeCommands.executeCommand(cmd); } catch { /* ignore */ }
+            try {
+                await ctx.vscodeCommands.executeCommand(cmd);
+                atLeastOneSuccess = true;
+            } catch { /* ignore */ }
         }
-        return true;
+        return atLeastOneSuccess;
     }
 }
 

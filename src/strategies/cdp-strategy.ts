@@ -106,7 +106,6 @@ export class CDPStrategy implements IStrategy {
         this.isActive = true;
         this.updateStatusBar();
 
-        // Connect to ALL windows (do not filter by workspace) so the Leader can orchestrate Followers
         let connected = await this.cdpHandler.connect();
         if (!connected) {
             // Fallback
@@ -116,6 +115,12 @@ export class CDPStrategy implements IStrategy {
             vscode.window.showWarningMessage('Antigravity: CDP connection failed. Retrying in background...');
             logToOutput('[CDPStrategy] Initial CDP connect failed (filtered + unfiltered fallback).');
         }
+
+        // Listen for frontend actions that failed DOM clicks and need Native fallback
+        this.cdpHandler.on('action', async ({ group, detail }) => {
+            logToOutput(`[CDPStrategy] Received fallback action from frontend: ${group} (${detail})`);
+            await this.executeAction(group);
+        });
 
         this.syncBlindBumpHandlerState();
 
@@ -212,14 +217,16 @@ export class CDPStrategy implements IStrategy {
                 SoundEffects.playActionGroup('run');
                 await this.createActionSafeClickRegistry(profile).executeCategory('click', {
                     ...ctx,
-                    selector
+                    selector,
+                    commandId: 'workbench.action.terminal.chat.runCommand'
                 });
                 break;
             case 'expand':
                 SoundEffects.playActionGroup('expand');
                 await this.createActionSafeClickRegistry(profile).executeCategory('click', {
                     ...ctx,
-                    selector
+                    selector,
+                    commandId: 'workbench.action.terminal.chat.viewInEditor'
                 });
                 break;
             default:

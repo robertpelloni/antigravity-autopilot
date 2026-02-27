@@ -407,10 +407,28 @@ export class CDPHandler extends EventEmitter {
                         }
                         this.sendCommand(page.id, 'Page.enable', {}, undefined, sessionId).catch(() => { });
                         this.sendCommand(page.id, 'Runtime.enable', {}, undefined, sessionId).catch(() => { });
-                        if (page.type === 'page') {
-                            this.sendCommand(page.id, 'Runtime.addBinding', { name: '__AUTOPILOT_BRIDGE__' }, undefined, sessionId).catch(() => { });
-                            this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' }, undefined, sessionId).catch(() => { }); // legacy sinkhole
+
+                        // Add Bridge Binding generically to all sessions, since chat inputs are often in unprivileged internal webviews
+                        this.sendCommand(page.id, 'Runtime.addBinding', { name: '__AUTOPILOT_BRIDGE__' }, undefined, sessionId).catch(() => { });
+                        this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' }, undefined, sessionId).catch(() => { });
+
+                        if (config.get<boolean>('autoContinueScriptEnabled') !== false) {
+                            try {
+                                this.sendCommand(page.id, 'Runtime.evaluate', {
+                                    expression: this.getAutomationConfigExpression(),
+                                    awaitPromise: false
+                                }, undefined, sessionId).catch(e => console.error(`[CDP] config injection error on session ${sessionId}`, e));
+
+                                this.sendCommand(page.id, 'Runtime.evaluate', {
+                                    expression: AUTO_CONTINUE_SCRIPT,
+                                    awaitPromise: false
+                                }, undefined, sessionId).catch(e => console.error(`[CDP] script injection error on session ${sessionId}`, e));
+                                console.log(`[CDP] Injected Auto-Continue Script into nested session ${sessionId}`);
+                            } catch (e) {
+                                console.error(`[CDP] Failed to inject Auto-Continue into nested session ${sessionId}`, e);
+                            }
                         }
+
                         this.sendCommand(page.id, 'DOM.enable', {}, undefined, sessionId).catch(() => { });
                         this.emit('sessionAttached', { pageId: page.id, sessionId, type: targetInfo?.type, url: targetInfo?.url });
                     }
@@ -660,6 +678,8 @@ export class CDPHandler extends EventEmitter {
                     // Safety hardening: never translate script-level "submit|keys" into global CDP Enter.
                     // Focus drift here can activate Run menu / Customize Layout instead of chat submit.
                     logToOutput(`[AutoAction:submit] Blocked unsafe CDP Enter relay for submit|keys`);
+                } else if (group === 'run' || group === 'expand' || group === 'continue' || group === 'accept' || group === 'submit' || group === 'type') {
+                    this.emit('action', { group, detail });
                 }
             } else if (text.startsWith('__AUTOPILOT_LOG__:')) {
                 const raw = text.substring('__AUTOPILOT_LOG__:'.length);
