@@ -196,10 +196,6 @@ export const AUTO_CONTINUE_SCRIPT = `
   }
 
         function controlGatePass(controlName, cfg, state, now, controlLastActionTime) {
-            if ((controlName === 'run' || controlName === 'expand') && isAntigravityRuntime()) {
-                bumpSafetyCounter('blockedRunExpandInAgRuntime');
-                    return false;
-            }
 
       const control = getControlConfig(cfg, controlName);
       const detect = control.detectMethods || [];
@@ -396,13 +392,10 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   function isAntigravityRuntime() {
       try {
-          // Only return true if we are specifically inside the Antigravity extension's own webviews
-          // or the Antigravity app itself, not just any VS Code window running the extension.
-          return !!(
-              document.querySelector('#antigravity-panel-root') ||
-              document.querySelector('[data-vscode-context*="antigravity" i]') ||
-              document.title.toLowerCase().includes('antigravity dev')
-          );
+          // Strict check: Only return true if the extension's own React dashboard panel is
+          // actively rendered. The previous checks for data-vscode-context and document.title
+          // caused false positives on EVERY Antigravity fork window, blocking all Run/Expand.
+          return !!document.getElementById('antigravity-panel-root');
       } catch (e) {
           return false;
       }
