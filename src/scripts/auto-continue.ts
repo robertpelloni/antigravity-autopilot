@@ -509,19 +509,31 @@ type
           let typed = false;
 
           if (tag !== 'TEXTAREA' && tag !== 'VSCODE-TEXT-AREA') {
-              // Ensure selection is inside the contenteditable for execCommand to work natively
+              // It's a [contenteditable] element like ProseMirror.
+              // ProseMirror ignores insertText but listens to Paste. We must mock the clipboard so it doesn't paste the user's real clipboard.
               try {
-                  const range = document.createRange();
-                  range.selectNodeContents(input);
-                  range.collapse(false); // Move cursor to the end
-                  const sel = window.getSelection();
-                  if (sel) {
-                      sel.removeAllRanges();
-                      sel.addRange(range);
+                  const originalClipboardRead = navigator.clipboard ? navigator.clipboard.readText : null;
+                  if (navigator.clipboard) {
+                      navigator.clipboard.readText = async () => text;
                   }
+
+                  const dataTransfer = new DataTransfer();
+                  dataTransfer.setData('text/plain', text);
+                  const pasteEvent = new ClipboardEvent('paste', {
+                      clipboardData: dataTransfer,
+                      bubbles: true,
+                      cancelable: true
+                  });
+                  input.dispatchEvent(pasteEvent);
+                  
+                  // Restore clipboard
+                  if (navigator.clipboard && originalClipboardRead) {
+                      navigator.clipboard.readText = originalClipboardRead;
+                  }
+                  typed = true;
               } catch(e) {}
               
-              if (hasMethod(bump.typeMethods, 'exec-command')) {
+              if (!typed && hasMethod(bump.typeMethods, 'exec-command')) {
                   try { typed = !!document.execCommand('insertText', false, text); } catch(e) {}
               }
               
@@ -712,9 +724,9 @@ type
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
                   if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) return false;
                   if (!isChatActionSurface(el)) return false;
-                  const t = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
-                  const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
-                  return t === 'accept all' || t.includes('accept all') || label.includes('accept all');
+                  const t = (el.textContent || '').replace(/\s+/g, '').toLowerCase(); // match acceptall regardless of space
+                  const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase().replace(/\s+/g, '');
+                  return t.includes('acceptall') || label.includes('acceptall');
               });
               if (acceptMatch) {
                   const clickTarget = acceptMatch.closest('button, a') || acceptMatch;
