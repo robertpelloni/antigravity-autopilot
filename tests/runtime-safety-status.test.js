@@ -15,7 +15,7 @@ test('Runtime safety telemetry is surfaced in status/diagnostics paths', async (
 
     await t.test('extension defines safety telemetry summary helper', () => {
         assert.match(source, /const getSafetyTelemetrySummary = \(state\?: any\) =>/, 'extension should define reusable safety telemetry summary helper');
-        assert.match(source, /const signal = total >= 10 \? 'HOT' : total > 0 \? 'ACTIVE' : 'QUIET';/, 'helper should classify safety signal severity from blocked totals');
+        assert.match(source, /const signal = \(total >= 10 \? 'HOT' : total > 0 \? 'ACTIVE' : 'QUIET'\)/, 'helper should classify safety signal severity from blocked totals');
     });
 
     await t.test('status menu includes safety line item', () => {

@@ -8,7 +8,9 @@ const PACKAGE_JSON_PATH = path.join(ROOT, 'package.json');
 const EXTENSION_TS_PATH = path.join(ROOT, 'src', 'extension.ts');
 
 const INTERNAL_ONLY_COMMANDS = new Set([
-    'antigravity.getChromeDevtoolsMcpUrl'
+    'antigravity.getChromeDevtoolsMcpUrl',
+    'antigravity.clearAutoAll',
+    'antigravity.writeAndSubmitBump'
 ]);
 
 test('Command manifest parity', async (t) => {

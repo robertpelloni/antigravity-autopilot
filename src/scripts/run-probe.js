@@ -1,19 +1,51 @@
 const CDP = require('chrome-remote-interface');
-const fs = require('fs');
 
 async function run() {
     let client;
     try {
-        const script = fs.readFileSync('C:/Users/hyper/workspace/antigravity-autopilot/src/scripts/probe-textareas.js', 'utf8');
-        // connect to endpoint
         client = await CDP({ port: 9222 });
-
-        // extract domains
         const { Runtime } = client;
 
-        // evaluate the script text
+        const script = `
+            (function() {
+                const el = document.querySelector('.cursor-text[contenteditable="true"]') || document.querySelector('.artifact-view [contenteditable="true"]');
+                if (!el) return "Not found";
+                
+                el.focus();
+                
+                // Try execCommand
+                const res1 = document.execCommand('insertText', false, 'test_execCommand ');
+                
+                // Try TextEvent
+                let res2 = false;
+                try {
+                    const event = document.createEvent('TextEvent');
+                    event.initTextEvent('textInput', true, true, null, 'test_textEvent ', 9, 'en-US');
+                    el.dispatchEvent(event);
+                    res2 = true;
+                } catch(e) {}
+                
+                // Try InputEvent
+                const eventInput = new InputEvent('input', {
+                    inputType: 'insertText',
+                    data: 'test_InputEvent ',
+                    bubbles: true,
+                    cancelable: true
+                });
+                const res3 = el.dispatchEvent(eventInput);
+                
+                // Try DataTransfer paste without mock
+                const dt = new DataTransfer();
+                dt.setData('text/plain', 'test_paste ');
+                const paste = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+                const res4 = el.dispatchEvent(paste);
+                
+                return "execCommand: " + res1 + ", TextEvent: " + res2 + ", InputEvent: " + res3 + ", PasteEvent: " + res4;
+            })()
+        `;
+
         const result = await Runtime.evaluate({
-            expression: `(function(){ ${script} ; return JSON.stringify(out, null, 2); })()`,
+            expression: script,
             returnByValue: true
         });
 
@@ -21,9 +53,7 @@ async function run() {
     } catch (err) {
         console.error(err);
     } finally {
-        if (client) {
-            await client.close();
-        }
+        if (client) await client.close();
     }
 }
 
