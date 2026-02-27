@@ -1065,7 +1065,14 @@ type
   
   // Expose state for CDP
   window.__antigravityGetState = analyzeChatState;
-  window.__antigravityTypeAndSubmit = typeAndSubmit;
+  window.__antigravityTypeAndSubmit = async (text: string) => {
+      const input = getSafeChatInput();
+      if (input) {
+          await typeAndSubmit(input, text);
+      } else {
+          log('Failed to find input for typeAndSubmit via CDP');
+      }
+  };
 
   window.stopAutoContinue = () => {
     if (pollTimer) clearTimeout(pollTimer);
