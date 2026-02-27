@@ -343,8 +343,8 @@ export const AUTO_CONTINUE_SCRIPT = `
     }
 
     // 4. Global Workbench safety lock (Prevent clicking native IDE elements)
-    // Allow clicks inside chat panels (.pane-body, .chat-list, .interactive-session) for Run/Expand/AcceptAll
-    if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview, .pane-body, .chat-list, .interactive-session, [class*="chat" i]')) {
+    // Allow clicks inside chat panels and composer for Run/Expand/AcceptAll
+    if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview, .pane-body, .chat-list, .interactive-session, [class*="chat" i], [class*="composer" i], .aichat-container')) {
         return "native-workbench-guard";
     }
 
@@ -359,7 +359,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       if (!el) return false;
 
       const blockedShell = '.part.titlebar, .part.activitybar, .part.statusbar, .menubar, .menubar-menu-button, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"]';
-      const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], .monaco-list-row, .pane-body';
+      const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], [class*="composer" i], .aichat-container, .monaco-list-row, .pane-body';
 
       let hasBlockedAncestor = false;
       let current = el;
@@ -387,7 +387,10 @@ export const AUTO_CONTINUE_SCRIPT = `
           current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
       }
 
-      return false;
+      // Default: allow clicks. blockedShell provides sufficient safety.
+      // Previously returned false, which silently blocked ALL clicks when the chat
+      // container class names didn't match (e.g. Cursor Composer).
+      return true;
   }
 
   function isAntigravityRuntime() {
@@ -518,6 +521,8 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   function getSafeChatInput() {
       const selectors = [
+          '[class*="composer" i] textarea',
+          '[class*="composer" i] [contenteditable="true"]',
           '[id*="chat-input" i]',
           '[aria-label*="Chat Input" i]',
           '.interactive-input-part textarea',
