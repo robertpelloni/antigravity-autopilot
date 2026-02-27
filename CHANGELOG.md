@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
-Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.168] - 2026-02-26
+### Fixed
+* **Auto-Continue Cursor Run Action**: Repaired auto-run functionality inside Cursor's Composer and native chat surfaces. Broadened the global workbench chat safety whitelist to include `[class*="composer"]` and `.aichat-container`, and explicitly appended `.codicon-play` matching to the `analyzeChatState` visual signal text detector.
+
 ## [5.2.167] - 2026-02-26
 ### Fixed
 * **TypeScript Compilation Errors**: Fixed type mismatch vulnerabilities where explicit configuration arrays (`string[]`) were improperly compared against boolean literals during fallback option derivation.

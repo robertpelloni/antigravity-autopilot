@@ -354,7 +354,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     // 4. Global Workbench safety lock (Prevent clicking native IDE elements)
     // Allow clicks inside chat panels (.pane-body, .chat-list, .interactive-session) for Run/Expand/AcceptAll
-    if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview, .pane-body, .chat-list, .interactive-session, [class*="chat" i], .monaco-list-row, .interactive-editor, .chat-input-widget, .interactive-input-part, .editor-instance')) {
+    if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview, .pane-body, .chat-list, .interactive-session, [class*="chat" i], [class*="composer" i], .composer-bar, .monaco-list-row, .interactive-editor, .chat-input-widget, .interactive-input-part, .editor-instance, .aichat-container')) {
         return "native-workbench-guard";
     }
 
@@ -369,7 +369,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       if (!el) return false;
 
       const blockedShell = '.part.titlebar, .part.activitybar, .part.statusbar, .menubar, .menubar-menu-button, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"]';
-      const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], .monaco-list-row, .pane-body';
+      const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], [class*="composer" i], .aichat-container, .monaco-list-row, .pane-body';
 
       // WEBVIEW/IFRAME DETECTION: If there is no .monaco-workbench root, we are inside
       // a webview or iframe (follower window). In this context, the VS Code host classes
@@ -475,7 +475,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
           if (t.includes('accept all') || attr.includes('accept all')) extAcceptAll++;
           if (t === 'accept' || t === 'apply' || (t.includes('accept') && t.includes('code')) || attr.includes('accept') || attr.includes('apply')) extAccept++;
-          if (t === 'run' || (t.includes('run') && t.includes('terminal')) || attr.includes('run')) extRun++;
+          if (t === 'run' || (t.includes('run') && t.includes('terminal')) || attr.includes('run') || t === 'execute' || attr.includes('execute') || attr.includes('play') || b.classList.contains('codicon-play') || b.classList.contains('codicon-run') || b.classList.contains('codicon-terminal')) extRun++;
           if (t === 'good' || t === 'bad' || t === 'helpful' || t === 'unhelpful' || t === 'upvote' || t === 'downvote' || attr.includes('upvote') || attr.includes('downvote')) extFeedback++;
       }
 
@@ -505,7 +505,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           acceptAll: extAcceptAll + queryShadowDOMAll('[title*="Accept All" i], [aria-label*="Accept All" i], button:has(.codicon-check-all)').length,
           keep: queryShadowDOMAll('[title="Keep" i], [aria-label="Keep" i], button[title*="Keep" i], button[aria-label*="Keep" i]').length,
           allow: queryShadowDOMAll('[title*="Allow" i], [aria-label*="Allow" i], button[title*="Allow" i], button[aria-label*="Allow" i]').length,
-          run: extRun + queryShadowDOMAll('[title*="Run in Terminal" i], [aria-label*="Run in Terminal" i], [title*="Run command" i], [aria-label*="Run command" i], [title*="Execute command" i], [aria-label*="Execute command" i]').length,
+          run: extRun + queryShadowDOMAll('[title*="Run in Terminal" i], [aria-label*="Run in Terminal" i], [title*="Run command" i], [aria-label*="Run command" i], [title*="Execute command" i], [aria-label*="Execute command" i], .codicon-play, .codicon-run, .codicon-terminal, [title*="Play" i], [aria-label*="Play" i]').length,
           expand: extExpand + queryShadowDOMAll('[title*="Expand" i], [aria-label*="Expand" i], .monaco-tl-twistie.collapsed, .expand-indicator.collapsed').length,
           continue: queryShadowDOMAll('a.monaco-button, button.monaco-button').length,
           submit: queryShadowDOMAll('[title="Send" i], [aria-label="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send').length,
@@ -887,7 +887,12 @@ export const AUTO_CONTINUE_SCRIPT = `
               '[title*="Run command" i]',
               '[aria-label*="Run command" i]',
               '[title*="Execute command" i]',
-              '[aria-label*="Execute command" i]'
+              '[aria-label*="Execute command" i]',
+              '[title*="Play" i]',
+              '[aria-label*="Play" i]',
+              '.codicon-play',
+              '.codicon-run',
+              '.codicon-terminal'
           ].join(',');
 
           if (hasMethod(runControl.actionMethods, 'dom-click')) {
@@ -896,11 +901,18 @@ export const AUTO_CONTINUE_SCRIPT = `
                   if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
                   if (!(el.offsetParent || el.clientWidth > 0)) return false;
-                  if (!isChatActionSurface(el)) return false;
+                  if (!isChatActionSurface(el)) {
+                      // log('Run Match: Failed isChatActionSurface for', el.className);
+                      return false;
+                  }
                   const text = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
                   const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
                   return text.includes('run') || label.includes('run')
-                      || text.includes('execute') || label.includes('execute');
+                      || text.includes('execute') || label.includes('execute')
+                      || el.classList.contains('codicon-play') 
+                      || el.classList.contains('codicon-run') 
+                      || el.classList.contains('codicon-terminal')
+                      || label.includes('play');
               });
               if (textMatch) {
                   highlight(textMatch);
@@ -919,7 +931,11 @@ export const AUTO_CONTINUE_SCRIPT = `
                   if (isUnsafeContext(el) || hasUnsafeLabel(el) || isNodeBanned(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
                   if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) return false;
-                  return isChatActionSurface(el);
+                  if (!isChatActionSurface(el)) {
+                      // log('Run Match: Failed isChatActionSurface for', el.className);
+                      return false;
+                  }
+                  return true;
               });
 
               if (runTarget) {
