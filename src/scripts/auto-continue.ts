@@ -521,6 +521,8 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   function getSafeChatInput() {
       const selectors = [
+          '.artifact-view [contenteditable="true"]',
+          '.cursor-text[contenteditable="true"]',
           '[class*="composer" i] textarea',
           '[class*="composer" i] [contenteditable="true"]',
           '[class*="composer" i] .ProseMirror',
@@ -611,6 +613,21 @@ export const AUTO_CONTINUE_SCRIPT = `
               try { typed = !!document.execCommand('insertText', false, text); } catch(e) {}
           }
 
+          if (!typed && tag !== 'TEXTAREA' && tag !== 'VSCODE-TEXT-AREA') {
+              // It's a [contenteditable] element like ProseMirror. Use Paste event.
+              try {
+                  const dataTransfer = new DataTransfer();
+                  dataTransfer.setData('text/plain', text);
+                  const pasteEvent = new ClipboardEvent('paste', {
+                      clipboardData: dataTransfer,
+                      bubbles: true,
+                      cancelable: true
+                  });
+                  input.dispatchEvent(pasteEvent);
+                  typed = true;
+              } catch(e) {}
+          }
+
           if (!typed && hasMethod(bump.typeMethods, 'native-setter')) {
               try {
                   if (tag === 'TEXTAREA' || tag === 'VSCODE-TEXT-AREA') {
@@ -621,8 +638,8 @@ export const AUTO_CONTINUE_SCRIPT = `
                           input.value = text;
                       }
                   } else {
-                      // It's a [contenteditable] element like ProseMirror
-                      input.textContent = text;
+                      // Fallback text injection (Dangerous for ProseMirror, but fallback)
+                      document.execCommand('insertHTML', false, text);
                   }
                   typed = true;
               } catch(e) {}
@@ -631,8 +648,6 @@ export const AUTO_CONTINUE_SCRIPT = `
           if (!typed && hasMethod(bump.typeMethods, 'dispatch-events')) {
               if (tag === 'TEXTAREA' || tag === 'VSCODE-TEXT-AREA') {
                  input.value = input.value || text;
-              } else {
-                 if (!input.textContent) input.textContent = text;
               }
               typed = true;
           }
@@ -640,8 +655,6 @@ export const AUTO_CONTINUE_SCRIPT = `
           if (!typed) {
               if (tag === 'TEXTAREA' || tag === 'VSCODE-TEXT-AREA') {
                   input.value = text;
-              } else {
-                  input.textContent = text;
               }
           }
 

@@ -1,7 +1,7 @@
-// Basic script to probe current Cursor DOM when run via developer tools
-const contenteditables = document.querySelectorAll('[contenteditable="true"]');
+// Probing for webviews or iframes
+const frames = document.querySelectorAll('webview, iframe');
 let out = [];
-contenteditables.forEach(t => {
+frames.forEach(t => {
     let p = t;
     let path = [];
     while (p && p.tagName) {
@@ -9,8 +9,10 @@ contenteditables.forEach(t => {
         p = p.parentElement;
     }
     out.push({
-        val: t.value || t.innerText,
+        tag: t.tagName,
+        src: t.src || t.getAttribute('src'),
         vis: t.offsetParent !== null,
+        dims: `${t.clientWidth}x${t.clientHeight}`,
         path: path.reverse().join(' > ')
     });
 });
