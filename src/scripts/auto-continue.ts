@@ -438,7 +438,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
 
       // Text checks for signals
-      const allBtns = queryShadowDOMAll('button, a, .monaco-button');
+      const allBtns = queryShadowDOMAll('button, a, .monaco-button, [role="button"], [tabindex], .clickable, .codicon');
       let extExpand = 0, extAcceptAll = 0, extAccept = 0, extRun = 0, extFeedback = 0;
       for (const b of allBtns) {
           if (isUnsafeContext(b) || hasUnsafeLabel(b)) continue;
@@ -769,6 +769,31 @@ export const AUTO_CONTINUE_SCRIPT = `
               actionTaken = true;
               lastActionByControl.acceptAll = now;
           }
+
+          // Text-match fallback: find any visible element with "Accept All" text
+          if (!actionTaken) {
+              const allElements = queryShadowDOMAll('button, a, [role="button"], [tabindex], .clickable, .codicon-check-all, .monaco-button, span, div');
+              const acceptMatch = allElements.find(el => {
+                  if (isUnsafeContext(el) || hasUnsafeLabel(el) || isNodeBanned(el)) return false;
+                  if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
+                  if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) return false;
+                  if (!isChatActionSurface(el)) return false;
+                  const t = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                  const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
+                  return t === 'accept all' || label.includes('accept all');
+              });
+              if (acceptMatch) {
+                  const clickTarget = acceptMatch.closest('button, a') || acceptMatch;
+                  highlight(clickTarget);
+                  clickTarget.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                  clickTarget.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                  clickTarget.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                  actionTaken = true;
+                  lastActionByControl.acceptAll = now;
+                  log('Clicked Accept All (Text Match)');
+                  emitAction('accept-all', 'text-match accept-all');
+              }
+          }
       }
 
       // 2. Auto-Run
@@ -784,7 +809,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           ].join(',');
 
           if (hasMethod(runControl.actionMethods, 'dom-click')) {
-              const buttons = queryShadowDOMAll('button, a.monaco-button, .clickable, [role="button"], .codicon-play');
+              const buttons = queryShadowDOMAll('button, a.monaco-button, .clickable, [role="button"], [tabindex], .codicon-play, .codicon-run, .codicon-terminal');
               const textMatch = buttons.find(el => {
                   if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
@@ -879,7 +904,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           ].join(',');
 
           if (hasMethod(expandControl.actionMethods, 'dom-click')) {
-              const buttons = queryShadowDOMAll('button, a.monaco-button, .clickable, [role="button"], .codicon-bell, .expand-indicator');
+              const buttons = queryShadowDOMAll('button, a.monaco-button, .clickable, [role="button"], [tabindex], .codicon-bell, .expand-indicator, span, div');
               const textMatch = buttons.find(el => {
                   if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
