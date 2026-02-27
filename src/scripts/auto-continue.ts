@@ -344,7 +344,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     // 4. Global Workbench safety lock (Prevent clicking native IDE elements)
     // Allow clicks inside chat panels and composer for Run/Expand/AcceptAll
-    if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview, .pane-body, .chat-list, .interactive-session, [class*="chat" i], [class*="composer" i], .aichat-container')) {
+    if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview, .pane-body, .chat-list, .interactive-session, [class*="chat" i], [class*="composer" i], .aichat-container, .artifact-view, .cursor-text')) {
         return "native-workbench-guard";
     }
 
@@ -359,7 +359,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       if (!el) return false;
 
       const blockedShell = '.part.titlebar, .part.activitybar, .part.statusbar, .menubar, .menubar-menu-button, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"]';
-      const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], [class*="composer" i], .aichat-container, .monaco-list-row, .pane-body';
+      const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], [class*="composer" i], .aichat-container, .monaco-list-row, .pane-body, .artifact-view, .cursor-text';
 
       let hasBlockedAncestor = false;
       let current = el;
@@ -454,7 +454,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           if (t.includes('expand') || t.includes('requires input') || (t.includes('step') && t.includes('input'))) {
               if (!t.includes('explorer') && !attr.includes('explorer')) extExpand++;
           }
-          if (t.includes('accept all')) extAcceptAll++;
+          if (t.includes('accept all') || t.replace(/\s+/g, '').includes('acceptall')) extAcceptAll++;
           if (t === 'accept' || t === 'apply' || (t.includes('accept') && t.includes('code'))) extAccept++;
           if (t === 'run' || (t.includes('run') && t.includes('terminal'))) extRun++;
           if (t === 'good' || t === 'bad' || t === 'helpful' || t === 'unhelpful' || t === 'upvote' || t === 'downvote' || attr.includes('upvote') || attr.includes('downvote')) extFeedback++;
@@ -497,7 +497,109 @@ export const AUTO_CONTINUE_SCRIPT = `
              targetToClick.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
              targetToClick.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
              targetToClick.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-type
+             log('Clicked ' + name);
+             emitAction(group || 'click', name);
+             return true; 
+          }
+      }
+      return false;
+  }
+
+  function dispatchInputEvents(input, text) {
+      input.focus();
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+      if (nativeInputValueSetter) {
+          nativeInputValueSetter.call(input, text);
+      } else {
+          input.value = text;
+      }
+      
+      // Some React apps need this exact sequence to register
+      input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+  }
+
+  function getSafeChatInput() {
+      const selectors = [
+          '.artifact-view [contenteditable="true"]',
+          '.cursor-text[contenteditable="true"]',
+          '[class*="composer" i] textarea',
+          '[class*="composer" i] [contenteditable="true"]',
+          '[class*="composer" i] .ProseMirror',
+          '.aichat-container textarea',
+          '.aichat-container [contenteditable="true"]',
+          '[id*="chat-input" i]',
+          '[aria-label*="Chat Input" i]',
+          '.interactive-input-part textarea',
+          '.chat-input-widget textarea',
+          'textarea[placeholder*="Ask" i]',
+          'textarea[placeholder*="Message" i]',
+          'vscode-text-area',
+          '[contenteditable="true"]'
+      ].join(',');
+
+      const candidates = queryShadowDOMAll(selectors);
+      for (const el of candidates) {
+          if (!el) continue;
+          if (isNodeBanned(el)) { log('getSafeChatInput: Rejected banned node ' + (el.tagName||'')); continue; }
+          const unsafeReason = isUnsafeContext(el);
+          if (unsafeReason && unsafeReason !== 'native-workbench-guard') { 
+              log('getSafeChatInput: Rejected unsafe context ' + (el.tagName||'') + ' reason: ' + unsafeReason); 
+              continue; 
+          }
+
+          if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) { 
+             log('getSafeChatInput: Rejected invisible element ' + (el.tagName||'')); 
+             continue; 
+          }
+
+          const tag = (el.tagName || '').toUpperCase();
+          if (tag === 'TEXTAREA' || tag === 'VSCODE-TEXT-AREA' || el.isContentEditable || el.hasAttribute('contenteditable')) {
+              return el;
+          }
+
+          const inner = el.querySelector && el.querySelector('textarea, [contenteditable="true"]');
+          if (inner && !isNodeBanned(inner) && (inner.offsetParent || inner.clientWidth > 0 || inner.clientHeight > 0)) {
+              return inner;
+          }
+      }
+
+      // Fallback: just find the first visible textarea on the screen if we couldn't find a widget
+      const fallbackInputs = queryShadowDOMAll('textarea, vscode-text-area');
+      for (const el of fallbackInputs) {
+          if (isNodeBanned(el)) { log('getSafeChatInput(fallback): Rejected banned node ' + (el.tagName||'')); continue; }
+          if (!isChatActionSurface(el)) { log('getSafeChatInput(fallback): Rejected not in chat surface ' + (el.tagName||'')); continue; }
+          const unsafeReason = isUnsafeContext(el);
+          if (unsafeReason && unsafeReason !== 'native-workbench-guard') { 
+              log('getSafeChatInput(fallback): Rejected unsafe context ' + (el.tagName||'') + ' reason: ' + unsafeReason); 
+              continue; 
+          }
+
+          if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) { 
+             log('getSafeChatInput(fallback): Rejected invisible element ' + (el.tagName||'')); 
+             continue; 
+          }
+          return el;
+      }
+      return null;
+  }
+
+  function typeAndSubmit(text) {
+      const cfg = getConfig();
+      const bump = getBumpConfig(cfg);
+      
+      let input = getSafeChatInput();
+      
+      if (!input) return false;
+
+      let val = '';
+      const tag = (input.tagName || '').toUpperCase();
+      if (tag === 'TEXTAREA' || tag === 'VSCODE-TEXT-AREA') {
+          val = input.value || '';
+      } else {
+          val = input.innerText || input.textContent || '';
+      }
+
       const hasText = val.trim().length > 0;
       const existingTextLength = val.length;
 
@@ -507,12 +609,11 @@ type
           input.focus();
 
           let typed = false;
-
           if (tag !== 'TEXTAREA' && tag !== 'VSCODE-TEXT-AREA') {
               // It's a [contenteditable] element like ProseMirror.
               // ProseMirror ignores insertText but listens to Paste. We must mock the clipboard so it doesn't paste the user's real clipboard.
               try {
-                  const originalClipboardRead = navigator.clipboard ? navigator.clipboard.readText : null;
+                  const originalClipboardRead = navigator.clipboard && navigator.clipboard.readText ? navigator.clipboard.readText : null;
                   if (navigator.clipboard) {
                       navigator.clipboard.readText = async () => text;
                   }
@@ -724,9 +825,9 @@ type
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
                   if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) return false;
                   if (!isChatActionSurface(el)) return false;
-                  const t = (el.textContent || '').replace(/\s+/g, '').toLowerCase(); // match acceptall regardless of space
-                  const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase().replace(/\s+/g, '');
-                  return t.includes('acceptall') || label.includes('acceptall');
+                  const t = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                  const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
+                  return t === 'accept all' || t.includes('accept all') || label.includes('accept all');
               });
               if (acceptMatch) {
                   const clickTarget = acceptMatch.closest('button, a') || acceptMatch;
@@ -1065,14 +1166,7 @@ type
   
   // Expose state for CDP
   window.__antigravityGetState = analyzeChatState;
-  window.__antigravityTypeAndSubmit = async (text: string) => {
-      const input = getSafeChatInput();
-      if (input) {
-          await typeAndSubmit(input, text);
-      } else {
-          log('Failed to find input for typeAndSubmit via CDP');
-      }
-  };
+  window.__antigravityTypeAndSubmit = typeAndSubmit;
 
   window.stopAutoContinue = () => {
     if (pollTimer) clearTimeout(pollTimer);
