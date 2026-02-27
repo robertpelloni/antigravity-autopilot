@@ -238,7 +238,7 @@ export class CDPHandler extends EventEmitter {
             clickAccept: config.get<boolean>('automation.actions.clickAccept') ?? true,
             clickAcceptAll: config.get<boolean>('automation.actions.clickAcceptAll') ?? true,
             clickContinue: config.get<boolean>('automation.actions.clickContinue') ?? true,
-            clickSubmit: config.get<boolean>('automation.actions.clickSubmit') ?? true,
+            clickSubmit: config.get<boolean>('automation.actions.clickSubmit') ?? false,
             clickFeedback: config.get<boolean>('automation.actions.clickFeedback') ?? false,
             autoScroll: config.get<boolean>('automation.actions.autoScroll') ?? true,
             autoReply: config.get<boolean>('automation.actions.autoReply') ?? true,
@@ -284,7 +284,7 @@ export class CDPHandler extends EventEmitter {
                 requireVisible: config.get<boolean>('automation.bump.requireVisible') ?? true,
                 detectMethods: getArr('automation.bump.detectMethods', ['feedback-visible', 'not-generating', 'last-sender-user', 'network-error-retry', 'waiting-for-input', 'loaded-conversation', 'completed-all-tasks', 'skip-ai-question']),
                 typeMethods: getArr('automation.bump.typeMethods', ['exec-command', 'native-setter', 'dispatch-events']),
-                submitMethods: getArr('automation.bump.submitMethods', ['click-send', 'enter-key']),
+                submitMethods: getArr('automation.bump.submitMethods', ['click-send']),
                 userDelayMs: config.get<number>('automation.bump.userDelayMs') ?? 3000,
                 retryDelayMs: config.get<number>('automation.bump.retryDelayMs') ?? 2000,
                 typingDelayMs: config.get<number>('actions.bump.typingDelayMs') ?? 50,
@@ -686,14 +686,16 @@ export class CDPHandler extends EventEmitter {
                 const group = (groupRaw || 'click').trim() as ActionSoundGroup;
                 const detail = (detailRaw || '').trim();
                 logToOutput(`[AutoAction:${group}] ${detail || 'triggered'}`);
-                SoundEffects.playActionGroup(group);
+                const soundGroup = group === 'accept-all' ? 'accept' : group;
+                SoundEffects.playActionGroup(soundGroup as ActionSoundGroup);
 
                 if (group === 'submit' && detail === 'keys') {
                     // Safety hardening: never translate script-level "submit|keys" into global CDP Enter.
                     // Focus drift here can activate Run menu / Customize Layout instead of chat submit.
                     logToOutput(`[AutoAction:submit] Blocked unsafe CDP Enter relay for submit|keys`);
-                } else if (group === 'run' || group === 'expand' || group === 'continue' || group === 'accept' || group === 'submit' || group === 'type') {
-                    this.emit('action', { group, detail });
+                } else if (group === 'run' || group === 'expand' || group === 'continue' || group === 'accept' || group === 'accept-all' || group === 'submit' || group === 'type') {
+                    const routedGroup = group === 'accept-all' ? 'accept' : group;
+                    this.emit('action', { group: routedGroup, detail });
                 }
             } else if (text.startsWith('__AUTOPILOT_LOG__:')) {
                 const raw = text.substring('__AUTOPILOT_LOG__:'.length);

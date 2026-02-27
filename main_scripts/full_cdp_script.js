@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '5.2.185';
+        const ANTIGRAVITY_VERSION = '5.2.186';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
@@ -1515,7 +1515,7 @@
         if (text.includes('accept all')) {
             if (el.closest('[id*="scm"], [class*="scm"], [data-view-id*="scm"]')) {
                 // Extracted git.stageAll command alias to prevent layout triggers
-                await workerDelay(50);
+                // no-op: async waits are not allowed inside this sync predicate
             }
             return true;
         }
@@ -1538,7 +1538,7 @@
             // "Accept All" in SCM view -> git.stageAll
             if (el.closest('[id*="scm-view"]')) {
                 // Extracted git.stageAll command alias to prevent layout triggers
-                await workerDelay(100);
+                // no-op: async waits are not allowed inside this sync predicate
             }
             return true;
         }

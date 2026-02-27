@@ -327,7 +327,7 @@ export const AUTO_CONTINUE_SCRIPT = `
             }
 
             // Workbench Chrome Bans + Menus
-            if (current.matches('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .title-actions, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box, .monaco-menu, .monaco-menu-container, .menubar, .menubar-menu-button, [role="menu"], [role="menuitem"], [role="menubar"]')) {
+            if (current.matches('.quick-input-widget, .monaco-quick-input-container, .suggest-widget, .rename-box, .settings-editor, .extensions-viewlet, [id*="workbench.view.extensions"], .pane-header, .panel-header, .view-pane-header, .tabs-and-actions-container, .part.activitybar, .part.statusbar, .part.titlebar, .panel-switcher-container, .monaco-panel .composite.title, .dialog-container, .notifications-toasts, .monaco-dialog-box, .monaco-menu, .monaco-menu-container, .menubar, .menubar-menu-button, [role="menu"], [role="menuitem"], [role="menubar"]')) {
                 return "banned-ancestor-class";
             }
             if (current.getAttribute('role') === 'tab' || current.getAttribute('role') === 'tablist') {
@@ -341,7 +341,6 @@ export const AUTO_CONTINUE_SCRIPT = `
         }
         current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
     }
-
 
     return false;
   }
@@ -382,10 +381,10 @@ export const AUTO_CONTINUE_SCRIPT = `
           current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
       }
 
-      // Default: allow clicks. blockedShell provides sufficient safety.
-      // Previously returned false, which silently blocked ALL clicks when the chat
-      // container class names didn't match (e.g. Cursor Composer).
-      return true;
+      // If we are inside an iframe/webview (which means we are an isolated CDP target), we can be more lenient,
+      // but in the main VS Code window, we MUST be strict!
+      const isMainWindow = !!document.querySelector('.monaco-workbench');
+      return !isMainWindow;
   }
 
   function isAntigravityRuntime() {
@@ -449,7 +448,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           if (t.includes('expand') || t.includes('requires input') || (t.includes('step') && t.includes('input'))) {
               if (!t.includes('explorer') && !attr.includes('explorer')) extExpand++;
           }
-          if (t.includes('accept all') || t.replace(/\s+/g, '').includes('acceptall')) extAcceptAll++;
+          if (t.replace(/\s+/g, '').includes('acceptall')) extAcceptAll++;
           if (t === 'accept' || t === 'apply' || (t.includes('accept') && t.includes('code'))) extAccept++;
           if (t === 'run' || (t.includes('run') && t.includes('terminal'))) extRun++;
           if (t === 'good' || t === 'bad' || t === 'helpful' || t === 'unhelpful' || t === 'upvote' || t === 'downvote' || attr.includes('upvote') || attr.includes('downvote')) extFeedback++;
@@ -460,7 +459,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           acceptAll: extAcceptAll + queryShadowDOMAll('[title*="Accept All" i], [aria-label*="Accept All" i], button:has(.codicon-check-all)').length,
           keep: queryShadowDOMAll('[title="Keep" i], [aria-label="Keep" i], button[title*="Keep" i], button[aria-label*="Keep" i]').length,
           allow: queryShadowDOMAll('[title*="Allow" i], [aria-label*="Allow" i], button[title*="Allow" i], button[aria-label*="Allow" i]').length,
-          run: extRun + queryShadowDOMAll('[title*="Run in Terminal" i], [aria-label*="Run in Terminal" i], [title*="Run command" i], [aria-label*="Run command" i], [title*="Execute command" i], [aria-label*="Execute command" i]').length,
+          run: extRun + queryShadowDOMAll('[title*="Run in Terminal" i], [aria-label*="Run in Terminal" i], [title*="Run command" i], [aria-label*="Run command" i], [title*="Execute command" i], [aria-label*="Execute command" i], .codicon-play, .codicon-run, .codicon-debug-start, [aria-keyshortcuts*="Alt+Enter" i], [aria-keyshortcuts*="Opt+Enter" i]').length,
           expand: extExpand + queryShadowDOMAll('[title*="Expand" i], [aria-label*="Expand" i], .monaco-tl-twistie.collapsed, .expand-indicator.collapsed').length,
           continue: queryShadowDOMAll('a.monaco-button, button.monaco-button').length,
           submit: queryShadowDOMAll('[title="Send" i], [aria-label="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send').length,
@@ -724,8 +723,8 @@ export const AUTO_CONTINUE_SCRIPT = `
                    try { form.requestSubmit(); submitted = true; emitAction('submit', 'form.requestSubmit-fallback'); } catch(e) {}
               }
               if (!submitted && !tryClick(sendSelectors, 'Submit (Auto-Reply fallback)', 'submit')) {
-                  dispatchEnters(input);
-                  emitAction('submit', 'keys-fallback');
+                  bumpSafetyCounter('blockedSubmitKeyDispatches');
+                  logAction('[SubmitGuard] ABORT: keys-fallback disabled to avoid leaking Enter into native IDE chrome.');
               }
           }
           
@@ -835,9 +834,9 @@ export const AUTO_CONTINUE_SCRIPT = `
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
                   if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) return false;
                   if (!isChatActionSurface(el)) return false;
-                  const t = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
-                  const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
-                  return t === 'accept all' || t.includes('accept all') || label.includes('accept all');
+                  const t = (el.textContent || '').replace(/\s+/g, '').toLowerCase();
+                  const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').replace(/\s+/g, '').toLowerCase();
+                  return t.includes('acceptall') || label.includes('acceptall');
               });
               if (acceptMatch) {
                   const clickTarget = acceptMatch.closest('button, a') || acceptMatch;
@@ -855,6 +854,9 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       // 2. Auto-Run
     if (!actionTaken && controlGatePass('run', cfg, state, now, lastActionByControl.run)) {
+          if ((state.buttonSignals?.run || 0) <= 0) {
+              log('Skipping Run: no run signals detected');
+          } else {
           const runControl = getControlConfig(cfg, 'run');
           const runSelectors = [
               '[title*="Run in Terminal" i]',
@@ -874,11 +876,10 @@ export const AUTO_CONTINUE_SCRIPT = `
                   const text = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
                   const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
                   return text.includes('run in terminal')
-                      || (text.includes('run') && (text.includes('alt') || text.includes('opt') || text.includes('enter') || text === 'run'))
+                      || text.includes('run command')
+                      || text.includes('execute command')
                       || label.includes('run in terminal')
                       || label.includes('run command')
-                      || label.includes('run (alt')
-                      || label.includes('run (opt')
                       || label.includes('execute command');
               });
               if (textMatch && isChatActionSurface(textMatch)) {
@@ -924,18 +925,9 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
 
           if (!actionTaken && hasMethod(runControl.actionMethods, 'alt-enter')) {
-              const input = getSafeChatInput();
-              if (input) {
-                  try {
-                      input.focus();
-                      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true, cancelable: true, composed: true }));
-                      input.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true, cancelable: true, composed: true }));
-                      actionTaken = true;
-                      lastActionByControl.run = now;
-                      log('Dispatched localized Alt+Enter to Run');
-                      emitAction('run', 'localized alt-enter');
-                  } catch(e) {}
-              }
+              bumpSafetyCounter('blockedSubmitKeyDispatches');
+              logAction('[RunGuard] ABORT: alt-enter fallback disabled to avoid native IDE command leakage.');
+          }
           }
       }
 
@@ -1125,9 +1117,14 @@ export const AUTO_CONTINUE_SCRIPT = `
                       log('Smart Resume: Will bump (standard completion)');
                   }
               } else {
-                  // Unknown sender -> Standard Bump
-                  shouldBump = true;
-                  log('Smart Resume: Will bump (unknown sender)');
+                  // Unknown sender usually appears during startup/reload. Avoid eager bumps until we have stronger state.
+                  if (state.rowCount > 0 && state.hasInputReady) {
+                      shouldBump = true;
+                      log('Smart Resume: Will bump (unknown sender with loaded rows)');
+                  } else {
+                      shouldBump = false;
+                      log('Smart Resume: Waiting (unknown sender startup state)');
+                  }
               }
 
               log('Smart Resume State: shouldBump=' + shouldBump + ' elapsed=' + (now - lastAction) + ' delay=' + computedDelay);

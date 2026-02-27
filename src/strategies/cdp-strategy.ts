@@ -205,6 +205,7 @@ export class CDPStrategy implements IStrategy {
 
         switch (action) {
             case 'accept':
+            case 'accept-all':
                 await clickRegistry.executeCategory('click', {
                     ...ctx,
                     selector,

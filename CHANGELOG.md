@@ -1,6 +1,13 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.186] - 2026-02-27
+### Fixed
+* **Auto-Continue Action Safety Hardening**: Tightened run-signal detection, blocked unsafe submit/run key fallback paths, improved unknown-sender startup gating for Smart Resume, and added explicit `accept-all` fallback routing across CDP bridge and strategy execution.
+
+### Changed
+* **Release Metadata Sync**: Updated version metadata across `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.186 VSIX build.
+
 ## [5.2.185] - 2026-02-27
 ### Fixed
 * **Unsafe Fallback Type Relay Blocked**: Hardened frontend fallback action routing so `type` fallback events are no longer executed as backend text-input actions, preventing accidental literal `"type"` insertion and cross-session typing fanout.
