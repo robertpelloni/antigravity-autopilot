@@ -523,6 +523,9 @@ export const AUTO_CONTINUE_SCRIPT = `
       const selectors = [
           '[class*="composer" i] textarea',
           '[class*="composer" i] [contenteditable="true"]',
+          '[class*="composer" i] .ProseMirror',
+          '.aichat-container textarea',
+          '.aichat-container [contenteditable="true"]',
           '[id*="chat-input" i]',
           '[aria-label*="Chat Input" i]',
           '.interactive-input-part textarea',
