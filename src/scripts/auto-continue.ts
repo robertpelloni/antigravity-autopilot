@@ -470,12 +470,12 @@ export const AUTO_CONTINUE_SCRIPT = `
           const t = (b.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
           const attr = (b.getAttribute('title') || b.getAttribute('aria-label') || '').toLowerCase();
           
-          if (t.includes('expand') || t.includes('requires input') || (t.includes('step') && t.includes('input'))) {
-              if (!t.includes('explorer') && !attr.includes('explorer')) extExpand++;
+          if (t.includes('expand') || ((t.includes('requires input') || (t.includes('step') && t.includes('input'))) && !t.includes('explorer')) || attr.includes('expand')) {
+              extExpand++;
           }
-          if (t.includes('accept all')) extAcceptAll++;
-          if (t === 'accept' || t === 'apply' || (t.includes('accept') && t.includes('code'))) extAccept++;
-          if (t === 'run' || (t.includes('run') && t.includes('terminal'))) extRun++;
+          if (t.includes('accept all') || attr.includes('accept all')) extAcceptAll++;
+          if (t === 'accept' || t === 'apply' || (t.includes('accept') && t.includes('code')) || attr.includes('accept') || attr.includes('apply')) extAccept++;
+          if (t === 'run' || (t.includes('run') && t.includes('terminal')) || attr.includes('run')) extRun++;
           if (t === 'good' || t === 'bad' || t === 'helpful' || t === 'unhelpful' || t === 'upvote' || t === 'downvote' || attr.includes('upvote') || attr.includes('downvote')) extFeedback++;
       }
 
@@ -490,7 +490,7 @@ export const AUTO_CONTINUE_SCRIPT = `
                   const vis = !!(s.offsetParent || s.clientWidth > 0);
                   const unsafe = isUnsafeContext(s);
                   const banned = isNodeBanned(s);
-                  if (txt.toLowerCase().includes('accept') || txt.toLowerCase().includes('keep') || txt.toLowerCase().includes('allow') || txt.toLowerCase().includes('expand') || txt.toLowerCase().includes('run')) {
+                      if (txt.toLowerCase().includes('accept') || txt.toLowerCase().includes('keep') || txt.toLowerCase().includes('allow') || txt.toLowerCase().includes('expand') || txt.toLowerCase().includes('run') || s.getAttribute('title')?.toLowerCase().includes('accept') || s.getAttribute('aria-label')?.toLowerCase().includes('accept')) {
                       diag.push('"' + txt + '" vis=' + vis + ' unsafe=' + (unsafe||false) + ' banned=' + banned);
                   }
               }
@@ -568,7 +568,13 @@ export const AUTO_CONTINUE_SCRIPT = `
           'textarea[placeholder*="Ask" i]',
           'textarea[placeholder*="Message" i]',
           'vscode-text-area',
-          '[contenteditable="true"]'
+          '[contenteditable="true"]',
+          '.composer-input',
+          '[class*="composer" i] [contenteditable="true"]',
+          '.chat-container textarea',
+          '[aria-label="chat input" i]',
+          '[placeholder*="type a message" i]',
+          'textarea'
       ].join(',');
 
       const candidates = queryShadowDOMAll(selectors);
@@ -577,6 +583,14 @@ export const AUTO_CONTINUE_SCRIPT = `
           if (isNodeBanned(el)) { log('getSafeChatInput: Rejected banned node ' + (el.tagName||'')); continue; }
           const unsafeReason = isUnsafeContext(el);
           if (unsafeReason && unsafeReason !== 'native-workbench-guard') { 
+              // Avoid strict rejection for contenteditables in modern UIs if they look like chat
+              if (el.isContentEditable || el.tagName.toUpperCase() === 'TEXTAREA') {
+                  const pLabel = (el.getAttribute('placeholder') || el.getAttribute('aria-label') || '').toLowerCase();
+                  if (pLabel.includes('ask') || pLabel.includes('message') || pLabel.includes('chat') || el.closest('[class*="chat" i]')) {
+                      // Bypass unsafe context if we are highly confident this is a chat input
+                      return el;
+                  }
+              }
               log('getSafeChatInput: Rejected unsafe context ' + (el.tagName||'') + ' reason: ' + unsafeReason); 
               continue; 
           }

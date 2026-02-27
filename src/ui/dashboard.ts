@@ -484,7 +484,7 @@ export class DashboardPanel {
                 </div>
                 <div class="setting" title="Require visible completion/feedback signals before bump logic is allowed to trigger.">
                     <label>Bump Requires Visible Signals:</label>
-                    <input type="checkbox" ${config.get<string[]>('automation.bump.requireVisible') !== false ? 'checked' : ''} onchange="updateConfig('automation.bump.requireVisible', this.checked)">
+                    <input type="checkbox" ${config.get<boolean>('automation.bump.requireVisible') !== false ? 'checked' : ''} onchange="updateConfig('automation.bump.requireVisible', this.checked)">
                 </div>
                  <div class="setting" title="Automatically click 'Run' buttons in code blocks (e.g., in Jupyter notebooks or interactive terminals).">
                     <label>Click Run (Play):</label>
@@ -557,11 +557,11 @@ export class DashboardPanel {
                 </div>
                 <div class="setting" title="Log every noteworthy detection/action transition from the injected script.">
                     <label>Log All Actions:</label>
-                    <input type="checkbox" ${config.get<string[]>('automation.debug.logAllActions') !== false ? 'checked' : ''} onchange="updateConfig('automation.debug.logAllActions', this.checked)">
+                    <input type="checkbox" ${config.get<boolean>('automation.debug.logAllActions') !== false ? 'checked' : ''} onchange="updateConfig('automation.debug.logAllActions', this.checked)">
                 </div>
                 <div class="setting" title="Forward browser automation logs into the Antigravity Debug output channel.">
                     <label>Forward Logs To Debug:</label>
-                    <input type="checkbox" ${config.get<string[]>('automation.debug.logToExtension') !== false ? 'checked' : ''} onchange="updateConfig('automation.debug.logToExtension', this.checked)">
+                    <input type="checkbox" ${config.get<boolean>('automation.debug.logToExtension') !== false ? 'checked' : ''} onchange="updateConfig('automation.debug.logToExtension', this.checked)">
                 </div>
             </div>
 

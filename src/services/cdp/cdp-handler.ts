@@ -184,6 +184,20 @@ export class CDPHandler extends EventEmitter {
                             return true;
                         });
 
+                        // Prioritize main VS Code / Cursor pages so that they are connected to first if multiTabEnabled is false
+                        filtered.sort((a: any, b: any) => {
+                            const aTitle = (a.title || '').toLowerCase();
+                            const bTitle = (b.title || '').toLowerCase();
+                            const aIsEditor = a.type === 'page' && (aTitle.includes('visual studio code') || aTitle.includes('cursor') || (a.url && a.url.includes('workbench.html')));
+                            const bIsEditor = b.type === 'page' && (bTitle.includes('visual studio code') || bTitle.includes('cursor') || (b.url && b.url.includes('workbench.html')));
+
+                            if (aIsEditor && !bIsEditor) return -1;
+                            if (!aIsEditor && bIsEditor) return 1;
+                            if (a.type === 'page' && b.type !== 'page') return -1;
+                            if (a.type !== 'page' && b.type === 'page') return 1;
+                            return 0;
+                        });
+
                         if (filtered.length === 0) {
                             logToOutput(`[CDPHandler] Port ${port} returned ${pages.length} raw targets. Filtered targets: 0.`);
                             if (pages.length > 0) {

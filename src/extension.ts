@@ -529,7 +529,7 @@ export function activate(context: vscode.ExtensionContext) {
             const blockedFocusLoss = toCounter((stats as any).blockedFocusLossKeyDispatches);
             const computedTotal = blockedRunExpand + blockedNonChat + blockedSubmit + blockedFocusLoss;
             const total = Math.max(toCounter(runtime?.blockedUnsafeActionsTotal), computedTotal);
-            const signal = total >= 10 ? 'HOT' : total > 0 ? 'ACTIVE' : 'QUIET';
+            const signal = (total >= 10 ? 'HOT' : total > 0 ? 'ACTIVE' : 'QUIET') as 'HOT' | 'ACTIVE' | 'QUIET';
 
             return {
                 total,

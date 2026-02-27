@@ -1,0 +1,7 @@
+src/extension.ts(189,17): error TS2322: Type 'string' is not assignable to type '"ACTIVE" | "HOT" | "QUIET" | null'.
+src/providers/project-manager.ts(228,23): error TS7022: 'response' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
+src/providers/project-manager.ts(268,23): error TS7022: 'linkHeader' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
+src/providers/project-manager.ts(269,23): error TS7022: 'nextMatch' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
+src/ui/dashboard.ts(487,46): error TS2367: This comparison appears to be unintentional because the types 'string[]' and 'boolean' have no overlap.
+src/ui/dashboard.ts(560,46): error TS2367: This comparison appears to be unintentional because the types 'string[]' and 'boolean' have no overlap.
+src/ui/dashboard.ts(564,46): error TS2367: This comparison appears to be unintentional because the types 'string[]' and 'boolean' have no overlap.

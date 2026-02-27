@@ -225,7 +225,7 @@ export class ProjectManager {
             let rateLimited = false;
 
             while (nextUrl && pagesFetched < maxPages) {
-                const response = await fetch(nextUrl, { headers });
+                const response: any = await fetch(nextUrl, { headers });
 
                 if (!response.ok) {
                     const remaining = response.headers.get('x-ratelimit-remaining');
@@ -265,8 +265,8 @@ export class ProjectManager {
                 allIssues.push(...filtered);
                 pagesFetched += 1;
 
-                const linkHeader = response.headers.get('link') || '';
-                const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/i);
+                const linkHeader: any = response.headers.get('link') || '';
+                const nextMatch: any = linkHeader.match(/<([^>]+)>;\s*rel="next"/i);
                 nextUrl = nextMatch?.[1] || null;
             }
 
@@ -355,7 +355,7 @@ export class ProjectManager {
                     ]
                 };
 
-                const response = await fetch(`${normalizedBase}/rest/api/3/search`, {
+                const response: any = await fetch(`${normalizedBase}/rest/api/3/search`, {
                     method: 'POST',
                     headers,
                     body: JSON.stringify(body)

@@ -24,5 +24,5 @@ This file represents the immediate backlog for the dramatically simplified, ultr
 
 ## Documentation Sync
 - [x] Keep `README.md`, `ROADMAP.md`, `TODO.md` strictly synchronized with "auto-clicker only" scope
-- [ ] Revise `VISION.md` assuming it previously advertised Voice/Remote/MCP capabilities.
+- [x] Revise `VISION.md` assuming it previously advertised Voice/Remote/MCP capabilities.
 

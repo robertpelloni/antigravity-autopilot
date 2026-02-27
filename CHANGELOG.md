@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
+## [5.2.167] - 2026-02-26
+### Fixed
+* **TypeScript Compilation Errors**: Fixed type mismatch vulnerabilities where explicit configuration arrays (`string[]`) were improperly compared against boolean literals during fallback option derivation.
+* **Auto-Continue DOM Selectors**: Refined deeply-nested Shadow DOM queries in `auto-continue.ts` injected context to support native Cursor inputs (`[aria-label="chat input"]`, `.composer-input`) and correctly attribute missing `title` properties on "Expand" / "Accept All" buttons.
+
 ## [5.2.166] - 2026-02-26
 ### Added
 * **Comprehensive DOMScanClick Safety Test Suite**: Added 22 new unit tests for `interaction-methods.ts` (35 total, all green). New coverage spans: ban-list completeness (icons, ancestor classes, attribute phrases, tab/tablist roles), wildcard/regex injection via accept/reject patterns, selector injection safety via JSON.stringify escaping, icon-only button classification (play→run, chevron→expand, check→accept), reject-pattern precedence over accept, default pattern safety (no dangerous terms like `install`/`delete`), BridgeCoordinateClick ban-list and disabled-by-default assertion, default config sanitization (dom-scan-click as solitary click method), fallbackSelector emptiness, text length filter, mousedown+mouseup+click dispatch, and visibility check completeness.
