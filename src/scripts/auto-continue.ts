@@ -613,23 +613,36 @@ export const AUTO_CONTINUE_SCRIPT = `
 
           if (!typed && hasMethod(bump.typeMethods, 'native-setter')) {
               try {
-                  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
-                  if (nativeInputValueSetter) {
-                      nativeInputValueSetter.call(input, text);
+                  if (tag === 'TEXTAREA' || tag === 'VSCODE-TEXT-AREA') {
+                      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+                      if (nativeInputValueSetter) {
+                          nativeInputValueSetter.call(input, text);
+                      } else {
+                          input.value = text;
+                      }
                   } else {
-                      input.value = text;
+                      // It's a [contenteditable] element like ProseMirror
+                      input.textContent = text;
                   }
                   typed = true;
               } catch(e) {}
           }
 
           if (!typed && hasMethod(bump.typeMethods, 'dispatch-events')) {
-              input.value = input.value || text;
+              if (tag === 'TEXTAREA' || tag === 'VSCODE-TEXT-AREA') {
+                 input.value = input.value || text;
+              } else {
+                 if (!input.textContent) input.textContent = text;
+              }
               typed = true;
           }
 
           if (!typed) {
-              input.value = text;
+              if (tag === 'TEXTAREA' || tag === 'VSCODE-TEXT-AREA') {
+                  input.value = text;
+              } else {
+                  input.textContent = text;
+              }
           }
 
           // Force sync React state
@@ -788,7 +801,7 @@ export const AUTO_CONTINUE_SCRIPT = `
                   if (!isChatActionSurface(el)) return false;
                   const t = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
                   const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
-                  return t === 'accept all' || label.includes('accept all');
+                  return t === 'accept all' || t.includes('accept all') || label.includes('accept all');
               });
               if (acceptMatch) {
                   const clickTarget = acceptMatch.closest('button, a') || acceptMatch;
