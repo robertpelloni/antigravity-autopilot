@@ -74,7 +74,7 @@ export const AUTO_CONTINUE_SCRIPT = `
          // - 'alt-enter': REMOVED. Sends Alt+Enter to chat input even when no Run button is visible,
          //   waking up the AI with no message and consuming actionTaken so bump never fires.
          run: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 100 },
-         expand: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 100 },
+         expand: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['dom-click', 'native-click'], delayMs: 50 },
          accept: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-first', 'accept-single', 'dom-click'], delayMs: 100 },
          submit: { detectMethods: ['enabled-flag', 'not-generating'], actionMethods: ['click-send', 'enter-key'], delayMs: 100 },
          feedback: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['thumbs-up', 'helpful-button', 'dom-click'], delayMs: 150 }
@@ -135,15 +135,10 @@ export const AUTO_CONTINUE_SCRIPT = `
   }
 
   function log(msg) {
-      if (window.__antigravityConfig && window.__antigravityConfig.debug.logToExtension) {
-          if (typeof window.__AUTOPILOT_BRIDGE__ === 'function') {
-              window.__AUTOPILOT_BRIDGE__('__AUTOPILOT_LOG__:' + msg);
-          } else {
-              console.log('__AUTOPILOT_LOG__:' + msg);
-          }
-      } else {
-          console.log('[AutoContinue] ' + msg);
-      }
+    const cfg = getConfig();
+    if (cfg.debug?.verboseLogging) {
+      console.log('[auto-continue] ' + msg);
+    }
   }
 
   function emitBridge(payload) {
@@ -178,7 +173,6 @@ export const AUTO_CONTINUE_SCRIPT = `
   function getBumpConfig(cfg) {
       const bump = cfg.bump || {};
       return {
-          text: bump.text,
           requireVisible: bump.requireVisible ?? defaults.bump.requireVisible ?? true,
           detectMethods: Array.isArray(bump.detectMethods) ? bump.detectMethods : defaults.bump.detectMethods,
           typeMethods: Array.isArray(bump.typeMethods) ? bump.typeMethods : defaults.bump.typeMethods,
@@ -201,11 +195,11 @@ export const AUTO_CONTINUE_SCRIPT = `
       };
   }
 
-  function controlGatePass(controlName, cfg, state, now, controlLastActionTime) {
-      if ((controlName === 'run' || controlName === 'expand') && isAntigravityRuntime()) {
-          bumpSafetyCounter('blockedRunExpandInAgRuntime');
-          return false;
-      }
+        function controlGatePass(controlName, cfg, state, now, controlLastActionTime) {
+            if ((controlName === 'run' || controlName === 'expand') && isAntigravityRuntime()) {
+                bumpSafetyCounter('blockedRunExpandInAgRuntime');
+                    return false;
+            }
 
       const control = getControlConfig(cfg, controlName);
       const detect = control.detectMethods || [];
@@ -255,9 +249,9 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       // Text / Label checks (Extremely strict)
       // DANGER: We NEVER include node.textContent here, as it permanently bans the Chat Input
-      // if the user types "clear chat" into the box!
+      // if the user types "add context" into the box!
       const attrs = ((node.getAttribute('aria-label') || '') + ' ' + (node.getAttribute('title') || '')).toLowerCase();
-      if (/(customize layout|layout control|new chat|clear chat|clear session)/i.test(attrs)) {
+      if (/(customize layout|layout control|add context|attach context|attach a file|new chat|clear chat|clear session)/i.test(attrs)) {
           bannedCache.add(node);
           return true;
       }
@@ -314,7 +308,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     // 1. Check the element itself for unsafe text
     try {
         const attrs = ((el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')).toLowerCase();
-        if (/(extension|marketplace|plugin|install|uninstall|customize layout|layout control|new chat|clear chat|clear session|view as|open in)/i.test(attrs)) {
+        if (/(extension|marketplace|plugin|install|uninstall|customize layout|layout control|add context|attach context|attach a file|new chat|clear chat|clear session|view as|open in)/i.test(attrs)) {
             return "unsafe-attributes";
         }
     } catch(e) {}
@@ -332,7 +326,7 @@ export const AUTO_CONTINUE_SCRIPT = `
         if (current.nodeType === 1) { // ELEMENT_NODE
             // Text/Attribute bans on parents
             const attrs = ((current.getAttribute('aria-label') || '') + ' ' + (current.getAttribute('title') || '')).toLowerCase();
-            if (/(customize layout|layout control|new chat|clear chat|clear session)/i.test(attrs)) {
+            if (/(customize layout|layout control|add context|attach context|new chat|clear chat|clear session)/i.test(attrs)) {
                 return "banned-ancestor-attrs";
             }
 
@@ -354,7 +348,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     // 4. Global Workbench safety lock (Prevent clicking native IDE elements)
     // Allow clicks inside chat panels (.pane-body, .chat-list, .interactive-session) for Run/Expand/AcceptAll
-    if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview, .pane-body, .chat-list, .interactive-session, [class*="chat" i], [class*="composer" i], .composer-bar, .monaco-list-row, .interactive-editor, .chat-input-widget, .interactive-input-part, .editor-instance, .aichat-container')) {
+    if (shadowClosest(el, '.monaco-workbench') && !shadowClosest(el, 'iframe, webview, .webview, #webview, .pane-body, .chat-list, .interactive-session, [class*="chat" i]')) {
         return "native-workbench-guard";
     }
 
@@ -369,13 +363,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       if (!el) return false;
 
       const blockedShell = '.part.titlebar, .part.activitybar, .part.statusbar, .menubar, .menubar-menu-button, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"]';
-      const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], [class*="composer" i], .aichat-container, .monaco-list-row, .pane-body';
-
-      // WEBVIEW/IFRAME DETECTION: If there is no .monaco-workbench root, we are inside
-      // a webview or iframe (follower window). In this context, the VS Code host classes
-      // (.chat-list, .pane-body, etc.) don't exist, so we should allow all actions
-      // as long as no blocked ancestor is found.
-      const isWebviewContext = !document.querySelector('.monaco-workbench');
+      const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], .monaco-list-row, .pane-body';
 
       let hasBlockedAncestor = false;
       let current = el;
@@ -393,9 +381,6 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       if (hasBlockedAncestor) return false;
 
-      // In webview/iframe contexts, allow all non-blocked surfaces
-      if (isWebviewContext) return true;
-
       current = el;
       while (current) {
           if (current.nodeType === 1) {
@@ -406,18 +391,18 @@ export const AUTO_CONTINUE_SCRIPT = `
           current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
       }
 
-      // Default: allow clicks. blockedShell + isUnsafeContext provide sufficient safety.
-      // Previously returned false, which silently blocked ALL clicks when Antigravity's chat
-      // container class names didn't match our chatContainers selectors.
-      return true;
+      return false;
   }
 
   function isAntigravityRuntime() {
       try {
-          // Strict check: Only return true if we are rendering the React dashboard itself.
-          // Native VS Code chat windows may contain buttons with 'data-vscode-context' matching "antigravity",
-          // and document.title can match the workspace folder name.
-          return !!document.getElementById('antigravity-panel-root');
+          // Only return true if we are specifically inside the Antigravity extension's own webviews
+          // or the Antigravity app itself, not just any VS Code window running the extension.
+          return !!(
+              document.querySelector('#antigravity-panel-root') ||
+              document.querySelector('[data-vscode-context*="antigravity" i]') ||
+              document.title.toLowerCase().includes('antigravity dev')
+          );
       } catch (e) {
           return false;
       }
@@ -460,7 +445,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
 
       // Text checks for signals
-      const allBtns = queryShadowDOMAll('button, a, .monaco-button, [role="button"], [tabindex], .clickable, .action-item, .codicon, [class*="action" i], [class*="button" i], span.truncate, span.cursor-pointer, span[class*="opacity"], span[class*="font-"]');
+      const allBtns = queryShadowDOMAll('button, a, .monaco-button');
       let extExpand = 0, extAcceptAll = 0, extAccept = 0, extRun = 0, extFeedback = 0;
       for (const b of allBtns) {
           if (isUnsafeContext(b) || hasUnsafeLabel(b)) continue;
@@ -470,34 +455,13 @@ export const AUTO_CONTINUE_SCRIPT = `
           const t = (b.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
           const attr = (b.getAttribute('title') || b.getAttribute('aria-label') || '').toLowerCase();
           
-          if (t.includes('expand') || ((t.includes('requires input') || (t.includes('step') && t.includes('input'))) && !t.includes('explorer')) || attr.includes('expand')) {
-              extExpand++;
+          if (t.includes('expand') || t.includes('requires input') || (t.includes('step') && t.includes('input'))) {
+              if (!t.includes('explorer') && !attr.includes('explorer')) extExpand++;
           }
-          if (t.includes('accept all') || attr.includes('accept all')) extAcceptAll++;
-          if (t === 'accept' || t === 'apply' || (t.includes('accept') && t.includes('code')) || attr.includes('accept') || attr.includes('apply')) extAccept++;
-          if (t === 'run' || (t.includes('run') && t.includes('terminal')) || attr.includes('run') || t === 'execute' || attr.includes('execute') || attr.includes('play') || b.classList.contains('codicon-play') || b.classList.contains('codicon-run') || b.classList.contains('codicon-terminal')) extRun++;
+          if (t.includes('accept all')) extAcceptAll++;
+          if (t === 'accept' || t === 'apply' || (t.includes('accept') && t.includes('code'))) extAccept++;
+          if (t === 'run' || (t.includes('run') && t.includes('terminal'))) extRun++;
           if (t === 'good' || t === 'bad' || t === 'helpful' || t === 'unhelpful' || t === 'upvote' || t === 'downvote' || attr.includes('upvote') || attr.includes('downvote')) extFeedback++;
-      }
-
-      // DIAG-ACCEPT: Lightweight diagnostic for cursor-pointer span detection
-      if (cfg.debug?.verbose) {
-          try {
-              const cpSpans = document.querySelectorAll('span.cursor-pointer, [class*="button" i]');
-              const diag = [];
-              for (const s of cpSpans) {
-                  const txt = (s.textContent || '').replace(/\s+/g, ' ').trim().substring(0, 40);
-                  if (!txt || txt.length < 2) continue;
-                  const vis = !!(s.offsetParent || s.clientWidth > 0);
-                  const unsafe = isUnsafeContext(s);
-                  const banned = isNodeBanned(s);
-                      if (txt.toLowerCase().includes('accept') || txt.toLowerCase().includes('keep') || txt.toLowerCase().includes('allow') || txt.toLowerCase().includes('expand') || txt.toLowerCase().includes('run') || s.getAttribute('title')?.toLowerCase().includes('accept') || s.getAttribute('aria-label')?.toLowerCase().includes('accept')) {
-                      diag.push('"' + txt + '" vis=' + vis + ' unsafe=' + (unsafe||false) + ' banned=' + banned);
-                  }
-              }
-              if (diag.length > 0) {
-                  console.log('[auto-continue] [DIAG-ACCEPT]', JSON.stringify(diag));
-              }
-          } catch(e) {}
       }
 
       const rowCount = rows.length;
@@ -505,7 +469,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           acceptAll: extAcceptAll + queryShadowDOMAll('[title*="Accept All" i], [aria-label*="Accept All" i], button:has(.codicon-check-all)').length,
           keep: queryShadowDOMAll('[title="Keep" i], [aria-label="Keep" i], button[title*="Keep" i], button[aria-label*="Keep" i]').length,
           allow: queryShadowDOMAll('[title*="Allow" i], [aria-label*="Allow" i], button[title*="Allow" i], button[aria-label*="Allow" i]').length,
-          run: extRun + queryShadowDOMAll('[title*="Run in Terminal" i], [aria-label*="Run in Terminal" i], [title*="Run command" i], [aria-label*="Run command" i], [title*="Execute command" i], [aria-label*="Execute command" i], .codicon-play, .codicon-run, .codicon-terminal, [title*="Play" i], [aria-label*="Play" i]').length,
+          run: extRun + queryShadowDOMAll('[title*="Run in Terminal" i], [aria-label*="Run in Terminal" i], [title*="Run command" i], [aria-label*="Run command" i], [title*="Execute command" i], [aria-label*="Execute command" i]').length,
           expand: extExpand + queryShadowDOMAll('[title*="Expand" i], [aria-label*="Expand" i], .monaco-tl-twistie.collapsed, .expand-indicator.collapsed').length,
           continue: queryShadowDOMAll('a.monaco-button, button.monaco-button').length,
           submit: queryShadowDOMAll('[title="Send" i], [aria-label="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send').length,
@@ -568,13 +532,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           'textarea[placeholder*="Ask" i]',
           'textarea[placeholder*="Message" i]',
           'vscode-text-area',
-          '[contenteditable="true"]',
-          '.composer-input',
-          '[class*="composer" i] [contenteditable="true"]',
-          '.chat-container textarea',
-          '[aria-label="chat input" i]',
-          '[placeholder*="type a message" i]',
-          'textarea'
+          '[contenteditable="true"]'
       ].join(',');
 
       const candidates = queryShadowDOMAll(selectors);
@@ -583,14 +541,6 @@ export const AUTO_CONTINUE_SCRIPT = `
           if (isNodeBanned(el)) { log('getSafeChatInput: Rejected banned node ' + (el.tagName||'')); continue; }
           const unsafeReason = isUnsafeContext(el);
           if (unsafeReason && unsafeReason !== 'native-workbench-guard') { 
-              // Avoid strict rejection for contenteditables in modern UIs if they look like chat
-              if (el.isContentEditable || el.tagName.toUpperCase() === 'TEXTAREA') {
-                  const pLabel = (el.getAttribute('placeholder') || el.getAttribute('aria-label') || '').toLowerCase();
-                  if (pLabel.includes('ask') || pLabel.includes('message') || pLabel.includes('chat') || el.closest('[class*="chat" i]')) {
-                      // Bypass unsafe context if we are highly confident this is a chat input
-                      return el;
-                  }
-              }
               log('getSafeChatInput: Rejected unsafe context ' + (el.tagName||'') + ' reason: ' + unsafeReason); 
               continue; 
           }
@@ -764,28 +714,6 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
       const baseThrottle = cfg.timing?.actionThrottleMs ?? 500;
       const jitter = cfg.timing?.randomness ?? 50;
-
-      // DIAGNOSTIC REMOVED: was causing extension host unresponsiveness
-      if (false) {
-          window.__lastDiagDump = now;
-          const allElements = Array.from(document.body.querySelectorAll('*')).concat(queryShadowDOMAll('*'));
-          const suspicious = allElements.filter(el => {
-            if (el.children.length > 0) return false;
-            if (!(el.offsetParent || el.clientWidth > 0)) return false;
-            const text = (el.textContent || '').toLowerCase();
-            const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
-            return text.includes('run') || label.includes('run') || text.includes('accept') || label.includes('accept') || text.includes('expand') || label.includes('expand');
-          }).slice(0, 20).map(el => {
-              const tag = el.tagName.toLowerCase();
-              const cls = el.className;
-              const text = (el.textContent || '').replace(/\s+/g, ' ').trim().substring(0, 30);
-              const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').substring(0, 30);
-              const chat = isChatActionSurface(el);
-              return \`<\${tag} class="\${cls}" text="\${text}" title="\${label}"> (chat:\${chat})\`;
-          });
-          logAction('[DIAG-DEEP] Found target text in: ' + JSON.stringify(suspicious));
-      }
-
       if (now - lastAction < (baseThrottle + Math.random() * jitter)) return;
 
       let actionTaken = false;
@@ -831,50 +759,22 @@ export const AUTO_CONTINUE_SCRIPT = `
       // 2.5 Auto-Accept-All
     if (!actionTaken && controlGatePass('acceptAll', cfg, state, now, lastActionByControl.acceptAll)) {
           const acceptAllControl = getControlConfig(cfg, 'acceptAll');
-
-          // Text-content matching first (catches buttons without title/aria-label)
-          if (hasMethod(acceptAllControl.actionMethods, 'accept-all-button') || hasMethod(acceptAllControl.actionMethods, 'dom-click')) {
-              const buttons = queryShadowDOMAll('button, a, .monaco-button, [role="button"], [tabindex], .clickable, .action-item, .codicon, [class*="action" i], [class*="button" i], span.truncate, span.cursor-pointer, span[class*="opacity"], span[class*="font-"]');
-              const textMatch = buttons.find(el => {
-                  if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
-                  if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
-                  if (!(el.offsetParent || el.clientWidth > 0)) return false;
-                  if (!isChatActionSurface(el)) return false;
-                  const text = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
-                  const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
-                  return text.includes('accept') || label.includes('accept')
-                      || text === 'keep' || label.includes('keep')
-                      || text.includes('allow') || label.includes('allow');
-              });
-              if (textMatch) {
-                  highlight(textMatch);
-                  textMatch.click();
-                  actionTaken = true;
-                  lastActionByControl.acceptAll = now;
-                  log('Clicked Accept All (Text Match)');
-                  emitAction('acceptAll', 'text-match accept-all');
-              }
+          const acceptAllSelectors = [];
+          if (hasMethod(acceptAllControl.actionMethods, 'accept-all-button')) {
+              acceptAllSelectors.push('[title*="Accept All" i]', '[aria-label*="Accept All" i]', '.codicon-check-all');
           }
-
-          // Selector-based fallback
-          if (!actionTaken) {
-              const acceptAllSelectors = [];
-              if (hasMethod(acceptAllControl.actionMethods, 'accept-all-button')) {
-                  acceptAllSelectors.push('[title*="Accept All" i]', '[aria-label*="Accept All" i]', '.codicon-check-all');
-              }
-              if (hasMethod(acceptAllControl.actionMethods, 'keep-button')) {
-                  acceptAllSelectors.push('[title="Keep" i]', '[aria-label="Keep" i]', 'button[title*="Keep" i]', 'button[aria-label*="Keep" i]');
-              }
-              if (hasMethod(acceptAllControl.actionMethods, 'allow-all-button')) {
-                  acceptAllSelectors.push('[title*="Allow" i]', '[aria-label*="Allow" i]', 'button[title*="Allow" i]', 'button[aria-label*="Allow" i]');
-              }
-              if (hasMethod(acceptAllControl.actionMethods, 'dom-click') && acceptAllSelectors.length === 0) {
-                  acceptAllSelectors.push('[title*="Accept All" i]', '[aria-label*="Accept All" i]', '[title="Keep" i]', '[aria-label="Keep" i]', '[title*="Allow" i]', '[aria-label*="Allow" i]', '.codicon-check-all');
-              }
-              if (acceptAllSelectors.length > 0 && tryClick(acceptAllSelectors.join(', '), 'Accept All/Keep', 'accept-all')) {
-                  actionTaken = true;
-                  lastActionByControl.acceptAll = now;
-              }
+          if (hasMethod(acceptAllControl.actionMethods, 'keep-button')) {
+              acceptAllSelectors.push('[title="Keep" i]', '[aria-label="Keep" i]', 'button[title*="Keep" i]', 'button[aria-label*="Keep" i]');
+          }
+          if (hasMethod(acceptAllControl.actionMethods, 'allow-all-button')) {
+              acceptAllSelectors.push('[title*="Allow" i]', '[aria-label*="Allow" i]', 'button[title*="Allow" i]', 'button[aria-label*="Allow" i]');
+          }
+          if (hasMethod(acceptAllControl.actionMethods, 'dom-click') && acceptAllSelectors.length === 0) {
+              acceptAllSelectors.push('[title*="Accept All" i]', '[aria-label*="Accept All" i]', '[title="Keep" i]', '[aria-label="Keep" i]', '[title*="Allow" i]', '[aria-label*="Allow" i]', '.codicon-check-all');
+          }
+          if (acceptAllSelectors.length > 0 && tryClick(acceptAllSelectors.join(', '), 'Accept All/Keep', 'accept-all')) {
+              actionTaken = true;
+              lastActionByControl.acceptAll = now;
           }
       }
 
@@ -887,34 +787,26 @@ export const AUTO_CONTINUE_SCRIPT = `
               '[title*="Run command" i]',
               '[aria-label*="Run command" i]',
               '[title*="Execute command" i]',
-              '[aria-label*="Execute command" i]',
-              '[title*="Play" i]',
-              '[aria-label*="Play" i]',
-              '.codicon-play',
-              '.codicon-run',
-              '.codicon-terminal'
+              '[aria-label*="Execute command" i]'
           ].join(',');
 
           if (hasMethod(runControl.actionMethods, 'dom-click')) {
-              const buttons = queryShadowDOMAll('button, a, [role="button"], [tabindex], .clickable, .action-item, .codicon, .codicon-play, .codicon-run, .codicon-terminal, [class*="action" i], [class*="button" i]');
+              const buttons = queryShadowDOMAll('button, a.monaco-button, .clickable, [role="button"], .codicon-play');
               const textMatch = buttons.find(el => {
                   if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
                   if (!(el.offsetParent || el.clientWidth > 0)) return false;
-                  if (!isChatActionSurface(el)) {
-                      // log('Run Match: Failed isChatActionSurface for', el.className);
-                      return false;
-                  }
                   const text = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
                   const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
-                  return text.includes('run') || label.includes('run')
-                      || text.includes('execute') || label.includes('execute')
-                      || el.classList.contains('codicon-play') 
-                      || el.classList.contains('codicon-run') 
-                      || el.classList.contains('codicon-terminal')
-                      || label.includes('play');
+                  return text.includes('run in terminal')
+                      || (text.includes('run') && (text.includes('alt') || text.includes('opt') || text.includes('enter') || text === 'run'))
+                      || label.includes('run in terminal')
+                      || label.includes('run command')
+                      || label.includes('run (alt')
+                      || label.includes('run (opt')
+                      || label.includes('execute command');
               });
-              if (textMatch) {
+              if (textMatch && isChatActionSurface(textMatch)) {
                   highlight(textMatch);
                   textMatch.click();
                   actionTaken = true;
@@ -931,11 +823,7 @@ export const AUTO_CONTINUE_SCRIPT = `
                   if (isUnsafeContext(el) || hasUnsafeLabel(el) || isNodeBanned(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
                   if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) return false;
-                  if (!isChatActionSurface(el)) {
-                      // log('Run Match: Failed isChatActionSurface for', el.className);
-                      return false;
-                  }
-                  return true;
+                  return isChatActionSurface(el);
               });
 
               if (runTarget) {
@@ -960,14 +848,20 @@ export const AUTO_CONTINUE_SCRIPT = `
               }
           }
 
-          // ALT-ENTER PERMANENTLY DISABLED:
-          // The Antigravity app's built-in extension (google.antigravity) intercepts ALL Alt+Enter
-          // keystrokes dispatched to the chat input and converts them into sendActionToChatPanel
-          // gRPC calls. Each call saturates the gRPC channel, causing ConnectError: channel is full.
-          // This happens regardless of guards or throttling since Antigravity's internal handler
-          // fires synchronously on every KeyboardEvent. We MUST rely on dom-click and native-click.
-          //
-          // If 'alt-enter' is in actionMethods, it is silently skipped.
+          if (!actionTaken && hasMethod(runControl.actionMethods, 'alt-enter')) {
+              const input = getSafeChatInput();
+              if (input) {
+                  try {
+                      input.focus();
+                      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true, cancelable: true, composed: true }));
+                      input.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, altKey: true, bubbles: true, cancelable: true, composed: true }));
+                      actionTaken = true;
+                      lastActionByControl.run = now;
+                      log('Dispatched localized Alt+Enter to Run');
+                      emitAction('run', 'localized alt-enter');
+                  } catch(e) {}
+              }
+          }
       }
 
       // 3. Auto-Accept
@@ -992,7 +886,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           ].join(',');
 
           if (hasMethod(expandControl.actionMethods, 'dom-click')) {
-              const buttons = queryShadowDOMAll('button, a, [role="button"], [tabindex], .clickable, .action-item, .codicon, .codicon-bell, .expand-indicator, [class*="action" i], [class*="button" i], span.truncate, span.cursor-pointer, span[class*="opacity"], span[class*="font-"]');
+              const buttons = queryShadowDOMAll('button, a.monaco-button, .clickable, [role="button"], .codicon-bell, .expand-indicator');
               const textMatch = buttons.find(el => {
                   if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
@@ -1206,7 +1100,7 @@ export const AUTO_CONTINUE_SCRIPT = `
   scheduleNext();
   
   // Expose state for CDP
-  window.__autopilotGetRuntimeState = analyzeChatState;
+  window.__antigravityGetState = analyzeChatState;
   window.__antigravityTypeAndSubmit = typeAndSubmit;
 
   window.stopAutoContinue = () => {
