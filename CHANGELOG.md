@@ -1,5 +1,13 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
+
+## [5.2.185] - 2026-02-27
+### Fixed
+* **Unsafe Fallback Type Relay Blocked**: Hardened frontend fallback action routing so `type` fallback events are no longer executed as backend text-input actions, preventing accidental literal `"type"` insertion and cross-session typing fanout.
+
+### Changed
+* **Release Metadata Sync**: Updated version metadata across `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` (including runtime activation toast) for the 5.2.185 VSIX build.
+
 ## [5.2.168] - 2026-02-26
 ### Fixed
 * **Auto-Continue Cursor Run Action**: Repaired auto-run functionality inside Cursor's Composer and native chat surfaces. Broadened the global workbench chat safety whitelist to include `[class*="composer"]` and `.aichat-container`, and explicitly appended `.codicon-play` matching to the `analyzeChatState` visual signal text detector.

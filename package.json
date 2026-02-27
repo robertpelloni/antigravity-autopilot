@@ -2,7 +2,7 @@
   "name": "antigravity-autopilot",
   "displayName": "Antigravity Autopilot (Unified)",
   "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-  "version": "5.2.183",
+  "version": "5.2.185",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -110,18 +110,6 @@
         "title": "Antigravity: Show Status Menu"
       },
       {
-        "command": "antigravity.toggleMcp",
-        "title": "Antigravity: Toggle MCP Server"
-      },
-      {
-        "command": "antigravity.toggleVoice",
-        "title": "Antigravity: Toggle Voice Control"
-      },
-      {
-        "command": "antigravity.processVoiceTranscript",
-        "title": "Antigravity: Process Voice Transcript (Debug)"
-      },
-      {
         "command": "antigravity.generateTests",
         "title": "Antigravity: Generate Tests"
       },
@@ -216,10 +204,6 @@
       {
         "command": "antigravity.testAudio",
         "title": "Antigravity: Test Audio Feedback"
-      },
-      {
-        "command": "antigravity.startRemoteServer",
-        "title": "Antigravity: Start Remote Control Server"
       }
     ],
     "keybindings": [

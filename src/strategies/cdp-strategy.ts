@@ -119,7 +119,7 @@ export class CDPStrategy implements IStrategy {
         // Listen for frontend actions that failed DOM clicks and need Native fallback
         this.cdpHandler.on('action', async ({ group, detail }) => {
             logToOutput(`[CDPStrategy] Received fallback action from frontend: ${group} (${detail})`);
-            await this.executeAction(group);
+            await this.executeAction(group, detail);
         });
 
         this.syncBlindBumpHandlerState();
@@ -181,8 +181,16 @@ export class CDPStrategy implements IStrategy {
         vscode.window.showInformationMessage('Antigravity: CDP Strategy OFF');
     }
 
-    async executeAction(action: string): Promise<void> {
+    async executeAction(action: string, detail?: string): Promise<void> {
         if ((action === 'run' || action === 'expand' || action === 'continue') && !this.isRunExpandContinueEnabled()) {
+            return;
+        }
+
+        // Safety hardening: never proxy frontend fallback `type` actions into backend text input.
+        // Frontend sends `type|typed bump text` as telemetry/fallback intent, and treating the action
+        // name as payload can cause literal "type" insertion across attached sessions.
+        if (action === 'type') {
+            logToOutput(`[CDPStrategy] Blocked unsafe fallback action: type (${detail || 'no-detail'})`);
             return;
         }
 
@@ -192,7 +200,7 @@ export class CDPStrategy implements IStrategy {
         const ctx: InteractionContext = {
             cdpHandler: this.cdpHandler,
             vscodeCommands: vscode.commands,
-            text: action
+            text: detail || ''
         };
 
         switch (action) {
@@ -208,10 +216,6 @@ export class CDPStrategy implements IStrategy {
             case 'submit':
                 SoundEffects.playActionGroup('submit');
                 await this.registry.executeCategory('submit', ctx);
-                break;
-            case 'type':
-                SoundEffects.playActionGroup('type');
-                await this.registry.executeCategory('text', ctx);
                 break;
             case 'run':
                 SoundEffects.playActionGroup('run');
@@ -290,11 +294,47 @@ export class CDPStrategy implements IStrategy {
     }
 
     private getClickSelectorForProfile(profile: 'vscode' | 'antigravity' | 'cursor'): string {
+        const defaultsByProfile: Record<'vscode' | 'antigravity' | 'cursor', string[]> = {
+            antigravity: [
+                '[data-testid="accept-all"]',
+                '[data-testid*="accept"]',
+                'button[aria-label*="Accept All"]',
+                'button[title*="Accept All"]',
+                'button[aria-label*="Accept"]',
+                'button[title*="Accept"]',
+                'button[aria-label*="Keep"]',
+                'button[title*="Keep"]',
+                'button[aria-label*="Allow"]',
+                'button[title*="Allow"]',
+                'button[aria-label*="Continue"]',
+                'button[title*="Continue"]',
+                'button[aria-label*="Retry"]',
+                'button[title*="Retry"]',
+                'button[aria-label*="Run"]',
+                'button[title*="Run"]'
+            ],
+            vscode: [
+                '.interactive-editor button[aria-label*="Accept"]',
+                '.interactive-editor button[title*="Accept"]',
+                '.interactive-editor [data-testid*="accept"]',
+                '.chat-input-container button[aria-label*="Accept"]',
+                '.chat-input-container button[title*="Accept"]',
+                '.chat-input-container [data-testid*="accept"]'
+            ],
+            cursor: [
+                '#workbench\\.parts\\.auxiliarybar button[aria-label*="Accept"]',
+                '#workbench\\.parts\\.auxiliarybar button[title*="Accept"]',
+                '.interactive-editor button[aria-label*="Accept"]',
+                '.interactive-editor button[title*="Accept"]',
+                '[class*="anysphere"] button[aria-label*="Accept"]'
+            ]
+        };
+
         const selectors = profile === 'antigravity'
-            ? (config.get<string[]>('interactionClickSelectorsAntigravity') || [])
+            ? (config.get<string[]>('interactionClickSelectorsAntigravity') || defaultsByProfile.antigravity)
             : profile === 'cursor'
-                ? (config.get<string[]>('interactionClickSelectorsCursor') || [])
-                : (config.get<string[]>('interactionClickSelectorsVSCode') || []);
+                ? (config.get<string[]>('interactionClickSelectorsCursor') || defaultsByProfile.cursor)
+                : (config.get<string[]>('interactionClickSelectorsVSCode') || defaultsByProfile.vscode);
 
         const filtered = selectors.map(s => s.trim()).filter(Boolean);
         return filtered.length > 0 ? filtered.join(', ') : '';
