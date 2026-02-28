@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.205] - 2026-02-28
+### Fixed
+* **Minimal Fork-Aware Runtime Core**: Replaced the oversized auto-continue runtime with a simplified loop that focuses on fork detection, stalled-conversation detection, bump typing/submission, and safe action clicking.
+* **Action Coverage Consolidation**: Unified DOM action targeting for `Run`, `Expand`, `Always Allow/Always Approve`, `Retry`, `Accept All`, `Accept`, `Keep`, and `Edit` using a single prioritized click pipeline.
+* **Keep Button Reliability**: Added explicit `Keep` selectors and semantic matching as a first-class continuation action in the simplified runtime flow.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.205 VSIX build.
+
 ## [5.2.204] - 2026-02-28
 ### Fixed
 * **Cross-Workspace Lease Contention Lockout**: Updated controller lease persistence to use a stable workspace-scoped lease file (`.antigravity-controller-lease.<workspace-hash>.json`) so unrelated workspaces no longer steal leader role and suppress automation in the active workspace.
