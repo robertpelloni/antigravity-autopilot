@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '5.2.195';
+        const ANTIGRAVITY_VERSION = '5.2.196';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
@@ -528,6 +528,39 @@
         const mode = (window.__autopilotState?.currentMode || 'cursor').toLowerCase();
         if (mode === 'antigravity' || mode === 'cursor' || mode === 'vscode') return mode;
         return 'vscode';
+    }
+
+    function getRuntimeRole() {
+        const fromState = String(window.__autopilotState?.controllerRole || '').toLowerCase();
+        if (fromState === 'leader' || fromState === 'follower') return fromState;
+
+        const fromConfig = window.__antigravityConfig?.runtime?.role;
+        const normalizedConfig = String(fromConfig || '').toLowerCase();
+        if (normalizedConfig === 'leader' || normalizedConfig === 'follower') return normalizedConfig;
+
+        const fromLeaderFlag = window.__antigravityConfig?.runtime?.isLeader;
+        if (fromLeaderFlag === true) return 'leader';
+        if (fromLeaderFlag === false) return 'follower';
+
+        return 'unknown';
+    }
+
+    function isInteractionWindowEligible() {
+        const role = getRuntimeRole();
+        if (role === 'follower') {
+            log('[RoleGuard] follower runtime: interaction blocked');
+            return false;
+        }
+
+        if (document.visibilityState !== 'visible') {
+            return false;
+        }
+
+        if (typeof document.hasFocus === 'function' && !document.hasFocus()) {
+            return false;
+        }
+
+        return true;
     }
 
     function mergeSelectorSets(mode, category) {
@@ -1791,6 +1824,9 @@
 
     async function sendMessage(text) {
         if (!text) return false;
+        if (!isInteractionWindowEligible()) {
+            return false;
+        }
         if (window.showAutoAllToast) {
             window.showAutoAllToast(`Auto-Reply: "${text}"`, 2000, 'rgba(0,100,200,0.8)');
         }
@@ -1862,6 +1898,7 @@
     let lastClickTime = 0;
 
     async function autoBump() {
+        if (!isInteractionWindowEligible()) return false;
         sendCommandToExtension('__AUTOPILOT_ACTION__:bump|auto');
         const state = window.__autopilotState;
         const bumpMsg = state.bumpMessage;
@@ -1886,6 +1923,7 @@
     }
 
     async function performClick(selectors) {
+        if (!isInteractionWindowEligible()) return 0;
         await detectAndDismissMCPDialog();
         const mode = getCurrentMode();
         // PRE-CHECK: Expand any collapsed sections that might be hiding buttons
@@ -2459,9 +2497,10 @@
             const ide = (config.ide || 'cursor').toLowerCase();
             const isPro = config.isPro !== false;
             const isBG = config.isBackgroundMode === true;
+            const role = config.controllerRole === 'leader' ? 'leader' : 'follower';
 
             // Visual confirmation of injection
-            window.showAutoAllToast('Antigravity v5.2.193 Active 🚀');
+            window.showAutoAllToast(`Antigravity v${ANTIGRAVITY_VERSION} Active (${role.toUpperCase()}) 🚀`);
 
             if (config.bannedCommands) {
                 window.__autoAllUpdateBannedCommands(config.bannedCommands);
@@ -2476,6 +2515,7 @@
             log(`__autopilotStart called: ide=${ide}, isPro=${isPro}, isBG=${isBG}`);
 
             const state = window.__autopilotState;
+            state.controllerRole = role;
 
             // If already running, just update config and return — do NOT restart
             // The 5-second poll timer calls this repeatedly; restarting would kill the loop
@@ -2511,6 +2551,7 @@
             state.bumpEnabled = !!config.bumpMessage;
             state.threadWaitInterval = (config.threadWaitInterval || 5) * 1000;
             log(`[Config] bumpMessage="${state.bumpMessage}", autoApproveDelay=${state.autoApproveDelay}ms, threadWait=${state.threadWaitInterval}ms`);
+            log(`[RoleGuard] Runtime role=${state.controllerRole}`);
 
             if (!state.stats.sessionStartTime) {
                 state.stats.sessionStartTime = Date.now();

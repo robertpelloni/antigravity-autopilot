@@ -1,6 +1,16 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.196] - 2026-02-27
+### Fixed
+* **Lease Acquisition Reliability**: Hardened `ControllerLease.tryAcquire()` to treat invalid PID leases as non-authoritative and verify lease write/readback success before reporting acquisition, reducing all-follower dead-state risk on Windows lease-file races.
+* **Cross-Session Bump Fanout Guard**: `CDPClient.sendMessage()` now hard-blocks follower, hidden, and unfocused sessions before any type/submit fallback path executes, preventing multi-window bump typing when role/focus drift occurs.
+* **Legacy Runtime Action Isolation**: Added runtime role + focus/visibility eligibility gates in `full_cdp_script.js` for send/click/bump flows so follower or background windows do not execute interaction actions.
+
+### Changed
+* **Role Telemetry Clarity**: `auto-continue` state-change logs now include runtime role (`leader`/`follower`) plus visibility/focus state, making no-leader/follower-only incidents much easier to diagnose from `Antigravity Debug` output.
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.196 VSIX build.
+
 ## [5.2.195] - 2026-02-27
 ### Fixed
 * **Pending Bump Submit Recovery**: Added safe submit retry logic in `auto-continue` so typed bump text keeps attempting send-button/form submission for a short window when initial submit click races UI enable/debounce.

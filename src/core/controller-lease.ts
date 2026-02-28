@@ -69,11 +69,14 @@ export class ControllerLease {
     tryAcquire(force: boolean = false): boolean {
         const existing = this.readLease();
         if (!force && existing && !this.isStale(existing) && existing.ownerId !== this.ownerId) {
-            let isAlive = true;
-            try {
-                process.kill(existing.pid, 0);
-            } catch (e) {
-                isAlive = false;
+            const pid = Number(existing.pid || 0);
+            let isAlive = pid > 0;
+            if (isAlive) {
+                try {
+                    process.kill(pid, 0);
+                } catch (e) {
+                    isAlive = false;
+                }
             }
             if (isAlive) {
                 return false;
@@ -89,8 +92,13 @@ export class ControllerLease {
             updatedAt: now
         };
 
-        this.writeLease(next);
-        return true;
+        const wrote = this.writeLease(next);
+        if (!wrote) {
+            return false;
+        }
+
+        const readBack = this.readLease();
+        return !!readBack && readBack.ownerId === this.ownerId && !this.isStale(readBack);
     }
 
     forceAcquire(): void {
@@ -118,7 +126,7 @@ export class ControllerLease {
         }
     }
 
-    private writeLease(payload: ControllerLeasePayload): void {
+    private writeLease(payload: ControllerLeasePayload): boolean {
         try {
             const tempPath = `${this.leasePath}.tmp.${process.pid}`;
             fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2), 'utf-8');
@@ -130,9 +138,11 @@ export class ControllerLease {
                 fs.writeFileSync(this.leasePath, JSON.stringify(payload, null, 2), 'utf-8');
                 try { fs.unlinkSync(tempPath); } catch { }
             }
+            return true;
         } catch (e: any) {
             console.error('[ControllerLease] Failed to write lease file:', e);
             // Best-effort write; non-critical.
+            return false;
         }
     }
 

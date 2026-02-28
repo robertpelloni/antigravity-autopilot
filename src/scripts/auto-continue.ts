@@ -915,6 +915,9 @@ export const AUTO_CONTINUE_SCRIPT = `
           state.isGenerating ? '1' : '0',
           state.hasInputReady ? '1' : '0',
           state.feedbackVisible ? '1' : '0',
+          (cfg?.runtime?.isLeader === false ? 'follower' : 'leader'),
+          (document.visibilityState || 'unknown'),
+          (typeof document.hasFocus === 'function' ? (document.hasFocus() ? 'focused' : 'blurred') : 'focus-unknown'),
           state.lastSender,
           state.rowCount,
           state.buttonSignals?.acceptAll || 0,
@@ -926,7 +929,9 @@ export const AUTO_CONTINUE_SCRIPT = `
       ].join('|');
       if (stateSignature !== lastStateSignature) {
           lastStateSignature = stateSignature;
-          logAction('state changed generating=' + state.isGenerating + ' sender=' + state.lastSender + ' rows=' + state.rowCount + ' input=' + state.hasInputReady + ' signals=' + JSON.stringify(state.buttonSignals || {}));
+          const roleLabel = cfg?.runtime?.isLeader === false ? 'follower' : 'leader';
+          const focusLabel = (typeof document.hasFocus === 'function' && document.hasFocus()) ? 'focused' : 'blurred';
+          logAction('state changed role=' + roleLabel + ' visibility=' + (document.visibilityState || 'unknown') + ' focus=' + focusLabel + ' generating=' + state.isGenerating + ' sender=' + state.lastSender + ' rows=' + state.rowCount + ' input=' + state.hasInputReady + ' signals=' + JSON.stringify(state.buttonSignals || {}));
       }
       const baseThrottle = cfg.timing?.actionThrottleMs ?? 500;
       const jitter = cfg.timing?.randomness ?? 50;

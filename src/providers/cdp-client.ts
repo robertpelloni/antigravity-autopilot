@@ -31,9 +31,21 @@ export class CDPClient {
 
     async sendMessage(text: string): Promise<boolean> {
         const script = `(function() {
+            const runtimeLeader = window.__antigravityConfig?.runtime?.isLeader;
+            if (runtimeLeader === false) {
+                return false;
+            }
+
+            if (document.visibilityState !== 'visible') {
+                return false;
+            }
+
+            if (typeof document.hasFocus === 'function' && !document.hasFocus()) {
+                return false;
+            }
+
             if (typeof window.__antigravityTypeAndSubmit === 'function') {
-                window.__antigravityTypeAndSubmit(${JSON.stringify(text)});
-                return true;
+                return window.__antigravityTypeAndSubmit(${JSON.stringify(text)}) === true;
             }
 
             function findChatInput() {
