@@ -20,7 +20,9 @@ export const AUTO_CONTINUE_SCRIPT = `
     timing: {
       pollIntervalMs: 700,
       actionThrottleMs: 350,
-      stalledMs: 7000
+      stalledMs: 7000,
+      bumpCooldownMs: 12000,
+      submitCooldownMs: 4000
     },
     actions: {
       clickRun: true,
@@ -37,6 +39,8 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   let pollTimer = null;
   let lastActionAt = 0;
+  let lastBumpAt = 0;
+  let submitInFlightUntil = 0;
   let lastUserVisibleChangeAt = Date.now();
   let lastStateHash = '';
 
@@ -261,7 +265,9 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
       input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
       input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-      emitAction('type', 'typed bump text');
+      // Intentionally do not emit backend 'type' fallback actions here.
+      // The frontend typed successfully already; emitting fallback signals can
+      // trigger noisy/unsafe backend handling loops.
       return true;
     } catch (e) {
       return false;
@@ -329,6 +335,10 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (state.isGenerating) return false;
     if (!state.hasInput) return false;
     if (state.stalledMs < Math.max(1000, cfg.timing?.stalledMs || 7000)) return false;
+    const bumpCooldownMs = Math.max(1000, cfg.timing?.bumpCooldownMs || 12000);
+    if ((Date.now() - lastBumpAt) < bumpCooldownMs) return false;
+    const submitCooldownMs = Math.max(500, cfg.timing?.submitCooldownMs || 4000);
+    if (Date.now() < submitInFlightUntil) return false;
 
     const text = String(cfg.bump?.text || 'Proceed').trim();
     if (!text) return false;
@@ -336,6 +346,8 @@ export const AUTO_CONTINUE_SCRIPT = `
     const input = getInput();
     if (!input) return false;
     if (!typeText(input, text)) return false;
+
+    submitInFlightUntil = Date.now() + submitCooldownMs;
 
     const submit = () => {
       const submitSelectors = targetSelectorsForFork(fork).submit;
@@ -353,6 +365,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     };
 
     setTimeout(submit, Math.max(60, cfg.bump?.submitDelayMs || 180));
+    lastBumpAt = Date.now();
     return true;
   }
 
@@ -402,11 +415,14 @@ export const AUTO_CONTINUE_SCRIPT = `
   window.__antigravityTypeAndSubmit = function (text) {
     const cfg = getConfig();
     if (!shouldAct(cfg)) return false;
+    const submitCooldownMs = Math.max(500, cfg.timing?.submitCooldownMs || 4000);
+    if (Date.now() < submitInFlightUntil) return false;
     const fork = detectFork();
     const input = getInput();
     if (!input) return false;
     const typed = typeText(input, String(text || cfg.bump?.text || 'Proceed'));
     if (!typed) return false;
+    submitInFlightUntil = Date.now() + submitCooldownMs;
     setTimeout(function () {
       const submitSelectors = targetSelectorsForFork(fork).submit;
       const send = findClickable(submitSelectors, /(send|submit|continue)/i);

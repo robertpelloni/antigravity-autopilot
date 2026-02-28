@@ -20,6 +20,7 @@ export class CDPHandler extends EventEmitter {
     private watchdogInterval: NodeJS.Timeout | null = null;
     private watchdogState: Map<string, { attempts: number; lastAttemptAt: number }> = new Map();
     private recentAutomationSignals: Map<string, number> = new Map();
+    private recentActionDispatch: Map<string, number> = new Map();
     private discoveredPort: number | null = null;
     private controllerRoleIsLeader = false;
 
@@ -625,11 +626,18 @@ export class CDPHandler extends EventEmitter {
         try {
             // Check existence
             const check = await this.sendCommand(pageId, 'Runtime.evaluate', {
-                expression: "typeof window.__autopilotStart",
+                expression: `(() => ({
+                    legacy: typeof window.__autopilotStart === 'function',
+                    modernRunning: window.__antigravityAutoContinueRunning === true,
+                    modernApi: typeof window.__antigravityGetState === 'function'
+                }))()`,
                 returnByValue: true
             }, 1000, sessionId);
 
-            if (force || check?.result?.value !== 'function') {
+            const marker = check?.result?.value;
+            const hasRuntime = !!(marker?.legacy || marker?.modernRunning || marker?.modernApi);
+
+            if (force || !hasRuntime) {
                 // If we are injecting the script, ALWAYS inject the config right before it.
                 // This guarantees followers and webviews receive the user's settings.
                 await this.sendCommand(pageId, 'Runtime.evaluate', {
@@ -665,6 +673,7 @@ export class CDPHandler extends EventEmitter {
         this.connections.clear();
         this.watchdogState.clear();
         this.recentAutomationSignals.clear();
+        this.recentActionDispatch.clear();
     }
 
     isConnected(): boolean {
@@ -792,6 +801,11 @@ export class CDPHandler extends EventEmitter {
                 const group = (groupRaw || 'click').trim() as ActionSoundGroup;
                 const detail = (detailRaw || '').trim();
                 this.noteAutomationSignal(pageId, sessionId);
+
+                if (!this.shouldDispatchAction(pageId, sessionId, group, detail)) {
+                    return;
+                }
+
                 logToOutput(`[AutoAction:${group}] ${detail || 'triggered'}`);
                 const soundGroup = group === 'accept-all' ? 'accept' : group;
                 SoundEffects.playActionGroup(soundGroup as ActionSoundGroup);
@@ -800,7 +814,7 @@ export class CDPHandler extends EventEmitter {
                     // Safety hardening: never translate script-level "submit|keys" into global CDP Enter.
                     // Focus drift here can activate Run menu / Customize Layout instead of chat submit.
                     logToOutput(`[AutoAction:submit] Blocked unsafe CDP Enter relay for submit|keys`);
-                } else if (group === 'run' || group === 'expand' || group === 'continue' || group === 'accept' || group === 'accept-all' || group === 'submit' || group === 'type') {
+                } else if (group === 'run' || group === 'expand' || group === 'continue' || group === 'accept' || group === 'accept-all' || group === 'submit') {
                     const routedGroup = group === 'accept-all' ? 'accept' : group;
                     this.emit('action', { group: routedGroup, detail });
                 }
@@ -1000,6 +1014,21 @@ export class CDPHandler extends EventEmitter {
         }
     }
 
+    private shouldDispatchAction(pageId: string, sessionId: string | undefined, group: string, detail: string): boolean {
+        const now = Date.now();
+        const normalizedDetail = String(detail || '').trim().toLowerCase();
+        const key = `${pageId}::${sessionId || 'main'}::${group}::${normalizedDetail}`;
+        const lastTs = this.recentActionDispatch.get(key) || 0;
+
+        const throttleMs = group === 'submit' ? 1500 : 200;
+        if (lastTs > 0 && (now - lastTs) < throttleMs) {
+            return false;
+        }
+
+        this.recentActionDispatch.set(key, now);
+        return true;
+    }
+
     private hasRecentAutomationSignal(pageId: string, sessions: Set<string>, now: number, graceMs: number): boolean {
         const pageTs = this.recentAutomationSignals.get(pageId) || 0;
         if (pageTs > 0 && (now - pageTs) < graceMs) {
@@ -1025,7 +1054,11 @@ export class CDPHandler extends EventEmitter {
                     visible: document.visibilityState,
                     focused: (typeof document.hasFocus === 'function') ? document.hasFocus() : true,
                     running: window.__antigravityAutoContinueRunning === true,
-                    hasAutopilotApi: typeof window.__autopilotStart === 'function' || !!window.__autopilotState
+                    hasAutopilotApi:
+                        typeof window.__autopilotStart === 'function'
+                        || !!window.__autopilotState
+                        || typeof window.__antigravityGetState === 'function'
+                        || typeof window.__antigravityTypeAndSubmit === 'function'
                 }))()`,
                 returnByValue: true,
                 awaitPromise: false

@@ -577,7 +577,7 @@ export class VSCodeSubmitCommands implements IInteractionMethod {
 export class ScriptForceSubmit implements IInteractionMethod {
     id = 'script-submit';
     name = 'Script Force Submit';
-    description = 'Calls window.__autopilotState.forceSubmit() via injected bridge';
+    description = 'Calls runtime submit hooks via injected bridge (legacy + minimal runtime compatible)';
     category = 'submit' as const;
     enabled = true;
     priority = 0; // Highest priority (runs first)
@@ -586,11 +586,53 @@ export class ScriptForceSubmit implements IInteractionMethod {
 
     async execute(ctx: InteractionContext): Promise<boolean> {
         if (!ctx.cdpHandler) return false;
+        const safeText = escapeJsSingleQuoted(String(ctx.text || 'Proceed'));
         const script = `
             (async function() {
-                if (window.__autopilotState && window.__autopilotState.forceSubmit) {
+                // Legacy runtime
+                if (window.__autopilotState && typeof window.__autopilotState.forceSubmit === 'function') {
                     return await window.__autopilotState.forceSubmit();
                 }
+
+                // Minimal runtime API
+                if (typeof window.__antigravityTypeAndSubmit === 'function') {
+                    return !!window.__antigravityTypeAndSubmit('${safeText}');
+                }
+
+                // Last-resort DOM submit attempt
+                const selectors = [
+                    '[title*="Send" i]',
+                    '[aria-label*="Send" i]',
+                    '[title*="Submit" i]',
+                    '[aria-label*="Submit" i]',
+                    '[data-testid*="send" i]',
+                    '[data-testid*="submit" i]',
+                    'button[type="submit"]',
+                    '.codicon-send'
+                ];
+
+                const isVisible = (el) => {
+                    if (!el || !el.isConnected || el.disabled) return false;
+                    const rect = el.getBoundingClientRect();
+                    if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+                    const style = window.getComputedStyle(el);
+                    return style.display !== 'none' && style.visibility !== 'hidden' && style.pointerEvents !== 'none';
+                };
+
+                for (const selector of selectors) {
+                    const nodes = Array.from(document.querySelectorAll(selector));
+                    for (const node of nodes) {
+                        const target = (node.closest && node.closest('button, [role="button"], .monaco-button')) || node;
+                        if (!isVisible(target)) continue;
+                        try {
+                            target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                            target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                            target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                            return true;
+                        } catch {}
+                    }
+                }
+
                 return false;
             })()
         `;

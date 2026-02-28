@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.206] - 2026-02-28
+### Fixed
+* **Submit Single-Flight Guarding**: Added cooldown-based in-flight submit protection in the minimal auto-continue runtime to prevent overlapping bump submit bursts.
+* **CDP Action Dedupe Throttling**: Added backend dispatch dedupe throttles to suppress repeated rapid-fire action relays (especially submit actions) across page/session routes.
+* **Strategy Submit Reentrancy Lock**: Added strategy-layer submit lock + short cooldown so submit categories cannot overlap while a prior submit execution is still active.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.206 VSIX build.
+
 ## [5.2.205] - 2026-02-28
 ### Fixed
 * **Minimal Fork-Aware Runtime Core**: Replaced the oversized auto-continue runtime with a simplified loop that focuses on fork detection, stalled-conversation detection, bump typing/submission, and safe action clicking.

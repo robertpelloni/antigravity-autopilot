@@ -30,6 +30,8 @@ export class CDPStrategy implements IStrategy {
     private cdpHandler: CDPHandler;
     private statusBarItem: vscode.StatusBarItem;
     private pollTimer: NodeJS.Timeout | null = null;
+    private submitInFlight = false;
+    private lastSubmitAt = 0;
     private registry: InteractionMethodRegistry;
     private context: vscode.ExtensionContext;
     private appName: string;
@@ -237,8 +239,20 @@ export class CDPStrategy implements IStrategy {
                 });
                 break;
             case 'submit':
+                if (this.submitInFlight) {
+                    return;
+                }
+                if ((Date.now() - this.lastSubmitAt) < 1200) {
+                    return;
+                }
+                this.submitInFlight = true;
                 SoundEffects.playActionGroup('submit');
-                await this.registry.executeCategory('submit', ctx);
+                try {
+                    await this.registry.executeCategory('submit', ctx);
+                } finally {
+                    this.lastSubmitAt = Date.now();
+                    this.submitInFlight = false;
+                }
                 break;
             case 'run':
                 SoundEffects.playActionGroup('run');

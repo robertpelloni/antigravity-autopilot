@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 5.2.63  
-**Last Updated**: 2026-02-22  
-**Status**: Production hardening in progress (active safety + governance sweep)
+**Version**: 5.2.206  
+**Last Updated**: 2026-02-28  
+**Status**: Production hardening in progress (submit dedupe + single-flight stabilization)
 
 ## Project Structure at a Glance
 

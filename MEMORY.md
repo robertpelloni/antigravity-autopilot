@@ -87,3 +87,8 @@ When dealing with "ghost" UI actions (e.g., the window layout mysteriously toggl
 
 - **Accept-All Needs Variant Coverage:** Treat `Accept All`, `Keep`, `Allow`, `Retry`, and `Always Approve/Allow` as first-class accept intents in both runtime and backend click fallback paths.
 - **Watchdog Must Observe Attached Sessions:** Heartbeat evaluation only on the top page target can create false reinjection storms when chat runs in nested sessions; aggregate snapshots across attached sessions and honor recent automation-activity grace windows.
+
+## Recent Hardening Notes (v5.2.206)
+
+- **Submit Single-Flight Across Layers:** Protect submit execution in frontend runtime, backend dispatch routing, and strategy execution path simultaneously; a single guard is insufficient during bursty session updates.
+- **Throttle-Then-Drop for Duplicate Actions:** For bridge actions, short-window dedupe is safer than attempting to execute every duplicate payload under load.
