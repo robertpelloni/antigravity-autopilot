@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.204] - 2026-02-28
+### Fixed
+* **Cross-Workspace Lease Contention Lockout**: Updated controller lease persistence to use a stable workspace-scoped lease file (`.antigravity-controller-lease.<workspace-hash>.json`) so unrelated workspaces no longer steal leader role and suppress automation in the active workspace.
+* **Workspace Key Canonicalization**: Added canonical workspace normalization before hashing lease keys (including Windows case-insensitive path normalization) to ensure consistent leader arbitration across identical workspace paths.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.204 VSIX build.
+
 ## [5.2.203] - 2026-02-27
 ### Fixed
 * **Controller Lease Role Reconciliation**: Restored global lease-file arbitration to resolve multi-window leader contention after workspace-scoped lease behavior caused all windows to report leader.
