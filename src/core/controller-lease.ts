@@ -1,7 +1,6 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import * as crypto from 'crypto';
 
 export interface ControllerLeasePayload {
     ownerId: string;
@@ -24,25 +23,7 @@ export class ControllerLease {
     ) {
         this.staleMs = Math.max(5000, options?.staleMs ?? 15000);
         this.heartbeatMs = Math.max(1000, options?.heartbeatMs ?? 4000);
-        this.leasePath = options?.leasePath || path.join(
-            os.homedir() || os.tmpdir(),
-            `.antigravity-controller-lease.${ControllerLease.getWorkspaceScope(workspace)}.json`
-        );
-    }
-
-    private static getWorkspaceScope(workspace: string): string {
-        const normalized = String(workspace || 'no-workspace')
-            .trim()
-            .replace(/\\/g, '/')
-            .toLowerCase();
-
-        const slug = normalized
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '')
-            .slice(-40) || 'workspace';
-
-        const digest = crypto.createHash('sha1').update(normalized).digest('hex').slice(0, 8);
-        return `${slug}-${digest}`;
+        this.leasePath = options?.leasePath || path.join(os.homedir() || os.tmpdir(), '.antigravity-controller-lease.json');
     }
 
     start(): void {

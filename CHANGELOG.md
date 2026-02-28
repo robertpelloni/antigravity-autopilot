@@ -1,6 +1,16 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.203] - 2026-02-27
+### Fixed
+* **Controller Lease Role Reconciliation**: Restored global lease-file arbitration to resolve multi-window leader contention after workspace-scoped lease behavior caused all windows to report leader.
+* **Hybrid Bump Bridge Truthiness**: Hardened `sendHybridBump()` so success is reported only when `__AUTOPILOT_BRIDGE__` is actually present and invoked.
+* **Console Bridge Compatibility**: Expanded CDP console fallback bridge parsing to accept `__AUTOPILOT*` payloads in addition to legacy `__ANTIGRAVITY*` prefixes.
+* **Run/Expand Selector Coverage**: Broadened run/expand/requires-input selector matching (`data-testid`, `Expand/Run`, shortcut hints) across interaction fallback paths to improve click reliability on forked UI variants.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.203 VSIX build.
+
 ## [5.2.202] - 2026-02-27
 ### Fixed
 * **Workspace-Scoped Controller Lease**: Changed controller lease persistence to workspace-scoped lease files, preventing leader/follower lock contention across unrelated workspaces.

@@ -565,7 +565,7 @@ export class CDPHandler extends EventEmitter {
                         const originSessionId = msg.sessionId;
 
                         // Check if it's a bridge message
-                        if (text.startsWith('__ANTIGRAVITY')) {
+                        if (typeof text === 'string' && (text.startsWith('__ANTIGRAVITY') || text.startsWith('__AUTOPILOT'))) {
                             this.handleBridgeMessage(page.id, text, originSessionId);
                         } else {
                             // Forward interesting logs to OutputChannel
@@ -983,10 +983,9 @@ export class CDPHandler extends EventEmitter {
                 const payload = '__AUTOPILOT_HYBRID_BUMP__:' + msg;
                 if (typeof window.__AUTOPILOT_BRIDGE__ === 'function') {
                     window.__AUTOPILOT_BRIDGE__(payload);
-                } else if (typeof console.log === 'function') {
-                    console.log(payload);
+                    return true;
                 }
-                return true;
+                return false;
             })()
         `;
         const result = await this.executeInFirstTruthySession(expression, true);
