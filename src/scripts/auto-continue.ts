@@ -621,6 +621,68 @@ export const AUTO_CONTINUE_SCRIPT = `
     }
   }
 
+  function didSubmitAdvance(input, beforeValue) {
+    try {
+      const nowValue = (function () {
+        if (!input) return '';
+        if (input.isContentEditable || input.getAttribute('contenteditable') === 'true') {
+          return String(input.textContent || '').trim();
+        }
+        return String(input.value || '').trim();
+      })();
+
+      if (!input || !input.isConnected) return true;
+      if (beforeValue && nowValue !== beforeValue) return true;
+      if (nowValue.length === 0) return true;
+
+      const stopIndicators = queryAllDeep('[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator');
+      if (stopIndicators.some(isVisible)) return true;
+    } catch (e) {}
+    return false;
+  }
+
+  function submitWithRetries(input, fork, cfg, typedText) {
+    const baseDelay = Math.max(60, Number(cfg.bump?.submitDelayMs || 180));
+    const attemptDelay = Math.max(120, Math.min(600, Math.floor(baseDelay * 0.9)));
+    const maxAttempts = 6;
+    const beforeValue = String(typedText || '').trim();
+
+    const tryOnce = function (attempt) {
+      const currentInput = (input && input.isConnected) ? input : getInput(fork);
+      if (!currentInput) return;
+
+      const send = findSubmitNearInput(currentInput, fork)
+        || findClickable(targetSelectorsForFork(fork).submit, /(send|submit|continue)/i, { requireChatSurface: true, allowNonChatFallback: false });
+      if (send) {
+        clickElement(send, 'Submit bump text', 'submit');
+      }
+
+      if (!didSubmitAdvance(currentInput, beforeValue)) {
+        const form = currentInput.closest && currentInput.closest('form');
+        if (form && typeof form.requestSubmit === 'function') {
+          try { form.requestSubmit(); } catch (e) {}
+        }
+      }
+
+      if (!didSubmitAdvance(currentInput, beforeValue)) {
+        safeSubmitFromInput(currentInput, fork);
+      }
+
+      if (didSubmitAdvance(currentInput, beforeValue)) {
+        log('submitted bump text');
+        return;
+      }
+
+      if (attempt < maxAttempts) {
+        setTimeout(function () { tryOnce(attempt + 1); }, attemptDelay);
+      } else {
+        log('submit retries exhausted');
+      }
+    };
+
+    setTimeout(function () { tryOnce(1); }, baseDelay);
+  }
+
   function readState(fork) {
     const stopIndicators = queryAllDeep('[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator');
     const isGenerating = stopIndicators.some(isVisible);
@@ -762,23 +824,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     submitInFlightUntil = Date.now() + submitCooldownMs;
 
-    const submit = () => {
-      const send = findSubmitNearInput(input, fork)
-        || findClickable(targetSelectorsForFork(fork).submit, /(send|submit|continue)/i, { requireChatSurface: true, allowNonChatFallback: false });
-      if (send && clickElement(send, 'Submit bump text', 'submit')) {
-        return;
-      }
-      const form = input.closest && input.closest('form');
-      if (form && typeof form.requestSubmit === 'function') {
-        try {
-          form.requestSubmit();
-          return;
-        } catch (e) {}
-      }
-      safeSubmitFromInput(input, fork);
-    };
-
-    setTimeout(submit, Math.max(60, cfg.bump?.submitDelayMs || 180));
+    submitWithRetries(input, fork, cfg, text);
     lastBumpAt = Date.now();
     return true;
   }
@@ -837,19 +883,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     const typed = typeText(input, String(text || cfg.bump?.text || 'Proceed'));
     if (!typed) return false;
     submitInFlightUntil = Date.now() + submitCooldownMs;
-    setTimeout(function () {
-      const send = findSubmitNearInput(input, fork)
-        || findClickable(targetSelectorsForFork(fork).submit, /(send|submit|continue)/i, { requireChatSurface: true, allowNonChatFallback: false });
-      if (send && clickElement(send, 'Submit bump text', 'submit')) return;
-      const form = input.closest && input.closest('form');
-      if (form && typeof form.requestSubmit === 'function') {
-        try {
-          form.requestSubmit();
-          return;
-        } catch (e) {}
-      }
-      safeSubmitFromInput(input, fork);
-    }, Math.max(60, cfg.bump?.submitDelayMs || 180));
+    submitWithRetries(input, fork, cfg, String(text || cfg.bump?.text || 'Proceed'));
     return true;
   };
 

@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 5.2.229  
+**Version**: 5.2.230  
 **Last Updated**: 2026-02-28  
-**Status**: Production stabilization shipped (global single-leader lease + verified-state expand clicks + deterministic multi-candidate action targeting)
+**Status**: Production stabilization shipped (strict leader-only runtime execution + robust bump submit retries + deterministic multi-candidate action targeting)
 
 ## Project Structure at a Glance
 

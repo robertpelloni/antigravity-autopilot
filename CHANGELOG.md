@@ -1,6 +1,16 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.230] - 2026-02-28
+### Fixed
+* **Multi-Window Role Drift in Runtime Layer**: Runtime config now explicitly enforces leader-only action execution (`runtime.enforceLeader=true`) to align injected behavior with the single-leader lease model.
+* **Bump Text Typed But Not Submitted**: Replaced one-shot submit with a deterministic retry sequence (`click-send` → `form.requestSubmit()` → `Alt+Enter/Enter`) that re-attempts multiple times and verifies progress before declaring success.
+* **Technical Auto-Resume Prompt Leakage**: Default auto-resume and minimal resume messages now resolve to simple bump text (`Proceed`) instead of long task-style continuation text.
+
+### Changed
+* **Auto-Resume Message Fallback Policy**: Resume dispatch now falls back to configured `actions.bump.text` when dedicated resume text is unset/empty.
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.230 VSIX build.
+
 ## [5.2.229] - 2026-02-28
 ### Fixed
 * **False Positive Expand Click Logging**: `Expand` clicks are now considered successful only when a visible expand-state transition is detected (e.g., `aria-expanded` change, control disappearance, or text/state shift away from expand/requires-input).

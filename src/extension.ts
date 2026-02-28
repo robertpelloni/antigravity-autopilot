@@ -814,8 +814,9 @@ export function activate(context: vscode.ExtensionContext) {
                 return false;
             }
 
-            const fullMessage = (config.get<string>('runtimeAutoResumeMessage') || '').trim();
-            const minimalMessage = (config.get<string>('runtimeAutoResumeMinimalMessage') || '').trim();
+            const bumpFallbackText = (config.get<string>('actions.bump.text') || 'Proceed').trim();
+            const fullMessage = (config.get<string>('runtimeAutoResumeMessage') || bumpFallbackText).trim();
+            const minimalMessage = (config.get<string>('runtimeAutoResumeMinimalMessage') || bumpFallbackText).trim();
             const minimalVSCode = (config.get<string>('runtimeAutoResumeMinimalMessageVSCode') || '').trim();
             const minimalAntigravity = (config.get<string>('runtimeAutoResumeMinimalMessageAntigravity') || '').trim();
             const minimalCursor = (config.get<string>('runtimeAutoResumeMinimalMessageCursor') || '').trim();
@@ -830,7 +831,7 @@ export function activate(context: vscode.ExtensionContext) {
             const useMinimal = !options?.forceFull
                 && !!config.get<boolean>('runtimeAutoResumeUseMinimalContinue')
                 && !!runtimeState?.completionWaiting?.readyToResume;
-            const message = (options?.messageOverride || (useMinimal ? (profileMinimalMessage || minimalMessage || fullMessage) : fullMessage)).trim();
+            const message = (options?.messageOverride || (useMinimal ? (profileMinimalMessage || minimalMessage || fullMessage || bumpFallbackText) : (fullMessage || bumpFallbackText))).trim();
             const messageKind: 'full' | 'minimal' = useMinimal ? 'minimal' : 'full';
             const messageProfile: 'unknown' | 'vscode' | 'antigravity' | 'cursor' = activeMode === 'vscode'
                 ? 'vscode'
