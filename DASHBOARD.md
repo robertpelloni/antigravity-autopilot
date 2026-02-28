@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 5.2.207  
+**Version**: 5.2.208  
 **Last Updated**: 2026-02-28  
-**Status**: Production hardening in progress (chat-surface bump isolation + run/expand reliability)
+**Status**: Production hardening in progress (host-focus leader gating + safe run/expand fallback recovery)
 
 ## Project Structure at a Glance
 

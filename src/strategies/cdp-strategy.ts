@@ -122,6 +122,10 @@ export class CDPStrategy implements IStrategy {
         this.cdpHandler.setControllerRole(this.controllerRoleIsLeader);
     }
 
+    setHostWindowFocused(focused: boolean): void {
+        this.cdpHandler.setHostWindowFocused(!!focused);
+    }
+
     async start(): Promise<void> {
         if (this.isActive) return;
         this.isActive = true;

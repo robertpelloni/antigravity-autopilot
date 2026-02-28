@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.208] - 2026-02-28
+### Fixed
+* **Host Window Focus Runtime Gating**: Propagated VS Code window focus state into runtime config and blocked automation when host window is unfocused, preventing multi-window bump fanout even under role drift.
+* **Role/Focus Sync to Connected Sessions**: Added live runtime config refresh on host focus changes so active/follower behavior updates immediately without requiring reconnect.
+* **Run/Expand/Submit Safe Fallback Matching**: Added two-pass clickable resolution (chat-first with safe non-terminal fallback) to recover icon-only and ambiguous-container action controls while preserving safety bans.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.208 VSIX build.
+
 ## [5.2.207] - 2026-02-28
 ### Fixed
 * **Foreground Chat-Surface Bump Isolation**: Restricted minimal runtime bump input and submit targeting to verified chat/composer surfaces while excluding terminal/explorer-adjacent editables.

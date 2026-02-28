@@ -151,6 +151,9 @@ export function activate(context: vscode.ExtensionContext) {
             if (cdp && typeof cdp.setControllerRole === 'function') {
                 cdp.setControllerRole(isControllerLeader());
             }
+            if (cdp && typeof cdp.setHostWindowFocused === 'function') {
+                cdp.setHostWindowFocused(vscode.window.state.focused);
+            }
         };
 
         const attemptNoLeaderSelfHeal = (reason: string): boolean => {
@@ -1201,6 +1204,13 @@ export function activate(context: vscode.ExtensionContext) {
                 });
             }
         });
+
+        context.subscriptions.push(vscode.window.onDidChangeWindowState((state) => {
+            const cdp = resolveCDPStrategy() as any;
+            if (cdp && typeof cdp.setHostWindowFocused === 'function') {
+                cdp.setHostWindowFocused(!!state.focused);
+            }
+        }));
 
         // Initial Status Update
         statusBar.update({

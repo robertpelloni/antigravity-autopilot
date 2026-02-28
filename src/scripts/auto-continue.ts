@@ -9,7 +9,7 @@ export const AUTO_CONTINUE_SCRIPT = `
   window.__antigravityAutoContinueRunning = true;
 
   const defaults = {
-    runtime: { isLeader: false, role: 'follower' },
+    runtime: { isLeader: false, role: 'follower', windowFocused: false },
     bump: {
       text: 'Proceed',
       enabled: true,
@@ -246,14 +246,20 @@ export const AUTO_CONTINUE_SCRIPT = `
     const opts = options || {};
     const joined = selectors.join(',');
     const candidates = queryAllDeep(joined);
-    for (const node of candidates) {
-      const el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
-      if (!isVisible(el) || !isSafeSurface(el)) continue;
-      if (opts.requireChatSurface && !isChatSurface(el)) continue;
-      if (isTerminalSurface(el)) continue;
-      const text = normalizeText(el);
-      if (semanticRegex && !semanticRegex.test(text)) continue;
-      return el;
+    const passes = opts.requireChatSurface ? [true, false] : [false];
+    for (const requireChat of passes) {
+      if (!requireChat && opts.requireChatSurface && !opts.allowNonChatFallback) {
+        continue;
+      }
+      for (const node of candidates) {
+        const el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
+        if (!isVisible(el) || !isSafeSurface(el)) continue;
+        if (requireChat && !isChatSurface(el)) continue;
+        if (isTerminalSurface(el)) continue;
+        const text = normalizeText(el);
+        if (semanticRegex && !semanticRegex.test(text)) continue;
+        return el;
+      }
     }
     return null;
   }
@@ -353,9 +359,9 @@ export const AUTO_CONTINUE_SCRIPT = `
     const input = getInput();
 
     const actionSignals = targetSelectorsForFork(fork);
-    const runVisible = !!findClickable(actionSignals.run, /(run|execute)/i, { requireChatSurface: true });
-    const expandVisible = !!findClickable(actionSignals.expand, /(expand|requires input)/i, { requireChatSurface: true });
-    const submitVisible = !!findClickable(actionSignals.submit, /(send|submit|continue)/i, { requireChatSurface: true });
+    const runVisible = !!findClickable(actionSignals.run, /(run|execute)/i, { requireChatSurface: true, allowNonChatFallback: true });
+    const expandVisible = !!findClickable(actionSignals.expand, /(expand|requires input)/i, { requireChatSurface: true, allowNonChatFallback: true });
+    const submitVisible = !!findClickable(actionSignals.submit, /(send|submit|continue)/i, { requireChatSurface: true, allowNonChatFallback: true });
 
     const hash = [isGenerating ? '1' : '0', !!input ? '1' : '0', runVisible ? '1' : '0', expandVisible ? '1' : '0', submitVisible ? '1' : '0'].join('|');
     if (hash !== lastStateHash) {
@@ -375,8 +381,13 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   function shouldAct(cfg) {
     if (cfg.runtime?.isLeader !== true) return false;
+    if (cfg.runtime?.windowFocused === false) return false;
     if (cfg.bump?.requireVisible !== false && document.visibilityState !== 'visible') return false;
-    if (cfg.bump?.requireFocused !== false && typeof document.hasFocus === 'function' && !document.hasFocus()) return false;
+    if (cfg.bump?.requireFocused !== false) {
+      if (cfg.runtime?.windowFocused !== true && typeof document.hasFocus === 'function' && !document.hasFocus()) {
+        return false;
+      }
+    }
     return true;
   }
 
@@ -397,7 +408,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     for (const a of ordered) {
       if (!enabled[a.key]) continue;
-      const el = findClickable(a.selectors, a.re, { requireChatSurface: true });
+      const el = findClickable(a.selectors, a.re, { requireChatSurface: true, allowNonChatFallback: true });
       if (el && clickElement(el, a.label, a.group)) return true;
     }
     return false;
@@ -424,7 +435,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     const submit = () => {
       const submitSelectors = targetSelectorsForFork(fork).submit;
-      const send = findClickable(submitSelectors, /(send|submit|continue)/i, { requireChatSurface: true });
+      const send = findClickable(submitSelectors, /(send|submit|continue)/i, { requireChatSurface: true, allowNonChatFallback: true });
       if (send && clickElement(send, 'Submit bump text', 'submit')) {
         return;
       }
@@ -498,7 +509,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     submitInFlightUntil = Date.now() + submitCooldownMs;
     setTimeout(function () {
       const submitSelectors = targetSelectorsForFork(fork).submit;
-      const send = findClickable(submitSelectors, /(send|submit|continue)/i, { requireChatSurface: true });
+      const send = findClickable(submitSelectors, /(send|submit|continue)/i, { requireChatSurface: true, allowNonChatFallback: true });
       if (send) clickElement(send, 'Submit bump text', 'submit');
     }, Math.max(60, cfg.bump?.submitDelayMs || 180));
     return true;

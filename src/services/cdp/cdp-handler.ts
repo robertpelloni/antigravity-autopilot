@@ -23,6 +23,7 @@ export class CDPHandler extends EventEmitter {
     private recentActionDispatch: Map<string, number> = new Map();
     private discoveredPort: number | null = null;
     private controllerRoleIsLeader = false;
+    private hostWindowFocused = vscode.window.state.focused;
 
     private isAntigravityHostApp(): boolean {
         try {
@@ -77,6 +78,35 @@ export class CDPHandler extends EventEmitter {
         }
 
         logToOutput(`[CDPHandler] Controller role synced to runtime config: ${this.controllerRoleIsLeader ? 'leader' : 'follower'}`);
+    }
+
+    setHostWindowFocused(focused: boolean): void {
+        const next = !!focused;
+        if (this.hostWindowFocused === next) {
+            return;
+        }
+
+        this.hostWindowFocused = next;
+        if (this.connections.size === 0) {
+            return;
+        }
+
+        const expression = this.getAutomationConfigExpression();
+        for (const [pageId, conn] of this.connections) {
+            this.sendCommand(pageId, 'Runtime.evaluate', {
+                expression,
+                awaitPromise: false
+            }).catch(() => { });
+
+            for (const sessionId of conn.sessions) {
+                this.sendCommand(pageId, 'Runtime.evaluate', {
+                    expression,
+                    awaitPromise: false
+                }, undefined, sessionId).catch(() => { });
+            }
+        }
+
+        logToOutput(`[CDPHandler] Host window focus synced to runtime config: ${this.hostWindowFocused ? 'focused' : 'unfocused'}`);
     }
 
     /**
@@ -400,7 +430,8 @@ export class CDPHandler extends EventEmitter {
             },
             runtime: {
                 isLeader: this.controllerRoleIsLeader,
-                role: this.controllerRoleIsLeader ? 'leader' : 'follower'
+                role: this.controllerRoleIsLeader ? 'leader' : 'follower',
+                windowFocused: this.hostWindowFocused
             }
         };
 
