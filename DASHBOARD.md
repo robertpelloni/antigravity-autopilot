@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 5.2.227  
+**Version**: 5.2.228  
 **Last Updated**: 2026-02-28  
-**Status**: Production stabilization shipped (de-restricted action targeting + completion-safe run/expand execution + simplified bump trigger/submit flow)
+**Status**: Production stabilization shipped (global single-leader lease + reliable chat composer bump detection + deterministic label-first button clicks)
 
 ## Project Structure at a Glance
 

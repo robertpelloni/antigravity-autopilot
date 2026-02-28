@@ -1,7 +1,6 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import * as crypto from 'crypto';
 
 export interface ControllerLeasePayload {
     ownerId: string;
@@ -24,14 +23,12 @@ export class ControllerLease {
     ) {
         this.staleMs = Math.max(5000, options?.staleMs ?? 15000);
         this.heartbeatMs = Math.max(1000, options?.heartbeatMs ?? 4000);
-        this.leasePath = options?.leasePath || this.getDefaultWorkspaceLeasePath(this.workspace);
+        this.leasePath = options?.leasePath || this.getDefaultGlobalLeasePath();
     }
 
-    private getDefaultWorkspaceLeasePath(workspace: string): string {
+    private getDefaultGlobalLeasePath(): string {
         const home = os.homedir() || os.tmpdir();
-        const normalizedWorkspace = this.normalizeWorkspaceKey(workspace);
-        const workspaceHash = crypto.createHash('sha1').update(normalizedWorkspace).digest('hex').slice(0, 16);
-        return path.join(home, `.antigravity-controller-lease.${workspaceHash}.json`);
+        return path.join(home, '.antigravity-controller-lease.json');
     }
 
     private normalizeWorkspaceKey(workspace: string): string {

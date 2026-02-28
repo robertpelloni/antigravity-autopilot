@@ -429,7 +429,6 @@ export const AUTO_CONTINUE_SCRIPT = `
     const strictMatches = queryAllDeep(strictSelectors);
     for (const el of strictMatches) {
       if (!isVisible(el) || !isSafeSurface(el)) continue;
-      if (isEditorLikeSurface(el)) continue;
       if (isTerminalSurface(el)) continue;
       const tag = (el.tagName || '').toLowerCase();
       const isEditable = tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true';
@@ -442,7 +441,6 @@ export const AUTO_CONTINUE_SCRIPT = `
     const all = queryAllDeep(broadSelectors);
     for (const el of all) {
       if (!isVisible(el) || !isSafeSurface(el)) continue;
-      if (isEditorLikeSurface(el)) continue;
       if (isTerminalSurface(el)) continue;
       const normalized = normalizeText(el);
       if (/(terminal|shell|debug console)/i.test(normalized)) continue;
@@ -458,7 +456,6 @@ export const AUTO_CONTINUE_SCRIPT = `
     // even when host-specific chat-root heuristics fail.
     for (const el of all) {
       if (!isVisible(el) || !isSafeSurface(el)) continue;
-      if (isEditorLikeSurface(el)) continue;
       if (isTerminalSurface(el)) continue;
       const normalized = normalizeText(el);
       if (/(terminal|shell|debug console)/i.test(normalized)) continue;
@@ -472,7 +469,6 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (fork === 'antigravity') {
       for (const el of all) {
         if (!isVisible(el) || !isSafeSurface(el)) continue;
-        if (isEditorLikeSurface(el)) continue;
         if (isTerminalSurface(el)) continue;
         const normalized = normalizeText(el);
         if (/(terminal|shell|debug console)/i.test(normalized)) continue;
@@ -482,6 +478,20 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
     }
 
+    return null;
+  }
+
+  function findActionByLabel(labelRegex, requireChatSurface) {
+    const pool = queryAllDeep('button, [role="button"], a, .monaco-button, [aria-label], [title], [data-testid]');
+    for (const node of pool) {
+      const el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
+      if (!isVisible(el) || !isSafeSurface(el)) continue;
+      if (isTerminalSurface(el)) continue;
+      if (requireChatSurface && !isChatSurface(el)) continue;
+      const text = normalizeText(el);
+      if (!labelRegex.test(text)) continue;
+      return el;
+    }
     return null;
   }
 
@@ -651,7 +661,8 @@ export const AUTO_CONTINUE_SCRIPT = `
       if (lastAt > 0 && (now - lastAt) < cooldownMs) {
         continue;
       }
-      const el = findClickable(a.selectors, a.re, { requireChatSurface: true, allowNonChatFallback: !!a.allowNonChatFallback });
+      const byLabel = findActionByLabel(a.re, true) || (a.allowNonChatFallback ? findActionByLabel(a.re, false) : null);
+      const el = byLabel || findClickable(a.selectors, a.re, { requireChatSurface: true, allowNonChatFallback: !!a.allowNonChatFallback });
       if (el && clickElement(el, a.label, a.group)) {
         lastButtonActionAt[a.key] = now;
         return true;

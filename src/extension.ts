@@ -2175,7 +2175,12 @@ export function activate(context: vscode.ExtensionContext) {
             if (ensureControllerLeader('activation bootstrap')) {
                 // 2. Autonomous Loop (The "Brain" - stays gated to one leader)
                 if (config.get('autonomousEnabled')) {
-                    autonomousLoop.start().catch(e => log.error(`Failed to start autonomous loop: ${e.message}`));
+                    const startOnActivation = config.get<boolean>('autonomousStartOnActivation') === true;
+                    if (startOnActivation) {
+                        autonomousLoop.start().catch(e => log.error(`Failed to start autonomous loop: ${e.message}`));
+                    } else {
+                        log.info('Autonomous loop auto-start suppressed (autonomousStartOnActivation=false). Use explicit start command when desired.');
+                    }
                 }
 
                 log.info('Antigravity Autopilot: Brain ACTIVE as controller leader.');

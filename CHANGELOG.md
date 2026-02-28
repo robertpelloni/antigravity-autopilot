@@ -1,6 +1,16 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.228] - 2026-02-28
+### Fixed
+* **All-Windows Leader Split-Brain**: Replaced workspace-scoped controller lease files with a single global lease file (`~/.antigravity-controller-lease.json`) so only one window can own leader role across all open workspaces.
+* **Bump Input Miss In Editor-Hosted Composer**: Removed over-strict editor-surface exclusions from input detection, allowing visible non-terminal chat composers embedded in editor-like containers to be selected for bump typing/submission.
+* **Button Click Misses On Attribute Drift**: Added deterministic label-first action discovery (`Run`, `Expand`, `Accept All`, `Keep`, `Always Allow/Approve`, `Retry`) before selector-based matching to improve click reliability when host attributes differ.
+* **Unexpected Task Prompt Injection During Startup**: Suppressed autonomous loop auto-start at activation unless explicit `autonomousStartOnActivation=true`, preventing unsolicited task text from being sent instead of bump text.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.228 VSIX build.
+
 ## [5.2.227] - 2026-02-28
 ### Fixed
 * **Run/Expand Suppression Regression**: Removed completion-priority suppression that skipped `Run`/`Expand` when completion text was present, so action buttons continue to be clicked when visible.
