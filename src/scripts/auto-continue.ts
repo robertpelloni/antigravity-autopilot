@@ -132,12 +132,59 @@ export const AUTO_CONTINUE_SCRIPT = `
     return true;
   }
 
+  function isTerminalSurface(el) {
+    if (!el || !el.closest) return false;
+    const terminalRoots = [
+      '.terminal-instance', '.terminal-wrapper', '.xterm',
+      '[data-testid*="terminal" i]', '[class*="terminal" i]'
+    ].join(',');
+    try {
+      return !!el.closest(terminalRoots);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function isChatSurface(el) {
+    if (!el || !el.closest) return false;
+    const chatRoots = [
+      '.interactive-input-part',
+      '.chat-input-widget',
+      '.interactive-editor',
+      '[data-testid*="chat" i]',
+      '[data-testid*="composer" i]',
+      '[class*="chat" i]',
+      '[class*="composer" i]',
+      '[class*="interactive" i]'
+    ].join(',');
+    try {
+      return !!el.closest(chatRoots);
+    } catch (e) {
+      return false;
+    }
+  }
+
   function normalizeText(el) {
     const text = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
     const aria = (el.getAttribute('aria-label') || '').toLowerCase();
     const title = (el.getAttribute('title') || '').toLowerCase();
     const testid = (el.getAttribute('data-testid') || '').toLowerCase();
-    return [text, aria, title, testid].join(' | ');
+    const className = (el.className || '').toString().toLowerCase();
+    const shortcut = (el.getAttribute('aria-keyshortcuts') || '').toLowerCase();
+    const hints = [];
+    if (className.includes('codicon-play') || className.includes('codicon-run') || className.includes('codicon-debug-start')) {
+      hints.push('run execute');
+    }
+    if (className.includes('codicon-chevron-right') || className.includes('twistie')) {
+      hints.push('expand requires input');
+    }
+    if (className.includes('codicon-send')) {
+      hints.push('send submit continue');
+    }
+    if (shortcut.includes('alt+enter') || shortcut.includes('opt+enter')) {
+      hints.push('run');
+    }
+    return [text, aria, title, testid, className, shortcut, hints.join(' ')].join(' | ');
   }
 
   function targetSelectorsForFork(fork) {
@@ -195,12 +242,15 @@ export const AUTO_CONTINUE_SCRIPT = `
     return shared;
   }
 
-  function findClickable(selectors, semanticRegex) {
+  function findClickable(selectors, semanticRegex, options) {
+    const opts = options || {};
     const joined = selectors.join(',');
     const candidates = queryAllDeep(joined);
     for (const node of candidates) {
       const el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
       if (!isVisible(el) || !isSafeSurface(el)) continue;
+      if (opts.requireChatSurface && !isChatSurface(el)) continue;
+      if (isTerminalSurface(el)) continue;
       const text = normalizeText(el);
       if (semanticRegex && !semanticRegex.test(text)) continue;
       return el;
@@ -223,25 +273,48 @@ export const AUTO_CONTINUE_SCRIPT = `
   }
 
   function getInput() {
-    const selectors = [
+    const strictSelectors = [
       '.interactive-input-part textarea',
       '.chat-input-widget textarea',
       '[data-testid*="chat" i] textarea',
+      '[data-testid*="composer" i] textarea',
       '[class*="composer" i] textarea',
+      '.interactive-input-part [contenteditable="true"]',
+      '.chat-input-widget [contenteditable="true"]',
+      '[data-testid*="chat" i] [contenteditable="true"]',
+      '[data-testid*="composer" i] [contenteditable="true"]',
+      '[class*="composer" i] [contenteditable="true"]'
+    ].join(',');
+
+    const broadSelectors = [
       'textarea[placeholder*="Ask" i]',
       'textarea[placeholder*="Message" i]',
       'textarea',
       '[contenteditable="true"]'
     ].join(',');
 
-    const all = queryAllDeep(selectors);
-    for (const el of all) {
+    const strictMatches = queryAllDeep(strictSelectors);
+    for (const el of strictMatches) {
       if (!isVisible(el) || !isSafeSurface(el)) continue;
+      if (!isChatSurface(el) || isTerminalSurface(el)) continue;
       const tag = (el.tagName || '').toLowerCase();
       if (tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
         return el;
       }
     }
+
+    const all = queryAllDeep(broadSelectors);
+    for (const el of all) {
+      if (!isVisible(el) || !isSafeSurface(el)) continue;
+      if (!isChatSurface(el) || isTerminalSurface(el)) continue;
+      const normalized = normalizeText(el);
+      if (/(terminal|shell|debug console)/i.test(normalized)) continue;
+      const tag = (el.tagName || '').toLowerCase();
+      if (tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
+        return el;
+      }
+    }
+
     return null;
   }
 
@@ -280,9 +353,9 @@ export const AUTO_CONTINUE_SCRIPT = `
     const input = getInput();
 
     const actionSignals = targetSelectorsForFork(fork);
-    const runVisible = !!findClickable(actionSignals.run, /(run|execute)/i);
-    const expandVisible = !!findClickable(actionSignals.expand, /(expand|requires input)/i);
-    const submitVisible = !!findClickable(actionSignals.submit, /(send|submit|continue)/i);
+    const runVisible = !!findClickable(actionSignals.run, /(run|execute)/i, { requireChatSurface: true });
+    const expandVisible = !!findClickable(actionSignals.expand, /(expand|requires input)/i, { requireChatSurface: true });
+    const submitVisible = !!findClickable(actionSignals.submit, /(send|submit|continue)/i, { requireChatSurface: true });
 
     const hash = [isGenerating ? '1' : '0', !!input ? '1' : '0', runVisible ? '1' : '0', expandVisible ? '1' : '0', submitVisible ? '1' : '0'].join('|');
     if (hash !== lastStateHash) {
@@ -324,7 +397,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     for (const a of ordered) {
       if (!enabled[a.key]) continue;
-      const el = findClickable(a.selectors, a.re);
+      const el = findClickable(a.selectors, a.re, { requireChatSurface: true });
       if (el && clickElement(el, a.label, a.group)) return true;
     }
     return false;
@@ -351,7 +424,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     const submit = () => {
       const submitSelectors = targetSelectorsForFork(fork).submit;
-      const send = findClickable(submitSelectors, /(send|submit|continue)/i);
+      const send = findClickable(submitSelectors, /(send|submit|continue)/i, { requireChatSurface: true });
       if (send && clickElement(send, 'Submit bump text', 'submit')) {
         return;
       }
@@ -425,7 +498,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     submitInFlightUntil = Date.now() + submitCooldownMs;
     setTimeout(function () {
       const submitSelectors = targetSelectorsForFork(fork).submit;
-      const send = findClickable(submitSelectors, /(send|submit|continue)/i);
+      const send = findClickable(submitSelectors, /(send|submit|continue)/i, { requireChatSurface: true });
       if (send) clickElement(send, 'Submit bump text', 'submit');
     }, Math.max(60, cfg.bump?.submitDelayMs || 180));
     return true;

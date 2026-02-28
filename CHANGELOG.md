@@ -1,11 +1,23 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.207] - 2026-02-28
+### Fixed
+* **Foreground Chat-Surface Bump Isolation**: Restricted minimal runtime bump input and submit targeting to verified chat/composer surfaces while excluding terminal/explorer-adjacent editables.
+* **Run/Expand/Submit Icon Semantics**: Improved semantic matching for icon-only controls (`codicon-play`, chevrons/twisties, `codicon-send`) so Run/Expand/Submit actions are detected and clicked more reliably.
+* **Unsafe Legacy Send Fallback Removal**: Disabled broad fallback textarea + synthetic Enter path in `CDPClient.sendMessage()` to prevent cross-surface text/key leakage.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.207 VSIX build.
+
 ## [5.2.206] - 2026-02-28
 ### Fixed
 * **Submit Single-Flight Guarding**: Added cooldown-based in-flight submit protection in the minimal auto-continue runtime to prevent overlapping bump submit bursts.
 * **CDP Action Dedupe Throttling**: Added backend dispatch dedupe throttles to suppress repeated rapid-fire action relays (especially submit actions) across page/session routes.
 * **Strategy Submit Reentrancy Lock**: Added strategy-layer submit lock + short cooldown so submit categories cannot overlap while a prior submit execution is still active.
+* **Chat-Surface Input Isolation**: Hardened minimal runtime input selection to chat/composer surfaces only, explicitly excluding terminal surfaces that could receive bump text (e.g., `@terminal:pwsh`).
+* **Run/Expand/Submit Icon Matching**: Added icon/class/shortcut semantic hints so icon-only controls (`codicon-play`, chevrons, send icon) are reliably detected and clicked.
+* **Unsafe Legacy Bump Fallback Removal**: Disabled broad legacy textarea + synthetic Enter fallback in `CDPClient.sendMessage()` to prevent cross-surface typing/keypress side effects.
 
 ### Changed
 * **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.206 VSIX build.
