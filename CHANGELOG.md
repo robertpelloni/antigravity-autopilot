@@ -1,6 +1,62 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.193] - 2026-02-27
+### Fixed
+* **Follower Runtime Fail-Closed**: Changed controller/runtime leader defaults to fail-closed (`follower`) until explicit role sync arrives, preventing follower CDP windows from auto-typing bump text during startup/reinjection races.
+* **Retry + Always Approve Coverage**: Expanded action detection/click selectors and semantic matching for `Retry` and `Always Approve` across both injected runtime layers (`auto-continue` + `full_cdp_script`) so these controls are now discovered and clicked with existing safety gates.
+* **Submit Detection Breadth**: Added additional send-button aliases/data-testid variants (`Send message`, `send-message`) to improve bump submit clicks in forked chat composers.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` (including activation toast) for the 5.2.193 VSIX build.
+
+## [5.2.192] - 2026-02-27
+### Fixed
+* **Action Click Recovery for Forked DOMs**: Added semantic action fallback in `tryClick()` so safe action-intent targets (Submit/Run/Expand/Accept/Keep/Continue) are allowed even when strict chat-surface container matching misses fork-specific wrappers.
+* **Continue/Keep Detection Coverage**: Expanded Continue/Keep selector set to include title/aria/data-testid variants beyond `.monaco-button` so Keep actions are discoverable in Antigravity fork surfaces.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.192 VSIX build.
+
+## [5.2.191] - 2026-02-27
+### Fixed
+* **Per-Window Bump Dedupe**: Added runtime per-window bump tracking (`pendingText`, `lastTypedAt`, `lastSubmitAt`, `lastSubmitAttemptAt`) and retry retype window to prevent repeated bump typing spam when submit remains pending.
+* **Expand/Run Detection Coverage**: Added explicit `Expand/Run` selector and text-match support so combined action labels are classified as run-capable actions.
+* **Submit Telemetry Clarity**: Added explicit pending-unsent submit guard telemetry to distinguish selector miss from typing success.
+
+### Changed
+* **Bump/Button Method Documentation**: Expanded `docs/BUMP_AND_BUTTON_METHODS.md` with narrowed known-good method guidance and exact log signatures for rapid diagnostics.
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.191 VSIX build.
+
+## [5.2.190] - 2026-02-27
+### Fixed
+* **Live Leader/Follower Role Propagation**: `CDPHandler.setControllerRole()` now immediately re-injects runtime automation config into all connected pages/sessions so follower windows stop Smart Resume bump typing without waiting for reconnect.
+* **Fork UI Chat-Surface Fallback**: Hardened `isChatActionSurface()` with semantic action fallback + `data-testid`/chat container heuristics for Antigravity fork DOM drift, improving Run/Expand/Accept All/Submit click eligibility while preserving unsafe-shell bans.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.190 VSIX build.
+
+## [5.2.189] - 2026-02-27
+### Fixed
+* **Bump Multi-Window Spam Guard**: Added focused-window gating for Smart Resume bumping (`requireFocused`) so non-focused windows no longer repeatedly type bump text.
+* **Bump Submit Robustness**: Expanded submit button detection selectors (`aria-keyshortcuts`, `data-testid`, additional Send/Submit aliases) to improve submit click recovery when host DOM labels vary.
+* **Run Action Regression Hardening**: Removed run signal-count precondition that could skip run attempts when detection counters missed host-specific labels.
+* **Accept-All Gate Logic**: Decoupled `acceptAll` gate from `clickAccept`; `clickAcceptAll` now independently enables bulk-accept flow.
+
+### Added
+* **Method Reliability Documentation**: Added `docs/BUMP_AND_BUTTON_METHODS.md` with current bump typing/submit method order, successful strategy notes, detection/click matrices, and safety guidance.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.189 VSIX build.
+
+## [5.2.188] - 2026-02-27
+### Fixed
+* **Leader/Follower Runtime Isolation**: Added explicit runtime role propagation so follower windows skip Smart Resume auto-bump typing/submission paths while leader behavior remains active.
+* **Run/Expand/Continue Fallback Routing**: Corrected CDP fallback selector routing so run/expand/continue actions use action-specific selector sets instead of accept-oriented selectors.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.188 VSIX build.
+
 ## [5.2.187] - 2026-02-27
 ### Changed
 * **Release Metadata Sync**: Bumped version metadata across `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.187 VSIX build.

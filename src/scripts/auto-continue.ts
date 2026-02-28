@@ -65,6 +65,10 @@ export const AUTO_CONTINUE_SCRIPT = `
      autoScroll: true,
      autoReply: true,
      autoReplyText: 'Proceed',
+     runtime: {
+         isLeader: false,
+         role: 'follower'
+     },
      controls: {
          acceptAll: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['accept-all-button', 'keep-button', 'allow-all-button', 'dom-click'], delayMs: 100 },
          continue: { detectMethods: ['enabled-flag', 'not-generating', 'action-cooldown'], actionMethods: ['continue-button', 'keep-button', 'dom-click'], delayMs: 100 },
@@ -81,6 +85,8 @@ export const AUTO_CONTINUE_SCRIPT = `
      },
      bump: {
          detectMethods: ['feedback-visible', 'not-generating', 'last-sender-user', 'network-error-retry', 'waiting-for-input', 'loaded-conversation', 'completed-all-tasks', 'skip-ai-question'],
+         requireFocused: true,
+         retryRetypeMs: 15000,
          // NOTES on bump typeMethods:
          // - 'exec-command': WORKS (primary). Uses document.execCommand('insertText'). Reliable in Antigravity chat input.
          // - 'native-setter': Fallback only. Uses HTMLTextAreaElement.prototype.value setter. May not sync React state.
@@ -174,6 +180,8 @@ export const AUTO_CONTINUE_SCRIPT = `
       const bump = cfg.bump || {};
       return {
           requireVisible: bump.requireVisible ?? defaults.bump.requireVisible ?? true,
+          requireFocused: bump.requireFocused ?? defaults.bump.requireFocused ?? true,
+          retryRetypeMs: Number.isFinite(bump.retryRetypeMs) ? bump.retryRetypeMs : defaults.bump.retryRetypeMs,
           detectMethods: Array.isArray(bump.detectMethods) ? bump.detectMethods : defaults.bump.detectMethods,
           typeMethods: Array.isArray(bump.typeMethods) ? bump.typeMethods : defaults.bump.typeMethods,
           submitMethods: Array.isArray(bump.submitMethods) ? bump.submitMethods : defaults.bump.submitMethods,
@@ -206,7 +214,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           : controlName === 'continue'
               ? !!cfg.clickContinue
               : controlName === 'acceptAll'
-                  ? (!!cfg.clickAccept && !!cfg.clickAcceptAll)
+                  ? !!cfg.clickAcceptAll
           : controlName === 'expand'
               ? !!cfg.clickExpand
               : controlName === 'accept'
@@ -353,7 +361,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       if (!el) return false;
 
       const blockedShell = '.part.titlebar, .part.activitybar, .part.statusbar, .menubar, .menubar-menu-button, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"]';
-      const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], [class*="composer" i], .aichat-container, .monaco-list-row, .pane-body, .artifact-view, .cursor-text';
+    const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], [class*="composer" i], [class*="conversation" i], [class*="message" i], [class*="thread" i], [class*="response" i], .aichat-container, .monaco-list-row, .pane-body, .artifact-view, .cursor-text';
 
       let hasBlockedAncestor = false;
       let current = el;
@@ -381,10 +389,56 @@ export const AUTO_CONTINUE_SCRIPT = `
           current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
       }
 
+      // Fork-safe semantic fallback: allow clearly chat-action semantics even if container classes drift,
+      // while still honoring blocked-shell and unsafe-context checks above.
+      try {
+          const attrs = ((el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')).toLowerCase();
+          const text = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+          const className = (el.className || '').toLowerCase();
+          const semanticAction = /(run in terminal|run command|execute command|expand|requires input|accept all|accept|keep|allow|continue|send|submit)/.test(attrs)
+              || /(run in terminal|run command|execute command|expand|requires input|accept all|accept|keep|allow|continue|send|submit)/.test(text)
+              || className.includes('codicon-send')
+              || className.includes('codicon-play')
+              || className.includes('codicon-run')
+              || className.includes('codicon-check-all');
+
+          if (semanticAction) return true;
+
+          if (el.closest && el.closest('[data-testid*="chat" i], [data-testid*="composer" i], [data-testid*="message" i], [data-testid*="response" i], [data-testid*="conversation" i], [class*="chat" i], [class*="composer" i]')) {
+              return true;
+          }
+      } catch (e) {}
+
       // If we are inside an iframe/webview (which means we are an isolated CDP target), we can be more lenient,
       // but in the main VS Code window, we MUST be strict!
       const isMainWindow = !!document.querySelector('.monaco-workbench');
       return !isMainWindow;
+  }
+
+  function isSemanticActionTarget(el, actionName) {
+      if (!el) return false;
+      try {
+          const attrs = ((el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')).replace(/\s+/g, ' ').trim().toLowerCase();
+          const text = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+          const action = String(actionName || '').toLowerCase();
+
+          const checks = [
+              { key: 'submit', re: /(send|submit|continue)/i },
+              { key: 'run', re: /(run in terminal|run command|execute command|expand\s*\/\s*run|\brun\b)/i },
+              { key: 'expand', re: /(expand|requires input|step requires input)/i },
+              { key: 'accept', re: /(accept|apply|insert|allow|approve|keep)/i },
+              { key: 'accept all', re: /(accept\s*all|\bkeep\b|allow)/i },
+              { key: 'keep', re: /\bkeep\b/i },
+              { key: 'continue', re: /(continue|keep|retry|always\s*approve)/i },
+              { key: 'retry', re: /\bretry\b/i },
+              { key: 'always approve', re: /always\s*approve/i }
+          ];
+
+          const source = (attrs + ' ' + text);
+          return checks.some(c => action.includes(c.key) && c.re.test(source));
+      } catch (e) {
+          return false;
+      }
   }
 
   function isAntigravityRuntime() {
@@ -450,7 +504,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           }
           if (t.replace(/\s+/g, '').includes('acceptall')) extAcceptAll++;
           if (t === 'accept' || t === 'apply' || (t.includes('accept') && t.includes('code'))) extAccept++;
-          if (t === 'run' || (t.includes('run') && t.includes('terminal'))) extRun++;
+          if (t === 'run' || t.includes('expand/run') || t.includes('expand / run') || (t.includes('run') && t.includes('terminal')) || attr.includes('expand/run') || attr.includes('expand / run')) extRun++;
           if (t === 'good' || t === 'bad' || t === 'helpful' || t === 'unhelpful' || t === 'upvote' || t === 'downvote' || attr.includes('upvote') || attr.includes('downvote')) extFeedback++;
       }
 
@@ -459,6 +513,8 @@ export const AUTO_CONTINUE_SCRIPT = `
           acceptAll: extAcceptAll + queryShadowDOMAll('[title*="Accept All" i], [aria-label*="Accept All" i], button:has(.codicon-check-all)').length,
           keep: queryShadowDOMAll('[title="Keep" i], [aria-label="Keep" i], button[title*="Keep" i], button[aria-label*="Keep" i]').length,
           allow: queryShadowDOMAll('[title*="Allow" i], [aria-label*="Allow" i], button[title*="Allow" i], button[aria-label*="Allow" i]').length,
+          retry: queryShadowDOMAll('[title*="Retry" i], [aria-label*="Retry" i], button[title*="Retry" i], button[aria-label*="Retry" i], [data-testid*="retry" i]').length,
+          alwaysApprove: queryShadowDOMAll('[title*="Always Approve" i], [aria-label*="Always Approve" i], button[title*="Always Approve" i], button[aria-label*="Always Approve" i], [data-testid*="always-approve" i], [data-testid*="always_approve" i], [data-testid*="approve-always" i]').length,
           run: extRun + queryShadowDOMAll('[title*="Run in Terminal" i], [aria-label*="Run in Terminal" i], [title*="Run command" i], [aria-label*="Run command" i], [title*="Execute command" i], [aria-label*="Execute command" i], .codicon-play, .codicon-run, .codicon-debug-start, [aria-keyshortcuts*="Alt+Enter" i], [aria-keyshortcuts*="Opt+Enter" i]').length,
           expand: extExpand + queryShadowDOMAll('[title*="Expand" i], [aria-label*="Expand" i], .monaco-tl-twistie.collapsed, .expand-indicator.collapsed').length,
           continue: queryShadowDOMAll('a.monaco-button, button.monaco-button').length,
@@ -488,7 +544,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       } catch(e) {}
   }
 
-    function tryClick(selector, name, group) {
+        function tryClick(selector, name, group) {
       const els = queryShadowDOMAll(selector);
       for (const el of els) {
           if (isUnsafeContext(el) || hasUnsafeLabel(el)) continue;
@@ -496,11 +552,16 @@ export const AUTO_CONTINUE_SCRIPT = `
              const targetToClick = el.closest('button, a') || el;
              if (targetToClick.hasAttribute('disabled') || targetToClick.classList.contains('disabled')) continue;
              if (isUnsafeContext(targetToClick) || isNodeBanned(targetToClick)) continue;
-                 if (!isChatActionSurface(targetToClick)) {
+             const strictChatSurface = isChatActionSurface(targetToClick);
+             if (!strictChatSurface) {
+                 const semanticOk = isSemanticActionTarget(targetToClick, name);
+                 if (!semanticOk) {
                      bumpSafetyCounter('blockedNonChatTargetClicks');
                      logAction('[SafetyGate] Blocked non-chat click target for ' + name);
                      continue;
                  }
+                 logAction('[SafetyGate] Semantic fallback allowed click for ' + name);
+             }
              
              highlight(targetToClick);
              targetToClick.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
@@ -593,9 +654,27 @@ export const AUTO_CONTINUE_SCRIPT = `
       return null;
   }
 
+  function getBumpRuntimeState() {
+      if (!window.__antigravityBumpState || typeof window.__antigravityBumpState !== 'object') {
+          window.__antigravityBumpState = {
+              pendingText: '',
+              lastTypedAt: 0,
+              lastSubmitAt: 0,
+              lastSubmitAttemptAt: 0
+          };
+      }
+      return window.__antigravityBumpState;
+  }
+
   function typeAndSubmit(text) {
       const cfg = getConfig();
+      if (cfg?.runtime?.isLeader === false) {
+          logAction('[RoleGuard] Follower runtime: blocked typeAndSubmit.');
+          return false;
+      }
       const bump = getBumpConfig(cfg);
+      const bumpState = getBumpRuntimeState();
+      const nowTs = Date.now();
       
       let input = getSafeChatInput();
       
@@ -611,10 +690,19 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       const hasText = val.trim().length > 0;
       const existingTextLength = val.length;
+      const retryRetypeMs = Math.max(1000, bump.retryRetypeMs || 15000);
+      const recentlyTypedSame = bumpState.pendingText === text && (nowTs - (bumpState.lastTypedAt || 0) < retryRetypeMs);
 
       if (hasText) {
            log('Skipping typeAndSubmit because text already detected in input container (length: ' + existingTextLength + ').');
+           if (!bumpState.pendingText && val.trim() === text.trim()) {
+               bumpState.pendingText = text;
+               bumpState.lastTypedAt = nowTs;
+           }
       } else {
+          if (recentlyTypedSame) {
+              log('Skipping bump re-type: pending text already typed recently for this window.');
+          } else {
           input.focus();
 
           let typed = false;
@@ -686,6 +774,9 @@ export const AUTO_CONTINUE_SCRIPT = `
 
           log('Auto-Replied (Typed): ' + text);
           emitAction('type', 'typed bump text');
+          bumpState.pendingText = text;
+          bumpState.lastTypedAt = Date.now();
+          }
       }
 
       function dispatchEnters(target) {
@@ -700,9 +791,29 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       const submitDelay = Math.max(150, bump.submitDelayMs || 150);
       setTimeout(() => {
-          const sendSelectors = '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send, .send-button';
+          const sendSelectors = [
+              '[title*="Send" i]',
+              '[aria-label*="Send" i]',
+              '[title*="Submit" i]',
+              '[aria-label*="Submit" i]',
+              '[title*="Continue" i]',
+              '[aria-label*="Continue" i]',
+              '[title*="Send message" i]',
+              '[aria-label*="Send message" i]',
+              '[title*="Send Message" i]',
+              '[aria-label*="Send Message" i]',
+              'button[type="submit"]',
+              '[aria-keyshortcuts*="Enter" i]',
+              '[data-testid*="send" i]',
+              '[data-testid*="submit" i]',
+              '[data-testid*="send-message" i]',
+              '[data-testid*="send_message" i]',
+              '.codicon-send',
+              '.send-button'
+          ].join(', ');
           let submitted = false;
           const form = input.closest('form');
+          bumpState.lastSubmitAttemptAt = Date.now();
 
           if (hasMethod(bump.submitMethods, 'click-send')) {
               submitted = tryClick(sendSelectors, 'Submit (Auto-Reply)', 'submit');
@@ -726,6 +837,14 @@ export const AUTO_CONTINUE_SCRIPT = `
                   bumpSafetyCounter('blockedSubmitKeyDispatches');
                   logAction('[SubmitGuard] ABORT: keys-fallback disabled to avoid leaking Enter into native IDE chrome.');
               }
+          }
+
+          if (submitted) {
+              bumpState.lastSubmitAt = Date.now();
+              bumpState.pendingText = '';
+          } else {
+              const age = Date.now() - (bumpState.lastTypedAt || Date.now());
+              logAction('[SubmitGuard] Pending bump remains unsent; suppressing re-type spam for retry window (age=' + age + 'ms)');
           }
           
           // Removed 300ms auto-clear. If the submit click fails, leaving the text in the input is safer than deleting it.
@@ -780,7 +899,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       // 1. Continue / Keep (Priority)
     if (controlGatePass('continue', cfg, state, now, lastActionByControl.continue)) {
           const continueControl = getControlConfig(cfg, 'continue');
-          const contSel = 'a.monaco-button, button.monaco-button';
+                    const contSel = 'a.monaco-button, button.monaco-button, button[title*="Continue" i], button[aria-label*="Continue" i], button[title*="Keep" i], button[aria-label*="Keep" i], button[title*="Retry" i], button[aria-label*="Retry" i], button[title*="Always Approve" i], button[aria-label*="Always Approve" i], [data-testid*="continue" i], [data-testid*="keep" i], [data-testid*="retry" i], [data-testid*="always-approve" i], [data-testid*="always_approve" i], [data-testid*="approve-always" i]';
           const els = queryShadowDOMAll(contSel);
           const target = els.find(el => {
               if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
@@ -788,8 +907,12 @@ export const AUTO_CONTINUE_SCRIPT = `
               const l = (el.getAttribute('aria-label') || '').toLowerCase();
               const continueMatch = hasMethod(continueControl.actionMethods, 'continue-button') && (/continue/i.test(t) || /continue/i.test(l));
               const keepMatch = hasMethod(continueControl.actionMethods, 'keep-button') && /^keep$/i.test(t);
+              const retryMatch = /\bretry\b/i.test(t) || /\bretry\b/i.test(l);
+              const alwaysApproveMatch = /always\s*approve/i.test(t) || /always\s*approve/i.test(l);
               if (continueMatch) return !/rebase/i.test(l);
               if (keepMatch) return true;
+              if (retryMatch) return true;
+              if (alwaysApproveMatch) return true;
               return false;
           });
           
@@ -818,8 +941,10 @@ export const AUTO_CONTINUE_SCRIPT = `
           if (hasMethod(acceptAllControl.actionMethods, 'allow-all-button')) {
               acceptAllSelectors.push('[title*="Allow" i]', '[aria-label*="Allow" i]', 'button[title*="Allow" i]', 'button[aria-label*="Allow" i]');
           }
+          acceptAllSelectors.push('[title*="Retry" i]', '[aria-label*="Retry" i]', 'button[title*="Retry" i]', 'button[aria-label*="Retry" i]', '[data-testid*="retry" i]');
+          acceptAllSelectors.push('[title*="Always Approve" i]', '[aria-label*="Always Approve" i]', 'button[title*="Always Approve" i]', 'button[aria-label*="Always Approve" i]', '[data-testid*="always-approve" i]', '[data-testid*="always_approve" i]', '[data-testid*="approve-always" i]');
           if (hasMethod(acceptAllControl.actionMethods, 'dom-click') && acceptAllSelectors.length === 0) {
-              acceptAllSelectors.push('[title*="Accept All" i]', '[aria-label*="Accept All" i]', '[title="Keep" i]', '[aria-label="Keep" i]', '[title*="Allow" i]', '[aria-label*="Allow" i]', '.codicon-check-all');
+              acceptAllSelectors.push('[title*="Accept All" i]', '[aria-label*="Accept All" i]', '[title="Keep" i]', '[aria-label="Keep" i]', '[title*="Allow" i]', '[aria-label*="Allow" i]', '[title*="Retry" i]', '[aria-label*="Retry" i]', '[title*="Always Approve" i]', '[aria-label*="Always Approve" i]', '.codicon-check-all');
           }
           if (acceptAllSelectors.length > 0 && tryClick(acceptAllSelectors.join(', '), 'Accept All/Keep', 'accept-all')) {
               actionTaken = true;
@@ -854,9 +979,6 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       // 2. Auto-Run
     if (!actionTaken && controlGatePass('run', cfg, state, now, lastActionByControl.run)) {
-          if ((state.buttonSignals?.run || 0) <= 0) {
-              log('Skipping Run: no run signals detected');
-          } else {
           const runControl = getControlConfig(cfg, 'run');
           const runSelectors = [
               '[title*="Run in Terminal" i]',
@@ -864,7 +986,14 @@ export const AUTO_CONTINUE_SCRIPT = `
               '[title*="Run command" i]',
               '[aria-label*="Run command" i]',
               '[title*="Execute command" i]',
-              '[aria-label*="Execute command" i]'
+              '[aria-label*="Execute command" i]',
+              '[title*="Expand/Run" i]',
+              '[aria-label*="Expand/Run" i]',
+              '[title*="Expand / Run" i]',
+              '[aria-label*="Expand / Run" i]',
+              '[data-testid*="run" i]',
+              '[aria-keyshortcuts*="Alt+Enter" i]',
+              '[aria-keyshortcuts*="Opt+Enter" i]'
           ].join(',');
 
           if (hasMethod(runControl.actionMethods, 'dom-click')) {
@@ -878,9 +1007,14 @@ export const AUTO_CONTINUE_SCRIPT = `
                   return text.includes('run in terminal')
                       || text.includes('run command')
                       || text.includes('execute command')
+                      || text === 'run'
+                      || text.includes('expand/run')
+                      || text.includes('expand / run')
                       || label.includes('run in terminal')
                       || label.includes('run command')
-                      || label.includes('execute command');
+                      || label.includes('execute command')
+                      || label.includes('expand/run')
+                      || label.includes('expand / run');
               });
               if (textMatch && isChatActionSurface(textMatch)) {
                   highlight(textMatch);
@@ -927,7 +1061,6 @@ export const AUTO_CONTINUE_SCRIPT = `
           if (!actionTaken && hasMethod(runControl.actionMethods, 'alt-enter')) {
               bumpSafetyCounter('blockedSubmitKeyDispatches');
               logAction('[RunGuard] ABORT: alt-enter fallback disabled to avoid native IDE command leakage.');
-          }
           }
       }
 
@@ -1014,7 +1147,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (!actionTaken && controlGatePass('submit', cfg, state, now, lastActionByControl.submit)) {
           const submitControl = getControlConfig(cfg, 'submit');
           const submitDelay = Math.max(0, submitControl.delayMs || 0);
-          const sendSelectors = '[title*="Send"], [aria-label*="Send"], [title*="Submit"], [aria-label*="Submit"], button[type="submit"], .codicon-send';
+          const sendSelectors = '[title*="Send" i], [aria-label*="Send" i], [title*="Send message" i], [aria-label*="Send message" i], [title*="Submit" i], [aria-label*="Submit" i], [data-testid*="send" i], [data-testid*="submit" i], button[type="submit"], .codicon-send, .send-button';
 
           if (hasMethod(submitControl.actionMethods, 'click-send') && tryClick(sendSelectors, 'Submit', 'submit')) {
               actionTaken = true;
@@ -1048,6 +1181,9 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       // 7. SMART RESUME (Actionable Auto-Reply)
       if (!actionTaken && cfg.autoReply) {
+          if (cfg?.runtime?.isLeader === false) {
+              log('Smart Resume: follower runtime detected, skipping auto-reply bumping.');
+          } else {
           const bump = getBumpConfig(cfg);
           const detectMethods = bump.detectMethods;
           const state = analyzeChatState();
@@ -1131,7 +1267,9 @@ export const AUTO_CONTINUE_SCRIPT = `
 
               if (shouldBump && (now - lastAction > computedDelay)) {
                   // Only bump if the tab is visible to avoid ghost typing in every open tab (unless configured otherwise)
-                  if (!bump.requireVisible || document.visibilityState === 'visible') {
+                  const visiblePass = !bump.requireVisible || document.visibilityState === 'visible';
+                  const focusPass = !bump.requireFocused || document.hasFocus();
+                  if (visiblePass && focusPass) {
                       if (typeAndSubmit(bumpText)) {
                            actionTaken = true;
                            lastActionByControl.bump = now;
@@ -1139,10 +1277,16 @@ export const AUTO_CONTINUE_SCRIPT = `
                            emitAction('bump', 'smart resume bump text=' + bumpText);
                       }
                   } else {
-                      // Skip bump because tab is invisible and requireVisible is true. Check again later.
+                      // Skip bump because visibility/focus guard blocked this target. Check again later.
+                      if (!visiblePass) {
+                          log('Smart Resume: Skipping bump (tab not visible)');
+                      } else if (!focusPass) {
+                          log('Smart Resume: Skipping bump (document not focused)');
+                      }
                       lastAction = now;
                   }
               }
+          }
           }
       }
 

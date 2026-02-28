@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '5.2.187';
+        const ANTIGRAVITY_VERSION = '5.2.193';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
@@ -425,7 +425,11 @@
                 '[aria-label*="Yes"]',
                 '[title*="Yes"]',
                 '[aria-label*="Continue"]',
-                '[title*="Continue"]'
+                '[title*="Continue"]',
+                '[aria-label*="Retry"]',
+                '[title*="Retry"]',
+                '[aria-label*="Always Approve"]',
+                '[title*="Always Approve"]'
             ],
             sendButtons: [
                 'button[aria-label*="Send"]',
@@ -464,7 +468,12 @@
                 'button[aria-label*="Keep"]',
                 'button[title*="Keep"]',
                 'button[aria-label*="Retry"]',
-                'button[title*="Retry"]'
+                'button[title*="Retry"]',
+                'button[aria-label*="Always Approve"]',
+                'button[title*="Always Approve"]',
+                '[data-testid*="always-approve" i]',
+                '[data-testid*="always_approve" i]',
+                '[data-testid*="approve-always" i]'
             ],
             sendButtons: [
                 'button[aria-label*="Send"]',
@@ -802,6 +811,8 @@
             acceptAll: countVisible(['[title*="Accept All"]', '[aria-label*="Accept All"]']),
             allow: countVisible(['[title*="Allow"]', '[aria-label*="Allow"]']),
             keep: countVisible(['[title="Keep"]', '[aria-label="Keep"]', 'button[title*="Keep"]', 'button[aria-label*="Keep"]']),
+            retry: countVisible(['[title*="Retry"]', '[aria-label*="Retry"]', 'button[title*="Retry"]', 'button[aria-label*="Retry"]', '[data-testid*="retry" i]']),
+            alwaysApprove: countVisible(['[title*="Always Approve"]', '[aria-label*="Always Approve"]', 'button[title*="Always Approve"]', 'button[aria-label*="Always Approve"]', '[data-testid*="always-approve" i]', '[data-testid*="always_approve" i]', '[data-testid*="approve-always" i]']),
             run: countVisible(['[title*="Run in Terminal"]', '[aria-label*="Run in Terminal"]', '.codicon-play', '.codicon-run']),
             expand: countVisible(['[title*="Expand"]', '[aria-label*="Expand"]', '.codicon-chevron-right', '.monaco-tl-twistie.collapsed']),
             continue: countVisible(['button[title*="Continue"]', 'button[aria-label*="Continue"]', '.action-label']),
@@ -1502,7 +1513,7 @@
         }
 
         // Use configured patterns from state if available, otherwise use defaults
-        const defaultPatterns = ['accept', 'accept all', 'keep', 'run in terminal', 'run command', 'execute command', 'run', 'expand', 'retry', 'apply', 'confirm', 'allow once', 'allow', 'proceed', 'continue', 'yes', 'ok', 'save', 'approve', 'overwrite'];
+        const defaultPatterns = ['accept', 'accept all', 'keep', 'run in terminal', 'run command', 'execute command', 'run', 'expand', 'retry', 'always approve', 'apply', 'confirm', 'allow once', 'allow', 'proceed', 'continue', 'yes', 'ok', 'save', 'approve', 'overwrite'];
 
         const patterns = state.acceptPatterns || defaultPatterns;
 
@@ -1887,7 +1898,9 @@
                 // User Requested "Gold Standard" coverage:
                 '[aria-label*="Allow"]', '[title*="Allow"]',
                 '[aria-label*="Accept All"]', '[title*="Accept All"]',
-                '[aria-label*="Yes"]', '[title*="Yes"]'
+                '[aria-label*="Yes"]', '[title*="Yes"]',
+                '[aria-label*="Retry"]', '[title*="Retry"]',
+                '[aria-label*="Always Approve"]', '[title*="Always Approve"]'
             ];
             [...new Set(fallbackSelectors)].forEach(s => queryAll(s).forEach(el => {
                 if (isValidInteractionTarget(el)) {
@@ -2438,7 +2451,7 @@
             const isBG = config.isBackgroundMode === true;
 
             // Visual confirmation of injection
-            window.showAutoAllToast('Antigravity v5.2.185 Active 🚀');
+            window.showAutoAllToast('Antigravity v5.2.193 Active 🚀');
 
             if (config.bannedCommands) {
                 window.__autoAllUpdateBannedCommands(config.bannedCommands);

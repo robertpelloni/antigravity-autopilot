@@ -19,6 +19,7 @@ export class CDPHandler extends EventEmitter {
     private timeoutMs: number;
     private watchdogInterval: NodeJS.Timeout | null = null;
     private discoveredPort: number | null = null;
+    private controllerRoleIsLeader = false;
 
     constructor(startPort?: number, endPort?: number) {
         super();
@@ -39,6 +40,33 @@ export class CDPHandler extends EventEmitter {
         this.timeoutMs = config.get<number>('cdpTimeout') || 10000;
         logToOutput(`[CDPHandler] Initialized with configured port range: ${this.startPort}-${this.endPort}`);
         this.startWatchdogLoop();
+    }
+
+    setControllerRole(isLeader: boolean): void {
+        const next = !!isLeader;
+        const changed = this.controllerRoleIsLeader !== next;
+        this.controllerRoleIsLeader = next;
+
+        if (!changed || this.connections.size === 0) {
+            return;
+        }
+
+        const expression = this.getAutomationConfigExpression();
+        for (const [pageId, conn] of this.connections) {
+            this.sendCommand(pageId, 'Runtime.evaluate', {
+                expression,
+                awaitPromise: false
+            }).catch(() => { });
+
+            for (const sessionId of conn.sessions) {
+                this.sendCommand(pageId, 'Runtime.evaluate', {
+                    expression,
+                    awaitPromise: false
+                }, undefined, sessionId).catch(() => { });
+            }
+        }
+
+        logToOutput(`[CDPHandler] Controller role synced to runtime config: ${this.controllerRoleIsLeader ? 'leader' : 'follower'}`);
     }
 
     /**
@@ -302,6 +330,10 @@ export class CDPHandler extends EventEmitter {
                 cooldownMs: config.get<number>('automation.timing.cooldownMs') ?? 2500,
                 randomness: config.get<number>('automation.timing.randomness') ?? 100,
                 autoReplyDelayMs: config.get<number>('automation.timing.autoReplyDelayMs') ?? 10000
+            },
+            runtime: {
+                isLeader: this.controllerRoleIsLeader,
+                role: this.controllerRoleIsLeader ? 'leader' : 'follower'
             }
         };
 
