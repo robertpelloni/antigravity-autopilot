@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '5.2.194';
+        const ANTIGRAVITY_VERSION = '5.2.195';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
@@ -1810,22 +1810,32 @@
                         const beforeSubmitText = readComposerValue(inputEl);
                         await workerDelay(100); // Wait for UI debounce
 
-                        // Try finding send button
-                        const sendEl = findVisibleElementBySelectors(getUnifiedSendButtonSelectors(profile));
-                        if (sendEl) {
-                            log(`[Chat] Found send button, clicking...`);
+                        // Try finding send button with short retry window (button may enable after debounce)
+                        let submitByClick = false;
+                        const maxSendRetries = 5;
+                        for (let attempt = 0; attempt < maxSendRetries; attempt++) {
+                            const sendEl = findVisibleElementBySelectors(getUnifiedSendButtonSelectors(profile));
+                            if (!sendEl) {
+                                await workerDelay(180);
+                                continue;
+                            }
+
+                            log(`[Chat] Found send button (${profile}) attempt ${attempt + 1}/${maxSendRetries}, clicking...`);
                             await remoteClick(sendEl);
-                            await workerDelay(500); // Wait for reaction
+                            await workerDelay(280);
 
                             const afterSendText = readComposerValue(inputEl);
                             if (!afterSendText || afterSendText.length < beforeSubmitText.length) {
-                                return true;
+                                submitByClick = true;
+                                break;
                             }
-
-                            log(`[Chat] Send click did not clear composer (${profile}), trying keyboard fallback...`);
-                        } else {
-                            log(`[Chat] Send button not found, trying Enter key...`);
                         }
+
+                        if (submitByClick) {
+                            return true;
+                        }
+
+                        log(`[Chat] Send click retries did not clear composer (${profile}), trying keyboard fallback...`);
 
                         // Method B: Keyboard Submit (Enter)
                         const success = await submitWithKeys(inputEl);

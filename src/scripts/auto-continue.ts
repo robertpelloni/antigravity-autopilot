@@ -660,10 +660,73 @@ export const AUTO_CONTINUE_SCRIPT = `
               pendingText: '',
               lastTypedAt: 0,
               lastSubmitAt: 0,
-              lastSubmitAttemptAt: 0
+              lastSubmitAttemptAt: 0,
+              submitRetryCount: 0
           };
       }
       return window.__antigravityBumpState;
+  }
+
+  function buildSubmitSelectors() {
+      return [
+          '[title*="Send" i]',
+          '[aria-label*="Send" i]',
+          '[title*="Submit" i]',
+          '[aria-label*="Submit" i]',
+          '[title*="Continue" i]',
+          '[aria-label*="Continue" i]',
+          '[title*="Send message" i]',
+          '[aria-label*="Send message" i]',
+          '[title*="Send Message" i]',
+          '[aria-label*="Send Message" i]',
+          'button[type="submit"]',
+          '[aria-keyshortcuts*="Enter" i]',
+          '[data-testid*="send" i]',
+          '[data-testid*="submit" i]',
+          '[data-testid*="send-message" i]',
+          '[data-testid*="send_message" i]',
+          '.codicon-send',
+          '.send-button'
+      ].join(', ');
+  }
+
+  function submitPendingBump(input, bump, bumpState, attemptTag) {
+      if (!input) return false;
+
+      const submitSelectors = buildSubmitSelectors();
+      const form = input.closest && input.closest('form');
+      const submitMethods = Array.isArray(bump?.submitMethods) && bump.submitMethods.length > 0
+          ? bump.submitMethods
+          : defaults.bump.submitMethods;
+
+      bumpState.lastSubmitAttemptAt = Date.now();
+      let submitted = false;
+
+      if (hasMethod(submitMethods, 'click-send')) {
+          submitted = tryClick(submitSelectors, 'Submit (Auto-Reply ' + attemptTag + ')', 'submit');
+      }
+
+      if (!submitted && form && typeof form.requestSubmit === 'function') {
+          try {
+              form.requestSubmit();
+              submitted = true;
+              emitAction('submit', 'form.requestSubmit-' + attemptTag);
+          } catch (e) {}
+      }
+
+      if (!submitted && hasMethod(submitMethods, 'enter-key')) {
+          logAction('[SubmitGuard] ABORT: Removed enter-key dispatch to prevent layout UI toggles. Awaiting valid [Send] button DOM state.');
+      }
+
+      if (submitted) {
+          bumpState.lastSubmitAt = Date.now();
+          bumpState.pendingText = '';
+          bumpState.submitRetryCount = 0;
+          return true;
+      }
+
+      bumpSafetyCounter('blockedSubmitKeyDispatches');
+      return false;
   }
 
   function typeAndSubmit(text) {
@@ -791,57 +854,42 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       const submitDelay = Math.max(150, bump.submitDelayMs || 150);
       setTimeout(() => {
-          const sendSelectors = [
-              '[title*="Send" i]',
-              '[aria-label*="Send" i]',
-              '[title*="Submit" i]',
-              '[aria-label*="Submit" i]',
-              '[title*="Continue" i]',
-              '[aria-label*="Continue" i]',
-              '[title*="Send message" i]',
-              '[aria-label*="Send message" i]',
-              '[title*="Send Message" i]',
-              '[aria-label*="Send Message" i]',
-              'button[type="submit"]',
-              '[aria-keyshortcuts*="Enter" i]',
-              '[data-testid*="send" i]',
-              '[data-testid*="submit" i]',
-              '[data-testid*="send-message" i]',
-              '[data-testid*="send_message" i]',
-              '.codicon-send',
-              '.send-button'
-          ].join(', ');
-          let submitted = false;
-          const form = input.closest('form');
-          bumpState.lastSubmitAttemptAt = Date.now();
-
-          if (hasMethod(bump.submitMethods, 'click-send')) {
-              submitted = tryClick(sendSelectors, 'Submit (Auto-Reply)', 'submit');
-          }
-
-          if (!submitted && hasMethod(bump.submitMethods, 'enter-key')) {
-              if (form && typeof form.requestSubmit === 'function') {
-                   try { form.requestSubmit(); submitted = true; emitAction('submit', 'form.requestSubmit'); } catch(e) {}
-              }
-              if (!submitted) {
-                  // Flaw fixed: dispatchEnters() completely destroyed. Bubbling Enter keys escape webviews and hit VS Code natively.
-                  logAction('[SubmitGuard] ABORT: Removed enter-key dispatch to prevent layout UI toggles. Awaiting valid [Send] button DOM state.');
-              }
-          }
+          let submitted = submitPendingBump(input, bump, bumpState, 'primary');
 
           if (!submitted) {
-              if (form && typeof form.requestSubmit === 'function') {
-                   try { form.requestSubmit(); submitted = true; emitAction('submit', 'form.requestSubmit-fallback'); } catch(e) {}
-              }
-              if (!submitted && !tryClick(sendSelectors, 'Submit (Auto-Reply fallback)', 'submit')) {
-                  bumpSafetyCounter('blockedSubmitKeyDispatches');
-                  logAction('[SubmitGuard] ABORT: keys-fallback disabled to avoid leaking Enter into native IDE chrome.');
-              }
+              const maxRetries = 6;
+              const retryDelayMs = 250;
+              let retries = 0;
+
+              const retrySubmit = () => {
+                  if (window.__antigravityActiveInstance !== THIS_INSTANCE) return;
+                  const currentInput = getSafeChatInput() || input;
+                  const currentValue = (currentInput && ((currentInput.value || currentInput.innerText || currentInput.textContent || '').trim())) || '';
+
+                  if (!bumpState.pendingText || (currentValue && bumpState.pendingText && currentValue !== bumpState.pendingText.trim())) {
+                      bumpState.submitRetryCount = 0;
+                      return;
+                  }
+
+                  retries += 1;
+                  bumpState.submitRetryCount = retries;
+                  const ok = submitPendingBump(currentInput, bump, bumpState, 'retry-' + retries);
+                  if (ok) {
+                      return;
+                  }
+
+                  if (retries < maxRetries) {
+                      setTimeout(retrySubmit, retryDelayMs);
+                  }
+              };
+
+              setTimeout(retrySubmit, retryDelayMs);
           }
 
           if (submitted) {
               bumpState.lastSubmitAt = Date.now();
               bumpState.pendingText = '';
+              bumpState.submitRetryCount = 0;
           } else {
               const age = Date.now() - (bumpState.lastTypedAt || Date.now());
               logAction('[SubmitGuard] Pending bump remains unsent; suppressing re-type spam for retry window (age=' + age + 'ms)');
@@ -1287,6 +1335,26 @@ export const AUTO_CONTINUE_SCRIPT = `
                   }
               }
           }
+          }
+      }
+
+      if (!actionTaken) {
+          const bumpState = getBumpRuntimeState();
+          if (cfg?.runtime?.isLeader !== false && bumpState.pendingText && !state.isGenerating) {
+              const pendingInput = getSafeChatInput();
+              const pendingValue = (pendingInput && ((pendingInput.value || pendingInput.innerText || pendingInput.textContent || '').trim())) || '';
+              if (pendingInput && pendingValue && pendingValue === bumpState.pendingText.trim()) {
+                  const sinceAttempt = now - (bumpState.lastSubmitAttemptAt || 0);
+                  if (sinceAttempt >= 1200) {
+                      const bump = getBumpConfig(cfg);
+                      const recovered = submitPendingBump(pendingInput, bump, bumpState, 'loop-retry');
+                      if (recovered) {
+                          actionTaken = true;
+                          lastActionByControl.bump = now;
+                          logAction('Recovered pending bump submit from loop retry.');
+                      }
+                  }
+              }
           }
       }
 

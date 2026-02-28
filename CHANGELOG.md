@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.195] - 2026-02-27
+### Fixed
+* **Pending Bump Submit Recovery**: Added safe submit retry logic in `auto-continue` so typed bump text keeps attempting send-button/form submission for a short window when initial submit click races UI enable/debounce.
+* **Loop-Level Submit Recovery**: Added periodic pending-bump submit recovery in the runtime loop (leader-only) to submit already-typed bump text without retyping spam.
+* **Bridge Send Robustness**: `full_cdp_script.js` `sendMessage()` now retries send-button discovery/click before keyboard fallback, improving bump submit reliability in AG mode where keyboard submit fallback is intentionally blocked.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.195 VSIX build.
+
 ## [5.2.194] - 2026-02-27
 ### Fixed
 * **No-Leader Self-Heal Fallback**: Added automatic controller-lease recovery when a window detects leaderless state (no valid lease leader), including runtime-refresh and activation preflight recovery paths.
