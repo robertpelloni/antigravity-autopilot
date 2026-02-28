@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '5.2.201';
+        const ANTIGRAVITY_VERSION = '5.2.202';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
@@ -1131,9 +1131,13 @@
     }
 
     function sendCommandToExtension(payload) {
-        if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
+        if (typeof window.__AUTOPILOT_BRIDGE__ === 'function') {
+            window.__AUTOPILOT_BRIDGE__(payload);
+            log(`[Bridge] Sent via AUTOPILOT bridge: ${payload}`);
+        } else if (typeof window.__ANTIGRAVITY_BRIDGE__ === 'function') {
+            // Legacy fallback only; primary runtime bridge is __AUTOPILOT_BRIDGE__.
             window.__ANTIGRAVITY_BRIDGE__(payload);
-            log(`[Bridge] Sent: ${payload}`);
+            log(`[Bridge] Sent via legacy bridge fallback: ${payload}`);
         } else {
             console.log(payload);
             log(`[Bridge] Console: ${payload}`);

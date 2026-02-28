@@ -177,7 +177,7 @@ export class ClipboardPaste implements IInteractionMethod {
 export class BridgeType implements IInteractionMethod {
     id = 'bridge-type';
     name = 'Bridge Type Injection';
-    description = 'Sends __ANTIGRAVITY_TYPE__ payload to extension bridge';
+    description = 'Sends __AUTOPILOT_TYPE__ payload to extension bridge';
     category = 'text' as const;
     enabled = true;
     priority = 4;
@@ -188,6 +188,7 @@ export class BridgeType implements IInteractionMethod {
         if (!ctx.cdpHandler || !ctx.text) return false;
         const escapedText = escapeJsSingleQuoted(ctx.text);
         const script = `
+            (function() {
                 const payload = '__AUTOPILOT_TYPE__:${escapedText}';
                 if (typeof window.__AUTOPILOT_BRIDGE__ === 'function') {
                     window.__AUTOPILOT_BRIDGE__(payload);

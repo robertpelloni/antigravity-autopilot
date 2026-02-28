@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.202] - 2026-02-27
+### Fixed
+* **Workspace-Scoped Controller Lease**: Changed controller lease persistence to workspace-scoped lease files, preventing leader/follower lock contention across unrelated workspaces.
+* **Bridge Routing Regression**: Restored runtime extension payload routing to `__AUTOPILOT_BRIDGE__` (with legacy fallback only), fixing dropped click/type/bump bridge actions.
+* **BridgeType Script Injection Repair**: Fixed malformed injected bridge-type script wrapper so text bridge fallback executes reliably.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.202 VSIX build.
+
 ## [5.2.201] - 2026-02-27
 ### Fixed
 * **Leader Role Transition Alignment**: Added runtime role-alignment orchestration so decentralized CDP automation starts/stops when lease role changes (including follower→leader transition), fixing cases where actions remained inactive after takeover.
