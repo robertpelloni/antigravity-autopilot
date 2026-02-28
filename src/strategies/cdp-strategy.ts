@@ -33,6 +33,7 @@ export class CDPStrategy implements IStrategy {
     private registry: InteractionMethodRegistry;
     private context: vscode.ExtensionContext;
     private appName: string;
+    private controllerRoleIsLeader = false;
 
     // ... (private methods unchanged)
 
@@ -99,6 +100,13 @@ export class CDPStrategy implements IStrategy {
             retryCount: cfg.interactionRetryCount,
             parallelExecution: cfg.interactionParallel
         });
+
+        this.cdpHandler.setControllerRole(this.controllerRoleIsLeader);
+    }
+
+    setControllerRole(isLeader: boolean): void {
+        this.controllerRoleIsLeader = !!isLeader;
+        this.cdpHandler.setControllerRole(this.controllerRoleIsLeader);
     }
 
     async start(): Promise<void> {
@@ -196,6 +204,9 @@ export class CDPStrategy implements IStrategy {
 
         const profile = this.resolveUiProfile();
         const selector = this.getClickSelectorForProfile(profile);
+        const runSelector = this.getRunSelectorForProfile(profile);
+        const expandSelector = this.getExpandSelectorForProfile(profile);
+        const continueSelector = this.getContinueSelectorForProfile(profile);
         const clickRegistry = this.createRegistryForProfile(profile);
         const ctx: InteractionContext = {
             cdpHandler: this.cdpHandler,
@@ -222,7 +233,7 @@ export class CDPStrategy implements IStrategy {
                 SoundEffects.playActionGroup('run');
                 await this.createActionSafeClickRegistry(profile).executeCategory('click', {
                     ...ctx,
-                    selector,
+                    selector: runSelector,
                     commandId: 'workbench.action.terminal.chat.runCommand'
                 });
                 break;
@@ -230,8 +241,14 @@ export class CDPStrategy implements IStrategy {
                 SoundEffects.playActionGroup('expand');
                 await this.createActionSafeClickRegistry(profile).executeCategory('click', {
                     ...ctx,
-                    selector,
+                    selector: expandSelector,
                     commandId: 'workbench.action.terminal.chat.viewInEditor'
+                });
+                break;
+            case 'continue':
+                await this.createActionSafeClickRegistry(profile).executeCategory('click', {
+                    ...ctx,
+                    selector: continueSelector
                 });
                 break;
             default:
@@ -336,6 +353,122 @@ export class CDPStrategy implements IStrategy {
             : profile === 'cursor'
                 ? (config.get<string[]>('interactionClickSelectorsCursor') || defaultsByProfile.cursor)
                 : (config.get<string[]>('interactionClickSelectorsVSCode') || defaultsByProfile.vscode);
+
+        const filtered = selectors.map(s => s.trim()).filter(Boolean);
+        return filtered.length > 0 ? filtered.join(', ') : '';
+    }
+
+    private getRunSelectorForProfile(profile: 'vscode' | 'antigravity' | 'cursor'): string {
+        const defaultsByProfile: Record<'vscode' | 'antigravity' | 'cursor', string[]> = {
+            antigravity: [
+                'button[aria-label*="Run" i]',
+                'button[title*="Run" i]',
+                'button[aria-label*="Run in Terminal" i]',
+                'button[title*="Run in Terminal" i]',
+                'button[aria-label*="Execute" i]',
+                'button[title*="Execute" i]',
+                '.codicon-play',
+                '.codicon-run',
+                '.codicon-debug-start'
+            ],
+            vscode: [
+                '.interactive-editor button[aria-label*="Run" i]',
+                '.interactive-editor button[title*="Run" i]',
+                '.chat-input-container button[aria-label*="Run" i]',
+                '.chat-input-container button[title*="Run" i]',
+                '.codicon-play',
+                '.codicon-run',
+                '.codicon-debug-start'
+            ],
+            cursor: [
+                '.interactive-editor button[aria-label*="Run" i]',
+                '.interactive-editor button[title*="Run" i]',
+                '#workbench\\.parts\\.auxiliarybar button[aria-label*="Run" i]',
+                '#workbench\\.parts\\.auxiliarybar button[title*="Run" i]',
+                '.codicon-play',
+                '.codicon-run',
+                '.codicon-debug-start'
+            ]
+        };
+
+        const selectors = profile === 'antigravity'
+            ? (config.get<string[]>('interactionRunSelectorsAntigravity') || defaultsByProfile.antigravity)
+            : profile === 'cursor'
+                ? (config.get<string[]>('interactionRunSelectorsCursor') || defaultsByProfile.cursor)
+                : (config.get<string[]>('interactionRunSelectorsVSCode') || defaultsByProfile.vscode);
+
+        const filtered = selectors.map(s => s.trim()).filter(Boolean);
+        return filtered.length > 0 ? filtered.join(', ') : '';
+    }
+
+    private getExpandSelectorForProfile(profile: 'vscode' | 'antigravity' | 'cursor'): string {
+        const defaultsByProfile: Record<'vscode' | 'antigravity' | 'cursor', string[]> = {
+            antigravity: [
+                'button[aria-label*="Expand" i]',
+                'button[title*="Expand" i]',
+                '[aria-label*="requires input" i]',
+                '[title*="requires input" i]',
+                '.monaco-tl-twistie.collapsed',
+                '.expand-indicator.collapsed',
+                '.codicon-chevron-right'
+            ],
+            vscode: [
+                '.interactive-editor button[aria-label*="Expand" i]',
+                '.interactive-editor button[title*="Expand" i]',
+                '.chat-input-container button[aria-label*="Expand" i]',
+                '.chat-input-container button[title*="Expand" i]',
+                '.monaco-tl-twistie.collapsed',
+                '.expand-indicator.collapsed',
+                '.codicon-chevron-right'
+            ],
+            cursor: [
+                '.interactive-editor button[aria-label*="Expand" i]',
+                '.interactive-editor button[title*="Expand" i]',
+                '#workbench\\.parts\\.auxiliarybar button[aria-label*="Expand" i]',
+                '#workbench\\.parts\\.auxiliarybar button[title*="Expand" i]',
+                '.monaco-tl-twistie.collapsed',
+                '.expand-indicator.collapsed',
+                '.codicon-chevron-right'
+            ]
+        };
+
+        const selectors = profile === 'antigravity'
+            ? (config.get<string[]>('interactionExpandSelectorsAntigravity') || defaultsByProfile.antigravity)
+            : profile === 'cursor'
+                ? (config.get<string[]>('interactionExpandSelectorsCursor') || defaultsByProfile.cursor)
+                : (config.get<string[]>('interactionExpandSelectorsVSCode') || defaultsByProfile.vscode);
+
+        const filtered = selectors.map(s => s.trim()).filter(Boolean);
+        return filtered.length > 0 ? filtered.join(', ') : '';
+    }
+
+    private getContinueSelectorForProfile(profile: 'vscode' | 'antigravity' | 'cursor'): string {
+        const defaultsByProfile: Record<'vscode' | 'antigravity' | 'cursor', string[]> = {
+            antigravity: [
+                'button[aria-label*="Continue" i]',
+                'button[title*="Continue" i]',
+                'button[aria-label*="Keep" i]',
+                'button[title*="Keep" i]'
+            ],
+            vscode: [
+                '.interactive-editor button[aria-label*="Continue" i]',
+                '.interactive-editor button[title*="Continue" i]',
+                '.interactive-editor button[aria-label*="Keep" i]',
+                '.interactive-editor button[title*="Keep" i]'
+            ],
+            cursor: [
+                '.interactive-editor button[aria-label*="Continue" i]',
+                '.interactive-editor button[title*="Continue" i]',
+                '.interactive-editor button[aria-label*="Keep" i]',
+                '.interactive-editor button[title*="Keep" i]'
+            ]
+        };
+
+        const selectors = profile === 'antigravity'
+            ? (config.get<string[]>('interactionContinueSelectorsAntigravity') || defaultsByProfile.antigravity)
+            : profile === 'cursor'
+                ? (config.get<string[]>('interactionContinueSelectorsCursor') || defaultsByProfile.cursor)
+                : (config.get<string[]>('interactionContinueSelectorsVSCode') || defaultsByProfile.vscode);
 
         const filtered = selectors.map(s => s.trim()).filter(Boolean);
         return filtered.length > 0 ? filtered.join(', ') : '';

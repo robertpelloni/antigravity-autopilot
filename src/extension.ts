@@ -84,6 +84,10 @@ export function activate(context: vscode.ExtensionContext) {
                 return true;
             }
 
+            if (attemptNoLeaderSelfHeal(reason)) {
+                return true;
+            }
+
             const leader = controllerLease?.getLeaderInfo();
             const leaderWorkspace = leader?.workspace ? ` | leader workspace: ${leader.workspace}` : '';
             log.info(`[ControllerLease] Follower mode in this window; skipping ${reason}.${leaderWorkspace}`);
@@ -141,9 +145,56 @@ export function activate(context: vscode.ExtensionContext) {
             return null;
         };
 
+        const syncControllerRoleToCDP = () => {
+            const cdp = resolveCDPStrategy() as any;
+            if (cdp && typeof cdp.setControllerRole === 'function') {
+                cdp.setControllerRole(isControllerLeader());
+            }
+        };
+
+        const attemptNoLeaderSelfHeal = (reason: string): boolean => {
+            if (!controllerLease) {
+                return false;
+            }
+
+            updateControllerRoleStatus();
+            if (isControllerLeader()) {
+                return true;
+            }
+
+            const leader = controllerLease.getLeaderInfo();
+            if (leader) {
+                return false;
+            }
+
+            const acquired = controllerLease.tryAcquire();
+            if (!acquired && !controllerLease.isLeader()) {
+                controllerLease.forceAcquire();
+            }
+
+            updateControllerRoleStatus();
+            syncControllerRoleToCDP();
+
+            const healed = isControllerLeader();
+            if (healed) {
+                log.warn(`[ControllerLease] Self-heal acquired leader role (${reason}).`);
+            } else {
+                log.warn(`[ControllerLease] Self-heal attempted but this window remains follower (${reason}).`);
+            }
+            return healed;
+        };
+
+        let lastNoLeaderSelfHealAt = 0;
+
         const refreshRuntimeState = async () => {
             try {
                 updateControllerRoleStatus();
+                const roleNow = Date.now();
+                if (!isControllerLeader() && (roleNow - lastNoLeaderSelfHealAt) >= 5000) {
+                    lastNoLeaderSelfHealAt = roleNow;
+                    attemptNoLeaderSelfHeal('runtime refresh');
+                }
+                syncControllerRoleToCDP();
                 const cdp = resolveCDPStrategy();
                 if (!cdp || !cdp.isConnected()) {
                     latestRuntimeState = null;
@@ -2037,6 +2088,8 @@ export function activate(context: vscode.ExtensionContext) {
                 if (controllerLease) {
                     controllerLease.forceAcquire();
                     updateControllerRoleStatus();
+                    syncControllerRoleToCDP();
+                    await refreshRuntimeState().catch(() => { });
                     vscode.window.showInformationMessage('Antigravity: Forcibly acquired Leader role for this window.');
                 }
             }),
@@ -2050,11 +2103,14 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Initialize based on saved config
         if (isUnifiedAutoAcceptEnabled()) {
+            attemptNoLeaderSelfHeal('activation bootstrap preflight');
+
             // CDP Strategy should run in ALL windows to ensure UI actions (Run, Expand, Accept) 
             // always work even if the current window is a "Passive Follower".
             // The browser script (auto-continue.ts) handles its own action safety.
             try {
                 strategyManager.start().catch(e => log.error(`Failed to start decentralized strategy: ${e.message}`));
+                syncControllerRoleToCDP();
                 refreshRuntimeState().catch(() => { });
             } catch (e) {
                 log.error(`Critical stall in strategy bootstrap: ${e}`);

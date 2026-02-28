@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.194] - 2026-02-27
+### Fixed
+* **No-Leader Self-Heal Fallback**: Added automatic controller-lease recovery when a window detects leaderless state (no valid lease leader), including runtime-refresh and activation preflight recovery paths.
+* **Role Sync on Manual Leader Override**: `forceAcquireLeader` now immediately syncs controller role into CDP runtime config and refreshes runtime state, preventing stale follower behavior after manual takeover.
+* **Startup Role Race Hardening**: `CDPStrategy` now defaults to follower (`controllerRoleIsLeader = false`) until extension lease sync applies, avoiding transient leader actions during bootstrap races.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.194 VSIX build.
+
 ## [5.2.193] - 2026-02-27
 ### Fixed
 * **Follower Runtime Fail-Closed**: Changed controller/runtime leader defaults to fail-closed (`follower`) until explicit role sync arrives, preventing follower CDP windows from auto-typing bump text during startup/reinjection races.
