@@ -1,6 +1,16 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.211] - 2026-02-28
+### Fixed
+* **Antigravity Action Suppression Regression**: Relaxed Antigravity-specific `requireChatSurface` gating for Run/Expand/Submit detection/click paths so valid fork controls outside strict chat wrappers are no longer skipped.
+* **Bump Input Discovery Recovery**: Added Antigravity fallback input discovery when strict chat selectors miss, while still excluding terminal/shell surfaces.
+* **Leader Action Gate Reliability**: Removed `runtime.windowFocused` hard stop from `shouldAct()` and retained `document.hasFocus()`/visibility checks to avoid stale host-focus config suppressing all leader actions.
+* **Submit Fallback Robustness**: Extended safe submit fallback to permit Antigravity fork inputs (non-terminal) for Enter-key fallback after send/form submit attempts.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.211 VSIX build.
+
 ## [5.2.210] - 2026-02-28
 ### Fixed
 * **Global Leader Arbitration**: Simplified controller lease to a single global lease file (`.antigravity-controller-lease.json`) to prevent per-workspace split-brain where multiple windows could all present/act as leader.

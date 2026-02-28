@@ -279,7 +279,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     }
   }
 
-  function getInput() {
+  function getInput(fork) {
     const strictSelectors = [
       '.interactive-input-part textarea',
       '.chat-input-widget textarea',
@@ -322,6 +322,19 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
     }
 
+    if (fork === 'antigravity') {
+      for (const el of all) {
+        if (!isVisible(el) || !isSafeSurface(el)) continue;
+        if (isTerminalSurface(el)) continue;
+        const normalized = normalizeText(el);
+        if (/(terminal|shell|debug console)/i.test(normalized)) continue;
+        const tag = (el.tagName || '').toLowerCase();
+        if (tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
+          return el;
+        }
+      }
+    }
+
     return null;
   }
 
@@ -354,9 +367,10 @@ export const AUTO_CONTINUE_SCRIPT = `
     }
   }
 
-  function safeSubmitFromInput(input) {
+  function safeSubmitFromInput(input, fork) {
     if (!input) return false;
-    if (!isChatSurface(input) || isTerminalSurface(input)) return false;
+    if (isTerminalSurface(input)) return false;
+    if (fork !== 'antigravity' && !isChatSurface(input)) return false;
     try {
       input.focus();
       input.dispatchEvent(new KeyboardEvent('keydown', {
@@ -393,12 +407,13 @@ export const AUTO_CONTINUE_SCRIPT = `
   function readState(fork) {
     const stopIndicators = queryAllDeep('[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator');
     const isGenerating = stopIndicators.some(isVisible);
-    const input = getInput();
+    const input = getInput(fork);
 
     const actionSignals = targetSelectorsForFork(fork);
-    const runVisible = !!findClickable(actionSignals.run, /(run|execute)/i, { requireChatSurface: true, allowNonChatFallback: true });
-    const expandVisible = !!findClickable(actionSignals.expand, /(expand|requires input)/i, { requireChatSurface: true, allowNonChatFallback: true });
-    const submitVisible = !!findClickable(actionSignals.submit, /(send|submit|continue)/i, { requireChatSurface: true, allowNonChatFallback: true });
+    const requireChatSurface = fork !== 'antigravity';
+    const runVisible = !!findClickable(actionSignals.run, /(run|execute)/i, { requireChatSurface, allowNonChatFallback: true });
+    const expandVisible = !!findClickable(actionSignals.expand, /(expand|requires input)/i, { requireChatSurface, allowNonChatFallback: true });
+    const submitVisible = !!findClickable(actionSignals.submit, /(send|submit|continue)/i, { requireChatSurface, allowNonChatFallback: true });
 
     const hash = [isGenerating ? '1' : '0', !!input ? '1' : '0', runVisible ? '1' : '0', expandVisible ? '1' : '0', submitVisible ? '1' : '0'].join('|');
     if (hash !== lastStateHash) {
@@ -418,10 +433,9 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   function shouldAct(cfg) {
     if (cfg.runtime?.isLeader !== true) return false;
-    if (cfg.runtime?.windowFocused === false) return false;
     if (cfg.bump?.requireVisible !== false && document.visibilityState !== 'visible') return false;
     if (cfg.bump?.requireFocused !== false) {
-      if (cfg.runtime?.windowFocused !== true && typeof document.hasFocus === 'function' && !document.hasFocus()) {
+      if (typeof document.hasFocus === 'function' && !document.hasFocus()) {
         return false;
       }
     }
@@ -443,9 +457,10 @@ export const AUTO_CONTINUE_SCRIPT = `
       { key: 'clickEdit', label: 'Edit', group: 'click', selectors: actions.edit, re: /\bedit\b/i }
     ];
 
+    const requireChatSurface = fork !== 'antigravity';
     for (const a of ordered) {
       if (!enabled[a.key]) continue;
-      const el = findClickable(a.selectors, a.re, { requireChatSurface: true, allowNonChatFallback: true });
+      const el = findClickable(a.selectors, a.re, { requireChatSurface, allowNonChatFallback: true });
       if (el && clickElement(el, a.label, a.group)) return true;
     }
     return false;
@@ -464,7 +479,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     const text = String(cfg.bump?.text || 'Proceed').trim();
     if (!text) return false;
 
-    const input = getInput();
+    const input = getInput(fork);
     if (!input) return false;
     if (!typeText(input, text)) return false;
 
@@ -472,7 +487,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     const submit = () => {
       const submitSelectors = targetSelectorsForFork(fork).submit;
-      const send = findClickable(submitSelectors, /(send|submit|continue)/i, { requireChatSurface: true, allowNonChatFallback: true });
+      const send = findClickable(submitSelectors, /(send|submit|continue)/i, { requireChatSurface: fork !== 'antigravity', allowNonChatFallback: true });
       if (send && clickElement(send, 'Submit bump text', 'submit')) {
         return;
       }
@@ -484,7 +499,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           return;
         } catch (e) {}
       }
-      safeSubmitFromInput(input);
+      safeSubmitFromInput(input, fork);
     };
 
     setTimeout(submit, Math.max(60, cfg.bump?.submitDelayMs || 180));
@@ -541,14 +556,14 @@ export const AUTO_CONTINUE_SCRIPT = `
     const submitCooldownMs = Math.max(500, cfg.timing?.submitCooldownMs || 4000);
     if (Date.now() < submitInFlightUntil) return false;
     const fork = detectFork();
-    const input = getInput();
+    const input = getInput(fork);
     if (!input) return false;
     const typed = typeText(input, String(text || cfg.bump?.text || 'Proceed'));
     if (!typed) return false;
     submitInFlightUntil = Date.now() + submitCooldownMs;
     setTimeout(function () {
       const submitSelectors = targetSelectorsForFork(fork).submit;
-      const send = findClickable(submitSelectors, /(send|submit|continue)/i, { requireChatSurface: true, allowNonChatFallback: true });
+      const send = findClickable(submitSelectors, /(send|submit|continue)/i, { requireChatSurface: fork !== 'antigravity', allowNonChatFallback: true });
       if (send && clickElement(send, 'Submit bump text', 'submit')) return;
       const form = input.closest && input.closest('form');
       if (form && typeof form.requestSubmit === 'function') {
@@ -558,7 +573,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           return;
         } catch (e) {}
       }
-      safeSubmitFromInput(input);
+      safeSubmitFromInput(input, fork);
     }, Math.max(60, cfg.bump?.submitDelayMs || 180));
     return true;
   };

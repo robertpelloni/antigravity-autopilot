@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 5.2.210  
+**Version**: 5.2.211  
 **Last Updated**: 2026-02-28  
-**Status**: Production hotfix shipped (global leader lease + simplified deterministic bump submit fallback)
+**Status**: Production hotfix shipped (Antigravity fork gating relaxation + bump submit/input recovery)
 
 ## Project Structure at a Glance
 
