@@ -1,6 +1,26 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.227] - 2026-02-28
+### Fixed
+* **Run/Expand Suppression Regression**: Removed completion-priority suppression that skipped `Run`/`Expand` when completion text was present, so action buttons continue to be clicked when visible.
+* **Action Button Over-Filtering**: Relaxed editor-like click exclusions in the button click pipeline to avoid filtering out legitimate chat action controls rendered in editor-adjacent containers.
+* **Button Intent Matching Coverage**: Hardened action semantic matching for `Accept All`, `Keep`, `Always Allow/Approve`, `Retry`, `Expand`, and `Run` with broader spacing/word-boundary tolerant patterns.
+
+### Changed
+* **Action Order Simplification**: Prioritized permission/continuation actions (`Accept All`/`Keep`/`Always Allow`/`Retry`) before `Expand`/`Run` to reduce stalled flows waiting on approval actions.
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.227 VSIX build.
+
+## [5.2.226] - 2026-02-28
+### Fixed
+* **No-Click Selector Misses**: Added semantic fallback scanning across visible safe button-like controls when direct selector matches fail, improving detection/click reliability for `Run`, `Expand`, `Accept All`, `Keep`, `Always Allow`, and `Retry` across fork DOM variants.
+* **No-Bump Trigger Over-Gating**: Simplified bump eligibility to trigger on waiting/completion/feedback/send-visible signals (plus session-open grace), removing brittle state-hash gating that could suppress legitimate bump typing.
+* **Submit Fallback Robustness**: Hardened submit fallback chain (`click-send` → `form.requestSubmit()` → guarded Alt+Enter/Enter) with nearby-submit safety gating for broader cross-fork compatibility.
+
+### Changed
+* **Runtime Simplification**: Reduced fragile role constraints by making leader enforcement optional (`runtime.enforceLeader`) while preserving focused/visible safety guards.
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.226 VSIX build.
+
 ## [5.2.225] - 2026-02-28
 ### Fixed
 * **Expand-Only Loop Contention**: Disabled backend broad click sweep (`executeAutoAccept`) when frontend auto-continue runtime is enabled, eliminating competing `dom-scan-click` cycles that repeatedly targeted Expand.

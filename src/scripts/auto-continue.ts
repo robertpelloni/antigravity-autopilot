@@ -10,7 +10,7 @@ export const AUTO_CONTINUE_SCRIPT = `
   window.__antigravityHeartbeat = Date.now();
 
   const defaults = {
-    runtime: { isLeader: false, role: 'follower', windowFocused: true },
+    runtime: { isLeader: false, role: 'follower', windowFocused: true, enforceLeader: false },
     bump: {
       text: 'Proceed',
       enabled: true,
@@ -20,8 +20,8 @@ export const AUTO_CONTINUE_SCRIPT = `
       sessionOpenGraceMs: 12000
     },
     timing: {
-      pollIntervalMs: 700,
-      actionThrottleMs: 350,
+      pollIntervalMs: 450,
+      actionThrottleMs: 220,
       stalledMs: 7000,
       bumpCooldownMs: 12000,
       submitCooldownMs: 4000
@@ -44,7 +44,6 @@ export const AUTO_CONTINUE_SCRIPT = `
   let lastUserVisibleChangeAt = Date.now();
   const scriptStartedAt = Date.now();
   let lastStateHash = '';
-  let lastBumpStateHash = '';
   const lastButtonActionAt = Object.create(null);
 
   function getConfig() {
@@ -327,6 +326,26 @@ export const AUTO_CONTINUE_SCRIPT = `
     const opts = options || {};
     const joined = selectors.join(',');
     const candidates = queryAllDeep(joined);
+
+    const matchesSemantic = function (el) {
+      if (!semanticRegex) return true;
+      const text = normalizeText(el);
+      return semanticRegex.test(text);
+    };
+
+    const findSemanticFallback = function (requireChat) {
+      const pool = queryAllDeep('button, [role="button"], a, .monaco-button, [aria-label], [title], [data-testid]');
+      for (const node of pool) {
+        const el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
+        if (!isVisible(el) || !isSafeSurface(el)) continue;
+        if (requireChat && !isChatSurface(el)) continue;
+        if (isTerminalSurface(el)) continue;
+        if (!matchesSemantic(el)) continue;
+        return el;
+      }
+      return null;
+    };
+
     const passes = opts.requireChatSurface ? [true, false] : [false];
     for (const requireChat of passes) {
       if (!requireChat && opts.requireChatSurface && !opts.allowNonChatFallback) {
@@ -337,11 +356,12 @@ export const AUTO_CONTINUE_SCRIPT = `
         if (!isVisible(el) || !isSafeSurface(el)) continue;
         if (requireChat && !isChatSurface(el)) continue;
         if (isTerminalSurface(el)) continue;
-        if (isEditorLikeSurface(el)) continue;
-        const text = normalizeText(el);
-        if (semanticRegex && !semanticRegex.test(text)) continue;
+        if (!matchesSemantic(el)) continue;
         return el;
       }
+
+      const semanticHit = findSemanticFallback(requireChat);
+      if (semanticHit) return semanticHit;
     }
     return null;
   }
@@ -349,9 +369,19 @@ export const AUTO_CONTINUE_SCRIPT = `
   function clickElement(el, label, group) {
     if (!el) return false;
     try {
+      if (typeof el.focus === 'function') {
+        try { el.focus({ preventScroll: true }); } catch (e) { try { el.focus(); } catch (e2) {} }
+      }
+      try {
+        el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true }));
+        el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true }));
+      } catch (e) {}
       el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
       el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
       el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      if (typeof el.click === 'function') {
+        try { el.click(); } catch (e) {}
+      }
       log('clicked ' + label);
       return true;
     } catch (e) {
@@ -487,7 +517,7 @@ export const AUTO_CONTINUE_SCRIPT = `
   function safeSubmitFromInput(input, fork) {
     if (!input) return false;
     if (isTerminalSurface(input)) return false;
-    if (fork !== 'antigravity' && !isChatSurface(input)) return false;
+    if (!isChatSurface(input) && !hasNearbySubmitControl(input, fork)) return false;
     try {
       input.focus();
       input.dispatchEvent(new KeyboardEvent('keydown', {
@@ -552,18 +582,18 @@ export const AUTO_CONTINUE_SCRIPT = `
       return isVisible(el) && isSafeSurface(el) && !isTerminalSurface(el);
     });
 
-    const completionTextSeen = queryAllDeep('[role="article"], .chat-turn, .message, .markdown-body, [data-testid*="message" i], [class*="chat" i], [class*="message" i]').some(function (el) {
+    const completionTextSeen = queryAllDeep('[role="article"], .chat-turn, .message, .markdown-body, [data-testid*="message" i], [class*="chat" i], [class*="message" i], [class*="response" i]').some(function (el) {
       if (!isVisible(el)) return false;
       const text = normalizeText(el);
-      return /(all tasks? (are )?completed|completed all tasks|task(s)? completed|implementation (is )?complete|done for now|ready for next task|waiting for (your|user) input)/i.test(text);
+      return /(all tasks? (are )?completed|completed all tasks|task(s)? completed|implementation (is )?complete|done for now|ready for next task|waiting for (your|user) input|waiting for your next message|ready when you are|task complete|completed)/i.test(text);
     });
 
     const bodyText = ((document.body && document.body.innerText) ? document.body.innerText : '').toLowerCase();
-    const waitingTextSeen = /(waiting for your message|waiting for user message|reactivate|start a new message|chat session (is )?complete|task complete)/i.test(bodyText);
+    const waitingTextSeen = /(waiting for your message|waiting for user message|reactivate|start a new message|chat session (is )?complete|task complete|resume conversation|send a message|continue the conversation|ready for your next request)/i.test(bodyText);
 
     const sessionJustOpened = (Date.now() - scriptStartedAt) <= Math.max(2000, Number((getConfig().bump || {}).sessionOpenGraceMs || 12000));
     const chatNotActive = !isGenerating;
-    const bumpEligibleSignal = chatNotActive && (feedbackVisible || completionTextSeen || waitingTextSeen || sessionJustOpened);
+    const bumpEligibleSignal = chatNotActive && (feedbackVisible || completionTextSeen || waitingTextSeen || submitVisible || sessionJustOpened);
 
     const hash = [isGenerating ? '1' : '0', !!input ? '1' : '0', runVisible ? '1' : '0', expandVisible ? '1' : '0', submitVisible ? '1' : '0', feedbackVisible ? '1' : '0', completionTextSeen ? '1' : '0', waitingTextSeen ? '1' : '0'].join('|');
     if (hash !== lastStateHash) {
@@ -588,8 +618,8 @@ export const AUTO_CONTINUE_SCRIPT = `
   }
 
   function shouldAct(cfg) {
-    if (cfg.runtime?.isLeader !== true) return false;
     if (cfg.bump?.requireVisible !== false && document.visibilityState !== 'visible') return false;
+    if (cfg.runtime?.enforceLeader === true && cfg.runtime?.isLeader !== true) return false;
     if (cfg.bump?.requireFocused === true) {
       const docFocused = (typeof document.hasFocus !== 'function') || document.hasFocus();
       const hostFocused = cfg.runtime?.windowFocused === true;
@@ -604,20 +634,18 @@ export const AUTO_CONTINUE_SCRIPT = `
     const actions = targetSelectorsForFork(fork);
     const enabled = cfg.actions || {};
     const now = Date.now();
-    const completionPriority = !!(state && (state.completionTextSeen || state.feedbackVisible));
 
     const ordered = [
-      { key: 'clickExpand', label: 'Expand', group: 'expand', selectors: actions.expand, re: /(expand|requires input)/i, allowNonChatFallback: true },
-      { key: 'clickRun', label: 'Run', group: 'run', selectors: actions.run, re: /(run|execute|run in terminal)/i, allowNonChatFallback: true },
-      { key: 'clickAcceptAll', label: 'Accept All', group: 'accept-all', selectors: actions.acceptAll, re: /(accept all|apply all|keep all)/i, allowNonChatFallback: true },
+      { key: 'clickAcceptAll', label: 'Accept All', group: 'accept-all', selectors: actions.acceptAll, re: /(accept\s*all|apply\s*all|allow\s*all|keep\s*all)/i, allowNonChatFallback: true },
       { key: 'clickKeep', label: 'Keep', group: 'continue', selectors: actions.keep, re: /\bkeep\b/i, allowNonChatFallback: true },
-      { key: 'clickAlwaysAllow', label: 'Always Allow', group: 'accept', selectors: actions.alwaysAllow, re: /(always allow|always approve)/i, allowNonChatFallback: true },
+      { key: 'clickAlwaysAllow', label: 'Always Allow', group: 'accept', selectors: actions.alwaysAllow, re: /(always\s*allow|always\s*approve)/i, allowNonChatFallback: true },
       { key: 'clickRetry', label: 'Retry', group: 'continue', selectors: actions.retry, re: /\bretry\b/i, allowNonChatFallback: true }
+      ,{ key: 'clickExpand', label: 'Expand', group: 'expand', selectors: actions.expand, re: /(expand|requires\s*input|step\s*requires\s*input)/i, allowNonChatFallback: true }
+      ,{ key: 'clickRun', label: 'Run', group: 'run', selectors: actions.run, re: /(^|\b)(run(\s+in\s+terminal|\s+command)?|execute)(\b|$)/i, allowNonChatFallback: true }
     ];
 
     for (const a of ordered) {
       if (!enabled[a.key]) continue;
-      if (completionPriority && (a.key === 'clickExpand' || a.key === 'clickRun')) continue;
       const lastAt = Number(lastButtonActionAt[a.key] || 0);
       const cooldownMs = getActionCooldownMs(a.key);
       if (lastAt > 0 && (now - lastAt) < cooldownMs) {
@@ -637,8 +665,11 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (state.isGenerating) return false;
     if (!state.hasInput) return false;
     if (!state.bumpEligibleSignal) return false;
-    if (lastBumpStateHash && lastBumpStateHash === lastStateHash) return false;
-    if (state.stalledMs < Math.max(1000, cfg.timing?.stalledMs || 7000)) return false;
+
+    const stalledThreshold = Math.max(1000, cfg.timing?.stalledMs || 7000);
+    const shouldBumpNow = !!(state.sessionJustOpened || state.feedbackVisible || state.completionTextSeen || state.waitingTextSeen || state.submitVisible || state.stalledMs >= stalledThreshold);
+    if (!shouldBumpNow) return false;
+
     const bumpCooldownMs = Math.max(1000, cfg.timing?.bumpCooldownMs || 12000);
     if ((Date.now() - lastBumpAt) < bumpCooldownMs) return false;
     const submitCooldownMs = Math.max(500, cfg.timing?.submitCooldownMs || 4000);
@@ -649,6 +680,22 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     const input = getInput(fork);
     if (!input) return false;
+
+    const currentValue = (function () {
+      try {
+        if (input.isContentEditable || input.getAttribute('contenteditable') === 'true') {
+          return String(input.textContent || '').trim();
+        }
+        return String(input.value || '').trim();
+      } catch (e) {
+        return '';
+      }
+    })();
+
+    if (currentValue && currentValue !== text) {
+      return false;
+    }
+
     if (!typeText(input, text)) return false;
 
     submitInFlightUntil = Date.now() + submitCooldownMs;
@@ -671,7 +718,6 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     setTimeout(submit, Math.max(60, cfg.bump?.submitDelayMs || 180));
     lastBumpAt = Date.now();
-    lastBumpStateHash = lastStateHash;
     return true;
   }
 

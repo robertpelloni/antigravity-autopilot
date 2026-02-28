@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 5.2.225  
+**Version**: 5.2.227  
 **Last Updated**: 2026-02-28  
-**Status**: Production stabilization shipped (frontend-only button control + cross-fork safe input fallback + strict bump eligibility)
+**Status**: Production stabilization shipped (de-restricted action targeting + completion-safe run/expand execution + simplified bump trigger/submit flow)
 
 ## Project Structure at a Glance
 
