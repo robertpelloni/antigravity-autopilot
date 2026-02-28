@@ -1048,7 +1048,9 @@ export class CDPHandler extends EventEmitter {
     private shouldDispatchAction(pageId: string, sessionId: string | undefined, group: string, detail: string): boolean {
         const now = Date.now();
         const normalizedDetail = String(detail || '').trim().toLowerCase();
-        const key = `${pageId}::${sessionId || 'main'}::${group}::${normalizedDetail}`;
+        const highImpactGroups = new Set(['submit', 'run', 'expand', 'continue', 'accept', 'accept-all']);
+        const actionScope = highImpactGroups.has(group) ? 'page' : (sessionId || 'main');
+        const key = `${pageId}::${actionScope}::${group}::${normalizedDetail}`;
         const lastTs = this.recentActionDispatch.get(key) || 0;
 
         const throttleMs = group === 'submit' ? 1500 : 200;
@@ -1113,6 +1115,12 @@ export class CDPHandler extends EventEmitter {
             const recentActivityGraceMs = config.get<number>('watchdogRecentActivityGraceMs') || 12000;
             const now = Date.now();
 
+            // Safety gate: watchdog reinjection should only run in the active leader window.
+            // Background/follower windows naturally throttle timers and can look "stale" even when healthy.
+            if (!this.controllerRoleIsLeader || !this.hostWindowFocused) {
+                return;
+            }
+
             for (const [pageId, conn] of this.connections) {
                 try {
                     const state = this.watchdogState.get(pageId) || { attempts: 0, lastAttemptAt: 0 };
@@ -1134,7 +1142,17 @@ export class CDPHandler extends EventEmitter {
                         continue;
                     }
 
-                    const freshHeartbeat = snapshots.some((snap: any) =>
+                    // Only evaluate watchdog health for foreground-eligible snapshots.
+                    // This avoids re-inject storms from hidden/background sessions.
+                    const eligibleSnapshots = snapshots.filter((snap: any) =>
+                        snap?.readyState === 'complete' && snap?.visible === 'visible' && snap?.focused === true
+                    );
+
+                    if (eligibleSnapshots.length === 0) {
+                        continue;
+                    }
+
+                    const freshHeartbeat = eligibleSnapshots.some((snap: any) =>
                         typeof snap?.heartbeat === 'number' && (now - snap.heartbeat) <= timeoutMs
                     );
 
@@ -1145,26 +1163,20 @@ export class CDPHandler extends EventEmitter {
                         continue;
                     }
 
-                    const staleHeartbeat = snapshots.some((snap: any) =>
-                        typeof snap?.heartbeat === 'number' && (now - snap.heartbeat) > timeoutMs
+                    const staleHeartbeat = eligibleSnapshots.some((snap: any) =>
+                        typeof snap?.heartbeat !== 'number' || (now - snap.heartbeat) > timeoutMs
                     );
 
-                    const hasReadyVisibleFocused = snapshots.some((snap: any) =>
-                        snap?.readyState === 'complete' && snap?.visible === 'visible' && snap?.focused === true
-                    );
-
-                    const hasAutomationSurface = snapshots.some((snap: any) =>
+                    const hasAutomationSurface = eligibleSnapshots.some((snap: any) =>
                         snap?.running === true || snap?.hasAutopilotApi === true
                     );
 
-                    if (!withinCooldown && state.attempts < maxConsecutiveReinjects && (staleHeartbeat || (hasReadyVisibleFocused && hasAutomationSurface))) {
-                        const staleDiffs = snapshots
+                    if (!withinCooldown && state.attempts < maxConsecutiveReinjects && staleHeartbeat && hasAutomationSurface) {
+                        const staleDiffs = eligibleSnapshots
                             .map((snap: any) => (typeof snap?.heartbeat === 'number' ? (now - snap.heartbeat) : null))
                             .filter((n: number | null) => typeof n === 'number') as number[];
                         const maxDiff = staleDiffs.length > 0 ? Math.max(...staleDiffs) : -1;
-                        const reason = staleHeartbeat
-                            ? `stale heartbeat${maxDiff >= 0 ? ` (${maxDiff}ms)` : ''}`
-                            : 'missing heartbeat on ready+visible+focused target';
+                        const reason = `stale or missing heartbeat on active target${maxDiff >= 0 ? ` (${maxDiff}ms)` : ''}`;
                         logToOutput(`[Watchdog] ${reason} on ${pageId}. Re-injecting script.`);
                         await this.injectScript(pageId, AUTO_CONTINUE_SCRIPT, true);
                         this.watchdogState.set(pageId, { attempts: state.attempts + 1, lastAttemptAt: now });

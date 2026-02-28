@@ -1206,6 +1206,12 @@ export function activate(context: vscode.ExtensionContext) {
         });
 
         context.subscriptions.push(vscode.window.onDidChangeWindowState((state) => {
+            if (state.focused && controllerLease) {
+                controllerLease.forceAcquire();
+                updateControllerRoleStatus();
+                syncControllerRoleToCDP();
+                void alignDecentralizedAutomationToRole('window focus takeover');
+            }
             const cdp = resolveCDPStrategy() as any;
             if (cdp && typeof cdp.setHostWindowFocused === 'function') {
                 cdp.setHostWindowFocused(!!state.focused);

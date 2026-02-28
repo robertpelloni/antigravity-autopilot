@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 5.2.212  
+**Version**: 5.2.213  
 **Last Updated**: 2026-02-28  
-**Status**: Production hotfix shipped (workspace-scoped lease isolation + follower suppression recovery)
+**Status**: Production hotfix shipped (watchdog reinjection storm suppression + cross-session action dedupe)
 
 ## Project Structure at a Glance
 

@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.213] - 2026-02-28
+### Fixed
+* **Watchdog Reinject Storm Suppression**: Restricted watchdog reinjection to leader + focused host windows and foreground-eligible runtime snapshots only, preventing repeated stale-heartbeat reinjections from background/follower sessions.
+* **Active-Target Heartbeat Gating**: Changed heartbeat health evaluation to ignore non-visible/non-focused sessions so timer throttling in hidden webviews no longer triggers unnecessary script reinjection.
+* **Cross-Session Action Fanout Dedupe**: Added page-scoped dedupe keys for high-impact action relays (`submit`, `run`, `expand`, `continue`, `accept`) to stop duplicate fallback dispatch bursts from multiple attached CDP sessions.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.213 VSIX build.
+
 ## [5.2.212] - 2026-02-28
 ### Fixed
 * **Cross-Workspace Leader Suppression Regression**: Restored workspace-scoped controller lease persistence using stable workspace-hashed lease filenames so unrelated workspaces can no longer force this window into follower/passive mode.

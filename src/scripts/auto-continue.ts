@@ -152,6 +152,8 @@ export const AUTO_CONTINUE_SCRIPT = `
       '.interactive-input-part',
       '.chat-input-widget',
       '.interactive-editor',
+      '.chat-editing-session-container',
+      '.aichat-container',
       '[data-testid*="chat" i]',
       '[data-testid*="composer" i]',
       '[class*="chat" i]',
@@ -163,6 +165,70 @@ export const AUTO_CONTINUE_SCRIPT = `
     } catch (e) {
       return false;
     }
+  }
+
+  function isEditorLikeSurface(el) {
+    if (!el || !el.closest) return false;
+    const editorRoots = [
+      '.monaco-editor',
+      '.view-lines',
+      '.inputarea',
+      '.code-editor',
+      '[data-testid*="editor" i]',
+      '[class*="editor" i]'
+    ].join(',');
+    try {
+      return !!el.closest(editorRoots);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function hasNearbySubmitControl(input, fork) {
+    if (!input) return false;
+    const submitSelectors = targetSelectorsForFork(fork).submit.join(',');
+    const roots = [
+      input.closest && input.closest('form'),
+      input.closest && input.closest('[class*="chat" i], [class*="composer" i], .chat-editing-session-container, .aichat-container'),
+      input.parentElement,
+      input
+    ].filter(Boolean);
+
+    for (const root of roots) {
+      const matches = queryAllDeep(submitSelectors, root);
+      for (const el of matches) {
+        const node = el.closest ? (el.closest('button, a, [role="button"], .monaco-button') || el) : el;
+        if (!isVisible(node) || !isSafeSurface(node)) continue;
+        if (isTerminalSurface(node)) continue;
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function findSubmitNearInput(input, fork) {
+    if (!input) return null;
+    const submitSelectors = targetSelectorsForFork(fork).submit;
+    const roots = [
+      input.closest && input.closest('form'),
+      input.closest && input.closest('[class*="chat" i], [class*="composer" i], .chat-editing-session-container, .aichat-container'),
+      input.parentElement,
+      input
+    ].filter(Boolean);
+
+    for (const root of roots) {
+      const joined = submitSelectors.join(',');
+      const matches = queryAllDeep(joined, root);
+      for (const el of matches) {
+        const node = el.closest ? (el.closest('button, a, [role="button"], .monaco-button') || el) : el;
+        if (!isVisible(node) || !isSafeSurface(node)) continue;
+        if (isTerminalSurface(node)) continue;
+        return node;
+      }
+    }
+
+    return null;
   }
 
   function normalizeText(el) {
@@ -193,14 +259,18 @@ export const AUTO_CONTINUE_SCRIPT = `
       run: [
         '[title*="Run in Terminal" i]', '[aria-label*="Run in Terminal" i]',
         '[title*="Run command" i]', '[aria-label*="Run command" i]',
+        '[title*="Run" i]', '[aria-label*="Run" i]',
         '[title*="Execute" i]', '[aria-label*="Execute" i]',
         '[data-testid*="run" i]', '[data-testid*="execute" i]',
+        '[class*="run-action" i]',
         '.codicon-play', '.codicon-run'
       ],
       expand: [
         '[title*="Expand" i]', '[aria-label*="Expand" i]',
         '[title*="requires input" i]', '[aria-label*="requires input" i]',
+        '[title*="1 Step Requires Input" i]', '[aria-label*="1 Step Requires Input" i]',
         '[data-testid*="expand" i]', '[data-testid*="requires-input" i]'
+        , '.codicon-chevron-right', '.monaco-tl-twistie'
       ],
       alwaysAllow: [
         '[title*="Always Allow" i]', '[aria-label*="Always Allow" i]',
@@ -228,6 +298,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       ],
       submit: [
         '[title*="Send" i]', '[aria-label*="Send" i]',
+        '[aria-label*="Send message" i]',
         '[title*="Submit" i]', '[aria-label*="Submit" i]',
         '[data-testid*="send" i]', '[data-testid*="submit" i]',
         'button[type="submit"]', '.codicon-send'
@@ -303,6 +374,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     const strictMatches = queryAllDeep(strictSelectors);
     for (const el of strictMatches) {
       if (!isVisible(el) || !isSafeSurface(el)) continue;
+      if (isEditorLikeSurface(el)) continue;
       if (!isChatSurface(el) || isTerminalSurface(el)) continue;
       const tag = (el.tagName || '').toLowerCase();
       if (tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
@@ -313,6 +385,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     const all = queryAllDeep(broadSelectors);
     for (const el of all) {
       if (!isVisible(el) || !isSafeSurface(el)) continue;
+      if (isEditorLikeSurface(el)) continue;
       if (!isChatSurface(el) || isTerminalSurface(el)) continue;
       const normalized = normalizeText(el);
       if (/(terminal|shell|debug console)/i.test(normalized)) continue;
@@ -325,11 +398,14 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (fork === 'antigravity') {
       for (const el of all) {
         if (!isVisible(el) || !isSafeSurface(el)) continue;
+        if (isEditorLikeSurface(el)) continue;
         if (isTerminalSurface(el)) continue;
         const normalized = normalizeText(el);
         if (/(terminal|shell|debug console)/i.test(normalized)) continue;
         const tag = (el.tagName || '').toLowerCase();
-        if (tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
+        const isEditable = tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true';
+        if (!isEditable) continue;
+        if (hasNearbySubmitControl(el, fork)) {
           return el;
         }
       }
@@ -410,10 +486,9 @@ export const AUTO_CONTINUE_SCRIPT = `
     const input = getInput(fork);
 
     const actionSignals = targetSelectorsForFork(fork);
-    const requireChatSurface = fork !== 'antigravity';
-    const runVisible = !!findClickable(actionSignals.run, /(run|execute)/i, { requireChatSurface, allowNonChatFallback: true });
-    const expandVisible = !!findClickable(actionSignals.expand, /(expand|requires input)/i, { requireChatSurface, allowNonChatFallback: true });
-    const submitVisible = !!findClickable(actionSignals.submit, /(send|submit|continue)/i, { requireChatSurface, allowNonChatFallback: true });
+    const runVisible = !!findClickable(actionSignals.run, /(run|execute)/i, { requireChatSurface: true, allowNonChatFallback: false });
+    const expandVisible = !!findClickable(actionSignals.expand, /(expand|requires input)/i, { requireChatSurface: true, allowNonChatFallback: false });
+    const submitVisible = !!findClickable(actionSignals.submit, /(send|submit|continue)/i, { requireChatSurface: true, allowNonChatFallback: false });
 
     const hash = [isGenerating ? '1' : '0', !!input ? '1' : '0', runVisible ? '1' : '0', expandVisible ? '1' : '0', submitVisible ? '1' : '0'].join('|');
     if (hash !== lastStateHash) {
@@ -457,10 +532,9 @@ export const AUTO_CONTINUE_SCRIPT = `
       { key: 'clickEdit', label: 'Edit', group: 'click', selectors: actions.edit, re: /\bedit\b/i }
     ];
 
-    const requireChatSurface = fork !== 'antigravity';
     for (const a of ordered) {
       if (!enabled[a.key]) continue;
-      const el = findClickable(a.selectors, a.re, { requireChatSurface, allowNonChatFallback: true });
+      const el = findClickable(a.selectors, a.re, { requireChatSurface: true, allowNonChatFallback: false });
       if (el && clickElement(el, a.label, a.group)) return true;
     }
     return false;
@@ -486,8 +560,8 @@ export const AUTO_CONTINUE_SCRIPT = `
     submitInFlightUntil = Date.now() + submitCooldownMs;
 
     const submit = () => {
-      const submitSelectors = targetSelectorsForFork(fork).submit;
-      const send = findClickable(submitSelectors, /(send|submit|continue)/i, { requireChatSurface: fork !== 'antigravity', allowNonChatFallback: true });
+      const send = findSubmitNearInput(input, fork)
+        || findClickable(targetSelectorsForFork(fork).submit, /(send|submit|continue)/i, { requireChatSurface: true, allowNonChatFallback: false });
       if (send && clickElement(send, 'Submit bump text', 'submit')) {
         return;
       }
@@ -562,8 +636,8 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (!typed) return false;
     submitInFlightUntil = Date.now() + submitCooldownMs;
     setTimeout(function () {
-      const submitSelectors = targetSelectorsForFork(fork).submit;
-      const send = findClickable(submitSelectors, /(send|submit|continue)/i, { requireChatSurface: fork !== 'antigravity', allowNonChatFallback: true });
+      const send = findSubmitNearInput(input, fork)
+        || findClickable(targetSelectorsForFork(fork).submit, /(send|submit|continue)/i, { requireChatSurface: true, allowNonChatFallback: false });
       if (send && clickElement(send, 'Submit bump text', 'submit')) return;
       const form = input.closest && input.closest('form');
       if (form && typeof form.requestSubmit === 'function') {
