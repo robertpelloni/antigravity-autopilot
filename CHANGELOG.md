@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.229] - 2026-02-28
+### Fixed
+* **False Positive Expand Click Logging**: `Expand` clicks are now considered successful only when a visible expand-state transition is detected (e.g., `aria-expanded` change, control disappearance, or text/state shift away from expand/requires-input).
+* **Single-Candidate Dead-Click Stall**: Action execution now tries multiple ranked candidate elements per action instead of stopping at the first matched target, improving reliability when the first matched control is non-interactive.
+
+### Changed
+* **Runtime Click Diagnostics**: Added explicit runtime log line when an expand attempt has no visible effect (`expand click had no visible effect; trying next candidate`).
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.229 VSIX build.
+
 ## [5.2.228] - 2026-02-28
 ### Fixed
 * **All-Windows Leader Split-Brain**: Replaced workspace-scoped controller lease files with a single global lease file (`~/.antigravity-controller-lease.json`) so only one window can own leader role across all open workspaces.

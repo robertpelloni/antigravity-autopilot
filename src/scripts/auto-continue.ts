@@ -322,10 +322,19 @@ export const AUTO_CONTINUE_SCRIPT = `
     return shared;
   }
 
-  function findClickable(selectors, semanticRegex, options) {
+  function findClickables(selectors, semanticRegex, options, maxResults) {
     const opts = options || {};
     const joined = selectors.join(',');
     const candidates = queryAllDeep(joined);
+    const out = [];
+    const seen = new Set();
+    const limit = Math.max(1, Number(maxResults || 6));
+
+    const pushCandidate = function (el) {
+      if (!el || seen.has(el)) return;
+      seen.add(el);
+      out.push(el);
+    };
 
     const matchesSemantic = function (el) {
       if (!semanticRegex) return true;
@@ -341,9 +350,9 @@ export const AUTO_CONTINUE_SCRIPT = `
         if (requireChat && !isChatSurface(el)) continue;
         if (isTerminalSurface(el)) continue;
         if (!matchesSemantic(el)) continue;
-        return el;
+        pushCandidate(el);
+        if (out.length >= limit) return;
       }
-      return null;
     };
 
     const passes = opts.requireChatSurface ? [true, false] : [false];
@@ -357,18 +366,43 @@ export const AUTO_CONTINUE_SCRIPT = `
         if (requireChat && !isChatSurface(el)) continue;
         if (isTerminalSurface(el)) continue;
         if (!matchesSemantic(el)) continue;
-        return el;
+        pushCandidate(el);
+        if (out.length >= limit) return out;
       }
 
-      const semanticHit = findSemanticFallback(requireChat);
-      if (semanticHit) return semanticHit;
+      findSemanticFallback(requireChat);
+      if (out.length >= limit) return out;
     }
-    return null;
+    return out;
   }
 
-  function clickElement(el, label, group) {
+  function findClickable(selectors, semanticRegex, options) {
+    const all = findClickables(selectors, semanticRegex, options, 1);
+    return all.length > 0 ? all[0] : null;
+  }
+
+  function expandStateSnapshot(el) {
+    if (!el) return { visible: false, expanded: null, text: '' };
+    const expandedAttr = (el.getAttribute && el.getAttribute('aria-expanded')) || null;
+    return {
+      visible: isVisible(el),
+      expanded: expandedAttr,
+      text: normalizeText(el)
+    };
+  }
+
+  function didExpandStateAdvance(before, after) {
+    if (!after.visible) return true;
+    if (before.expanded === 'false' && after.expanded === 'true') return true;
+    if (/\bexpand\b|requires\s*input|step\s*requires\s*input/i.test(before.text) && /\bcollapse\b|expanded|show\s*less/i.test(after.text)) return true;
+    if (/\bexpand\b|requires\s*input|step\s*requires\s*input/i.test(before.text) && !/\bexpand\b|requires\s*input|step\s*requires\s*input/i.test(after.text)) return true;
+    return false;
+  }
+
+  function clickElement(el, label, group, actionKey) {
     if (!el) return false;
     try {
+      const beforeExpand = actionKey === 'clickExpand' ? expandStateSnapshot(el) : null;
       if (typeof el.focus === 'function') {
         try { el.focus({ preventScroll: true }); } catch (e) { try { el.focus(); } catch (e2) {} }
       }
@@ -382,6 +416,15 @@ export const AUTO_CONTINUE_SCRIPT = `
       if (typeof el.click === 'function') {
         try { el.click(); } catch (e) {}
       }
+
+      if (actionKey === 'clickExpand') {
+        const afterExpand = expandStateSnapshot(el);
+        if (!didExpandStateAdvance(beforeExpand, afterExpand)) {
+          log('expand click had no visible effect; trying next candidate');
+          return false;
+        }
+      }
+
       log('clicked ' + label);
       return true;
     } catch (e) {
@@ -661,11 +704,19 @@ export const AUTO_CONTINUE_SCRIPT = `
       if (lastAt > 0 && (now - lastAt) < cooldownMs) {
         continue;
       }
-      const byLabel = findActionByLabel(a.re, true) || (a.allowNonChatFallback ? findActionByLabel(a.re, false) : null);
-      const el = byLabel || findClickable(a.selectors, a.re, { requireChatSurface: true, allowNonChatFallback: !!a.allowNonChatFallback });
-      if (el && clickElement(el, a.label, a.group)) {
-        lastButtonActionAt[a.key] = now;
-        return true;
+      const candidates = [];
+      const labelFirst = findActionByLabel(a.re, true) || (a.allowNonChatFallback ? findActionByLabel(a.re, false) : null);
+      if (labelFirst) candidates.push(labelFirst);
+      const discovered = findClickables(a.selectors, a.re, { requireChatSurface: true, allowNonChatFallback: !!a.allowNonChatFallback }, 8);
+      for (const c of discovered) {
+        if (!candidates.includes(c)) candidates.push(c);
+      }
+
+      for (const el of candidates) {
+        if (clickElement(el, a.label, a.group, a.key)) {
+          lastButtonActionAt[a.key] = now;
+          return true;
+        }
       }
     }
     return false;
