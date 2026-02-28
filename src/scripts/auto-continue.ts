@@ -190,6 +190,19 @@ export const AUTO_CONTINUE_SCRIPT = `
     }
   }
 
+  function isLikelyInteractive(el) {
+    if (!el) return false;
+    const tag = (el.tagName || '').toLowerCase();
+    if (tag === 'button' || tag === 'a') return true;
+    const role = String((el.getAttribute && el.getAttribute('role')) || '').toLowerCase();
+    if (role === 'button' || role === 'link') return true;
+    const tabIndex = Number(el.tabIndex);
+    if (Number.isFinite(tabIndex) && tabIndex >= 0) return true;
+    const className = String(el.className || '').toLowerCase();
+    if (className.includes('monaco-button') || className.includes('button')) return true;
+    return typeof el.onclick === 'function' || typeof el.click === 'function';
+  }
+
   function hasNearbySubmitControl(input, fork) {
     if (!input) return false;
     const submitSelectors = targetSelectorsForFork(fork).submit.join(',');
@@ -300,6 +313,8 @@ export const AUTO_CONTINUE_SCRIPT = `
         '[title*="Send" i]', '[aria-label*="Send" i]',
         '[aria-label*="Send message" i]',
         '[title*="Submit" i]', '[aria-label*="Submit" i]',
+        '[title*="Continue" i]', '[aria-label*="Continue" i]',
+        '[aria-keyshortcuts*="Enter" i]',
         '[data-testid*="send" i]', '[data-testid*="submit" i]',
         'button[type="submit"]', '.codicon-send'
       ],
@@ -347,6 +362,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       for (const node of pool) {
         const el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
         if (!isVisible(el) || !isSafeSurface(el)) continue;
+        if (!isLikelyInteractive(el)) continue;
         if (requireChat && !isChatSurface(el)) continue;
         if (isTerminalSurface(el)) continue;
         if (!matchesSemantic(el)) continue;
@@ -363,6 +379,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       for (const node of candidates) {
         const el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
         if (!isVisible(el) || !isSafeSurface(el)) continue;
+        if (!isLikelyInteractive(el)) continue;
         if (requireChat && !isChatSurface(el)) continue;
         if (isTerminalSurface(el)) continue;
         if (!matchesSemantic(el)) continue;
@@ -529,6 +546,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     for (const node of pool) {
       const el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
       if (!isVisible(el) || !isSafeSurface(el)) continue;
+      if (!isLikelyInteractive(el)) continue;
       if (isTerminalSurface(el)) continue;
       if (requireChatSurface && !isChatSurface(el)) continue;
       const text = normalizeText(el);
@@ -755,8 +773,8 @@ export const AUTO_CONTINUE_SCRIPT = `
       { key: 'clickKeep', label: 'Keep', group: 'continue', selectors: actions.keep, re: /\bkeep\b/i, allowNonChatFallback: true },
       { key: 'clickAlwaysAllow', label: 'Always Allow', group: 'accept', selectors: actions.alwaysAllow, re: /(always\s*allow|always\s*approve)/i, allowNonChatFallback: true },
       { key: 'clickRetry', label: 'Retry', group: 'continue', selectors: actions.retry, re: /\bretry\b/i, allowNonChatFallback: true }
-      ,{ key: 'clickExpand', label: 'Expand', group: 'expand', selectors: actions.expand, re: /(expand|requires\s*input|step\s*requires\s*input)/i, allowNonChatFallback: true }
       ,{ key: 'clickRun', label: 'Run', group: 'run', selectors: actions.run, re: /(^|\b)(run(\s+in\s+terminal|\s+command)?|execute)(\b|$)/i, allowNonChatFallback: true }
+      ,{ key: 'clickExpand', label: 'Expand', group: 'expand', selectors: actions.expand, re: /(expand|requires\s*input|step\s*requires\s*input)/i, allowNonChatFallback: true }
     ];
 
     for (const a of ordered) {
@@ -779,6 +797,11 @@ export const AUTO_CONTINUE_SCRIPT = `
           lastButtonActionAt[a.key] = now;
           return true;
         }
+      }
+
+      if (a.key === 'clickExpand' && candidates.length > 0) {
+        // Prevent hot-looping dead Expand targets; back off before next sweep.
+        lastButtonActionAt[a.key] = now;
       }
     }
     return false;
@@ -804,21 +827,6 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     const input = getInput(fork);
     if (!input) return false;
-
-    const currentValue = (function () {
-      try {
-        if (input.isContentEditable || input.getAttribute('contenteditable') === 'true') {
-          return String(input.textContent || '').trim();
-        }
-        return String(input.value || '').trim();
-      } catch (e) {
-        return '';
-      }
-    })();
-
-    if (currentValue && currentValue !== text) {
-      return false;
-    }
 
     if (!typeText(input, text)) return false;
 

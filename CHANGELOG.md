@@ -1,6 +1,18 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.231] - 2026-02-28
+### Fixed
+* **Follower Lockout From Unrelated Workspace Leader**: Restored workspace-scoped controller lease files so a leader in another workspace no longer suppresses automation in this workspace.
+* **Run/Expand Dead Target Sweeps**: Action target selection now filters to likely interactive controls only, reducing repeated no-effect clicks on decorative/non-interactive elements.
+* **Expand Starvation Looping**: Added expand no-effect backoff so repeated failed Expand attempts do not hot-loop the same dead candidates continuously.
+* **Bump Typing Suppression On Non-Empty Input**: Removed overly strict guard that skipped bump typing when composer already had content.
+* **Submit Target Coverage Gaps**: Expanded submit selector coverage (`Continue`, Enter keyshortcut hints) to improve bump-send detection.
+
+### Changed
+* **Action Priority Tuning**: `Run` is now attempted before `Expand` in the ordered action sweep.
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.231 VSIX build.
+
 ## [5.2.230] - 2026-02-28
 ### Fixed
 * **Multi-Window Role Drift in Runtime Layer**: Runtime config now explicitly enforces leader-only action execution (`runtime.enforceLeader=true`) to align injected behavior with the single-leader lease model.
