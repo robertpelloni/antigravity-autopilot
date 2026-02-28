@@ -516,7 +516,8 @@ export class CDPHandler extends EventEmitter {
             runtime: {
                 isLeader: this.controllerRoleIsLeader,
                 role: this.controllerRoleIsLeader ? 'leader' : 'follower',
-                windowFocused: this.hostWindowFocused
+                windowFocused: this.hostWindowFocused,
+                mode: config.get<string>('interactionUiProfile') || 'auto'
             }
         };
 

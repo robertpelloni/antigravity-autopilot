@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.225] - 2026-02-28
+### Fixed
+* **Expand-Only Loop Contention**: Disabled backend broad click sweep (`executeAutoAccept`) when frontend auto-continue runtime is enabled, eliminating competing `dom-scan-click` cycles that repeatedly targeted Expand.
+* **No-Bump Input Misses Across Fork Detection Drift**: Added a fork-agnostic safe editable-input fallback gated by nearby submit controls, so bump text typing still works when chat-root classification is imperfect.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.225 VSIX build.
+
 ## [5.2.224] - 2026-02-28
 ### Fixed
 * **No-Bump While Expand Loops**: Runtime now prioritizes bump attempts before button scanning, so completion/waiting signals can trigger bump text even when Expand/Run controls remain visible.

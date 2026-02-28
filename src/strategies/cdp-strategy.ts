@@ -286,6 +286,12 @@ export class CDPStrategy implements IStrategy {
      * Auto-accept agent steps using configured interaction methods.
      */
     private async executeAutoAccept() {
+        if (config.get<boolean>('autoContinueScriptEnabled') !== false) {
+            // Frontend auto-continue runtime already handles action buttons directly.
+            // Skip backend broad click sweeps to avoid Expand-only loops and selector contention.
+            return;
+        }
+
         if (!this.isUnifiedAutoAcceptEnabled()) {
             return;
         }

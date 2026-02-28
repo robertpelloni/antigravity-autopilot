@@ -77,7 +77,12 @@ export const AUTO_CONTINUE_SCRIPT = `
     emitBridge('__AUTOPILOT_ACTION__:' + String(group || 'click') + '|' + String(detail || 'triggered'));
   }
 
-  function detectFork() {
+  function detectFork(cfg) {
+    const configuredMode = String(cfg?.runtime?.mode || '').toLowerCase();
+    if (configuredMode === 'antigravity' || configuredMode === 'cursor' || configuredMode === 'vscode') {
+      return configuredMode;
+    }
+
     const title = (document.title || '').toLowerCase();
     const url = String(location.href || '').toLowerCase();
     const bodyClass = (document.body && document.body.className ? document.body.className : '').toLowerCase();
@@ -395,9 +400,11 @@ export const AUTO_CONTINUE_SCRIPT = `
     for (const el of strictMatches) {
       if (!isVisible(el) || !isSafeSurface(el)) continue;
       if (isEditorLikeSurface(el)) continue;
-      if (!isChatSurface(el) || isTerminalSurface(el)) continue;
+      if (isTerminalSurface(el)) continue;
       const tag = (el.tagName || '').toLowerCase();
-      if (tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
+      const isEditable = tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true';
+      if (!isEditable) continue;
+      if (isChatSurface(el) || hasNearbySubmitControl(el, fork)) {
         return el;
       }
     }
@@ -406,30 +413,33 @@ export const AUTO_CONTINUE_SCRIPT = `
     for (const el of all) {
       if (!isVisible(el) || !isSafeSurface(el)) continue;
       if (isEditorLikeSurface(el)) continue;
-      if (!isChatSurface(el) || isTerminalSurface(el)) continue;
+      if (isTerminalSurface(el)) continue;
       const normalized = normalizeText(el);
       if (/(terminal|shell|debug console)/i.test(normalized)) continue;
       const tag = (el.tagName || '').toLowerCase();
-      if (tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
+      const isEditable = tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true';
+      if (!isEditable) continue;
+      if (isChatSurface(el) || hasNearbySubmitControl(el, fork)) {
         return el;
       }
     }
 
-    if (fork === 'antigravity') {
-      for (const el of all) {
-        if (!isVisible(el) || !isSafeSurface(el)) continue;
-        if (isEditorLikeSurface(el)) continue;
-        if (isTerminalSurface(el)) continue;
-        const normalized = normalizeText(el);
-        if (/(terminal|shell|debug console)/i.test(normalized)) continue;
-        const tag = (el.tagName || '').toLowerCase();
-        const isEditable = tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true';
-        if (!isEditable) continue;
-        if (hasNearbySubmitControl(el, fork)) return el;
-      }
+    // Cross-fork safe fallback: allow visible editable with a nearby submit control,
+    // even when host-specific chat-root heuristics fail.
+    for (const el of all) {
+      if (!isVisible(el) || !isSafeSurface(el)) continue;
+      if (isEditorLikeSurface(el)) continue;
+      if (isTerminalSurface(el)) continue;
+      const normalized = normalizeText(el);
+      if (/(terminal|shell|debug console)/i.test(normalized)) continue;
+      const tag = (el.tagName || '').toLowerCase();
+      const isEditable = tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true';
+      if (!isEditable) continue;
+      if (hasNearbySubmitControl(el, fork)) return el;
+    }
 
-      // Final AG fallback: allow safe visible editable even if send button detection is flaky.
-      // Submission still uses guarded click/form/key paths and never targets terminal/editor surfaces.
+    // Last-resort fallback remains Antigravity-only to avoid unsafe typing in other hosts.
+    if (fork === 'antigravity') {
       for (const el of all) {
         if (!isVisible(el) || !isSafeSurface(el)) continue;
         if (isEditorLikeSurface(el)) continue;
@@ -542,17 +552,20 @@ export const AUTO_CONTINUE_SCRIPT = `
       return isVisible(el) && isSafeSurface(el) && !isTerminalSurface(el);
     });
 
-    const completionTextSeen = queryAllDeep('[role="article"], .chat-turn, .message, .markdown-body, [data-testid*="message" i]').some(function (el) {
+    const completionTextSeen = queryAllDeep('[role="article"], .chat-turn, .message, .markdown-body, [data-testid*="message" i], [class*="chat" i], [class*="message" i]').some(function (el) {
       if (!isVisible(el)) return false;
       const text = normalizeText(el);
       return /(all tasks? (are )?completed|completed all tasks|task(s)? completed|implementation (is )?complete|done for now|ready for next task|waiting for (your|user) input)/i.test(text);
     });
 
+    const bodyText = ((document.body && document.body.innerText) ? document.body.innerText : '').toLowerCase();
+    const waitingTextSeen = /(waiting for your message|waiting for user message|reactivate|start a new message|chat session (is )?complete|task complete)/i.test(bodyText);
+
     const sessionJustOpened = (Date.now() - scriptStartedAt) <= Math.max(2000, Number((getConfig().bump || {}).sessionOpenGraceMs || 12000));
     const chatNotActive = !isGenerating;
-    const bumpEligibleSignal = chatNotActive && (feedbackVisible || completionTextSeen || sessionJustOpened);
+    const bumpEligibleSignal = chatNotActive && (feedbackVisible || completionTextSeen || waitingTextSeen || sessionJustOpened);
 
-    const hash = [isGenerating ? '1' : '0', !!input ? '1' : '0', runVisible ? '1' : '0', expandVisible ? '1' : '0', submitVisible ? '1' : '0', feedbackVisible ? '1' : '0', completionTextSeen ? '1' : '0'].join('|');
+    const hash = [isGenerating ? '1' : '0', !!input ? '1' : '0', runVisible ? '1' : '0', expandVisible ? '1' : '0', submitVisible ? '1' : '0', feedbackVisible ? '1' : '0', completionTextSeen ? '1' : '0', waitingTextSeen ? '1' : '0'].join('|');
     if (hash !== lastStateHash) {
       lastStateHash = hash;
       lastUserVisibleChangeAt = Date.now();
@@ -566,6 +579,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       submitVisible,
       feedbackVisible,
       completionTextSeen,
+      waitingTextSeen,
       sessionJustOpened,
       chatNotActive,
       bumpEligibleSignal,
@@ -673,7 +687,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       const now = Date.now();
       if ((now - lastActionAt) < Math.max(50, cfg.timing?.actionThrottleMs || 350)) return;
 
-      const fork = detectFork();
+      const fork = detectFork(cfg);
       const state = readState(fork);
       window.__antigravityRuntimeState = { fork, ...state, ts: now };
 
@@ -709,7 +723,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (!shouldAct(cfg)) return false;
     const submitCooldownMs = Math.max(500, cfg.timing?.submitCooldownMs || 4000);
     if (Date.now() < submitInFlightUntil) return false;
-    const fork = detectFork();
+    const fork = detectFork(cfg);
     const input = getInput(fork);
     if (!input) return false;
     const typed = typeText(input, String(text || cfg.bump?.text || 'Proceed'));
