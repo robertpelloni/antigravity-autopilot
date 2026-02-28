@@ -1,6 +1,78 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.222] - 2026-02-28
+### Fixed
+* **Strict Bump Eligibility**: Auto-bump now requires explicit waiting/completion signals and will only type+submit when chat is not actively generating and a valid trigger exists (feedback thumbs-up/down controls visible, completion/waiting text detected, or short session-open grace).
+* **Bump Timing Guardrails**: Bump still requires stall timing + cooldown checks, preventing noisy repeated type/submit loops while preserving intentional resume nudges.
+
+### Changed
+* **Runtime Simplification**: Consolidated bump decision state to a single `bumpEligibleSignal` computed in runtime state detection.
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.222 VSIX build.
+
+## [5.2.221] - 2026-02-28
+### Fixed
+* **Submit Action Re-Entry Loop**: Removed backend relay for frontend `submit` action events so submit telemetry details no longer get reinterpreted by backend submit handlers (preventing stray "alt-enter or enter key" typing/submission loops).
+* **Cross-Window Bump Spam Reduction**: Runtime bump config now defaults `requireFocused` to true and receives explicit host timing cadence values (`stalledMs`, `bumpCooldownMs`, `submitCooldownMs`) from CDP config injection.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.221 VSIX build.
+
+## [5.2.220] - 2026-02-28
+### Fixed
+* **No-Click Runtime Detection Stall**: Relaxed over-strict chat-surface gating in `auto-continue` button detection so `Run`, `Expand`, `Accept All`, `Keep`, `Always Allow`, and `Retry` can be discovered on real Antigravity DOM wrappers while still honoring safe-surface and terminal/editor bans.
+* **No-Bump Input Misses**: Added a final safe Antigravity editable-input fallback when nearby submit-control detection is flaky, enabling bump typing recovery without re-enabling unsafe global typing.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.220 VSIX build.
+
+## [5.2.219] - 2026-02-28
+### Fixed
+* **All-Windows Follower Lockout Across Workspaces**: Restored workspace-scoped controller lease files (hashed by normalized workspace path) so an unrelated workspace leader can no longer force this workspace into follower/passive mode.
+* **CDP Startup Port Confusion**: Simplified CDP client initialization to auto-discovery-first startup (no explicit constructor port range), eliminating misleading explicit-port bootstrap behavior while preserving configured-port fallback only when discovery is unavailable.
+* **Default CDP Port Alignment**: Updated `antigravity.cdpPort` default to `9222` to match expected Antigravity/CDP runtime defaults.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.219 VSIX build.
+
+## [5.2.218] - 2026-02-28
+### Fixed
+* **Bump Starvation From Repeated Expand/Run Clicks**: Added per-action cooldown tracking in `auto-continue` so `Expand`/`Run` no longer fire in a tight loop and block stalled-conversation bump typing/submission.
+* **Single-Primary Watchdog Churn**: Hardened watchdog policy to always skip reinjection in strict single-target/single-primary mode, preventing recurring stale-heartbeat reinjection loops during active sessions.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.218 VSIX build.
+
+## [5.2.217] - 2026-02-28
+### Fixed
+* **Strict Single-Primary Page Enforcement**: Added explicit primary-page eligibility checks and non-primary connection pruning so runtime injection/control is constrained to one active page in single-primary mode.
+* **Nested Session Eligibility Clamp**: Session-level runtime injection now obeys the same primary-page eligibility rules as main-page injection.
+* **Watchdog Reinjection Spam Suppression**: Added single-primary watchdog reinject disable switch (default ON) to stop repeated stale-heartbeat reinjection storms when strict single-primary mode is active.
+* **Duplicate Connect Cycle Hardening**: Reinforced connect flow so in-flight deduplication and post-connect pruning prevent additive multi-target drift under repeated connect requests.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.217 VSIX build.
+
+## [5.2.216] - 2026-02-28
+### Fixed
+* **Parallel CDP Connect De-duplication**: Added in-flight connect dedupe in `CDPHandler` to prevent concurrent duplicate connect scans/attach cycles.
+* **Strict Single-Primary Runtime Eligibility**: Runtime now defaults to one primary page target (`automation.forceSinglePrimaryPage` defaults ON unless explicitly disabled), with non-primary targets actively stopped.
+* **Watchdog Reinjection Scope Clamp**: Watchdog now skips non-primary targets in single-primary mode and stops their runtime instead of repeatedly attempting reinjection.
+* **Submit Fallback Hardening**: Bump-submit fallback now tries `Alt+Enter` before `Enter` for fork variants where continue/submit is bound to modifier-enter.
+
+### Changed
+* **Auto-Continue Core Simplification**: Reduced action list to requested essentials (`Run`, `Expand`, `Accept All`, `Keep`, `Always Allow`, `Retry`, submit) to keep runtime behavior minimal and predictable.
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.216 VSIX build.
+
+## [5.2.215] - 2026-02-28
+### Fixed
+* **Single-Target Runtime Isolation Hardening**: In non-multi-tab mode, runtime eligibility is now pinned to one primary connected page, and non-primary pages are actively runtime-stopped during role/config sync.
+* **Repeated Connect Fanout Guard**: `connect()` now short-circuits immediately in single-target mode when any page is already connected, preventing additive page/session attachment drift during repeated connect passes.
+* **Watchdog Reinjection Storm Mitigation**: Reinjection eligibility now follows per-page runtime eligibility in single-target mode, preventing watchdog churn across extra background connections.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.215 VSIX build.
+
 ## [5.2.214] - 2026-02-28
 ### Fixed
 * **Cross-Window Bump Fanout Guarding**: Gated Auto-Continue runtime injection to role-eligible windows only (leader or explicit follower override), preventing follower-disabled windows from running active bump loops.

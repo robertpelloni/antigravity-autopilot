@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 5.2.214  
+**Version**: 5.2.222  
 **Last Updated**: 2026-02-28  
-**Status**: Production stabilization shipped (role-aware runtime injection + focused single-target CDP + reduced leader/follower flapping)
+**Status**: Production stabilization shipped (strict bump eligibility + simplified runtime decision flow + safe submit de-loop)
 
 ## Project Structure at a Glance
 

@@ -14,9 +14,10 @@ export const AUTO_CONTINUE_SCRIPT = `
     bump: {
       text: 'Proceed',
       enabled: true,
-      requireFocused: true,
+      requireFocused: false,
       requireVisible: true,
-      submitDelayMs: 180
+      submitDelayMs: 180,
+      sessionOpenGraceMs: 12000
     },
     timing: {
       pollIntervalMs: 700,
@@ -31,9 +32,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       clickAlwaysAllow: true,
       clickRetry: true,
       clickAcceptAll: true,
-      clickAccept: true,
       clickKeep: true,
-      clickEdit: true,
       clickSubmit: true
     }
   };
@@ -43,7 +42,9 @@ export const AUTO_CONTINUE_SCRIPT = `
   let lastBumpAt = 0;
   let submitInFlightUntil = 0;
   let lastUserVisibleChangeAt = Date.now();
+  const scriptStartedAt = Date.now();
   let lastStateHash = '';
+  const lastButtonActionAt = Object.create(null);
 
   function getConfig() {
     const cfg = window.__antigravityConfig || {};
@@ -285,16 +286,10 @@ export const AUTO_CONTINUE_SCRIPT = `
         '[title*="Apply All" i]', '[aria-label*="Apply All" i]',
         '[data-testid*="accept-all" i]', '.codicon-check-all'
       ],
-      accept: [
-        '[title="Accept" i]', '[aria-label="Accept" i]', '[data-testid*="accept" i]'
-      ],
       keep: [
         '[title="Keep" i]', '[aria-label="Keep" i]',
         '[title*="Keep" i]', '[aria-label*="Keep" i]',
         '[data-testid*="keep" i]'
-      ],
-      edit: [
-        '[title*="Edit" i]', '[aria-label*="Edit" i]', '[data-testid*="edit" i]', '.codicon-edit'
       ],
       submit: [
         '[title*="Send" i]', '[aria-label*="Send" i]',
@@ -302,6 +297,14 @@ export const AUTO_CONTINUE_SCRIPT = `
         '[title*="Submit" i]', '[aria-label*="Submit" i]',
         '[data-testid*="send" i]', '[data-testid*="submit" i]',
         'button[type="submit"]', '.codicon-send'
+      ],
+      feedback: [
+        '[aria-label*="thumbs up" i]', '[title*="thumbs up" i]',
+        '[aria-label*="thumbs down" i]', '[title*="thumbs down" i]',
+        '[aria-label*="good response" i]', '[title*="good response" i]',
+        '[aria-label*="bad response" i]', '[title*="bad response" i]',
+        '[data-testid*="thumbs-up" i]', '[data-testid*="thumbs-down" i]',
+        '[data-icon*="thumb" i]', '.codicon-thumbsup', '.codicon-thumbsdown'
       ]
     };
 
@@ -328,6 +331,7 @@ export const AUTO_CONTINUE_SCRIPT = `
         if (!isVisible(el) || !isSafeSurface(el)) continue;
         if (requireChat && !isChatSurface(el)) continue;
         if (isTerminalSurface(el)) continue;
+        if (isEditorLikeSurface(el)) continue;
         const text = normalizeText(el);
         if (semanticRegex && !semanticRegex.test(text)) continue;
         return el;
@@ -347,6 +351,22 @@ export const AUTO_CONTINUE_SCRIPT = `
       return true;
     } catch (e) {
       return false;
+    }
+  }
+
+  function getActionCooldownMs(actionKey) {
+    switch (String(actionKey || '')) {
+      case 'clickExpand':
+        return 8000;
+      case 'clickRun':
+        return 5000;
+      case 'clickAcceptAll':
+      case 'clickKeep':
+      case 'clickAlwaysAllow':
+      case 'clickRetry':
+        return 2500;
+      default:
+        return 1200;
     }
   }
 
@@ -405,9 +425,20 @@ export const AUTO_CONTINUE_SCRIPT = `
         const tag = (el.tagName || '').toLowerCase();
         const isEditable = tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true';
         if (!isEditable) continue;
-        if (hasNearbySubmitControl(el, fork)) {
-          return el;
-        }
+        if (hasNearbySubmitControl(el, fork)) return el;
+      }
+
+      // Final AG fallback: allow safe visible editable even if send button detection is flaky.
+      // Submission still uses guarded click/form/key paths and never targets terminal/editor surfaces.
+      for (const el of all) {
+        if (!isVisible(el) || !isSafeSurface(el)) continue;
+        if (isEditorLikeSurface(el)) continue;
+        if (isTerminalSurface(el)) continue;
+        const normalized = normalizeText(el);
+        if (/(terminal|shell|debug console)/i.test(normalized)) continue;
+        const tag = (el.tagName || '').toLowerCase();
+        const isEditable = tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true';
+        if (isEditable) return el;
       }
     }
 
@@ -454,6 +485,24 @@ export const AUTO_CONTINUE_SCRIPT = `
         code: 'Enter',
         keyCode: 13,
         which: 13,
+        altKey: true,
+        bubbles: true,
+        cancelable: true
+      }));
+      input.dispatchEvent(new KeyboardEvent('keyup', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+        altKey: true,
+        bubbles: true,
+        cancelable: true
+      }));
+      input.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
         bubbles: true,
         cancelable: true
       }));
@@ -473,7 +522,7 @@ export const AUTO_CONTINUE_SCRIPT = `
         bubbles: true,
         cancelable: true
       }));
-      emitAction('submit', 'enter key');
+      emitAction('submit', 'alt-enter or enter key');
       return true;
     } catch (e) {
       return false;
@@ -486,11 +535,25 @@ export const AUTO_CONTINUE_SCRIPT = `
     const input = getInput(fork);
 
     const actionSignals = targetSelectorsForFork(fork);
-    const runVisible = !!findClickable(actionSignals.run, /(run|execute)/i, { requireChatSurface: true, allowNonChatFallback: false });
-    const expandVisible = !!findClickable(actionSignals.expand, /(expand|requires input)/i, { requireChatSurface: true, allowNonChatFallback: false });
+    const runVisible = !!findClickable(actionSignals.run, /(run|execute)/i, { requireChatSurface: true, allowNonChatFallback: true });
+    const expandVisible = !!findClickable(actionSignals.expand, /(expand|requires input)/i, { requireChatSurface: true, allowNonChatFallback: true });
     const submitVisible = !!findClickable(actionSignals.submit, /(send|submit|continue)/i, { requireChatSurface: true, allowNonChatFallback: false });
+    const feedbackVisible = queryAllDeep(actionSignals.feedback.join(',')).some(function (node) {
+      const el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
+      return isVisible(el) && isSafeSurface(el) && !isTerminalSurface(el);
+    });
 
-    const hash = [isGenerating ? '1' : '0', !!input ? '1' : '0', runVisible ? '1' : '0', expandVisible ? '1' : '0', submitVisible ? '1' : '0'].join('|');
+    const completionTextSeen = queryAllDeep('[role="article"], .chat-turn, .message, .markdown-body, [data-testid*="message" i]').some(function (el) {
+      if (!isVisible(el)) return false;
+      const text = normalizeText(el);
+      return /(all tasks? (are )?completed|completed all tasks|task(s)? completed|implementation (is )?complete|done for now|ready for next task|waiting for (your|user) input)/i.test(text);
+    });
+
+    const sessionJustOpened = (Date.now() - scriptStartedAt) <= Math.max(2000, Number((getConfig().bump || {}).sessionOpenGraceMs || 12000));
+    const chatNotActive = !isGenerating && !runVisible && !expandVisible;
+    const bumpEligibleSignal = chatNotActive && (feedbackVisible || completionTextSeen || sessionJustOpened);
+
+    const hash = [isGenerating ? '1' : '0', !!input ? '1' : '0', runVisible ? '1' : '0', expandVisible ? '1' : '0', submitVisible ? '1' : '0', feedbackVisible ? '1' : '0', completionTextSeen ? '1' : '0'].join('|');
     if (hash !== lastStateHash) {
       lastStateHash = hash;
       lastUserVisibleChangeAt = Date.now();
@@ -502,6 +565,11 @@ export const AUTO_CONTINUE_SCRIPT = `
       runVisible,
       expandVisible,
       submitVisible,
+      feedbackVisible,
+      completionTextSeen,
+      sessionJustOpened,
+      chatNotActive,
+      bumpEligibleSignal,
       stalledMs: Date.now() - lastUserVisibleChangeAt
     };
   }
@@ -509,8 +577,10 @@ export const AUTO_CONTINUE_SCRIPT = `
   function shouldAct(cfg) {
     if (cfg.runtime?.isLeader !== true) return false;
     if (cfg.bump?.requireVisible !== false && document.visibilityState !== 'visible') return false;
-    if (cfg.bump?.requireFocused !== false) {
-      if (typeof document.hasFocus === 'function' && !document.hasFocus()) {
+    if (cfg.bump?.requireFocused === true) {
+      const docFocused = (typeof document.hasFocus !== 'function') || document.hasFocus();
+      const hostFocused = cfg.runtime?.windowFocused === true;
+      if (!docFocused && !hostFocused) {
         return false;
       }
     }
@@ -520,22 +590,29 @@ export const AUTO_CONTINUE_SCRIPT = `
   function tryButtons(cfg, fork) {
     const actions = targetSelectorsForFork(fork);
     const enabled = cfg.actions || {};
+    const now = Date.now();
 
     const ordered = [
-      { key: 'clickExpand', label: 'Expand', group: 'expand', selectors: actions.expand, re: /(expand|requires input)/i },
-      { key: 'clickRun', label: 'Run', group: 'run', selectors: actions.run, re: /(run|execute|run in terminal)/i },
-      { key: 'clickAcceptAll', label: 'Accept All', group: 'accept-all', selectors: actions.acceptAll, re: /(accept all|apply all|keep all)/i },
-      { key: 'clickKeep', label: 'Keep', group: 'continue', selectors: actions.keep, re: /\bkeep\b/i },
-      { key: 'clickAlwaysAllow', label: 'Always Allow', group: 'accept', selectors: actions.alwaysAllow, re: /(always allow|always approve)/i },
-      { key: 'clickRetry', label: 'Retry', group: 'continue', selectors: actions.retry, re: /\bretry\b/i },
-      { key: 'clickAccept', label: 'Accept', group: 'accept', selectors: actions.accept, re: /\baccept\b/i },
-      { key: 'clickEdit', label: 'Edit', group: 'click', selectors: actions.edit, re: /\bedit\b/i }
+      { key: 'clickExpand', label: 'Expand', group: 'expand', selectors: actions.expand, re: /(expand|requires input)/i, allowNonChatFallback: true },
+      { key: 'clickRun', label: 'Run', group: 'run', selectors: actions.run, re: /(run|execute|run in terminal)/i, allowNonChatFallback: true },
+      { key: 'clickAcceptAll', label: 'Accept All', group: 'accept-all', selectors: actions.acceptAll, re: /(accept all|apply all|keep all)/i, allowNonChatFallback: true },
+      { key: 'clickKeep', label: 'Keep', group: 'continue', selectors: actions.keep, re: /\bkeep\b/i, allowNonChatFallback: true },
+      { key: 'clickAlwaysAllow', label: 'Always Allow', group: 'accept', selectors: actions.alwaysAllow, re: /(always allow|always approve)/i, allowNonChatFallback: true },
+      { key: 'clickRetry', label: 'Retry', group: 'continue', selectors: actions.retry, re: /\bretry\b/i, allowNonChatFallback: true }
     ];
 
     for (const a of ordered) {
       if (!enabled[a.key]) continue;
-      const el = findClickable(a.selectors, a.re, { requireChatSurface: true, allowNonChatFallback: false });
-      if (el && clickElement(el, a.label, a.group)) return true;
+      const lastAt = Number(lastButtonActionAt[a.key] || 0);
+      const cooldownMs = getActionCooldownMs(a.key);
+      if (lastAt > 0 && (now - lastAt) < cooldownMs) {
+        continue;
+      }
+      const el = findClickable(a.selectors, a.re, { requireChatSurface: true, allowNonChatFallback: !!a.allowNonChatFallback });
+      if (el && clickElement(el, a.label, a.group)) {
+        lastButtonActionAt[a.key] = now;
+        return true;
+      }
     }
     return false;
   }
@@ -544,6 +621,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (!cfg.bump?.enabled) return false;
     if (state.isGenerating) return false;
     if (!state.hasInput) return false;
+    if (!state.bumpEligibleSignal) return false;
     if (state.stalledMs < Math.max(1000, cfg.timing?.stalledMs || 7000)) return false;
     const bumpCooldownMs = Math.max(1000, cfg.timing?.bumpCooldownMs || 12000);
     if ((Date.now() - lastBumpAt) < bumpCooldownMs) return false;

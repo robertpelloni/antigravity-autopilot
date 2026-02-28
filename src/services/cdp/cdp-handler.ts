@@ -24,6 +24,55 @@ export class CDPHandler extends EventEmitter {
     private discoveredPort: number | null = null;
     private controllerRoleIsLeader = false;
     private hostWindowFocused = vscode.window.state.focused;
+    private connectInFlight: Promise<boolean> | null = null;
+
+    private isSingleTargetMode(): boolean {
+        const forceSinglePrimary = config.get<boolean>('automation.forceSinglePrimaryPage');
+        if (forceSinglePrimary !== false) {
+            return true;
+        }
+
+        return !(config.get<boolean>('multiTabEnabled') ?? false);
+    }
+
+    private getPrimaryConnectedPageId(): string | null {
+        const iterator = this.connections.keys();
+        const first = iterator.next();
+        return first?.done ? null : (first.value as string);
+    }
+
+    private isPrimaryPageEligible(pageId: string): boolean {
+        if (!this.shouldInjectAutoContinueRuntime()) {
+            return false;
+        }
+
+        if (!this.isSingleTargetMode()) {
+            return true;
+        }
+
+        const primaryPageId = this.getPrimaryConnectedPageId();
+        return primaryPageId === pageId;
+    }
+
+    private pruneNonPrimaryConnections(): void {
+        if (!this.isSingleTargetMode() || this.connections.size <= 1) {
+            return;
+        }
+
+        const primaryPageId = this.getPrimaryConnectedPageId();
+        if (!primaryPageId) {
+            return;
+        }
+
+        for (const [pageId, conn] of this.connections) {
+            if (pageId === primaryPageId) {
+                continue;
+            }
+            try { conn.ws.close(); } catch { }
+            this.connections.delete(pageId);
+            this.watchdogState.delete(pageId);
+        }
+    }
 
     private shouldInjectAutoContinueRuntime(): boolean {
         if (config.get<boolean>('autoContinueScriptEnabled') === false) {
@@ -60,14 +109,21 @@ export class CDPHandler extends EventEmitter {
     }
 
     private async syncAutomationRuntimeEligibility(): Promise<void> {
+        this.pruneNonPrimaryConnections();
+
         const shouldInject = this.shouldInjectAutoContinueRuntime();
+        const singleTargetMode = this.isSingleTargetMode();
+        const primaryPageId = singleTargetMode ? this.getPrimaryConnectedPageId() : null;
+
         for (const [pageId, conn] of this.connections) {
+            const pageEligible = shouldInject && (!singleTargetMode || pageId === primaryPageId);
+
             await this.pushAutomationConfigToConnection(pageId);
             for (const sessionId of conn.sessions) {
                 await this.pushAutomationConfigToConnection(pageId, sessionId);
             }
 
-            if (!shouldInject) {
+            if (!pageEligible) {
                 await this.stopAutoContinueRuntime(pageId);
                 for (const sessionId of conn.sessions) {
                     await this.stopAutoContinueRuntime(pageId, sessionId);
@@ -431,6 +487,7 @@ export class CDPHandler extends EventEmitter {
             },
             bump: {
                 text: config.get<string>('actions.bump.text') || 'Proceed',
+                requireFocused: config.get<boolean>('automation.bump.requireFocused') ?? true,
                 requireVisible: config.get<boolean>('automation.bump.requireVisible') ?? true,
                 detectMethods: getArr('automation.bump.detectMethods', ['feedback-visible', 'not-generating', 'last-sender-user', 'network-error-retry', 'waiting-for-input', 'loaded-conversation', 'completed-all-tasks', 'skip-ai-question']),
                 typeMethods: getArr('automation.bump.typeMethods', ['exec-command', 'native-setter', 'dispatch-events']),
@@ -451,7 +508,10 @@ export class CDPHandler extends EventEmitter {
                 actionThrottleMs: config.get<number>('automation.timing.actionThrottleMs') ?? 1000,
                 cooldownMs: config.get<number>('automation.timing.cooldownMs') ?? 2500,
                 randomness: config.get<number>('automation.timing.randomness') ?? 100,
-                autoReplyDelayMs: config.get<number>('automation.timing.autoReplyDelayMs') ?? 10000
+                autoReplyDelayMs: config.get<number>('automation.timing.autoReplyDelayMs') ?? 10000,
+                stalledMs: config.get<number>('automation.bump.userDelayMs') ?? 7000,
+                bumpCooldownMs: (config.get<number>('actions.bump.cooldown') ?? 30) * 1000,
+                submitCooldownMs: Math.max(500, config.get<number>('actions.bump.submitDelayMs') ?? 100) * 10
             },
             runtime: {
                 isLeader: this.controllerRoleIsLeader,
@@ -482,8 +542,16 @@ export class CDPHandler extends EventEmitter {
 
                     // In single-target mode, only keep the actively focused visible page.
                     // This prevents one leader window from controlling every open Antigravity page.
-                    const singleTargetMode = !(config.get<boolean>('multiTabEnabled') ?? false);
+                    const singleTargetMode = this.isSingleTargetMode();
                     if (singleTargetMode) {
+                        const existingPrimary = this.getPrimaryConnectedPageId();
+                        if (existingPrimary && existingPrimary !== page.id) {
+                            this.connections.delete(page.id);
+                            try { ws.close(); } catch { }
+                            resolve(false);
+                            return;
+                        }
+
                         const focusCheck = await this.sendCommand(page.id, 'Runtime.evaluate', {
                             expression: `(() => document.visibilityState === 'visible' && ((typeof document.hasFocus !== 'function') || document.hasFocus()))()`,
                             returnByValue: true,
@@ -514,7 +582,7 @@ export class CDPHandler extends EventEmitter {
                     });
 
                     // 1b. Inject Auto-Continue Script only when this window is eligible to run automation.
-                    if (this.shouldInjectAutoContinueRuntime()) {
+                    if (this.isPrimaryPageEligible(page.id)) {
                         try {
                             // Inject config first
                             await this.pushAutomationConfigToConnection(page.id);
@@ -601,7 +669,8 @@ export class CDPHandler extends EventEmitter {
                         this.sendCommand(page.id, 'Runtime.addBinding', { name: '__AUTOPILOT_BRIDGE__' }, undefined, sessionId).catch(() => { });
                         this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' }, undefined, sessionId).catch(() => { });
 
-                        if (this.shouldInjectAutoContinueRuntime()) {
+                        const sessionPageEligible = this.isPrimaryPageEligible(page.id);
+                        if (sessionPageEligible) {
                             try {
                                 this.pushAutomationConfigToConnection(page.id, sessionId).catch(e => console.error(`[CDP] config injection error on session ${sessionId}`, e));
 
@@ -715,7 +784,11 @@ export class CDPHandler extends EventEmitter {
 
             await this.pushAutomationConfigToConnection(pageId, sessionId);
 
-            if (!this.shouldInjectAutoContinueRuntime()) {
+            const singleTargetMode = this.isSingleTargetMode();
+            const primaryPageId = singleTargetMode ? this.getPrimaryConnectedPageId() : null;
+            const pageEligible = this.shouldInjectAutoContinueRuntime() && (!singleTargetMode || pageId === primaryPageId);
+
+            if (!pageEligible) {
                 if (hasRuntime) {
                     await this.stopAutoContinueRuntime(pageId, sessionId);
                 }
@@ -760,9 +833,27 @@ export class CDPHandler extends EventEmitter {
     }
 
     async connect(targetFilter?: string): Promise<boolean> {
+        if (this.connectInFlight) {
+            return this.connectInFlight;
+        }
+
+        this.connectInFlight = this.connectInternal(targetFilter);
+        try {
+            return await this.connectInFlight;
+        } finally {
+            this.connectInFlight = null;
+        }
+    }
+
+    private async connectInternal(targetFilter?: string): Promise<boolean> {
         const instances = await this.scanForInstances();
         let connectedCount = 0;
-        const multiTabEnabled = config.get<boolean>('multiTabEnabled') ?? false;
+        const multiTabEnabled = !this.isSingleTargetMode() && (config.get<boolean>('multiTabEnabled') ?? false);
+
+        if (!multiTabEnabled && this.connections.size > 0) {
+            this.pruneNonPrimaryConnections();
+            return true;
+        }
 
         logToOutput(`[CDP] Connect requested. Filter: "${targetFilter || 'NONE'}" (Instances found: ${instances.length})`);
 
@@ -796,6 +887,7 @@ export class CDPHandler extends EventEmitter {
                 const ok = await this.connectToPage(page);
                 if (ok) {
                     connectedCount++;
+                    this.pruneNonPrimaryConnections();
                     if (!multiTabEnabled) return true;
                 }
             }
@@ -889,11 +981,14 @@ export class CDPHandler extends EventEmitter {
                 const soundGroup = group === 'accept-all' ? 'accept' : group;
                 SoundEffects.playActionGroup(soundGroup as ActionSoundGroup);
 
-                if (group === 'submit' && detail === 'keys') {
-                    // Safety hardening: never translate script-level "submit|keys" into global CDP Enter.
-                    // Focus drift here can activate Run menu / Customize Layout instead of chat submit.
-                    logToOutput(`[AutoAction:submit] Blocked unsafe CDP Enter relay for submit|keys`);
-                } else if (group === 'run' || group === 'expand' || group === 'continue' || group === 'accept' || group === 'accept-all' || group === 'submit') {
+                if (group === 'submit') {
+                    // Frontend runtime already performed submit attempts directly.
+                    // Do not relay submit back into backend interaction methods, which can re-type
+                    // action detail text (e.g. "alt-enter or enter key") and create noisy loops.
+                    if (detail === 'keys') {
+                        logToOutput(`[AutoAction:submit] Blocked unsafe CDP Enter relay for submit|keys`);
+                    }
+                } else if (group === 'run' || group === 'expand' || group === 'continue' || group === 'accept' || group === 'accept-all') {
                     const routedGroup = group === 'accept-all' ? 'accept' : group;
                     this.emit('action', { group: routedGroup, detail });
                 }
@@ -1171,8 +1266,22 @@ export class CDPHandler extends EventEmitter {
 
             for (const [pageId, conn] of this.connections) {
                 try {
+                    const singleTargetMode = this.isSingleTargetMode();
+                    const primaryPageId = singleTargetMode ? this.getPrimaryConnectedPageId() : null;
+                    if (singleTargetMode && pageId !== primaryPageId) {
+                        await this.stopAutoContinueRuntime(pageId);
+                        for (const sessionId of conn.sessions) {
+                            await this.stopAutoContinueRuntime(pageId, sessionId);
+                        }
+                        continue;
+                    }
+
                     const state = this.watchdogState.get(pageId) || { attempts: 0, lastAttemptAt: 0 };
                     const withinCooldown = (now - state.lastAttemptAt) < reinjectCooldownMs;
+
+                    if (singleTargetMode) {
+                        continue;
+                    }
 
                     if (this.hasRecentAutomationSignal(pageId, conn.sessions, now, recentActivityGraceMs)) {
                         continue;
