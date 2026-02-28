@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.200] - 2026-02-27
+### Fixed
+* **Regression Hotfix — No Leader / No Actions Deadlock**: Restored fail-open follower UI automation default at activation (`controller.followerUiAutomationEnabled` now defaults to enabled when unset) so automation does not stall in startup lease races where no leader is established quickly.
+* **Startup Role Logging Clarity**: Updated follower log messaging to clearly indicate fail-open follower behavior versus explicit follower disable override.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.200 VSIX build.
+
 ## [5.2.199] - 2026-02-27
 ### Fixed
 * **Follower Automation Isolation (Default Safe Mode)**: Gated decentralized UI automation to controller leader by default, with explicit opt-in (`controller.followerUiAutomationEnabled`) for follower-window UI automation to prevent cross-workspace action contention.

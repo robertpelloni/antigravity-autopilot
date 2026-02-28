@@ -2099,7 +2099,9 @@ export function activate(context: vscode.ExtensionContext) {
         // Initialize based on saved config
         if (isUnifiedAutoAcceptEnabled()) {
             attemptNoLeaderSelfHeal('activation bootstrap preflight');
-            const followerUiAutomationEnabled = config.get<boolean>('controller.followerUiAutomationEnabled') ?? false;
+            // Hotfix: fail-open by default to avoid startup deadlocks where no window acquires
+            // leader quickly enough and automation never starts.
+            const followerUiAutomationEnabled = config.get<boolean>('controller.followerUiAutomationEnabled') ?? true;
 
             // Default safety posture: only the controller leader runs decentralized UI automation.
             // Followers can opt-in via controller.followerUiAutomationEnabled.
@@ -2128,9 +2130,9 @@ export function activate(context: vscode.ExtensionContext) {
                 // Follower mode: stop high-level services. Decentralized automation follows followerUiAutomationEnabled.
                 autonomousLoop.stop('Follower mode bootstrap');
                 if (followerUiAutomationEnabled) {
-                    log.info('Antigravity Autopilot: Brain PASSIVE (Leader in another workspace). UI automation ACTIVE (explicit follower override).');
+                    log.info('Antigravity Autopilot: Brain PASSIVE (Leader in another workspace). UI automation ACTIVE (follower fail-open mode).');
                 } else {
-                    log.info('Antigravity Autopilot: Brain PASSIVE (Leader in another workspace). UI automation DISABLED in follower mode.');
+                    log.info('Antigravity Autopilot: Brain PASSIVE (Leader in another workspace). UI automation DISABLED (explicit follower override).');
                 }
             }
         }
