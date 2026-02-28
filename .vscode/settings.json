@@ -1,5 +1,6 @@
 {
   "antigravity.autoApproveDelay": 600,
+  "antigravity.cdpPort": 9222,
   "antigravity.pollFrequency": 3000,
   "antigravity.threadWaitInterval": 30,
   "antigravity.actions.bump.text": "Proceed"

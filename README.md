@@ -47,6 +47,7 @@ All settings are under `antigravity.*` in VS Code settings. Key ones:
 - [**Dashboard**](DASHBOARD.md) — Module status and project structure
 - [**Submodules**](docs/SUBMODULES.md) — Reference implementation details
 - [**LLM Instructions**](docs/LLM_INSTRUCTIONS.md) — Agent development protocol
+- [**Bump + Button Methods**](docs/BUMP_AND_BUTTON_METHODS.md) — Proven typing/submit/detection/click strategies and safety guidance
 
 ## Internal Commands (Intentional)
 
