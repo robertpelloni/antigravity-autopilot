@@ -7,9 +7,10 @@ export const AUTO_CONTINUE_SCRIPT = `
   const THIS_INSTANCE = Math.random().toString(36).slice(2);
   window.__antigravityActiveInstance = THIS_INSTANCE;
   window.__antigravityAutoContinueRunning = true;
+  window.__antigravityHeartbeat = Date.now();
 
   const defaults = {
-    runtime: { isLeader: false, role: 'follower', windowFocused: false },
+    runtime: { isLeader: false, role: 'follower', windowFocused: true },
     bump: {
       text: 'Proceed',
       enabled: true,

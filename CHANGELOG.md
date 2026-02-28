@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.209] - 2026-02-28
+### Fixed
+* **Prompt Injection Eligibility Regression**: Removed over-strict preflight focus/visibility/leader checks in `CDPClient.sendMessage()` so prompt injection can proceed through runtime API routing instead of being rejected before session selection.
+* **Watchdog Heartbeat Startup Race**: Initialized `window.__antigravityHeartbeat` immediately at runtime boot to reduce false "missing heartbeat" reinjection storms during early page/session startup.
+* **Bootstrap Focus Default Safety**: Set minimal runtime default `runtime.windowFocused` to `true` until host config sync arrives, preventing premature local focus false-negatives during initialization while leader gating remains enforced.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.209 VSIX build.
+
 ## [5.2.208] - 2026-02-28
 ### Fixed
 * **Host Window Focus Runtime Gating**: Propagated VS Code window focus state into runtime config and blocked automation when host window is unfocused, preventing multi-window bump fanout even under role drift.
