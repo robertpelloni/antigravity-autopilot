@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.210] - 2026-02-28
+### Fixed
+* **Global Leader Arbitration**: Simplified controller lease to a single global lease file (`.antigravity-controller-lease.json`) to prevent per-workspace split-brain where multiple windows could all present/act as leader.
+* **Bump Submit Reliability**: Simplified submit flow to deterministic fallback order in minimal runtime (`click send` → `form.requestSubmit()` → safe chat-only Enter dispatch), improving "typed but not submitted" incidents.
+* **Minimal Core Hardening**: Preserved core action surface (Run, Expand, Always Allow, Retry, Accept All, Keep) while keeping strict terminal-surface exclusion and leader/focus gating.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.210 VSIX build.
+
 ## [5.2.209] - 2026-02-28
 ### Fixed
 * **Prompt Injection Eligibility Regression**: Removed over-strict preflight focus/visibility/leader checks in `CDPClient.sendMessage()` so prompt injection can proceed through runtime API routing instead of being rejected before session selection.

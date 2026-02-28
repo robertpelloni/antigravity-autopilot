@@ -354,6 +354,42 @@ export const AUTO_CONTINUE_SCRIPT = `
     }
   }
 
+  function safeSubmitFromInput(input) {
+    if (!input) return false;
+    if (!isChatSurface(input) || isTerminalSurface(input)) return false;
+    try {
+      input.focus();
+      input.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+        bubbles: true,
+        cancelable: true
+      }));
+      input.dispatchEvent(new KeyboardEvent('keypress', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+        bubbles: true,
+        cancelable: true
+      }));
+      input.dispatchEvent(new KeyboardEvent('keyup', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+        bubbles: true,
+        cancelable: true
+      }));
+      emitAction('submit', 'enter key');
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   function readState(fork) {
     const stopIndicators = queryAllDeep('[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator');
     const isGenerating = stopIndicators.some(isVisible);
@@ -445,8 +481,10 @@ export const AUTO_CONTINUE_SCRIPT = `
         try {
           form.requestSubmit();
           emitAction('submit', 'form submit');
+          return;
         } catch (e) {}
       }
+      safeSubmitFromInput(input);
     };
 
     setTimeout(submit, Math.max(60, cfg.bump?.submitDelayMs || 180));
@@ -511,7 +549,16 @@ export const AUTO_CONTINUE_SCRIPT = `
     setTimeout(function () {
       const submitSelectors = targetSelectorsForFork(fork).submit;
       const send = findClickable(submitSelectors, /(send|submit|continue)/i, { requireChatSurface: true, allowNonChatFallback: true });
-      if (send) clickElement(send, 'Submit bump text', 'submit');
+      if (send && clickElement(send, 'Submit bump text', 'submit')) return;
+      const form = input.closest && input.closest('form');
+      if (form && typeof form.requestSubmit === 'function') {
+        try {
+          form.requestSubmit();
+          emitAction('submit', 'form submit');
+          return;
+        } catch (e) {}
+      }
+      safeSubmitFromInput(input);
     }, Math.max(60, cfg.bump?.submitDelayMs || 180));
     return true;
   };

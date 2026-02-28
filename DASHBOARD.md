@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 5.2.209  
+**Version**: 5.2.210  
 **Last Updated**: 2026-02-28  
-**Status**: Production hotfix shipped (prompt injection gating regression fix + watchdog heartbeat startup stabilization)
+**Status**: Production hotfix shipped (global leader lease + simplified deterministic bump submit fallback)
 
 ## Project Structure at a Glance
 
