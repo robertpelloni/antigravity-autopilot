@@ -30,8 +30,6 @@ export class CDPStrategy implements IStrategy {
     private cdpHandler: CDPHandler;
     private statusBarItem: vscode.StatusBarItem;
     private pollTimer: NodeJS.Timeout | null = null;
-    private submitInFlight = false;
-    private lastSubmitAt = 0;
     private registry: InteractionMethodRegistry;
     private context: vscode.ExtensionContext;
     private appName: string;
@@ -219,6 +217,11 @@ export class CDPStrategy implements IStrategy {
             return;
         }
 
+        if (action === 'submit') {
+            logToOutput(`[CDPStrategy] Ignored frontend submit fallback action (${detail || 'no-detail'})`);
+            return;
+        }
+
         const profile = this.resolveUiProfile();
         const selector = this.getClickSelectorForProfile(profile);
         const runSelector = this.getRunSelectorForProfile(profile);
@@ -241,22 +244,6 @@ export class CDPStrategy implements IStrategy {
                     rejectPatterns: config.get<string[]>('rejectPatterns') || [],
                     visualDiffThreshold: config.get<number>('interactionVisualDiffThreshold') || 0.001
                 });
-                break;
-            case 'submit':
-                if (this.submitInFlight) {
-                    return;
-                }
-                if ((Date.now() - this.lastSubmitAt) < 1200) {
-                    return;
-                }
-                this.submitInFlight = true;
-                SoundEffects.playActionGroup('submit');
-                try {
-                    await this.registry.executeCategory('submit', ctx);
-                } finally {
-                    this.lastSubmitAt = Date.now();
-                    this.submitInFlight = false;
-                }
                 break;
             case 'run':
                 SoundEffects.playActionGroup('run');

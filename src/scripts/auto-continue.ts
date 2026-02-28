@@ -44,6 +44,7 @@ export const AUTO_CONTINUE_SCRIPT = `
   let lastUserVisibleChangeAt = Date.now();
   const scriptStartedAt = Date.now();
   let lastStateHash = '';
+  let lastBumpStateHash = '';
   const lastButtonActionAt = Object.create(null);
 
   function getConfig() {
@@ -522,7 +523,6 @@ export const AUTO_CONTINUE_SCRIPT = `
         bubbles: true,
         cancelable: true
       }));
-      emitAction('submit', 'alt-enter or enter key');
       return true;
     } catch (e) {
       return false;
@@ -622,6 +622,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (state.isGenerating) return false;
     if (!state.hasInput) return false;
     if (!state.bumpEligibleSignal) return false;
+    if (lastBumpStateHash && lastBumpStateHash === lastStateHash) return false;
     if (state.stalledMs < Math.max(1000, cfg.timing?.stalledMs || 7000)) return false;
     const bumpCooldownMs = Math.max(1000, cfg.timing?.bumpCooldownMs || 12000);
     if ((Date.now() - lastBumpAt) < bumpCooldownMs) return false;
@@ -647,7 +648,6 @@ export const AUTO_CONTINUE_SCRIPT = `
       if (form && typeof form.requestSubmit === 'function') {
         try {
           form.requestSubmit();
-          emitAction('submit', 'form submit');
           return;
         } catch (e) {}
       }
@@ -656,6 +656,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     setTimeout(submit, Math.max(60, cfg.bump?.submitDelayMs || 180));
     lastBumpAt = Date.now();
+    lastBumpStateHash = lastStateHash;
     return true;
   }
 
@@ -721,7 +722,6 @@ export const AUTO_CONTINUE_SCRIPT = `
       if (form && typeof form.requestSubmit === 'function') {
         try {
           form.requestSubmit();
-          emitAction('submit', 'form submit');
           return;
         } catch (e) {}
       }

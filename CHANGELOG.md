@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.223] - 2026-02-28
+### Fixed
+* **Frontend Submit Fallback Loop Kill**: Removed frontend submit action telemetry emissions from `auto-continue` and fail-closed submit fallback handling in `CDPStrategy`, preventing repeated backend `submit` method execution loops.
+* **Repeat Bump On Unchanged State**: Added a per-state bump guard so the same unchanged waiting/completed signal hash cannot trigger repeated bump type+submit cycles.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.223 VSIX build.
+
 ## [5.2.222] - 2026-02-28
 ### Fixed
 * **Strict Bump Eligibility**: Auto-bump now requires explicit waiting/completion signals and will only type+submit when chat is not actively generating and a valid trigger exists (feedback thumbs-up/down controls visible, completion/waiting text detected, or short session-open grace).
