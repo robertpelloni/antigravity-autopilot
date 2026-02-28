@@ -55,7 +55,18 @@ export class CDPStrategy implements IStrategy {
     }
 
     private isRunExpandContinueEnabled(): boolean {
-        return !!config.get<boolean>('autopilotRunExpandContinueEnabled');
+        const legacy = config.get<boolean>('autopilotRunExpandContinueEnabled');
+        if (typeof legacy === 'boolean') {
+            return legacy;
+        }
+
+        const runEnabled = (config.get<boolean>('actions.run.enabled') ?? true)
+            && (config.get<boolean>('automation.actions.clickRun') ?? true);
+        const expandEnabled = (config.get<boolean>('actions.expand.enabled') ?? true)
+            && (config.get<boolean>('automation.actions.clickExpand') ?? true);
+        const continueEnabled = config.get<boolean>('automation.actions.clickContinue') ?? true;
+
+        return !!(runEnabled || expandEnabled || continueEnabled);
     }
 
     private shouldRunBlindBump(): boolean {

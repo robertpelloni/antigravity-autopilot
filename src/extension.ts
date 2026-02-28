@@ -2099,16 +2099,22 @@ export function activate(context: vscode.ExtensionContext) {
         // Initialize based on saved config
         if (isUnifiedAutoAcceptEnabled()) {
             attemptNoLeaderSelfHeal('activation bootstrap preflight');
+            const followerUiAutomationEnabled = config.get<boolean>('controller.followerUiAutomationEnabled') ?? false;
 
-            // CDP Strategy should run in ALL windows to ensure UI actions (Run, Expand, Accept) 
-            // always work even if the current window is a "Passive Follower".
-            // The browser script (auto-continue.ts) handles its own action safety.
-            try {
-                strategyManager.start().catch(e => log.error(`Failed to start decentralized strategy: ${e.message}`));
+            // Default safety posture: only the controller leader runs decentralized UI automation.
+            // Followers can opt-in via controller.followerUiAutomationEnabled.
+            if (isControllerLeader() || followerUiAutomationEnabled) {
+                try {
+                    strategyManager.start().catch(e => log.error(`Failed to start decentralized strategy: ${e.message}`));
+                    syncControllerRoleToCDP();
+                    refreshRuntimeState().catch(() => { });
+                } catch (e) {
+                    log.error(`Critical stall in strategy bootstrap: ${e}`);
+                }
+            } else {
+                strategyManager.stop().catch(() => { });
                 syncControllerRoleToCDP();
                 refreshRuntimeState().catch(() => { });
-            } catch (e) {
-                log.error(`Critical stall in strategy bootstrap: ${e}`);
             }
 
             if (ensureControllerLeader('activation bootstrap')) {
@@ -2119,9 +2125,13 @@ export function activate(context: vscode.ExtensionContext) {
 
                 log.info('Antigravity Autopilot: Brain ACTIVE as controller leader.');
             } else {
-                // Follower mode: stop high-level services but KEEP decentralized automation (StrategyManager) running
+                // Follower mode: stop high-level services. Decentralized automation follows followerUiAutomationEnabled.
                 autonomousLoop.stop('Follower mode bootstrap');
-                log.info('Antigravity Autopilot: Brain PASSIVE (Leader in another workspace). UI automation ACTIVE.');
+                if (followerUiAutomationEnabled) {
+                    log.info('Antigravity Autopilot: Brain PASSIVE (Leader in another workspace). UI automation ACTIVE (explicit follower override).');
+                } else {
+                    log.info('Antigravity Autopilot: Brain PASSIVE (Leader in another workspace). UI automation DISABLED in follower mode.');
+                }
             }
         }
     } catch (e: any) {

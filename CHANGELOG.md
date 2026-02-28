@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.199] - 2026-02-27
+### Fixed
+* **Follower Automation Isolation (Default Safe Mode)**: Gated decentralized UI automation to controller leader by default, with explicit opt-in (`controller.followerUiAutomationEnabled`) for follower-window UI automation to prevent cross-workspace action contention.
+* **Watchdog Reinject Churn Guard**: Hardened watchdog reinjection so `ready+visible+focused` reinjects now require automation-surface evidence (`__autopilotStart`/`__autopilotState` or runtime running flag), reducing false reinjection storms on non-chat targets.
+* **Nested Target Attach Stability**: Set `experimental.cdpExplicitDiscovery` default to `false` to reduce noisy over-attachment/reinjection behavior unless explicitly enabled.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.199 VSIX build.
+
 ## [5.2.198] - 2026-02-27
 ### Fixed
 * **Cross-App CDP Isolation**: Restricted CDP target discovery/attachment to Antigravity page targets and disabled Antigravity port auto-discovery in non-Antigravity host apps, preventing VS Code/Insiders windows from influencing Antigravity automation state.

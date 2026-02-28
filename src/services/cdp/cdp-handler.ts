@@ -180,6 +180,17 @@ export class CDPHandler extends EventEmitter {
             portsToCheck.add(this.discoveredPort);
         }
 
+        // Recovery fallback: allow explicit configured cdpPort only inside Antigravity host.
+        // This is not a hardwired port; it's user-controlled config and only used when discovery is absent.
+        if (portsToCheck.size === 0 && this.isAntigravityHostApp()) {
+            const configuredPortRaw = config.get<number | string>('cdpPort');
+            const configuredPort = typeof configuredPortRaw === 'string' ? parseInt(configuredPortRaw, 10) : configuredPortRaw;
+            if (typeof configuredPort === 'number' && Number.isFinite(configuredPort) && configuredPort > 0) {
+                portsToCheck.add(configuredPort);
+                logToOutput(`[CDPHandler] Auto-discovery unavailable; using explicit configured cdpPort=${configuredPort} (Antigravity host only).`);
+            }
+        }
+
         // Optional explicit constructor port range fallback (only if caller supplied it)
         if (this.startPort > 0 && this.endPort > 0) {
             for (let p = this.startPort; p <= this.endPort; p++) portsToCheck.add(p);
@@ -445,7 +456,7 @@ export class CDPHandler extends EventEmitter {
                     }
 
                     // 3. Explicit Target Discovery (Belt & Suspenders) - CONFIG GATED (Default: True)
-                    const explicitDiscovery = config.get<boolean>('experimental.cdpExplicitDiscovery') ?? true;
+                    const explicitDiscovery = config.get<boolean>('experimental.cdpExplicitDiscovery') ?? false;
                     if (explicitDiscovery) {
                         try {
                             const { targetInfos } = await this.sendCommand(page.id, 'Target.getTargets');
@@ -1004,7 +1015,8 @@ export class CDPHandler extends EventEmitter {
                     readyState: document.readyState,
                     visible: document.visibilityState,
                     focused: (typeof document.hasFocus === 'function') ? document.hasFocus() : true,
-                    running: window.__antigravityAutoContinueRunning === true
+                    running: window.__antigravityAutoContinueRunning === true,
+                    hasAutopilotApi: typeof window.__autopilotStart === 'function' || !!window.__autopilotState
                 }))()`,
                 returnByValue: true,
                 awaitPromise: false
@@ -1068,7 +1080,11 @@ export class CDPHandler extends EventEmitter {
                         snap?.readyState === 'complete' && snap?.visible === 'visible' && snap?.focused === true
                     );
 
-                    if (!withinCooldown && state.attempts < maxConsecutiveReinjects && (staleHeartbeat || hasReadyVisibleFocused)) {
+                    const hasAutomationSurface = snapshots.some((snap: any) =>
+                        snap?.running === true || snap?.hasAutopilotApi === true
+                    );
+
+                    if (!withinCooldown && state.attempts < maxConsecutiveReinjects && (staleHeartbeat || (hasReadyVisibleFocused && hasAutomationSurface))) {
                         const staleDiffs = snapshots
                             .map((snap: any) => (typeof snap?.heartbeat === 'number' ? (now - snap.heartbeat) : null))
                             .filter((n: number | null) => typeof n === 'number') as number[];
