@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '5.2.196';
+        const ANTIGRAVITY_VERSION = '5.2.197';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
@@ -547,8 +547,8 @@
 
     function isInteractionWindowEligible() {
         const role = getRuntimeRole();
-        if (role === 'follower') {
-            log('[RoleGuard] follower runtime: interaction blocked');
+        if (role !== 'leader') {
+            log(`[RoleGuard] non-leader runtime (${role}): interaction blocked`);
             return false;
         }
 
@@ -858,6 +858,8 @@
     function getRuntimeStateSnapshot() {
         const state = window.__autopilotState || {};
         const mode = getCurrentMode();
+        const runtimeRole = getRuntimeRole();
+        const interactionEligible = isInteractionWindowEligible();
         const profileCoverage = {
             antigravity: getProfileCoverage('antigravity'),
             vscode: getProfileCoverage('vscode'),
@@ -931,6 +933,8 @@
         return {
             status,
             mode,
+            runtimeRole,
+            interactionEligible,
             isRunning: !!state.isRunning,
             isIdle,
             pendingAcceptButtons,
@@ -1508,6 +1512,7 @@
     }
 
     function isAcceptButton(el) {
+        const state = window.__autopilotState || {};
         let text = (el.textContent || "").trim().toLowerCase();
 
         // Fallback: If text is empty, check aria-label or title (common for icon-only buttons like "Run")
@@ -1922,7 +1927,7 @@
         return false;
     }
 
-    async function performClick(selectors) {
+    async function performClick(selectors, options = {}) {
         if (!isInteractionWindowEligible()) return 0;
         await detectAndDismissMCPDialog();
         const mode = getCurrentMode();
@@ -2006,7 +2011,8 @@
             }
             // FILTER: Only interact with buttons matching allowlist/rejectlist
             // FILTER: Only interact with buttons matching allowlist/rejectlist
-            if (!isAcceptButton(el)) {
+            const passesAcceptFilter = options.skipAcceptCheck ? true : isAcceptButton(el);
+            if (!passesAcceptFilter) {
                 continue;
             }
 
@@ -2027,7 +2033,7 @@
             const state = window.__autopilotState;
             if (!state.clickHistory) state.clickHistory = { signature: '', count: 0 };
 
-            if (isAcceptButton(el)) {
+            if (passesAcceptFilter) {
                 log(`[Trace] Found Candidate. Text: "${el.textContent?.substring(0, 30)}", Selector: "${selector}" (${source})`);
 
                 // Hybrid Strategy: Check if we can use a command instead of click
@@ -2497,7 +2503,21 @@
             const ide = (config.ide || 'cursor').toLowerCase();
             const isPro = config.isPro !== false;
             const isBG = config.isBackgroundMode === true;
-            const role = config.controllerRole === 'leader' ? 'leader' : 'follower';
+            const cfgRole = String(config?.controllerRole || '').toLowerCase();
+            const runtimeCfgRole = String(window.__antigravityConfig?.runtime?.role || '').toLowerCase();
+            const runtimeCfgIsLeader = window.__antigravityConfig?.runtime?.isLeader;
+            const previousRole = String(window.__autopilotState?.controllerRole || '').toLowerCase();
+            const role = cfgRole === 'leader' || cfgRole === 'follower'
+                ? cfgRole
+                : runtimeCfgRole === 'leader' || runtimeCfgRole === 'follower'
+                    ? runtimeCfgRole
+                    : runtimeCfgIsLeader === true
+                        ? 'leader'
+                        : runtimeCfgIsLeader === false
+                            ? 'follower'
+                            : previousRole === 'leader' || previousRole === 'follower'
+                                ? previousRole
+                                : 'unknown';
 
             // Visual confirmation of injection
             window.showAutoAllToast(`Antigravity v${ANTIGRAVITY_VERSION} Active (${role.toUpperCase()}) 🚀`);

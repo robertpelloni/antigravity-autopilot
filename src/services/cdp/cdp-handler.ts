@@ -18,6 +18,8 @@ export class CDPHandler extends EventEmitter {
     private pendingMessages: Map<number, { resolve: Function, reject: Function }>;
     private timeoutMs: number;
     private watchdogInterval: NodeJS.Timeout | null = null;
+    private watchdogState: Map<string, { attempts: number; lastAttemptAt: number }> = new Map();
+    private recentAutomationSignals: Map<string, number> = new Map();
     private discoveredPort: number | null = null;
     private controllerRoleIsLeader = false;
 
@@ -75,6 +77,42 @@ export class CDPHandler extends EventEmitter {
      * 2. DevToolsActivePort file in the Antigravity user data directory
      * 3. Fall back to configured cdpPort
      */
+
+    async executeInFirstTruthySession(expression: string, returnByValue: boolean = true): Promise<any | null> {
+        for (const [pageId, conn] of this.connections) {
+            try {
+                const mainResult = await this.sendCommand(pageId, 'Runtime.evaluate', {
+                    expression,
+                    returnByValue,
+                    awaitPromise: true
+                });
+                const mainValue = mainResult?.result?.value;
+                if (mainValue) {
+                    return mainValue;
+                }
+            } catch {
+                // ignore
+            }
+
+            for (const sessionId of conn.sessions) {
+                try {
+                    const sessionResult = await this.sendCommand(pageId, 'Runtime.evaluate', {
+                        expression,
+                        returnByValue,
+                        awaitPromise: true
+                    }, undefined, sessionId);
+                    const sessionValue = sessionResult?.result?.value;
+                    if (sessionValue) {
+                        return sessionValue;
+                    }
+                } catch {
+                    // ignore
+                }
+            }
+        }
+
+        return null;
+    }
     private async autoDiscoverPort(): Promise<number | null> {
         // Strategy 1: Use internal Antigravity API (same as chrome-devtools-mcp extension)
         try {
@@ -597,6 +635,8 @@ export class CDPHandler extends EventEmitter {
             try { conn.ws.close(); } catch (e) { }
         }
         this.connections.clear();
+        this.watchdogState.clear();
+        this.recentAutomationSignals.clear();
     }
 
     isConnected(): boolean {
@@ -654,7 +694,7 @@ export class CDPHandler extends EventEmitter {
             // Text input routing
             if (text.startsWith('__AUTOPILOT_TYPE__:')) {
                 const content = text.substring('__AUTOPILOT_TYPE__:'.length);
-                this.insertTextToAll(content).catch(() => { });
+                this.insertTextToOriginSession(pageId, sessionId, content).catch(() => { });
             } else if (text.startsWith('__ANTIGRAVITY_COMMAND__:')) {
                 // [LEGACY ZOMBIE KILLER]
                 // The legacy `full_cdp_script.js` sends `__ANTIGRAVITY_COMMAND__:workbench.action.terminal.chat.accept` 
@@ -717,6 +757,7 @@ export class CDPHandler extends EventEmitter {
                 const [groupRaw, detailRaw] = raw.split('|');
                 const group = (groupRaw || 'click').trim() as ActionSoundGroup;
                 const detail = (detailRaw || '').trim();
+                this.noteAutomationSignal(pageId, sessionId);
                 logToOutput(`[AutoAction:${group}] ${detail || 'triggered'}`);
                 const soundGroup = group === 'accept-all' ? 'accept' : group;
                 SoundEffects.playActionGroup(soundGroup as ActionSoundGroup);
@@ -731,6 +772,7 @@ export class CDPHandler extends EventEmitter {
                 }
             } else if (text.startsWith('__AUTOPILOT_LOG__:')) {
                 const raw = text.substring('__AUTOPILOT_LOG__:'.length);
+                this.noteAutomationSignal(pageId, sessionId);
                 logToOutput(`[AutoContinue] ${raw}`);
             }
         } catch (e) {
@@ -772,6 +814,34 @@ export class CDPHandler extends EventEmitter {
             for (const sessionId of conn.sessions) {
                 this.sendCommand(pageId, 'Input.insertText', { text }, undefined, sessionId).catch(() => { });
             }
+        }
+    }
+
+    private async insertTextToOriginSession(pageId: string, sessionId: string | undefined, text: string): Promise<void> {
+        if (!pageId || !text) {
+            return;
+        }
+
+        if (!sessionId) {
+            this.sendCommand(pageId, 'Input.insertText', { text }).catch(() => { });
+            return;
+        }
+
+        const gateResult = await this.sendCommand(pageId, 'Runtime.evaluate', {
+            expression: `(() => {
+                const isLeader = window.__antigravityConfig?.runtime?.isLeader === true;
+                const visible = document.visibilityState === 'visible';
+                const focused = (typeof document.hasFocus !== 'function') || document.hasFocus();
+                return isLeader && visible && focused;
+            })()`,
+            returnByValue: true,
+            awaitPromise: true
+        }, undefined, sessionId).catch(() => null);
+
+        if (gateResult?.result?.value === true) {
+            this.sendCommand(pageId, 'Input.insertText', { text }, undefined, sessionId).catch(() => { });
+        } else {
+            logToOutput('[Bridge] Blocked __AUTOPILOT_TYPE__ relay for non-eligible origin session');
         }
     }
 
@@ -881,9 +951,51 @@ export class CDPHandler extends EventEmitter {
                 return true;
             })()
         `;
-        const results = await this.executeInAllSessions(expression, true);
-        if (!Array.isArray(results)) return false;
-        return results.some(r => r === true);
+        const result = await this.executeInFirstTruthySession(expression, true);
+        return result === true;
+    }
+
+    private noteAutomationSignal(pageId: string, sessionId?: string): void {
+        const now = Date.now();
+        this.recentAutomationSignals.set(pageId, now);
+        if (sessionId) {
+            this.recentAutomationSignals.set(`${pageId}::${sessionId}`, now);
+        }
+    }
+
+    private hasRecentAutomationSignal(pageId: string, sessions: Set<string>, now: number, graceMs: number): boolean {
+        const pageTs = this.recentAutomationSignals.get(pageId) || 0;
+        if (pageTs > 0 && (now - pageTs) < graceMs) {
+            return true;
+        }
+
+        for (const sessionId of sessions) {
+            const ts = this.recentAutomationSignals.get(`${pageId}::${sessionId}`) || 0;
+            if (ts > 0 && (now - ts) < graceMs) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private async getWatchdogSnapshot(pageId: string, sessionId?: string): Promise<any | null> {
+        try {
+            const result = await this.sendCommand(pageId, 'Runtime.evaluate', {
+                expression: `(() => ({
+                    heartbeat: window.__antigravityHeartbeat,
+                    readyState: document.readyState,
+                    visible: document.visibilityState,
+                    focused: (typeof document.hasFocus === 'function') ? document.hasFocus() : true,
+                    running: window.__antigravityAutoContinueRunning === true
+                }))()`,
+                returnByValue: true,
+                awaitPromise: false
+            }, 2000, sessionId);
+            return result?.result?.value || null;
+        } catch {
+            return null;
+        }
     }
     // --- Watchdog ---
     startWatchdogLoop() {
@@ -894,36 +1006,62 @@ export class CDPHandler extends EventEmitter {
             if (!enabled) return;
 
             const timeoutMs = config.get<number>('watchdogTimeoutMs') || 15000;
+            const reinjectCooldownMs = config.get<number>('watchdogReinjectCooldownMs') || 15000;
+            const maxConsecutiveReinjects = config.get<number>('watchdogMaxConsecutiveReinjects') || 3;
+            const recentActivityGraceMs = config.get<number>('watchdogRecentActivityGraceMs') || 12000;
             const now = Date.now();
 
             for (const [pageId, conn] of this.connections) {
                 try {
-                    // Check heartbeat
-                    const result = await this.sendCommand(pageId, 'Runtime.evaluate', {
-                        expression: 'window.__antigravityHeartbeat',
-                        returnByValue: true,
-                        awaitPromise: false
-                    }, 2000);
+                    const state = this.watchdogState.get(pageId) || { attempts: 0, lastAttemptAt: 0 };
+                    const withinCooldown = (now - state.lastAttemptAt) < reinjectCooldownMs;
 
-                    const lastHeartbeat = result?.result?.value;
+                    if (this.hasRecentAutomationSignal(pageId, conn.sessions, now, recentActivityGraceMs)) {
+                        continue;
+                    }
 
-                    if (typeof lastHeartbeat === 'number') {
-                        const diff = now - lastHeartbeat;
-                        if (diff > timeoutMs) {
-                            console.log(`[Watchdog] Script dead on ${pageId} (Last heartbeat: ${diff}ms ago). Re-injecting...`);
-                            // Force re-injection
-                            await this.injectScript(pageId, AUTO_CONTINUE_SCRIPT, true);
+                    const snapshots: any[] = [];
+                    const mainSnapshot = await this.getWatchdogSnapshot(pageId);
+                    if (mainSnapshot) snapshots.push(mainSnapshot);
+                    for (const sessionId of conn.sessions) {
+                        const sessionSnapshot = await this.getWatchdogSnapshot(pageId, sessionId);
+                        if (sessionSnapshot) snapshots.push(sessionSnapshot);
+                    }
+
+                    if (snapshots.length === 0) {
+                        continue;
+                    }
+
+                    const freshHeartbeat = snapshots.some((snap: any) =>
+                        typeof snap?.heartbeat === 'number' && (now - snap.heartbeat) <= timeoutMs
+                    );
+
+                    if (freshHeartbeat) {
+                        if (state.attempts > 0 || state.lastAttemptAt > 0) {
+                            this.watchdogState.set(pageId, { attempts: 0, lastAttemptAt: 0 });
                         }
-                    } else {
-                        // No heartbeat found (maybe page reloaded?)
-                        // If we tracked injection, we could be smarter. For now, assume if connection is open but no heartbeat var, we need to inject.
-                        // But we don't want to spam inject on pages that don't need it or are loading.
-                        // Check readyState first?
-                        const readyState = await this.sendCommand(pageId, 'Runtime.evaluate', { expression: 'document.readyState', returnByValue: true });
-                        if (readyState?.result?.value === 'complete') {
-                            console.log(`[Watchdog] No heartbeat on ready page ${pageId}. Injecting...`);
-                            await this.injectScript(pageId, AUTO_CONTINUE_SCRIPT, true);
-                        }
+                        continue;
+                    }
+
+                    const staleHeartbeat = snapshots.some((snap: any) =>
+                        typeof snap?.heartbeat === 'number' && (now - snap.heartbeat) > timeoutMs
+                    );
+
+                    const hasReadyVisibleFocused = snapshots.some((snap: any) =>
+                        snap?.readyState === 'complete' && snap?.visible === 'visible' && snap?.focused === true
+                    );
+
+                    if (!withinCooldown && state.attempts < maxConsecutiveReinjects && (staleHeartbeat || hasReadyVisibleFocused)) {
+                        const staleDiffs = snapshots
+                            .map((snap: any) => (typeof snap?.heartbeat === 'number' ? (now - snap.heartbeat) : null))
+                            .filter((n: number | null) => typeof n === 'number') as number[];
+                        const maxDiff = staleDiffs.length > 0 ? Math.max(...staleDiffs) : -1;
+                        const reason = staleHeartbeat
+                            ? `stale heartbeat${maxDiff >= 0 ? ` (${maxDiff}ms)` : ''}`
+                            : 'missing heartbeat on ready+visible+focused target';
+                        logToOutput(`[Watchdog] ${reason} on ${pageId}. Re-injecting script.`);
+                        await this.injectScript(pageId, AUTO_CONTINUE_SCRIPT, true);
+                        this.watchdogState.set(pageId, { attempts: state.attempts + 1, lastAttemptAt: now });
                     }
                 } catch (e) {
                     // Connection might be dead, handled by 'close' event

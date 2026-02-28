@@ -1,6 +1,16 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.197] - 2026-02-27
+### Fixed
+* **Accept-All Reliability Across UI Variants**: Expanded accept-pattern matching and selector coverage for `Accept All`, `Keep`, `Allow`, `Retry`, and `Always Approve/Allow` paths across both runtime and interaction fallback layers.
+* **Shadow DOM Click Discovery**: Updated interaction click scanning to include recursive Shadow DOM traversal so chat-action buttons rendered in nested webview/shadow roots are no longer missed.
+* **Legacy Click Pipeline Stability**: Fixed legacy runtime `performClick()` option handling (`skipAcceptCheck`) and guarded `isAcceptButton()` against undefined state references that could silently break click loops.
+* **Watchdog Reinject Churn Reduction**: Hardened watchdog logic to evaluate heartbeats across main + attached sessions and defer reinjection when recent automation activity is present, reducing false reinjections during active runs.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.197 VSIX build.
+
 ## [5.2.196] - 2026-02-27
 ### Fixed
 * **Lease Acquisition Reliability**: Hardened `ControllerLease.tryAcquire()` to treat invalid PID leases as non-authoritative and verify lease write/readback success before reporting acquisition, reducing all-follower dead-state risk on Windows lease-file races.

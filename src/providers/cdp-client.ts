@@ -32,7 +32,7 @@ export class CDPClient {
     async sendMessage(text: string): Promise<boolean> {
         const script = `(function() {
             const runtimeLeader = window.__antigravityConfig?.runtime?.isLeader;
-            if (runtimeLeader === false) {
+            if (runtimeLeader !== true) {
                 return false;
             }
 
@@ -150,8 +150,8 @@ export class CDPClient {
         })()`;
 
         try {
-            const results = await this.handler.executeInAllSessions(script, true);
-            if (results && results.some(r => r === true)) {
+            const result = await this.handler.executeInFirstTruthySession(script, true);
+            if (result === true) {
                 log.info('Sent message: ' + text);
                 return true;
             }

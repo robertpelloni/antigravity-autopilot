@@ -293,7 +293,8 @@ export class CDPStrategy implements IStrategy {
             // DISABLED: commandId: 'antigravity.agent.acceptAgentStep' -> This command aliases to Customize Layout!
         };
 
-        const success = await clickRegistry.executeCategory('click', ctx);
+        const results = await clickRegistry.executeCategory('click', ctx);
+        const success = Array.isArray(results) && results.some(r => !!r.success);
         if (success) {
             SoundEffects.playActionGroup('click');
         }
@@ -476,15 +477,23 @@ export class CDPStrategy implements IStrategy {
 
     private createRegistryForProfile(profile: 'vscode' | 'antigravity' | 'cursor'): InteractionMethodRegistry {
         const cfg = config.getAll();
-        const clickMethods = profile === 'antigravity'
+        const baseMethods = profile === 'antigravity'
             ? (cfg.interactionClickMethodsAntigravity || cfg.interactionClickMethods)
             : profile === 'cursor'
                 ? (cfg.interactionClickMethodsCursor || cfg.interactionClickMethods)
                 : (cfg.interactionClickMethodsVSCode || cfg.interactionClickMethods);
 
+        const disallowed = new Set(['vscode-cmd', 'process-peek']);
+        const clickMethods = (Array.isArray(baseMethods) ? baseMethods : [])
+            .map(m => String(m || '').trim())
+            .filter(Boolean)
+            .filter(m => !disallowed.has(m));
+
+        const safeClickMethods = clickMethods.length > 0 ? clickMethods : ['dom-scan-click'];
+
         return new InteractionMethodRegistry({
             textInput: cfg.interactionTextMethods,
-            click: clickMethods,
+            click: safeClickMethods,
             submit: cfg.interactionSubmitMethods,
             timings: cfg.interactionTimings,
             retryCount: cfg.interactionRetryCount,
@@ -506,9 +515,11 @@ export class CDPStrategy implements IStrategy {
             .filter(Boolean)
             .filter(m => !disallowed.has(m));
 
+        const safeClickMethods = clickMethods.length > 0 ? clickMethods : ['dom-scan-click'];
+
         return new InteractionMethodRegistry({
             textInput: cfg.interactionTextMethods,
-            click: clickMethods,
+            click: safeClickMethods,
             submit: cfg.interactionSubmitMethods,
             timings: cfg.interactionTimings,
             retryCount: cfg.interactionRetryCount,

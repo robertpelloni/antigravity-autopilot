@@ -61,14 +61,14 @@ export interface MethodDescriptor {
 }
 
 const DEFAULT_ACCEPT_PATTERNS = [
-    'accept', 'accept all', 'run', 'run command', 'retry', 'apply', 'execute',
-    'confirm', 'allow once', 'allow', 'proceed', 'continue', 'yes', 'ok',
+    'accept', 'accept all', 'acceptall', 'keep', 'run', 'run command', 'retry', 'apply', 'execute',
+    'confirm', 'allow once', 'allow', 'allow all', 'always approve', 'always allow', 'proceed', 'continue', 'yes', 'ok',
     'save', 'approve', 'overwrite', 'expand'
 ];
 
 const DEFAULT_REJECT_PATTERNS = [
     'skip', 'reject', 'cancel', 'close', 'refine', 'deny', 'no', 'dismiss',
-    'abort', 'ask every time', 'always run', 'always allow', 'stop', 'pause', 'disconnect'
+    'abort', 'ask every time', 'always run', 'stop', 'pause', 'disconnect'
 ];
 
 // ============ Text Input Methods ============
@@ -291,7 +291,50 @@ export class DOMScanClick implements IInteractionMethod {
                     ? selectorCsv.split(',').map(s => s.trim()).filter(Boolean)
                     : [];
 
-                const fallbackSelectors = [];
+                const fallbackSelectors = [
+                    '.interactive-editor button',
+                    '.chat-input-container button',
+                    'button[aria-label]',
+                    'button[title]',
+                    '[role="button"][aria-label]',
+                    '[role="button"][title]',
+                    '[title*="Accept All" i]',
+                    '[aria-label*="Accept All" i]',
+                    '[title*="Keep" i]',
+                    '[aria-label*="Keep" i]',
+                    '[title*="Allow" i]',
+                    '[aria-label*="Allow" i]',
+                    '[title*="Retry" i]',
+                    '[aria-label*="Retry" i]',
+                    '[title*="Always Approve" i]',
+                    '[aria-label*="Always Approve" i]',
+                    '[title*="Always Allow" i]',
+                    '[aria-label*="Always Allow" i]',
+                    '.codicon-play',
+                    '.codicon-run',
+                    '.codicon-debug-start',
+                    '.codicon-chevron-right',
+                    '.monaco-tl-twistie.collapsed',
+                    '.expand-indicator.collapsed'
+                ];
+
+                function queryShadowDOMAll(selector, root) {
+                    root = root || document;
+                    let results = [];
+                    if (root.querySelectorAll) {
+                        try {
+                            results = results.concat(Array.from(root.querySelectorAll(selector)));
+                        } catch (e) {}
+                    }
+                    const all = root.querySelectorAll ? root.querySelectorAll('*') : [];
+                    for (let i = 0; i < all.length; i++) {
+                        const node = all[i];
+                        if (node && node.shadowRoot) {
+                            results = results.concat(queryShadowDOMAll(selector, node.shadowRoot));
+                        }
+                    }
+                    return results;
+                }
 
                 const allSelectors = Array.from(new Set([...selectorParts, ...fallbackSelectors]));
 
@@ -299,7 +342,7 @@ export class DOMScanClick implements IInteractionMethod {
                 const candidates = [];
                 for (const sel of allSelectors) {
                     let nodes = [];
-                    try { nodes = Array.from(document.querySelectorAll(sel)); } catch (e) { nodes = []; }
+                    try { nodes = queryShadowDOMAll(sel); } catch (e) { nodes = []; }
                     for (const node of nodes) {
                         if (!seen.has(node)) {
                             seen.add(node);
@@ -339,14 +382,25 @@ export class DOMScanClick implements IInteractionMethod {
                     return false;
                 }
 
-                for (const el of candidates) {
-                    if (isNodeBanned(el)) continue;
+                function toClickableTarget(el) {
+                    if (!el) return null;
+                    const iconLike = el.matches && el.matches('.codicon-play, .codicon-run, .codicon-debug-start, .codicon-chevron-right, .monaco-tl-twistie, .expand-indicator');
+                    if (iconLike) {
+                        return el.closest('button, [role="button"], .action-label, .action-item, .monaco-button') || el;
+                    }
+                    return el;
+                }
 
-                    let text = ((el.textContent || '') + ' ' + (el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '')).trim().toLowerCase();
+                for (const el of candidates) {
+                    const target = toClickableTarget(el);
+                    if (!target) continue;
+                    if (isNodeBanned(target)) continue;
+
+                    let text = ((target.textContent || '') + ' ' + (target.getAttribute('aria-label') || '') + ' ' + (target.getAttribute('title') || '')).trim().toLowerCase();
                     
                     // Icon-only button handling (Run / Expand)
                     if (!text) {
-                        const classList = (el.className || '').toLowerCase();
+                        const classList = ((target.className || '') + ' ' + (target.querySelector && target.querySelector('[class*="codicon-"]')?.className || '')).toLowerCase();
                         if (classList.includes('codicon-play') || classList.includes('codicon-run') || classList.includes('codicon-debug-start')) {
                             text = 'run';
                         } else if (classList.includes('codicon-chevron-right') || classList.includes('monaco-tl-twistie')) { 
@@ -358,12 +412,17 @@ export class DOMScanClick implements IInteractionMethod {
                     }
 
                     if (!text || text.length > 120) continue;
-                    if (!visible(el)) continue;
+                    if (!visible(target)) continue;
+                    const normalized = text.replace(/\s+/g, '');
                     if (reject.some(p => text.includes(p))) continue;
-                    if (!accept.some(p => text.includes(p))) continue;
-                    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                    el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-                    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                    const acceptHit = accept.some(p => text.includes(p))
+                        || normalized.includes('acceptall')
+                        || /\bkeep\b/.test(text)
+                        || /always\s*approve|always\s*allow/.test(text);
+                    if (!acceptHit) continue;
+                    target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                    target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                    target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
                     return true;
                 }
 
@@ -439,7 +498,10 @@ export class VSCodeCommandClick implements IInteractionMethod {
         try {
             await ctx.vscodeCommands.executeCommand(ctx.commandId);
             return true;
-        } catch { return false; }
+        } catch (e: any) {
+            logToOutput(`[Interaction] vscode-cmd failed for ${ctx.commandId}: ${String(e?.message || e || 'unknown')}`);
+            return false;
+        }
     }
 }
 

@@ -76,3 +76,14 @@ When dealing with "ghost" UI actions (e.g., the window layout mysteriously toggl
 ## Recent Hardening Notes (v5.2.76)
 
 - **Alert Only on Meaningful HOT Events:** For operator warnings, gate alerts on HOT transitions or significant HOT deltas and enforce cooldown windows. This avoids reminder spam while still surfacing dangerous suppression bursts quickly.
+
+## Recent Hardening Notes (v5.2.188+)
+
+- **Focus-Gated Bumping Prevents Multi-Window Spam:** `document.visibilityState === 'visible'` alone is insufficient in multi-window desktop scenarios. Require focused document state for bump typing to avoid all-open-window bump storms.
+- **Accept-All Should Gate Independently:** Do not require `clickAccept` for `acceptAll` control gating. `clickAcceptAll` must independently permit bulk-accept actions.
+- **Run Signal Counts Must Not Hard-Block Action Attempts:** Selector detection counters can miss host-specific labels; keep safe direct run selector attempts active even when signal counts are zero.
+
+## Recent Hardening Notes (v5.2.197)
+
+- **Accept-All Needs Variant Coverage:** Treat `Accept All`, `Keep`, `Allow`, `Retry`, and `Always Approve/Allow` as first-class accept intents in both runtime and backend click fallback paths.
+- **Watchdog Must Observe Attached Sessions:** Heartbeat evaluation only on the top page target can create false reinjection storms when chat runs in nested sessions; aggregate snapshots across attached sessions and honor recent automation-activity grace windows.

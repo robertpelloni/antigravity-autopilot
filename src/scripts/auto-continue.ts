@@ -731,8 +731,8 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   function typeAndSubmit(text) {
       const cfg = getConfig();
-      if (cfg?.runtime?.isLeader === false) {
-          logAction('[RoleGuard] Follower runtime: blocked typeAndSubmit.');
+      if (cfg?.runtime?.isLeader !== true) {
+          logAction('[RoleGuard] Non-leader runtime: blocked typeAndSubmit.');
           return false;
       }
       const bump = getBumpConfig(cfg);
@@ -915,7 +915,7 @@ export const AUTO_CONTINUE_SCRIPT = `
           state.isGenerating ? '1' : '0',
           state.hasInputReady ? '1' : '0',
           state.feedbackVisible ? '1' : '0',
-          (cfg?.runtime?.isLeader === false ? 'follower' : 'leader'),
+          (cfg?.runtime?.isLeader === true ? 'leader' : (cfg?.runtime?.isLeader === false ? 'follower' : 'unknown')),
           (document.visibilityState || 'unknown'),
           (typeof document.hasFocus === 'function' ? (document.hasFocus() ? 'focused' : 'blurred') : 'focus-unknown'),
           state.lastSender,
@@ -929,7 +929,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       ].join('|');
       if (stateSignature !== lastStateSignature) {
           lastStateSignature = stateSignature;
-          const roleLabel = cfg?.runtime?.isLeader === false ? 'follower' : 'leader';
+        const roleLabel = cfg?.runtime?.isLeader === true ? 'leader' : 'follower';
           const focusLabel = (typeof document.hasFocus === 'function' && document.hasFocus()) ? 'focused' : 'blurred';
           logAction('state changed role=' + roleLabel + ' visibility=' + (document.visibilityState || 'unknown') + ' focus=' + focusLabel + ' generating=' + state.isGenerating + ' sender=' + state.lastSender + ' rows=' + state.rowCount + ' input=' + state.hasInputReady + ' signals=' + JSON.stringify(state.buttonSignals || {}));
       }
@@ -958,10 +958,11 @@ export const AUTO_CONTINUE_SCRIPT = `
               if (isUnsafeContext(el) || hasUnsafeLabel(el)) return false;
               const t = (el.textContent || '').trim().toLowerCase();
               const l = (el.getAttribute('aria-label') || '').toLowerCase();
+            const source = (t + ' ' + l).trim();
               const continueMatch = hasMethod(continueControl.actionMethods, 'continue-button') && (/continue/i.test(t) || /continue/i.test(l));
-              const keepMatch = hasMethod(continueControl.actionMethods, 'keep-button') && /^keep$/i.test(t);
-              const retryMatch = /\bretry\b/i.test(t) || /\bretry\b/i.test(l);
-              const alwaysApproveMatch = /always\s*approve/i.test(t) || /always\s*approve/i.test(l);
+            const keepMatch = hasMethod(continueControl.actionMethods, 'keep-button') && /\bkeep\b/i.test(source);
+            const retryMatch = /\bretry\b/i.test(source);
+            const alwaysApproveMatch = /always\s*approve/i.test(source);
               if (continueMatch) return !/rebase/i.test(l);
               if (keepMatch) return true;
               if (retryMatch) return true;
@@ -969,7 +970,13 @@ export const AUTO_CONTINUE_SCRIPT = `
               return false;
           });
           
-        if (target && (target.offsetParent || target.clientWidth > 0) && isChatActionSurface(target)) {
+       if (target && (target.offsetParent || target.clientWidth > 0)) {
+            const surfaceOk = isChatActionSurface(target) || isSemanticActionTarget(target, 'continue keep retry always approve');
+            if (!surfaceOk) {
+                bumpSafetyCounter('blockedNonChatTargetClicks');
+                logAction('[SafetyGate] Blocked Continue/Keep target outside chat surface');
+                return;
+            }
                if (hasMethod(continueControl.actionMethods, 'dom-click')) {
                     highlight(target);
                     target.click();
@@ -1011,10 +1018,15 @@ export const AUTO_CONTINUE_SCRIPT = `
                   if (isUnsafeContext(el) || hasUnsafeLabel(el) || isNodeBanned(el)) return false;
                   if (el.hasAttribute('disabled') || el.classList.contains('disabled')) return false;
                   if (!(el.offsetParent || el.clientWidth > 0 || el.clientHeight > 0)) return false;
-                  if (!isChatActionSurface(el)) return false;
+                  if (!isChatActionSurface(el) && !isSemanticActionTarget(el, 'accept all keep allow retry always approve')) return false;
                   const t = (el.textContent || '').replace(/\s+/g, '').toLowerCase();
                   const label = (el.getAttribute('title') || el.getAttribute('aria-label') || '').replace(/\s+/g, '').toLowerCase();
-                  return t.includes('acceptall') || label.includes('acceptall');
+                  const source = t + ' ' + label;
+                  return source.includes('acceptall')
+                      || source.includes('keep')
+                      || source.includes('allow')
+                      || source.includes('retry')
+                      || source.includes('alwaysapprove');
               });
               if (acceptMatch) {
                   const clickTarget = acceptMatch.closest('button, a') || acceptMatch;
@@ -1234,7 +1246,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       // 7. SMART RESUME (Actionable Auto-Reply)
       if (!actionTaken && cfg.autoReply) {
-          if (cfg?.runtime?.isLeader === false) {
+          if (cfg?.runtime?.isLeader !== true) {
               log('Smart Resume: follower runtime detected, skipping auto-reply bumping.');
           } else {
           const bump = getBumpConfig(cfg);
@@ -1345,7 +1357,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
       if (!actionTaken) {
           const bumpState = getBumpRuntimeState();
-          if (cfg?.runtime?.isLeader !== false && bumpState.pendingText && !state.isGenerating) {
+          if (cfg?.runtime?.isLeader === true && bumpState.pendingText && !state.isGenerating) {
               const pendingInput = getSafeChatInput();
               const pendingValue = (pendingInput && ((pendingInput.value || pendingInput.innerText || pendingInput.textContent || '').trim())) || '';
               if (pendingInput && pendingValue && pendingValue === bumpState.pendingText.trim()) {
