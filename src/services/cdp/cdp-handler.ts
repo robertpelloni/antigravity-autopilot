@@ -23,24 +23,31 @@ export class CDPHandler extends EventEmitter {
     private discoveredPort: number | null = null;
     private controllerRoleIsLeader = false;
 
+    private isAntigravityHostApp(): boolean {
+        try {
+            const appName = String((vscode as any)?.env?.appName || '').toLowerCase();
+            return appName.includes('antigravity');
+        } catch {
+            return false;
+        }
+    }
+
     constructor(startPort?: number, endPort?: number) {
         super();
-        const configuredPortRaw = config.get<number | string>('cdpPort');
-        let configuredPort = typeof configuredPortRaw === 'string' ? parseInt(configuredPortRaw, 10) : configuredPortRaw;
+        const explicitStart = (typeof startPort === 'number' && Number.isFinite(startPort) && startPort > 0) ? startPort : 0;
+        const explicitEnd = (typeof endPort === 'number' && Number.isFinite(endPort) && endPort > 0) ? endPort : explicitStart;
 
-        // If everything fails, use 0 to indicate no valid config port exists
-        if (typeof configuredPort !== 'number' || isNaN(configuredPort)) {
-            console.warn(`[CDPHandler] cdpPort setting could not be cleanly parsed: ${configuredPortRaw}. No fallback port will be scanned unless auto-discovered.`);
-            configuredPort = 0;
-        }
-
-        this.startPort = startPort ?? configuredPort;
-        this.endPort = endPort ?? configuredPort;
+        this.startPort = explicitStart;
+        this.endPort = explicitEnd;
         this.connections = new Map();
         this.messageId = 1;
         this.pendingMessages = new Map();
         this.timeoutMs = config.get<number>('cdpTimeout') || 10000;
-        logToOutput(`[CDPHandler] Initialized with configured port range: ${this.startPort}-${this.endPort}`);
+        if (this.startPort > 0 && this.endPort > 0) {
+            logToOutput(`[CDPHandler] Initialized with explicit port range: ${this.startPort}-${this.endPort}`);
+        } else {
+            logToOutput('[CDPHandler] Initialized in auto-discovery-only mode (no implicit fallback ports).');
+        }
         this.startWatchdogLoop();
     }
 
@@ -75,7 +82,7 @@ export class CDPHandler extends EventEmitter {
      * Auto-discover the actual CDP port using multiple strategies:
      * 1. Internal Antigravity API: vscode.antigravityUnifiedStateSync.BrowserPreferences.getBrowserCdpPort()
      * 2. DevToolsActivePort file in the Antigravity user data directory
-     * 3. Fall back to configured cdpPort
+    * 3. Optional explicit constructor port (only when caller passes it deliberately)
      */
 
     async executeInFirstTruthySession(expression: string, returnByValue: boolean = true): Promise<any | null> {
@@ -114,6 +121,11 @@ export class CDPHandler extends EventEmitter {
         return null;
     }
     private async autoDiscoverPort(): Promise<number | null> {
+        if (!this.isAntigravityHostApp()) {
+            logToOutput('[CDPHandler] Skipping Antigravity CDP auto-discovery in non-Antigravity host app.');
+            return null;
+        }
+
         // Strategy 1: Use internal Antigravity API (same as chrome-devtools-mcp extension)
         try {
             const vsCodeAny = vscode as any;
@@ -168,7 +180,7 @@ export class CDPHandler extends EventEmitter {
             portsToCheck.add(this.discoveredPort);
         }
 
-        // Also check the configured port range as fallback (only if valid)
+        // Optional explicit constructor port range fallback (only if caller supplied it)
         if (this.startPort > 0 && this.endPort > 0) {
             for (let p = this.startPort; p <= this.endPort; p++) portsToCheck.add(p);
         }
@@ -230,6 +242,34 @@ export class CDPHandler extends EventEmitter {
         return report;
     }
 
+    private isAntigravityPageTarget(p: any): boolean {
+        if (!p || typeof p !== 'object') return false;
+        if (!p.webSocketDebuggerUrl) return false;
+        if (p.type !== 'page') return false;
+
+        const title = String(p.title || '').toLowerCase();
+        const url = String(p.url || '').toLowerCase();
+
+        const antigravityMarkers = [
+            'antigravity',
+            '/programs/antigravity/',
+            '\\programs\\antigravity\\',
+            '/roaming/antigravity/',
+            '\\roaming\\antigravity\\'
+        ];
+
+        const hasAntigravityMarker = antigravityMarkers.some(marker => title.includes(marker) || url.includes(marker));
+        if (!hasAntigravityMarker) return false;
+
+        const foreignMarkers = ['visual studio code', 'vscode insiders', 'cursor'];
+        const appearsForeign = foreignMarkers.some(marker => title.includes(marker) || url.includes(marker));
+        if (appearsForeign && !title.includes('antigravity') && !url.includes('antigravity')) {
+            return false;
+        }
+
+        return true;
+    }
+
     getPages(port: number): Promise<any[]> {
         return new Promise((resolve, reject) => {
             const req = http.get({ hostname: '127.0.0.1', port, path: '/json/list', timeout: 500 }, (res) => {
@@ -238,34 +278,10 @@ export class CDPHandler extends EventEmitter {
                 res.on('end', () => {
                     try {
                         const pages = JSON.parse(data);
-                        // Phase 27: Intelligent Filter
-                        const allowedTypes = ['page', 'webview', 'iframe', 'background_page'];
-                        // Specifically exclude the main VSCode workbench to prevent runaway clicks on the editor
-                        const excludedUrls = ['chrome://newtab/', 'chrome://newtab-footer/', 'workbench-jetski-agent.html'];
-                        // Log exactly what types of targets are available and which ones match
-                        const filtered = pages.filter((p: any) => {
-                            if (!p.webSocketDebuggerUrl) return false;
-                            if (!allowedTypes.includes(p.type)) return false;
-                            if (p.url && excludedUrls.some(ex => p.url.startsWith(ex) || p.url.includes(ex))) return false;
-                            return true;
-                        });
-
-                        // Prioritize main VS Code / Cursor pages so that they are connected to first if multiTabEnabled is false
-                        filtered.sort((a: any, b: any) => {
-                            const aTitle = (a.title || '').toLowerCase();
-                            const bTitle = (b.title || '').toLowerCase();
-                            const aIsEditor = a.type === 'page' && (aTitle.includes('visual studio code') || aTitle.includes('cursor') || (a.url && a.url.includes('workbench.html')));
-                            const bIsEditor = b.type === 'page' && (bTitle.includes('visual studio code') || bTitle.includes('cursor') || (b.url && b.url.includes('workbench.html')));
-
-                            if (aIsEditor && !bIsEditor) return -1;
-                            if (!aIsEditor && bIsEditor) return 1;
-                            if (a.type === 'page' && b.type !== 'page') return -1;
-                            if (a.type !== 'page' && b.type === 'page') return 1;
-                            return 0;
-                        });
+                        const filtered = pages.filter((p: any) => this.isAntigravityPageTarget(p));
 
                         if (filtered.length === 0) {
-                            logToOutput(`[CDPHandler] Port ${port} returned ${pages.length} raw targets. Filtered targets: 0.`);
+                            logToOutput(`[CDPHandler] Port ${port} returned ${pages.length} raw targets. Antigravity page targets: 0.`);
                             if (pages.length > 0) {
                                 logToOutput(`[CDPHandler] First raw target on port ${port}: ${JSON.stringify(pages[0])}`);
                             }
@@ -661,10 +677,11 @@ export class CDPHandler extends EventEmitter {
                 // Smart Target Filtering
                 if (targetFilter) {
                     const title = (page.title || '').toLowerCase();
+                    const url = (page.url || '').toLowerCase();
                     const filter = targetFilter.toLowerCase();
                     // Match if title includes filter 
                     // OR if it's a shared resource we might want? No, strict is better for now.
-                    if (!title.includes(filter)) {
+                    if (!title.includes(filter) && !url.includes(filter)) {
                         // console.log(`[CDP] Skipping target "${page.title}" (Mismatch filter "${filter}")`);
                         continue;
                     }

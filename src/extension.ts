@@ -1173,11 +1173,7 @@ export function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(
             safeRegisterCommand('antigravity.getChromeDevtoolsMcpUrl', async () => {
                 try {
-                    const probePort = config.get<number>('cdpPort');
-                    if (!probePort) {
-                        return undefined;
-                    }
-                    const probe = new CDPHandler(probePort, probePort);
+                    const probe = new CDPHandler();
                     const instances = await probe.scanForInstances();
                     for (const instance of instances) {
                         const wsTarget = instance.pages.find((p: any) => typeof p?.webSocketDebuggerUrl === 'string' && p.webSocketDebuggerUrl.length > 0);
@@ -1189,8 +1185,7 @@ export function activate(context: vscode.ExtensionContext) {
                     log.warn(`DevTools URL probe failed: ${String(error?.message || error || 'unknown error')}`);
                 }
 
-                const fallbackPort = config.get<number>('cdpPort');
-                return `ws://127.0.0.1:${fallbackPort}`;
+                return undefined;
             }),
             safeRegisterCommand('antigravity.clickExpand', () => resolveCDPStrategy()?.executeAction('expand')),
             safeRegisterCommand('antigravity.resetConnection', async () => {

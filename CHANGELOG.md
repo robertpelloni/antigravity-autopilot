@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.198] - 2026-02-27
+### Fixed
+* **Cross-App CDP Isolation**: Restricted CDP target discovery/attachment to Antigravity page targets and disabled Antigravity port auto-discovery in non-Antigravity host apps, preventing VS Code/Insiders windows from influencing Antigravity automation state.
+* **Implicit Port Fallback Removal**: Removed default `cdpPort` fallback wiring from the core CDP client/bootstrap probe path so automation no longer silently binds to externally configured/hardwired ports when discovery context is invalid.
+* **Probe Hardcoded Port Removal**: Updated `src/scripts/run-probe.js` to resolve CDP ports via environment or Antigravity `DevToolsActivePort` file instead of fixed `9222`.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.198 VSIX build.
+
 ## [5.2.197] - 2026-02-27
 ### Fixed
 * **Accept-All Reliability Across UI Variants**: Expanded accept-pattern matching and selector coverage for `Accept All`, `Keep`, `Allow`, `Retry`, and `Always Approve/Allow` paths across both runtime and interaction fallback layers.

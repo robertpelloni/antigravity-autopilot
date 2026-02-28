@@ -1,7 +1,6 @@
 
 import { CDPHandler } from '../services/cdp/cdp-handler';
 import { createLogger } from '../utils/logger';
-import { config } from '../utils/config';
 
 const log = createLogger('CDPClient');
 
@@ -10,11 +9,7 @@ export class CDPClient {
     private isPro = true;
 
     constructor() {
-        const port = config.get<number>('cdpPort');
-        if (!port) {
-            console.warn('[CDPClient] cdpPort not configured in settings.');
-        }
-        this.handler = new CDPHandler(port, port);
+        this.handler = new CDPHandler();
     }
 
     getHandler(): CDPHandler {

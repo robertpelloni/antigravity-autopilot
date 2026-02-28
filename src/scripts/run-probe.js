@@ -1,9 +1,36 @@
 const CDP = require('chrome-remote-interface');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+function resolveCdpPort() {
+    const envPortRaw = process.env.ANTIGRAVITY_CDP_PORT || process.env.CDP_PORT;
+    const envPort = Number(envPortRaw);
+    if (Number.isFinite(envPort) && envPort > 0) {
+        return envPort;
+    }
+
+    try {
+        const userDataDir = path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Antigravity');
+        const portFilePath = path.join(userDataDir, 'DevToolsActivePort');
+        if (fs.existsSync(portFilePath)) {
+            const content = fs.readFileSync(portFilePath, 'utf8');
+            const [rawPort] = content.split('\n').map(l => l.trim()).filter(Boolean);
+            const parsed = Number(rawPort);
+            if (Number.isFinite(parsed) && parsed > 0) {
+                return parsed;
+            }
+        }
+    } catch (_) {}
+
+    throw new Error('Unable to resolve Antigravity CDP port. Set ANTIGRAVITY_CDP_PORT or start Antigravity with DevToolsActivePort available.');
+}
 
 async function run() {
     let client;
     try {
-        client = await CDP({ port: 9222 });
+        const port = resolveCdpPort();
+        client = await CDP({ port });
         const { Runtime } = client;
 
         const script = `
