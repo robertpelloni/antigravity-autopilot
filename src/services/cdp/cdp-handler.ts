@@ -25,6 +25,57 @@ export class CDPHandler extends EventEmitter {
     private controllerRoleIsLeader = false;
     private hostWindowFocused = vscode.window.state.focused;
 
+    private shouldInjectAutoContinueRuntime(): boolean {
+        if (config.get<boolean>('autoContinueScriptEnabled') === false) {
+            return false;
+        }
+
+        if (this.controllerRoleIsLeader) {
+            return true;
+        }
+
+        return config.get<boolean>('controller.followerUiAutomationEnabled') ?? false;
+    }
+
+    private async pushAutomationConfigToConnection(pageId: string, sessionId?: string): Promise<void> {
+        await this.sendCommand(pageId, 'Runtime.evaluate', {
+            expression: this.getAutomationConfigExpression(),
+            awaitPromise: false
+        }, 5000, sessionId).catch(() => { });
+    }
+
+    private async stopAutoContinueRuntime(pageId: string, sessionId?: string): Promise<void> {
+        await this.sendCommand(pageId, 'Runtime.evaluate', {
+            expression: `(() => {
+                try {
+                    if (typeof window.stopAutoContinue === 'function') {
+                        window.stopAutoContinue();
+                    }
+                    window.__antigravityAutoContinueRunning = false;
+                } catch (e) {}
+                return true;
+            })()`,
+            awaitPromise: false
+        }, 2000, sessionId).catch(() => { });
+    }
+
+    private async syncAutomationRuntimeEligibility(): Promise<void> {
+        const shouldInject = this.shouldInjectAutoContinueRuntime();
+        for (const [pageId, conn] of this.connections) {
+            await this.pushAutomationConfigToConnection(pageId);
+            for (const sessionId of conn.sessions) {
+                await this.pushAutomationConfigToConnection(pageId, sessionId);
+            }
+
+            if (!shouldInject) {
+                await this.stopAutoContinueRuntime(pageId);
+                for (const sessionId of conn.sessions) {
+                    await this.stopAutoContinueRuntime(pageId, sessionId);
+                }
+            }
+        }
+    }
+
     private isAntigravityHostApp(): boolean {
         try {
             const appName = String((vscode as any)?.env?.appName || '').toLowerCase();
@@ -62,20 +113,7 @@ export class CDPHandler extends EventEmitter {
             return;
         }
 
-        const expression = this.getAutomationConfigExpression();
-        for (const [pageId, conn] of this.connections) {
-            this.sendCommand(pageId, 'Runtime.evaluate', {
-                expression,
-                awaitPromise: false
-            }).catch(() => { });
-
-            for (const sessionId of conn.sessions) {
-                this.sendCommand(pageId, 'Runtime.evaluate', {
-                    expression,
-                    awaitPromise: false
-                }, undefined, sessionId).catch(() => { });
-            }
-        }
+        this.syncAutomationRuntimeEligibility().catch(() => { });
 
         logToOutput(`[CDPHandler] Controller role synced to runtime config: ${this.controllerRoleIsLeader ? 'leader' : 'follower'}`);
     }
@@ -91,20 +129,7 @@ export class CDPHandler extends EventEmitter {
             return;
         }
 
-        const expression = this.getAutomationConfigExpression();
-        for (const [pageId, conn] of this.connections) {
-            this.sendCommand(pageId, 'Runtime.evaluate', {
-                expression,
-                awaitPromise: false
-            }).catch(() => { });
-
-            for (const sessionId of conn.sessions) {
-                this.sendCommand(pageId, 'Runtime.evaluate', {
-                    expression,
-                    awaitPromise: false
-                }, undefined, sessionId).catch(() => { });
-            }
-        }
+        this.syncAutomationRuntimeEligibility().catch(() => { });
 
         logToOutput(`[CDPHandler] Host window focus synced to runtime config: ${this.hostWindowFocused ? 'focused' : 'unfocused'}`);
     }
@@ -454,6 +479,26 @@ export class CDPHandler extends EventEmitter {
                 try {
                     // 1. Enable Runtime on Main Page
                     await this.sendCommand(page.id, 'Runtime.enable');
+
+                    // In single-target mode, only keep the actively focused visible page.
+                    // This prevents one leader window from controlling every open Antigravity page.
+                    const singleTargetMode = !(config.get<boolean>('multiTabEnabled') ?? false);
+                    if (singleTargetMode) {
+                        const focusCheck = await this.sendCommand(page.id, 'Runtime.evaluate', {
+                            expression: `(() => document.visibilityState === 'visible' && ((typeof document.hasFocus !== 'function') || document.hasFocus()))()`,
+                            returnByValue: true,
+                            awaitPromise: false
+                        }, 1500).catch(() => null);
+
+                        const isFocusedVisible = focusCheck?.result?.value === true;
+                        if (!isFocusedVisible) {
+                            this.connections.delete(page.id);
+                            try { ws.close(); } catch { }
+                            resolve(false);
+                            return;
+                        }
+                    }
+
                     if (page.type === 'page') {
                         await this.sendCommand(page.id, 'Runtime.addBinding', { name: '__AUTOPILOT_BRIDGE__' });
                         await this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' }); // Still register fake legacy bridge to block it
@@ -468,14 +513,11 @@ export class CDPHandler extends EventEmitter {
                         awaitPromise: false
                     });
 
-                    // 1b. Inject Auto-Continue Script (if enabled)
-                    if (config.get<boolean>('autoContinueScriptEnabled') !== false) {
+                    // 1b. Inject Auto-Continue Script only when this window is eligible to run automation.
+                    if (this.shouldInjectAutoContinueRuntime()) {
                         try {
                             // Inject config first
-                            await this.sendCommand(page.id, 'Runtime.evaluate', {
-                                expression: this.getAutomationConfigExpression(),
-                                awaitPromise: false
-                            });
+                            await this.pushAutomationConfigToConnection(page.id);
 
                             // Inject script
                             await this.sendCommand(page.id, 'Runtime.evaluate', {
@@ -486,6 +528,9 @@ export class CDPHandler extends EventEmitter {
                         } catch (e) {
                             console.error(`[CDP] Failed to inject Auto-Continue Script into ${page.id}`, e);
                         }
+                    } else {
+                        await this.pushAutomationConfigToConnection(page.id);
+                        await this.stopAutoContinueRuntime(page.id);
                     }
 
                     // 3. Explicit Target Discovery (Belt & Suspenders) - CONFIG GATED (Default: True)
@@ -556,12 +601,9 @@ export class CDPHandler extends EventEmitter {
                         this.sendCommand(page.id, 'Runtime.addBinding', { name: '__AUTOPILOT_BRIDGE__' }, undefined, sessionId).catch(() => { });
                         this.sendCommand(page.id, 'Runtime.addBinding', { name: '__ANTIGRAVITY_BRIDGE__' }, undefined, sessionId).catch(() => { });
 
-                        if (config.get<boolean>('autoContinueScriptEnabled') !== false) {
+                        if (this.shouldInjectAutoContinueRuntime()) {
                             try {
-                                this.sendCommand(page.id, 'Runtime.evaluate', {
-                                    expression: this.getAutomationConfigExpression(),
-                                    awaitPromise: false
-                                }, undefined, sessionId).catch(e => console.error(`[CDP] config injection error on session ${sessionId}`, e));
+                                this.pushAutomationConfigToConnection(page.id, sessionId).catch(e => console.error(`[CDP] config injection error on session ${sessionId}`, e));
 
                                 this.sendCommand(page.id, 'Runtime.evaluate', {
                                     expression: AUTO_CONTINUE_SCRIPT,
@@ -571,6 +613,9 @@ export class CDPHandler extends EventEmitter {
                             } catch (e) {
                                 console.error(`[CDP] Failed to inject Auto-Continue into nested session ${sessionId}`, e);
                             }
+                        } else {
+                            this.pushAutomationConfigToConnection(page.id, sessionId).catch(() => { });
+                            this.stopAutoContinueRuntime(page.id, sessionId).catch(() => { });
                         }
 
                         this.sendCommand(page.id, 'DOM.enable', {}, undefined, sessionId).catch(() => { });
@@ -668,13 +713,16 @@ export class CDPHandler extends EventEmitter {
             const marker = check?.result?.value;
             const hasRuntime = !!(marker?.legacy || marker?.modernRunning || marker?.modernApi);
 
+            await this.pushAutomationConfigToConnection(pageId, sessionId);
+
+            if (!this.shouldInjectAutoContinueRuntime()) {
+                if (hasRuntime) {
+                    await this.stopAutoContinueRuntime(pageId, sessionId);
+                }
+                return;
+            }
+
             if (force || !hasRuntime) {
-                // If we are injecting the script, ALWAYS inject the config right before it.
-                // This guarantees followers and webviews receive the user's settings.
-                await this.sendCommand(pageId, 'Runtime.evaluate', {
-                    expression: this.getAutomationConfigExpression(),
-                    awaitPromise: false
-                }, 5000, sessionId).catch((e) => console.error(`[CDP] Failed setting config on ${pageId} freq update`, e));
 
                 // Inject script
                 await this.sendCommand(pageId, 'Runtime.evaluate', {

@@ -1207,7 +1207,9 @@ export function activate(context: vscode.ExtensionContext) {
 
         context.subscriptions.push(vscode.window.onDidChangeWindowState((state) => {
             if (state.focused && controllerLease) {
-                controllerLease.forceAcquire();
+                // Do not unconditionally steal leader on focus.
+                // Only self-heal leader election when no active leader exists.
+                attemptNoLeaderSelfHeal('window focus event');
                 updateControllerRoleStatus();
                 syncControllerRoleToCDP();
                 void alignDecentralizedAutomationToRole('window focus takeover');

@@ -122,8 +122,31 @@ This is designed to avoid ghost clicks into non-chat UI while still allowing act
 
 ## 5) Operational Guidance
 
+## 5.1) Known-working path (current production intent)
+
+For reliable operation, the expected path is:
+1. `CDP: ON` in the controlling window status bar.
+2. Window role is `LEADER` (or follower fail-open explicitly enabled).
+3. Runtime is injected only into the focused-visible page target in single-target mode.
+4. Bump send path uses `click-send` first; if unavailable, `form.requestSubmit()`, then guarded Enter dispatch.
+5. Run/Expand clicks execute via DOM scan/click on safe chat/action surfaces only.
+
+If any of the above is missing, behavior is expected to degrade safely (block instead of unsafe click/type).
+
+## 5.2) Methods intentionally NOT used (by design)
+
+The following are intentionally disabled/avoided because they produced unsafe host behavior in Antigravity fork builds:
+- Native fallback commands for Run/Expand from extension host (`workbench.*` command fallbacks).
+- Broad textarea + global keyboard submit fallbacks from backend send path.
+- Legacy `__ANTIGRAVITY_COMMAND__` bridge command execution.
+- Unscoped keyboard submit relays (`submit|keys`) that can leak into menu/layout shortcuts.
+- Unconditional leader takeover on every focus transition.
+
+These are non-working **by policy** (safety), not regressions.
+
 If bump text is typed repeatedly but not submitted:
 1. Verify runtime focus/visibility state (focused window should be the only bumper).
+2. Verify role status is stable (no rapid leader/follower flapping in logs).
 2. Enable action logging and inspect `submit` action telemetry lines.
 3. Confirm send button selectors still match current host DOM.
 4. Prefer selector updates over re-enabling keyboard submit fallbacks.

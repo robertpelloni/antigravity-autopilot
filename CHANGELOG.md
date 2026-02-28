@@ -1,6 +1,18 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.214] - 2026-02-28
+### Fixed
+* **Cross-Window Bump Fanout Guarding**: Gated Auto-Continue runtime injection to role-eligible windows only (leader or explicit follower override), preventing follower-disabled windows from running active bump loops.
+* **Single-Target CDP Focus Filtering**: In non-multi-tab mode, CDP now keeps only focused+visible page targets, reducing broad multi-window runtime injection and accidental cross-window activity.
+* **Follower Runtime Shutdown**: When role/config transitions make a window ineligible, runtime is now actively stopped instead of left running from previous injections.
+* **Leader Role Flap Reduction**: Replaced unconditional focus-time force-acquire with no-leader self-heal logic to reduce leader/follower thrash.
+
+### Changed
+* **Code Simplification**: Consolidated CDP runtime eligibility/config sync paths in `cdp-handler` (shared helpers for config push, runtime stop, and eligibility sync).
+* **Method Documentation Hardening**: Updated `docs/BUMP_AND_BUTTON_METHODS.md` to explicitly separate known-working methods from intentionally disabled/unsafe fallbacks.
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.214 VSIX build.
+
 ## [5.2.213] - 2026-02-28
 ### Fixed
 * **Watchdog Reinject Storm Suppression**: Restricted watchdog reinjection to leader + focused host windows and foreground-eligible runtime snapshots only, preventing repeated stale-heartbeat reinjections from background/follower sessions.

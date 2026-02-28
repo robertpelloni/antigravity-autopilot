@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 5.2.213  
+**Version**: 5.2.214  
 **Last Updated**: 2026-02-28  
-**Status**: Production hotfix shipped (watchdog reinjection storm suppression + cross-session action dedupe)
+**Status**: Production stabilization shipped (role-aware runtime injection + focused single-target CDP + reduced leader/follower flapping)
 
 ## Project Structure at a Glance
 
