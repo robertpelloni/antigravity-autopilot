@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 5.2.223  
+**Version**: 5.2.224  
 **Last Updated**: 2026-02-28  
-**Status**: Production stabilization shipped (submit fallback fail-closed + anti-repeat bump state guard + strict bump eligibility)
+**Status**: Production stabilization shipped (bump-priority runtime + duplicate click fallback suppression + strict bump eligibility)
 
 ## Project Structure at a Glance
 

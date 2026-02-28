@@ -348,7 +348,6 @@ export const AUTO_CONTINUE_SCRIPT = `
       el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
       el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
       log('clicked ' + label);
-      emitAction(group || 'click', label);
       return true;
     } catch (e) {
       return false;
@@ -550,7 +549,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     });
 
     const sessionJustOpened = (Date.now() - scriptStartedAt) <= Math.max(2000, Number((getConfig().bump || {}).sessionOpenGraceMs || 12000));
-    const chatNotActive = !isGenerating && !runVisible && !expandVisible;
+    const chatNotActive = !isGenerating;
     const bumpEligibleSignal = chatNotActive && (feedbackVisible || completionTextSeen || sessionJustOpened);
 
     const hash = [isGenerating ? '1' : '0', !!input ? '1' : '0', runVisible ? '1' : '0', expandVisible ? '1' : '0', submitVisible ? '1' : '0', feedbackVisible ? '1' : '0', completionTextSeen ? '1' : '0'].join('|');
@@ -587,10 +586,11 @@ export const AUTO_CONTINUE_SCRIPT = `
     return true;
   }
 
-  function tryButtons(cfg, fork) {
+  function tryButtons(cfg, fork, state) {
     const actions = targetSelectorsForFork(fork);
     const enabled = cfg.actions || {};
     const now = Date.now();
+    const completionPriority = !!(state && (state.completionTextSeen || state.feedbackVisible));
 
     const ordered = [
       { key: 'clickExpand', label: 'Expand', group: 'expand', selectors: actions.expand, re: /(expand|requires input)/i, allowNonChatFallback: true },
@@ -603,6 +603,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     for (const a of ordered) {
       if (!enabled[a.key]) continue;
+      if (completionPriority && (a.key === 'clickExpand' || a.key === 'clickRun')) continue;
       const lastAt = Number(lastButtonActionAt[a.key] || 0);
       const cooldownMs = getActionCooldownMs(a.key);
       if (lastAt > 0 && (now - lastAt) < cooldownMs) {
@@ -676,14 +677,14 @@ export const AUTO_CONTINUE_SCRIPT = `
       const state = readState(fork);
       window.__antigravityRuntimeState = { fork, ...state, ts: now };
 
-      const clicked = tryButtons(cfg, fork);
-      if (clicked) {
+      const bumped = tryBump(cfg, fork, state);
+      if (bumped) {
         lastActionAt = now;
         return;
       }
 
-      const bumped = tryBump(cfg, fork, state);
-      if (bumped) {
+      const clicked = tryButtons(cfg, fork, state);
+      if (clicked) {
         lastActionAt = now;
       }
     } catch (e) {}

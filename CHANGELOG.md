@@ -1,6 +1,16 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.224] - 2026-02-28
+### Fixed
+* **No-Bump While Expand Loops**: Runtime now prioritizes bump attempts before button scanning, so completion/waiting signals can trigger bump text even when Expand/Run controls remain visible.
+* **Duplicate Expand/Run Backfill Clicks**: Removed frontend success-path `__AUTOPILOT_ACTION__` emit on direct DOM click success, preventing redundant backend fallback clicks after a button was already clicked.
+* **Over-Strict Chat-Not-Active Gate**: Bump eligibility now treats "not generating" as inactive chat, instead of requiring Run/Expand absence.
+
+### Changed
+* **Runtime Simplification**: `tryButtons` now receives detected runtime state and suppresses Expand/Run scans when completion/feedback signals indicate bump should take priority.
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.224 VSIX build.
+
 ## [5.2.223] - 2026-02-28
 ### Fixed
 * **Frontend Submit Fallback Loop Kill**: Removed frontend submit action telemetry emissions from `auto-continue` and fail-closed submit fallback handling in `CDPStrategy`, preventing repeated backend `submit` method execution loops.
