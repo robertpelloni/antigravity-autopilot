@@ -62,6 +62,7 @@ export interface MethodDescriptor {
 
 const DEFAULT_ACCEPT_PATTERNS = [
     'accept', 'accept all', 'acceptall', 'keep', 'run', 'run command', 'retry', 'apply', 'execute',
+    'accept all changes', 'apply all changes', 'approve all', 'keep all',
     'confirm', 'allow once', 'allow', 'allow all', 'always approve', 'always allow', 'proceed', 'continue', 'yes', 'ok',
     'save', 'approve', 'overwrite', 'expand'
 ];
@@ -292,8 +293,13 @@ export class DOMScanClick implements IInteractionMethod {
                     : [];
 
                 const fallbackSelectors = [
+                    '[data-testid*="accept" i]',
+                    '[data-testid*="allow" i]',
+                    '[data-testid*="approve" i]',
+                    '[data-testid*="keep" i]',
                     '.interactive-editor button',
                     '.chat-input-container button',
+                    '.monaco-button',
                     'button[aria-label]',
                     'button[title]',
                     '[role="button"][aria-label]',
@@ -396,7 +402,17 @@ export class DOMScanClick implements IInteractionMethod {
                     if (!target) continue;
                     if (isNodeBanned(target)) continue;
 
-                    let text = ((target.textContent || '') + ' ' + (target.getAttribute('aria-label') || '') + ' ' + (target.getAttribute('title') || '')).trim().toLowerCase();
+                    const dataTestId = (target.getAttribute('data-testid') || '').toLowerCase();
+                    let text = ((target.textContent || '') + ' ' + (target.getAttribute('aria-label') || '') + ' ' + (target.getAttribute('title') || '') + ' ' + dataTestId + ' ' + (target.id || '')).trim().toLowerCase();
+
+                    if (!visible(target)) continue;
+
+                    if (/(accept.*all|allow.*all|approve.*all|keep.*all)/i.test(dataTestId)) {
+                        target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                        target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                        target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                        return true;
+                    }
                     
                     // Icon-only button handling (Run / Expand)
                     if (!text) {
@@ -411,12 +427,13 @@ export class DOMScanClick implements IInteractionMethod {
                         }
                     }
 
-                    if (!text || text.length > 120) continue;
-                    if (!visible(target)) continue;
+                    if (!text || text.length > 220) continue;
                     const normalized = text.replace(/\s+/g, '');
                     if (reject.some(p => text.includes(p))) continue;
                     const acceptHit = accept.some(p => text.includes(p))
                         || normalized.includes('acceptall')
+                        || normalized.includes('acceptallchanges')
+                        || normalized.includes('applyallchanges')
                         || /\bkeep\b/.test(text)
                         || /always\s*approve|always\s*allow/.test(text);
                     if (!acceptHit) continue;

@@ -191,8 +191,9 @@ export class CDPHandler extends EventEmitter {
             }
         }
 
-        // Optional explicit constructor port range fallback (only if caller supplied it)
-        if (this.startPort > 0 && this.endPort > 0) {
+        // Optional explicit constructor port range fallback (only if caller supplied it).
+        // Suppress this fallback when auto-discovery already yielded a concrete port.
+        if (!this.discoveredPort && this.startPort > 0 && this.endPort > 0) {
             for (let p = this.startPort; p <= this.endPort; p++) portsToCheck.add(p);
         }
 
@@ -742,6 +743,11 @@ export class CDPHandler extends EventEmitter {
                     console.log(`[Browser Debug] ${logMsg}`);
                 }
             } else if (text.startsWith('__AUTOPILOT_HYBRID_BUMP__:')) {
+                if (!this.controllerRoleIsLeader) {
+                    logToOutput('[Bump-Blocked] Ignoring hybrid bump bridge payload in follower window.');
+                    return;
+                }
+
                 // Phase 52: Hybrid Bump Strategy
                 const bumpText = text.substring('__AUTOPILOT_HYBRID_BUMP__:'.length);
                 const vscode = require('vscode');
@@ -966,6 +972,10 @@ export class CDPHandler extends EventEmitter {
      */
     async sendHybridBump(message: string): Promise<boolean> {
         if (!message || !message.trim()) return false;
+        if (!this.controllerRoleIsLeader) {
+            logToOutput('[Bump-Blocked] sendHybridBump skipped in follower window (leader-only dispatch).');
+            return false;
+        }
         const safe = JSON.stringify(String(message));
         const expression = `
             (function() {

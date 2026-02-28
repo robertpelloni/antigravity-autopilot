@@ -122,6 +122,7 @@ export function activate(context: vscode.ExtensionContext) {
         let lastSafetySignal: 'QUIET' | 'ACTIVE' | 'HOT' | null = null;
         let lastSafetyBlockedTotal: number | null = null;
         let lastSafetyHotAlertAt = 0;
+        let lastRoleAutomationMode: 'leader' | 'follower-enabled' | 'follower-disabled' | null = null;
 
         updateControllerRoleStatus();
 
@@ -186,6 +187,34 @@ export function activate(context: vscode.ExtensionContext) {
 
         let lastNoLeaderSelfHealAt = 0;
 
+        const alignDecentralizedAutomationToRole = async (source: string) => {
+            if (!isUnifiedAutoAcceptEnabled()) {
+                lastRoleAutomationMode = null;
+                return;
+            }
+
+            const followerUiAutomationEnabled = config.get<boolean>('controller.followerUiAutomationEnabled') ?? false;
+            const mode: 'leader' | 'follower-enabled' | 'follower-disabled' = isControllerLeader()
+                ? 'leader'
+                : (followerUiAutomationEnabled ? 'follower-enabled' : 'follower-disabled');
+
+            if (mode === lastRoleAutomationMode) {
+                return;
+            }
+
+            lastRoleAutomationMode = mode;
+
+            if (mode === 'follower-disabled') {
+                await strategyManager.stop().catch(() => { });
+                log.info(`[ControllerLease] Runtime role alignment (${source}): follower with UI automation disabled.`);
+            } else {
+                await strategyManager.start().catch(e => log.error(`Role alignment start failed (${source}): ${e?.message || e}`));
+                log.info(`[ControllerLease] Runtime role alignment (${source}): ${mode === 'leader' ? 'leader active' : 'follower override active'}.`);
+            }
+
+            syncControllerRoleToCDP();
+        };
+
         const refreshRuntimeState = async () => {
             try {
                 updateControllerRoleStatus();
@@ -195,6 +224,7 @@ export function activate(context: vscode.ExtensionContext) {
                     attemptNoLeaderSelfHeal('runtime refresh');
                 }
                 syncControllerRoleToCDP();
+                await alignDecentralizedAutomationToRole('runtime refresh');
                 const cdp = resolveCDPStrategy();
                 if (!cdp || !cdp.isConnected()) {
                     latestRuntimeState = null;
@@ -310,8 +340,10 @@ export function activate(context: vscode.ExtensionContext) {
                 const autoResumeDelayMs = completionReadyToResume
                     ? Math.min(waitingDelayMs, 15000)
                     : waitingDelayMs;
+                const thisWindowIsLeader = isControllerLeader();
 
                 if (autoFixWaitingEnabled
+                    && thisWindowIsLeader
                     && waitingElapsed >= autoFixWaitingDelayMs
                     && (now - lastAutoFixWatchdogAt) >= autoFixWaitingCooldownMs
                     && !autoFixWatchdogInProgress) {
@@ -369,6 +401,12 @@ export function activate(context: vscode.ExtensionContext) {
                 }
 
                 if (autoResumeEnabled && waitingElapsed >= autoResumeDelayMs && (now - lastAutoResumeAt) >= autoResumeCooldownMs && readyToResumeStreak >= stablePollsRequired) {
+                    if (!thisWindowIsLeader) {
+                        lastAutoResumeOutcome = 'blocked';
+                        lastAutoResumeBlockedReason = 'follower window (leader-only auto-resume)';
+                        return;
+                    }
+
                     const guard = getAutoResumeGuardReport(runtimeState);
 
                     if (guard.allowed) {
@@ -765,6 +803,14 @@ export function activate(context: vscode.ExtensionContext) {
             runtimeState?: any,
             options?: { forceFull?: boolean; escalationReason?: string; messageOverride?: string }
         ) => {
+            if (!ensureControllerLeader(`sendAutoResumeMessage (${reason})`, reason === 'manual')) {
+                if (reason === 'automatic') {
+                    lastAutoResumeOutcome = 'blocked';
+                    lastAutoResumeBlockedReason = 'follower window (leader-only resume dispatch)';
+                }
+                return false;
+            }
+
             const fullMessage = (config.get<string>('runtimeAutoResumeMessage') || '').trim();
             const minimalMessage = (config.get<string>('runtimeAutoResumeMinimalMessage') || '').trim();
             const minimalVSCode = (config.get<string>('runtimeAutoResumeMinimalMessageVSCode') || '').trim();
@@ -1171,23 +1217,6 @@ export function activate(context: vscode.ExtensionContext) {
         // For now, it's left as potentially undefined, which TypeScript will flag.
         // Assuming `cdpStrategy` refers to an instance of CDPHandler or similar.
         context.subscriptions.push(
-            safeRegisterCommand('antigravity.getChromeDevtoolsMcpUrl', async () => {
-                try {
-                    const probe = new CDPHandler();
-                    const instances = await probe.scanForInstances();
-                    for (const instance of instances) {
-                        const wsTarget = instance.pages.find((p: any) => typeof p?.webSocketDebuggerUrl === 'string' && p.webSocketDebuggerUrl.length > 0);
-                        if (wsTarget?.webSocketDebuggerUrl) {
-                            return wsTarget.webSocketDebuggerUrl as string;
-                        }
-                    }
-                } catch (error: any) {
-                    log.warn(`DevTools URL probe failed: ${String(error?.message || error || 'unknown error')}`);
-                }
-
-                return undefined;
-            }),
-            safeRegisterCommand('antigravity.clickExpand', () => resolveCDPStrategy()?.executeAction('expand')),
             safeRegisterCommand('antigravity.resetConnection', async () => {
                 const cdpStrategy = resolveCDPStrategy();
                 if (cdpStrategy) {
@@ -1206,7 +1235,6 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Register Commands
         // Internal-only commands are intentionally not contributed in package.json.
-        // Current internal command policy allowlist: antigravity.getChromeDevtoolsMcpUrl
         context.subscriptions.push(
             safeRegisterCommand('antigravity.toggleExtension', async () => {
                 await strategyManager.toggle();
@@ -1830,6 +1858,9 @@ export function activate(context: vscode.ExtensionContext) {
                 vscode.window.showInformationMessage('Antigravity: escalation timeline cleared (no prompt).');
             }),
             safeRegisterCommand('antigravity.resumeFromWaitingState', async () => {
+                if (!ensureControllerLeader('resumeFromWaitingState', true)) {
+                    return;
+                }
                 await sendAutoResumeMessage('manual', latestRuntimeState);
             }),
             safeRegisterCommand('antigravity.validateCrossUiCoverage', async () => {
@@ -2049,9 +2080,14 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             }),
             safeRegisterCommand('antigravity.writeAndSubmitBump', async () => {
+                if (!ensureControllerLeader('writeAndSubmitBump', true)) {
+                    return;
+                }
                 const message = config.get<string>('actions.bump.text') || 'Proceed';
-                await sendAutoResumeMessage('manual', null, { messageOverride: message } as any);
-                vscode.window.showInformationMessage(`Antigravity: Bump message "${message}" submitted.`);
+                const sent = await sendAutoResumeMessage('manual', null, { messageOverride: message } as any);
+                if (sent) {
+                    vscode.window.showInformationMessage(`Antigravity: Bump message "${message}" submitted.`);
+                }
             }),
             safeRegisterCommand('antigravity.clickAccept', async () => {
                 const cdp = resolveCDPStrategy();
@@ -2063,7 +2099,6 @@ export function activate(context: vscode.ExtensionContext) {
             // If we don't register them here, VS Code falls back to a global layout toggle alias.
             safeRegisterCommand('antigravity.agent.acceptAgentStep', async () => { /* legacy backend sinkhole */ }),
             safeRegisterCommand('antigravity.terminal.accept', async () => { /* legacy backend sinkhole */ }),
-            safeRegisterCommand('antigravity.testMethod', async () => { /* legacy backend sinkhole */ }),
             safeRegisterCommand('antigravity.clickRun', async () => {
                 const cdp = resolveCDPStrategy();
                 if (cdp && await cdp.executeAction('run')) return;
@@ -2099,9 +2134,9 @@ export function activate(context: vscode.ExtensionContext) {
         // Initialize based on saved config
         if (isUnifiedAutoAcceptEnabled()) {
             attemptNoLeaderSelfHeal('activation bootstrap preflight');
-            // Hotfix: fail-open by default to avoid startup deadlocks where no window acquires
-            // leader quickly enough and automation never starts.
-            const followerUiAutomationEnabled = config.get<boolean>('controller.followerUiAutomationEnabled') ?? true;
+            // Default safety posture: followers are OFF unless explicitly opted in.
+            // This prevents multi-window duplicate click loops and cross-window action fanout.
+            const followerUiAutomationEnabled = config.get<boolean>('controller.followerUiAutomationEnabled') ?? false;
 
             // Default safety posture: only the controller leader runs decentralized UI automation.
             // Followers can opt-in via controller.followerUiAutomationEnabled.
