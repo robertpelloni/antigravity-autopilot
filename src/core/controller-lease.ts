@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { createHash } from 'crypto';
 
 export interface ControllerLeasePayload {
     ownerId: string;
@@ -28,7 +29,12 @@ export class ControllerLease {
 
     private getDefaultWorkspaceLeasePath(workspace: string): string {
         const home = os.homedir() || os.tmpdir();
-        return path.join(home, '.antigravity-controller-lease.json');
+        const normalizedWorkspace = String(workspace || 'no-workspace')
+            .trim()
+            .toLowerCase()
+            .replace(/\\/g, '/');
+        const workspaceHash = createHash('sha256').update(normalizedWorkspace).digest('hex').slice(0, 16);
+        return path.join(home, `.antigravity-controller-lease-${workspaceHash}.json`);
     }
 
     start(): void {

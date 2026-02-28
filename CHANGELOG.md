@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.212] - 2026-02-28
+### Fixed
+* **Cross-Workspace Leader Suppression Regression**: Restored workspace-scoped controller lease persistence using stable workspace-hashed lease filenames so unrelated workspaces can no longer force this window into follower/passive mode.
+* **Leader Election Isolation**: Prevented global lease contention from disabling local automation in active workspace sessions while preserving single-leader behavior within the same workspace.
+
+### Changed
+* **Release Metadata Sync**: Bumped version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.212 VSIX build.
+
 ## [5.2.211] - 2026-02-28
 ### Fixed
 * **Antigravity Action Suppression Regression**: Relaxed Antigravity-specific `requireChatSurface` gating for Run/Expand/Submit detection/click paths so valid fork controls outside strict chat wrappers are no longer skipped.
