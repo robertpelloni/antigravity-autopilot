@@ -361,7 +361,8 @@ export function activate(context: vscode.ExtensionContext) {
                 if (!isControllerLeader() && (roleNow - lastNoLeaderSelfHealAt) >= 5000) {
                     lastNoLeaderSelfHealAt = roleNow;
                     attemptNoLeaderSelfHeal('runtime refresh');
-                    if (!isControllerLeader()) {
+                    const allowRuntimeRefreshTakeover = config.get<boolean>('controller.runtimeRefreshTakeoverEnabled') ?? false;
+                    if (!isControllerLeader() && allowRuntimeRefreshTakeover) {
                         attemptFocusedWindowTakeover('runtime refresh');
                     }
                 }
