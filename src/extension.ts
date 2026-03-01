@@ -269,7 +269,7 @@ export function activate(context: vscode.ExtensionContext) {
             return healed;
         };
 
-        const attemptFocusedWindowTakeover = (reason: string): boolean => {
+        const attemptFocusedWindowTakeover = (reason: string, options?: { allowUnfocused?: boolean }): boolean => {
             if (!controllerLease) {
                 return false;
             }
@@ -282,9 +282,12 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             const allowFocusedTakeover = config.get<boolean>('controller.allowFocusedTakeover') ?? true;
-            if (!allowFocusedTakeover || !vscode.window.state.focused) {
+            const allowUnfocused = options?.allowUnfocused === true;
+            if (!allowFocusedTakeover || (!allowUnfocused && !vscode.window.state.focused)) {
                 if (!allowFocusedTakeover) {
                     log.info(`[ControllerLease] Focused-window takeover skipped (${reason}): controller.allowFocusedTakeover=false`);
+                } else if (!allowUnfocused && !vscode.window.state.focused) {
+                    log.info(`[ControllerLease] Focused-window takeover skipped (${reason}): window not focused`);
                 }
                 return false;
             }
@@ -2315,7 +2318,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             const leaderAtBootstrap = ensureControllerLeader('activation bootstrap');
-            const takeoverSucceeded = !leaderAtBootstrap && attemptFocusedWindowTakeover('activation bootstrap follower');
+            const takeoverSucceeded = !leaderAtBootstrap && attemptFocusedWindowTakeover('activation bootstrap follower', { allowUnfocused: true });
             const leaderAfterBootstrap = leaderAtBootstrap || takeoverSucceeded || isControllerLeader();
 
             if (leaderAfterBootstrap) {
