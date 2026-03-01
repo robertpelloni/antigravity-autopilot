@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.236] - 2026-03-01
+### Fixed
+* **Bootstrap Follower Deadlock**: Corrected focused takeover behavior so bootstrap can recover leader role safely even when another workspace previously held lease ownership.
+* **No-Leader Takeover Regression**: Removed an incorrect takeover guard that could prevent forced leader acquisition when no active leader was available.
+
+### Changed
+* **Bootstrap Cross-Workspace Rescue**: Activation bootstrap takeover now uses a scoped cross-workspace override, while normal focus/runtime behavior remains constrained by `controller.allowCrossWorkspaceTakeover`.
+
 ## [5.2.235] - 2026-03-01
 ### Fixed
 * **Cross-Workspace Leader Steal Thrash**: Focus-based takeover no longer overrides leaders from unrelated workspaces by default (`controller.allowCrossWorkspaceTakeover=false` unless explicitly enabled).

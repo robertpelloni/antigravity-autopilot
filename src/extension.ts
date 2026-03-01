@@ -269,7 +269,7 @@ export function activate(context: vscode.ExtensionContext) {
             return healed;
         };
 
-        const attemptFocusedWindowTakeover = (reason: string, options?: { allowUnfocused?: boolean }): boolean => {
+        const attemptFocusedWindowTakeover = (reason: string, options?: { allowUnfocused?: boolean; allowCrossWorkspaceOverride?: boolean }): boolean => {
             if (!controllerLease) {
                 return false;
             }
@@ -295,19 +295,16 @@ export function activate(context: vscode.ExtensionContext) {
             const leader = controllerLease.getLeaderInfo();
             const sameWorkspace = !!leader && isSameWorkspaceLease(leader.workspace);
             const allowCrossWorkspaceTakeover = config.get<boolean>('controller.allowCrossWorkspaceTakeover') ?? false;
+            const allowCrossWorkspaceForAttempt = allowCrossWorkspaceTakeover || options?.allowCrossWorkspaceOverride === true;
 
-            if (leader && !sameWorkspace && !allowCrossWorkspaceTakeover) {
+            if (leader && !sameWorkspace && !allowCrossWorkspaceForAttempt) {
                 log.info(`[ControllerLease] Focused-window takeover skipped (${reason}): leader workspace mismatch (${leader.workspace}) and controller.allowCrossWorkspaceTakeover=false.`);
                 return false;
             }
 
-            if (leader && !sameWorkspace && allowCrossWorkspaceTakeover) {
+            if (leader && !sameWorkspace && allowCrossWorkspaceForAttempt) {
                 const localWorkspace = getCurrentWorkspaceId();
                 log.warn(`[ControllerLease] Focused-window cross-workspace takeover override (${reason}): leader=${leader.workspace} local=${localWorkspace}.`);
-            }
-
-            if (!leader && !allowCrossWorkspaceTakeover) {
-                return false;
             }
 
             controllerLease.forceAcquire();
@@ -2319,7 +2316,10 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             const leaderAtBootstrap = ensureControllerLeader('activation bootstrap');
-            const takeoverSucceeded = !leaderAtBootstrap && attemptFocusedWindowTakeover('activation bootstrap follower', { allowUnfocused: true });
+            const takeoverSucceeded = !leaderAtBootstrap && attemptFocusedWindowTakeover('activation bootstrap follower', {
+                allowUnfocused: true,
+                allowCrossWorkspaceOverride: true
+            });
             const leaderAfterBootstrap = leaderAtBootstrap || takeoverSucceeded || isControllerLeader();
 
             if (leaderAfterBootstrap) {
