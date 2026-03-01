@@ -1,6 +1,20 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.233] - 2026-03-01
+### Fixed
+* **Stopped Thread Recovery**: Added stopped-thread/resume signal detection and resume/reactivate button handling so bump flow can recover input on stopped conversation threads.
+* **Runtime Action Telemetry Coverage**: Successful runtime clicks now emit action bridge events for improved host-side routing and diagnostics.
+* **Submit Target Scope Safety**: Tightened submit fallback targeting to composer-local controls to reduce no-op submit loops on unrelated UI controls.
+
+### Changed
+* **Controller Lease Diagnostics**: Added lease debug snapshot output (path/owner/pid/staleness) in controller state reporting and leader/follower activation logs.
+
+## [5.2.232] - 2026-02-28
+### Changed
+* **Release Validity Refresh**: Bumped extension version to produce a fresh VSIX identity after prior package validation rejection.
+* **Release Metadata Sync**: Updated version metadata across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` for the 5.2.232 build.
+
 ## [5.2.231] - 2026-02-28
 ### Fixed
 * **Follower Lockout From Unrelated Workspace Leader**: Restored workspace-scoped controller lease files so a leader in another workspace no longer suppresses automation in this workspace.

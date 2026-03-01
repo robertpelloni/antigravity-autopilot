@@ -1,7 +1,6 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import * as crypto from 'crypto';
 
 export interface ControllerLeasePayload {
     ownerId: string;
@@ -9,6 +8,20 @@ export interface ControllerLeasePayload {
     workspace: string;
     updatedAt: number;
     createdAt: number;
+}
+
+export interface ControllerLeaseDebugState {
+    leasePath: string;
+    ownerId: string;
+    workspaceKey: string;
+    currentPid: number;
+    staleMs: number;
+    heartbeatMs: number;
+    now: number;
+    lease: ControllerLeasePayload | null;
+    leaseAgeMs: number | null;
+    leaseIsStale: boolean;
+    isLeader: boolean;
 }
 
 export class ControllerLease {
@@ -29,9 +42,7 @@ export class ControllerLease {
 
     private getDefaultWorkspaceLeasePath(workspace: string): string {
         const home = os.homedir() || os.tmpdir();
-        const normalizedWorkspace = this.normalizeWorkspaceKey(workspace);
-        const workspaceHash = crypto.createHash('sha1').update(normalizedWorkspace).digest('hex').slice(0, 16);
-        return path.join(home, `.antigravity-controller-lease.${workspaceHash}.json`);
+        return path.join(home, '.antigravity-controller-lease.json');
     }
 
     private normalizeWorkspaceKey(workspace: string): string {
@@ -40,12 +51,33 @@ export class ControllerLease {
             return 'no-workspace';
         }
 
-        const normalizedSeparators = raw.replace(/\\/g, '/');
+        const normalizedSeparators = raw.replace(/\\/g, '/').replace(/\/+$/, '');
         const normalizedCase = process.platform === 'win32'
             ? normalizedSeparators.toLowerCase()
             : normalizedSeparators;
 
         return normalizedCase;
+    }
+
+    getDebugState(): ControllerLeaseDebugState {
+        const now = Date.now();
+        const lease = this.readLease();
+        const leaseAgeMs = lease ? Math.max(0, now - lease.updatedAt) : null;
+        const leaseIsStale = lease ? this.isStale(lease) : false;
+
+        return {
+            leasePath: this.leasePath,
+            ownerId: this.ownerId,
+            workspaceKey: this.normalizeWorkspaceKey(this.workspace),
+            currentPid: process.pid,
+            staleMs: this.staleMs,
+            heartbeatMs: this.heartbeatMs,
+            now,
+            lease,
+            leaseAgeMs,
+            leaseIsStale,
+            isLeader: !!lease && !leaseIsStale && lease.ownerId === this.ownerId
+        };
     }
 
     start(): void {
@@ -96,8 +128,15 @@ export class ControllerLease {
             if (isAlive) {
                 try {
                     process.kill(pid, 0);
-                } catch (e) {
-                    isAlive = false;
+                } catch (e: any) {
+                    const code = String(e?.code || '').toUpperCase();
+                    // EPERM/EACCES means the process exists but we cannot signal it.
+                    // Treat this as alive so we don't spuriously steal lease ownership.
+                    if (code === 'EPERM' || code === 'EACCES') {
+                        isAlive = true;
+                    } else {
+                        isAlive = false;
+                    }
                 }
             }
             if (isAlive) {
@@ -114,7 +153,23 @@ export class ControllerLease {
             updatedAt: now
         };
 
-        const wrote = this.writeLease(next);
+        let wrote = false;
+
+        if (force || (existing && existing.ownerId === this.ownerId)) {
+            wrote = this.writeLease(next);
+        } else {
+            wrote = this.tryClaimLeaseAtomically(next);
+            if (!wrote && existing && existing.ownerId !== this.ownerId) {
+                // Dead/stale lease owner: best-effort reclaim with an unlink + atomic claim.
+                try {
+                    fs.unlinkSync(this.leasePath);
+                } catch {
+                    // Another process may have already replaced/removed it.
+                }
+                wrote = this.tryClaimLeaseAtomically(next);
+            }
+        }
+
         if (!wrote) {
             return false;
         }
@@ -164,6 +219,28 @@ export class ControllerLease {
         } catch (e: any) {
             console.error('[ControllerLease] Failed to write lease file:', e);
             // Best-effort write; non-critical.
+            return false;
+        }
+    }
+
+    private tryClaimLeaseAtomically(payload: ControllerLeasePayload): boolean {
+        try {
+            fs.writeFileSync(this.leasePath, JSON.stringify(payload, null, 2), {
+                encoding: 'utf-8',
+                flag: 'wx'
+            });
+            return true;
+        } catch (e: any) {
+            const code = String(e?.code || '').toUpperCase();
+            if (code === 'EEXIST') {
+                return false;
+            }
+            // EPERM/EBUSY can happen on Windows under AV/indexing contention.
+            // Treat as non-claim rather than escalating to leader.
+            if (code === 'EPERM' || code === 'EBUSY' || code === 'EACCES') {
+                return false;
+            }
+            console.error('[ControllerLease] Atomic claim failed:', e);
             return false;
         }
     }

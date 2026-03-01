@@ -76,6 +76,12 @@ export const AUTO_CONTINUE_SCRIPT = `
     emitBridge('__AUTOPILOT_ACTION__:' + String(group || 'click') + '|' + String(detail || 'triggered'));
   }
 
+  function emitTypeRelay(text) {
+    const payload = String(text || '').trim();
+    if (!payload) return;
+    emitBridge('__AUTOPILOT_TYPE__:' + payload);
+  }
+
   function detectFork(cfg) {
     const configuredMode = String(cfg?.runtime?.mode || '').toLowerCase();
     if (configuredMode === 'antigravity' || configuredMode === 'cursor' || configuredMode === 'vscode') {
@@ -301,7 +307,12 @@ export const AUTO_CONTINUE_SCRIPT = `
       ],
       acceptAll: [
         '[title*="Accept All" i]', '[aria-label*="Accept All" i]',
+        '[title*="Accept all" i]', '[aria-label*="Accept all" i]',
+        '[title*="Accept all changes" i]', '[aria-label*="Accept all changes" i]',
+        '[title*="Accept changes" i]', '[aria-label*="Accept changes" i]',
         '[title*="Apply All" i]', '[aria-label*="Apply All" i]',
+        '[title*="Apply all changes" i]', '[aria-label*="Apply all changes" i]',
+        '[title*="Keep all" i]', '[aria-label*="Keep all" i]',
         '[data-testid*="accept-all" i]', '.codicon-check-all'
       ],
       keep: [
@@ -309,14 +320,26 @@ export const AUTO_CONTINUE_SCRIPT = `
         '[title*="Keep" i]', '[aria-label*="Keep" i]',
         '[data-testid*="keep" i]'
       ],
+      resume: [
+        '[title*="Resume" i]', '[aria-label*="Resume" i]',
+        '[title*="Reactivate" i]', '[aria-label*="Reactivate" i]',
+        '[title*="Continue conversation" i]', '[aria-label*="Continue conversation" i]',
+        '[title*="Start new message" i]', '[aria-label*="Start new message" i]',
+        '[title*="New message" i]', '[aria-label*="New message" i]',
+        '[data-testid*="resume" i]', '[data-testid*="reactivate" i]', '[data-testid*="new-message" i]'
+      ],
       submit: [
         '[title*="Send" i]', '[aria-label*="Send" i]',
         '[aria-label*="Send message" i]',
+        '[title*="Send message" i]',
+        '[title*="Send prompt" i]', '[aria-label*="Send prompt" i]',
         '[title*="Submit" i]', '[aria-label*="Submit" i]',
         '[title*="Continue" i]', '[aria-label*="Continue" i]',
         '[aria-keyshortcuts*="Enter" i]',
         '[data-testid*="send" i]', '[data-testid*="submit" i]',
-        'button[type="submit"]', '.codicon-send'
+        'button[type="submit"]', '.codicon-send',
+        '[role="button"][class*="send" i]',
+        '[role="button"][class*="submit" i]'
       ],
       feedback: [
         '[aria-label*="thumbs up" i]', '[title*="thumbs up" i]',
@@ -443,6 +466,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
 
       log('clicked ' + label);
+      emitAction(group || 'click', String(label || 'triggered').toLowerCase());
       return true;
     } catch (e) {
       return false;
@@ -452,7 +476,7 @@ export const AUTO_CONTINUE_SCRIPT = `
   function getActionCooldownMs(actionKey) {
     switch (String(actionKey || '')) {
       case 'clickExpand':
-        return 8000;
+        return 30000;
       case 'clickRun':
         return 5000;
       case 'clickAcceptAll':
@@ -538,6 +562,20 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
     }
 
+    // Final generic fallback: allow only likely chat composers.
+    for (const el of all) {
+      if (!isVisible(el) || !isSafeSurface(el)) continue;
+      if (isTerminalSurface(el)) continue;
+      if (isEditorLikeSurface(el)) continue;
+      const normalized = normalizeText(el);
+      if (/(terminal|shell|debug console)/i.test(normalized)) continue;
+      const tag = (el.tagName || '').toLowerCase();
+      const isEditable = tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true';
+      if (!isEditable) continue;
+      if (!isChatSurface(el) && !hasNearbySubmitControl(el, fork)) continue;
+      return el;
+    }
+
     return null;
   }
 
@@ -585,12 +623,67 @@ export const AUTO_CONTINUE_SCRIPT = `
     }
   }
 
+  function readInputValue(input) {
+    if (!input) return '';
+    try {
+      if (input.isContentEditable || input.getAttribute('contenteditable') === 'true') {
+        return String(input.textContent || '').trim();
+      }
+      return String(input.value || '').trim();
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function didTypeStick(input, expectedText) {
+    const actual = readInputValue(input).toLowerCase();
+    const expected = String(expectedText || '').trim().toLowerCase();
+    if (!expected) return false;
+    return actual.includes(expected);
+  }
+
   function safeSubmitFromInput(input, fork) {
     if (!input) return false;
     if (isTerminalSurface(input)) return false;
     if (!isChatSurface(input) && !hasNearbySubmitControl(input, fork)) return false;
     try {
       input.focus();
+      input.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true
+      }));
+      input.dispatchEvent(new KeyboardEvent('keyup', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true
+      }));
+      input.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+        metaKey: true,
+        bubbles: true,
+        cancelable: true
+      }));
+      input.dispatchEvent(new KeyboardEvent('keyup', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+        metaKey: true,
+        bubbles: true,
+        cancelable: true
+      }));
       input.dispatchEvent(new KeyboardEvent('keydown', {
         key: 'Enter',
         code: 'Enter',
@@ -662,15 +755,18 @@ export const AUTO_CONTINUE_SCRIPT = `
   function submitWithRetries(input, fork, cfg, typedText) {
     const baseDelay = Math.max(60, Number(cfg.bump?.submitDelayMs || 180));
     const attemptDelay = Math.max(120, Math.min(600, Math.floor(baseDelay * 0.9)));
-    const maxAttempts = 6;
-    const beforeValue = String(typedText || '').trim();
+    const maxAttempts = 4;
+    const beforeValue = readInputValue(input);
+    if (!beforeValue) {
+      log('submit skipped: bump text missing in input');
+      return;
+    }
 
     const tryOnce = function (attempt) {
       const currentInput = (input && input.isConnected) ? input : getInput(fork);
       if (!currentInput) return;
 
-      const send = findSubmitNearInput(currentInput, fork)
-        || findClickable(targetSelectorsForFork(fork).submit, /(send|submit|continue)/i, { requireChatSurface: true, allowNonChatFallback: false });
+      const send = findSubmitNearInput(currentInput, fork);
       if (send) {
         clickElement(send, 'Submit bump text', 'submit');
       }
@@ -709,6 +805,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     const actionSignals = targetSelectorsForFork(fork);
     const runVisible = !!findClickable(actionSignals.run, /(run|execute)/i, { requireChatSurface: true, allowNonChatFallback: true });
     const expandVisible = !!findClickable(actionSignals.expand, /(expand|requires input)/i, { requireChatSurface: true, allowNonChatFallback: true });
+    const resumeVisible = !!findClickable(actionSignals.resume, /(resume|reactivate|continue\s*conversation|start\s*(a\s*)?new\s*message|new\s*message)/i, { requireChatSurface: true, allowNonChatFallback: true });
     const submitVisible = !!findClickable(actionSignals.submit, /(send|submit|continue)/i, { requireChatSurface: true, allowNonChatFallback: false });
     const feedbackVisible = queryAllDeep(actionSignals.feedback.join(',')).some(function (node) {
       const el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
@@ -723,12 +820,14 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     const bodyText = ((document.body && document.body.innerText) ? document.body.innerText : '').toLowerCase();
     const waitingTextSeen = /(waiting for your message|waiting for user message|reactivate|start a new message|chat session (is )?complete|task complete|resume conversation|send a message|continue the conversation|ready for your next request)/i.test(bodyText);
+    const completeStatusSeen = /(completed|complete|all done|done|finished|ready for review|awaiting input|waiting)/i.test(bodyText);
+    const stoppedThreadSeen = /(thread (is )?stopped|stopped thread|conversation stopped|chat stopped|reactivate|resume conversation|start a new message|continue conversation)/i.test(bodyText);
 
     const sessionJustOpened = (Date.now() - scriptStartedAt) <= Math.max(2000, Number((getConfig().bump || {}).sessionOpenGraceMs || 12000));
     const chatNotActive = !isGenerating;
-    const bumpEligibleSignal = chatNotActive && (feedbackVisible || completionTextSeen || waitingTextSeen || submitVisible || sessionJustOpened);
+    const bumpEligibleSignal = chatNotActive && (feedbackVisible || completionTextSeen || waitingTextSeen || completeStatusSeen || stoppedThreadSeen || resumeVisible || submitVisible || sessionJustOpened);
 
-    const hash = [isGenerating ? '1' : '0', !!input ? '1' : '0', runVisible ? '1' : '0', expandVisible ? '1' : '0', submitVisible ? '1' : '0', feedbackVisible ? '1' : '0', completionTextSeen ? '1' : '0', waitingTextSeen ? '1' : '0'].join('|');
+    const hash = [isGenerating ? '1' : '0', !!input ? '1' : '0', runVisible ? '1' : '0', expandVisible ? '1' : '0', resumeVisible ? '1' : '0', submitVisible ? '1' : '0', feedbackVisible ? '1' : '0', completionTextSeen ? '1' : '0', waitingTextSeen ? '1' : '0', completeStatusSeen ? '1' : '0', stoppedThreadSeen ? '1' : '0'].join('|');
     if (hash !== lastStateHash) {
       lastStateHash = hash;
       lastUserVisibleChangeAt = Date.now();
@@ -739,10 +838,13 @@ export const AUTO_CONTINUE_SCRIPT = `
       hasInput: !!input,
       runVisible,
       expandVisible,
+      resumeVisible,
       submitVisible,
       feedbackVisible,
       completionTextSeen,
       waitingTextSeen,
+      completeStatusSeen,
+      stoppedThreadSeen,
       sessionJustOpened,
       chatNotActive,
       bumpEligibleSignal,
@@ -769,12 +871,13 @@ export const AUTO_CONTINUE_SCRIPT = `
     const now = Date.now();
 
     const ordered = [
-      { key: 'clickAcceptAll', label: 'Accept All', group: 'accept-all', selectors: actions.acceptAll, re: /(accept\s*all|apply\s*all|allow\s*all|keep\s*all)/i, allowNonChatFallback: true },
+      { key: 'clickAcceptAll', label: 'Accept All', group: 'accept-all', selectors: actions.acceptAll, re: /(accept\s*all|accept\s*all\s*changes|accept\s*changes|apply\s*all|apply\s*all\s*changes|allow\s*all|keep\s*all)/i, allowNonChatFallback: true },
       { key: 'clickKeep', label: 'Keep', group: 'continue', selectors: actions.keep, re: /\bkeep\b/i, allowNonChatFallback: true },
+      { key: 'clickResume', label: 'Resume', group: 'resume', selectors: actions.resume, re: /(resume|reactivate|continue\s*conversation|start\s*(a\s*)?new\s*message|new\s*message)/i, allowNonChatFallback: true },
       { key: 'clickAlwaysAllow', label: 'Always Allow', group: 'accept', selectors: actions.alwaysAllow, re: /(always\s*allow|always\s*approve)/i, allowNonChatFallback: true },
       { key: 'clickRetry', label: 'Retry', group: 'continue', selectors: actions.retry, re: /\bretry\b/i, allowNonChatFallback: true }
       ,{ key: 'clickRun', label: 'Run', group: 'run', selectors: actions.run, re: /(^|\b)(run(\s+in\s+terminal|\s+command)?|execute)(\b|$)/i, allowNonChatFallback: true }
-      ,{ key: 'clickExpand', label: 'Expand', group: 'expand', selectors: actions.expand, re: /(expand|requires\s*input|step\s*requires\s*input)/i, allowNonChatFallback: true }
+      ,{ key: 'clickExpand', label: 'Expand', group: 'expand', selectors: actions.expand, re: /(requires\s*input|step\s*requires\s*input|expand\s*(details|changes|diff|context)?)/i, allowNonChatFallback: true }
     ];
 
     for (const a of ordered) {
@@ -811,10 +914,20 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (!cfg.bump?.enabled) return false;
     if (state.isGenerating) return false;
     if (!state.hasInput) return false;
-    if (!state.bumpEligibleSignal) return false;
 
     const stalledThreshold = Math.max(1000, cfg.timing?.stalledMs || 7000);
-    const shouldBumpNow = !!(state.sessionJustOpened || state.feedbackVisible || state.completionTextSeen || state.waitingTextSeen || state.submitVisible || state.stalledMs >= stalledThreshold);
+    const shouldBumpNow = !!(
+      state.sessionJustOpened
+      || state.feedbackVisible
+      || state.completionTextSeen
+      || state.waitingTextSeen
+      || state.completeStatusSeen
+      || state.stoppedThreadSeen
+      || state.resumeVisible
+      || state.submitVisible
+      || state.bumpEligibleSignal
+      || state.stalledMs >= stalledThreshold
+    );
     if (!shouldBumpNow) return false;
 
     const bumpCooldownMs = Math.max(1000, cfg.timing?.bumpCooldownMs || 12000);
@@ -829,6 +942,17 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (!input) return false;
 
     if (!typeText(input, text)) return false;
+    if (!didTypeStick(input, text)) {
+      // One additional conservative attempt for editors that ignore execCommand.
+      if (!typeText(input, text) || !didTypeStick(input, text)) {
+        emitTypeRelay(text);
+        lastBumpAt = Date.now();
+        log('bump typing did not persist; skipping submit');
+        return false;
+      }
+    }
+
+    log('typed bump text');
 
     submitInFlightUntil = Date.now() + submitCooldownMs;
 

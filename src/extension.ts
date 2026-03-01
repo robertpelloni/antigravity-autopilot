@@ -172,9 +172,6 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             const acquired = controllerLease.tryAcquire();
-            if (!acquired && !controllerLease.isLeader()) {
-                controllerLease.forceAcquire();
-            }
 
             updateControllerRoleStatus();
             syncControllerRoleToCDP();
@@ -183,6 +180,9 @@ export function activate(context: vscode.ExtensionContext) {
             if (healed) {
                 log.warn(`[ControllerLease] Self-heal acquired leader role (${reason}).`);
             } else {
+                if (!acquired) {
+                    log.warn(`[ControllerLease] Self-heal attempted but lease acquire failed (${reason}).`);
+                }
                 log.warn(`[ControllerLease] Self-heal attempted but this window remains follower (${reason}).`);
             }
             return healed;
@@ -1591,6 +1591,7 @@ export function activate(context: vscode.ExtensionContext) {
             }),
             safeRegisterCommand('antigravity.showControllerLeaseState', async () => {
                 const leader = controllerLease?.getLeaderInfo();
+                const debug = controllerLease?.getDebugState();
                 const payload = {
                     timestamp: new Date().toISOString(),
                     role: isControllerLeader() ? 'leader' : 'follower',
@@ -1598,6 +1599,7 @@ export function activate(context: vscode.ExtensionContext) {
                         pid: process.pid,
                         workspace: workspaceId
                     },
+                    debug,
                     leader
                 };
 
@@ -2184,14 +2186,20 @@ export function activate(context: vscode.ExtensionContext) {
                     }
                 }
 
-                log.info('Antigravity Autopilot: Brain ACTIVE as controller leader.');
+                const leaseDebug = controllerLease?.getDebugState();
+                const leaseOwner = leaseDebug?.lease?.ownerId || 'none';
+                const leasePid = leaseDebug?.lease?.pid || 'none';
+                log.info(`Antigravity Autopilot: Brain ACTIVE as controller leader. leasePath=${leaseDebug?.leasePath || 'unknown'} owner=${leaseOwner} pid=${leasePid}`);
             } else {
                 // Follower mode: stop high-level services. Decentralized automation follows followerUiAutomationEnabled.
                 autonomousLoop.stop('Follower mode bootstrap');
                 if (followerUiAutomationEnabled) {
                     log.info('Antigravity Autopilot: Brain PASSIVE (Leader in another workspace). UI automation ACTIVE (follower fail-open mode).');
                 } else {
-                    log.info('Antigravity Autopilot: Brain PASSIVE (Leader in another workspace). UI automation DISABLED (explicit follower override).');
+                    const leaseDebug = controllerLease?.getDebugState();
+                    const leaseOwner = leaseDebug?.lease?.ownerId || 'none';
+                    const leasePid = leaseDebug?.lease?.pid || 'none';
+                    log.info(`Antigravity Autopilot: Brain PASSIVE (Leader in another workspace). UI automation DISABLED (explicit follower override). leasePath=${leaseDebug?.leasePath || 'unknown'} owner=${leaseOwner} pid=${leasePid}`);
                 }
             }
         }

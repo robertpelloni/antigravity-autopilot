@@ -141,6 +141,27 @@ export class CDPHandler extends EventEmitter {
         }
     }
 
+    private resolveRuntimeUiMode(): 'auto' | 'vscode' | 'antigravity' | 'cursor' {
+        const configured = String(config.get<string>('interactionUiProfile') || 'auto').toLowerCase();
+        if (configured === 'vscode' || configured === 'antigravity' || configured === 'cursor') {
+            return configured as 'vscode' | 'antigravity' | 'cursor';
+        }
+
+        try {
+            const appName = String((vscode as any)?.env?.appName || '').toLowerCase();
+            if (appName.includes('antigravity')) {
+                return 'antigravity';
+            }
+            if (appName.includes('cursor')) {
+                return 'cursor';
+            }
+        } catch {
+            // noop
+        }
+
+        return 'vscode';
+    }
+
     constructor(startPort?: number, endPort?: number) {
         super();
         const explicitStart = (typeof startPort === 'number' && Number.isFinite(startPort) && startPort > 0) ? startPort : 0;
@@ -487,7 +508,7 @@ export class CDPHandler extends EventEmitter {
             },
             bump: {
                 text: config.get<string>('actions.bump.text') || 'Proceed',
-                requireFocused: config.get<boolean>('automation.bump.requireFocused') ?? true,
+                requireFocused: config.get<boolean>('automation.bump.requireFocused') ?? false,
                 requireVisible: config.get<boolean>('automation.bump.requireVisible') ?? true,
                 detectMethods: getArr('automation.bump.detectMethods', ['feedback-visible', 'not-generating', 'last-sender-user', 'network-error-retry', 'waiting-for-input', 'loaded-conversation', 'completed-all-tasks', 'skip-ai-question']),
                 typeMethods: getArr('automation.bump.typeMethods', ['exec-command', 'native-setter', 'dispatch-events']),
@@ -518,7 +539,7 @@ export class CDPHandler extends EventEmitter {
                 role: this.controllerRoleIsLeader ? 'leader' : 'follower',
                 windowFocused: this.hostWindowFocused,
                 enforceLeader: true,
-                mode: config.get<string>('interactionUiProfile') || 'auto'
+                mode: this.resolveRuntimeUiMode()
             }
         };
 
@@ -1055,8 +1076,7 @@ export class CDPHandler extends EventEmitter {
             expression: `(() => {
                 const isLeader = window.__antigravityConfig?.runtime?.isLeader === true;
                 const visible = document.visibilityState === 'visible';
-                const focused = (typeof document.hasFocus !== 'function') || document.hasFocus();
-                return isLeader && visible && focused;
+                return isLeader && visible;
             })()`,
             returnByValue: true,
             awaitPromise: true
