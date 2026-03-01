@@ -294,7 +294,7 @@ export function activate(context: vscode.ExtensionContext) {
 
             const leader = controllerLease.getLeaderInfo();
             const sameWorkspace = !!leader && isSameWorkspaceLease(leader.workspace);
-            const allowCrossWorkspaceTakeover = config.get<boolean>('controller.allowCrossWorkspaceTakeover') ?? true;
+            const allowCrossWorkspaceTakeover = config.get<boolean>('controller.allowCrossWorkspaceTakeover') ?? false;
 
             if (leader && !sameWorkspace && !allowCrossWorkspaceTakeover) {
                 log.info(`[ControllerLease] Focused-window takeover skipped (${reason}): leader workspace mismatch (${leader.workspace}) and controller.allowCrossWorkspaceTakeover=false.`);
