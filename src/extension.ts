@@ -290,10 +290,20 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             const leader = controllerLease.getLeaderInfo();
-            if (!leader || !isSameWorkspaceLease(leader.workspace)) {
-                if (leader?.workspace) {
-                    log.info(`[ControllerLease] Focused-window takeover skipped (${reason}): leader workspace mismatch (${leader.workspace}).`);
-                }
+            const sameWorkspace = !!leader && isSameWorkspaceLease(leader.workspace);
+            const allowCrossWorkspaceTakeover = config.get<boolean>('controller.allowCrossWorkspaceTakeover') ?? true;
+
+            if (leader && !sameWorkspace && !allowCrossWorkspaceTakeover) {
+                log.info(`[ControllerLease] Focused-window takeover skipped (${reason}): leader workspace mismatch (${leader.workspace}) and controller.allowCrossWorkspaceTakeover=false.`);
+                return false;
+            }
+
+            if (leader && !sameWorkspace && allowCrossWorkspaceTakeover) {
+                const localWorkspace = getCurrentWorkspaceId();
+                log.warn(`[ControllerLease] Focused-window cross-workspace takeover override (${reason}): leader=${leader.workspace} local=${localWorkspace}.`);
+            }
+
+            if (!leader && !allowCrossWorkspaceTakeover) {
                 return false;
             }
 
