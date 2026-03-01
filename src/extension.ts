@@ -62,7 +62,13 @@ export function activate(context: vscode.ExtensionContext) {
         // Initialize Managers
         const strategyManager = new StrategyManager(context);
         fs.appendFileSync(debugDumpPath, `[${new Date().toISOString()}] Strategy Manager init success\n`);
-        const getCurrentWorkspaceId = (): string => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || 'no-workspace';
+        const getCurrentWorkspaceId = (): string => {
+            const folderPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (folderPath) {
+                return folderPath;
+            }
+            return vscode.workspace.workspaceFile?.fsPath || 'no-workspace';
+        };
         let workspaceId = getCurrentWorkspaceId();
         const leaseOwnerId = `${process.pid}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
         controllerLease = new ControllerLease(leaseOwnerId, workspaceId);
@@ -98,16 +104,55 @@ export function activate(context: vscode.ExtensionContext) {
             controllerLease.start();
             log.info(`[ControllerLease] Workspace binding refreshed (${reason}): ${previousWorkspaceId} -> ${workspaceId}`);
         };
-        const normalizeWorkspaceForCompare = (value: string): string => {
-            const raw = String(value || '').trim();
+        const canonicalizeWorkspaceForCompare = (value: string): string => {
+            const raw = String(value || '').trim().replace(/^"|"$/g, '');
             if (!raw) return '';
-            const normalized = path.normalize(raw).replace(/\\/g, '/').replace(/\/+$/, '');
+            if (raw === 'no-workspace') return 'no-workspace';
+
+            let candidate = raw;
+            if (/^file:\/\//i.test(candidate)) {
+                try {
+                    candidate = vscode.Uri.parse(candidate).fsPath;
+                } catch {
+                    // Keep original candidate.
+                }
+            }
+
+            if (process.platform === 'win32') {
+                candidate = candidate.replace(/^\\\\\?\\/, '');
+                candidate = candidate.replace(/^\/\/\?\//, '');
+            }
+
+            let resolved = path.resolve(candidate);
+            try {
+                resolved = fs.realpathSync.native(resolved);
+            } catch {
+                // Path may not exist yet; keep resolved fallback.
+            }
+
+            const normalized = resolved.replace(/\\/g, '/').replace(/\/+$/, '');
             return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
         };
+        let lastWorkspaceMismatchLogAt = 0;
         const isSameWorkspaceLease = (leaseWorkspace?: string | null): boolean => {
             if (!leaseWorkspace) return false;
             syncWorkspaceLeaseBinding('workspace compare');
-            return normalizeWorkspaceForCompare(leaseWorkspace) === normalizeWorkspaceForCompare(workspaceId);
+            const localWorkspace = getCurrentWorkspaceId();
+            const leaseCanonical = canonicalizeWorkspaceForCompare(leaseWorkspace);
+            const localCanonical = canonicalizeWorkspaceForCompare(localWorkspace);
+            const matches = leaseCanonical === localCanonical;
+
+            if (!matches) {
+                const now = Date.now();
+                if ((now - lastWorkspaceMismatchLogAt) >= 10000) {
+                    lastWorkspaceMismatchLogAt = now;
+                    log.info(
+                        `[ControllerLease] Workspace compare mismatch: leaseRaw=${JSON.stringify(leaseWorkspace)} localRaw=${JSON.stringify(localWorkspace)} leaseCanonical=${JSON.stringify(leaseCanonical)} localCanonical=${JSON.stringify(localCanonical)}`
+                    );
+                }
+            }
+
+            return matches;
         };
         const updateControllerRoleStatus = () => {
             const leader = controllerLease?.getLeaderInfo();
