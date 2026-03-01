@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.237] - 2026-03-01
+### Changed
+* **Minimal Core Refactor**: Replaced complex runtime loop orchestration with a deterministic minimal core focused on fork detection, stalled-conversation detection, bump typing/submission, and explicit action-intent clicking.
+* **Action Intent Simplification**: Consolidated action handling to core intents only: `Run`, `Expand`, `Always Allow/Approve`, `Retry`, `Accept All`, `Allow`, `Proceed/Continue`, and `Keep`.
+* **Timing + Text Configuration Simplification**: Unified minimal timing knobs (`pollMs`, `clickThrottleMs`, `stalledMs`, `bumpCooldownMs`, `typingDelayMs`) and settable bump text through runtime config/state.
+
+### Fixed
+* **Follower/Leader Automation Path Consistency**: Runtime state snapshots now derive from the minimal deterministic action/stall model used by the active loop.
+
 ## [5.2.236] - 2026-03-01
 ### Fixed
 * **Bootstrap Follower Deadlock**: Corrected focused takeover behavior so bootstrap can recover leader role safely even when another workspace previously held lease ownership.

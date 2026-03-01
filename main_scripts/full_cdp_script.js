@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '5.2.236';
+        const ANTIGRAVITY_VERSION = '5.2.237';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
@@ -2463,7 +2463,17 @@
 
     window.__autopilotGetRuntimeState = function () {
         try {
-            return getRuntimeStateSnapshot();
+            const state = window.__autopilotState || {};
+            if (state.lastRuntimeSnapshot && typeof state.lastRuntimeSnapshot === 'object') {
+                return state.lastRuntimeSnapshot;
+            }
+
+            const mode = resolveForkMode();
+            const map = detectIntentButtons();
+            const stalled = detectStalledConversation(mode, map);
+            const snapshot = buildMinimalRuntimeState(mode, map, stalled);
+            state.lastRuntimeSnapshot = snapshot;
+            return snapshot;
         } catch (e) {
             log(`[State] Failed to compute runtime state: ${e.message}`);
             return {
@@ -2479,19 +2489,337 @@
         Analytics.setFocusState(isFocused, log);
     };
 
-    // Helper for visual feedback
-    window.__autopilotState.forceSubmit = async function () {
-        const selectors = getUnifiedSendButtonSelectors(getCurrentMode());
-        const button = findVisibleElementBySelectors(selectors);
+    // ------------------------------
+    // Minimal deterministic core
+    // ------------------------------
+    const MINIMAL_INTENT_ORDER = [
+        'always_allow',
+        'accept_all',
+        'allow',
+        'keep',
+        'proceed',
+        'retry',
+        'expand',
+        'run'
+    ];
 
-        if (button) {
-            log(`[forceSubmit] Found send button: ${button.className} (aria=${button.getAttribute('aria-label')})`);
-            button.click();
+    const MINIMAL_INTENTS = {
+        always_allow: [/always\s*(allow|approve|run)/i],
+        accept_all: [/accept\s*all/i],
+        allow: [/^allow$/i, /allow\s*once/i],
+        keep: [/^keep$/i],
+        proceed: [/^proceed$/i, /^continue$/i],
+        retry: [/^retry$/i],
+        expand: [/^expand$/i, /expand\s*(section|response|steps?)?/i],
+        run: [/run\s*in\s*terminal/i, /run\s*command/i, /execute\s*command/i, /^run$/i]
+    };
+
+    function normalizeButtonLabel(el) {
+        if (!el) return '';
+        const text = (el.textContent || '').trim();
+        const aria = (el.getAttribute('aria-label') || '').trim();
+        const title = (el.getAttribute('title') || '').trim();
+        return `${text} ${aria} ${title}`.replace(/\s+/g, ' ').trim().toLowerCase();
+    }
+
+    function resolveForkMode() {
+        const stateMode = (window.__autopilotState?.currentMode || '').toLowerCase();
+        if (stateMode === 'antigravity' || stateMode === 'cursor' || stateMode === 'vscode') {
+            return stateMode;
+        }
+
+        const cfgMode = String(window.__antigravityConfig?.runtime?.mode || '').toLowerCase();
+        if (cfgMode === 'antigravity' || cfgMode === 'cursor' || cfgMode === 'vscode') {
+            return cfgMode;
+        }
+
+        if (queryAll('#antigravity\\.agentPanel').length > 0) return 'antigravity';
+        if (queryAll('#workbench\\.parts\\.auxiliarybar').length > 0) return 'cursor';
+        return 'vscode';
+    }
+
+    function getForkSelectors(mode) {
+        if (mode === 'antigravity') {
+            return {
+                input: [
+                    '#antigravity\\.agentPanel textarea',
+                    '#antigravity\\.agentPanel [contenteditable="true"]',
+                    'textarea[aria-label*="Chat" i]',
+                    'textarea'
+                ],
+                send: [
+                    '#antigravity\\.agentPanel button[aria-label*="Send" i]',
+                    '#antigravity\\.agentPanel button[title*="Send" i]',
+                    'button[aria-label*="Send" i]',
+                    'button[title*="Send" i]'
+                ],
+                generating: [
+                    'button[aria-label*="Stop" i]',
+                    'button[title*="Stop" i]',
+                    '[aria-label*="Cancel generation" i]'
+                ]
+            };
+        }
+
+        if (mode === 'cursor') {
+            return {
+                input: [
+                    '#workbench\\.parts\\.auxiliarybar textarea',
+                    '.interactive-editor textarea',
+                    '.interactive-editor [contenteditable="true"]'
+                ],
+                send: [
+                    '#workbench\\.parts\\.auxiliarybar button[aria-label*="Send" i]',
+                    '.interactive-editor button[aria-label*="Send" i]',
+                    '.interactive-editor button[title*="Send" i]'
+                ],
+                generating: [
+                    'button[aria-label*="Stop" i]',
+                    'button[title*="Stop" i]',
+                    '[aria-label*="Cancel generation" i]'
+                ]
+            };
+        }
+
+        return {
+            input: [
+                '.interactive-editor textarea',
+                '.chat-input-container textarea',
+                '.chat-input-container [contenteditable="true"]',
+                'textarea[aria-label*="Chat" i]'
+            ],
+            send: [
+                '.interactive-editor button[aria-label*="Send" i]',
+                '.chat-input-container button[aria-label*="Send" i]',
+                '.chat-input-container button[title*="Send" i]',
+                'button[aria-label*="Send" i]'
+            ],
+            generating: [
+                'button[aria-label*="Stop" i]',
+                'button[title*="Stop" i]',
+                '[aria-label*="Cancel generation" i]'
+            ]
+        };
+    }
+
+    function findVisibleBySelectors(selectors) {
+        for (const selector of selectors) {
+            const nodes = queryAll(selector);
+            for (const node of nodes) {
+                if (isElementVisible(node) && !node.disabled && isValidInteractionTarget(node)) {
+                    return node;
+                }
+            }
+        }
+        return null;
+    }
+
+    function detectIntentButtons() {
+        const result = {
+            always_allow: [],
+            accept_all: [],
+            allow: [],
+            keep: [],
+            proceed: [],
+            retry: [],
+            expand: [],
+            run: []
+        };
+
+        const candidates = queryAll('button, [role="button"], [aria-label], [title]');
+        for (const el of candidates) {
+            if (!isElementVisible(el) || el.disabled) continue;
+            if (!isValidInteractionTarget(el)) continue;
+            if (!isChatActionSurface(el)) continue;
+
+            const label = normalizeButtonLabel(el);
+            if (!label) continue;
+
+            for (const intent of MINIMAL_INTENT_ORDER) {
+                const patterns = MINIMAL_INTENTS[intent] || [];
+                if (patterns.some((re) => re.test(label))) {
+                    result[intent].push(el);
+                    break;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    function readInputText(el) {
+        if (!el) return '';
+        if (el.isContentEditable) return (el.textContent || '').trim();
+        if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') return (el.value || '').trim();
+        return '';
+    }
+
+    async function submitComposerByBestMethod(mode, inputEl) {
+        const fork = getForkSelectors(mode);
+        const sendEl = findVisibleBySelectors(fork.send);
+        if (sendEl) {
+            await remoteClick(sendEl);
+            await workerDelay(220);
+            if (!readInputText(inputEl)) return true;
+        }
+
+        // Final host fallback: delegate submit bridge for this fork.
+        // This remains deterministic for currently supported host bridges.
+        const currentText = readInputText(inputEl);
+        if (currentText) {
+            sendCommandToExtension('__AUTOPILOT_HYBRID_BUMP__:' + currentText);
+            await workerDelay(220);
             return true;
         }
 
-        log(`[forceSubmit] No send button found. Trying Enter key fallback.`);
-        return await submitWithKeys();
+        return false;
+    }
+
+    async function typeAndSubmitBump(mode, bumpText) {
+        const text = String(bumpText || '').trim();
+        if (!text) return false;
+        if (!isInteractionWindowEligible()) return false;
+
+        const fork = getForkSelectors(mode);
+        const inputEl = findVisibleBySelectors(fork.input);
+        if (!inputEl) return false;
+
+        const typed = setInputValue(inputEl, text);
+        if (!typed) return false;
+
+        const delayMs = Math.max(40, Number(window.__autopilotState?.minimal?.typingDelayMs || 80));
+        await workerDelay(delayMs);
+        const submitted = await submitComposerByBestMethod(mode, inputEl);
+        if (submitted) {
+            lastBumpTime = Date.now();
+            sendCommandToExtension('__AUTOPILOT_ACTION__:submit|minimal');
+        }
+        return submitted;
+    }
+
+    function detectStalledConversation(mode, actionMap) {
+        const state = window.__autopilotState || {};
+        const now = Date.now();
+        const fork = getForkSelectors(mode);
+        const hasInput = !!findVisibleBySelectors(fork.input);
+        const isGenerating = !!findVisibleBySelectors(fork.generating);
+
+        const actionableCount = MINIMAL_INTENT_ORDER.reduce((sum, key) => sum + (actionMap[key]?.length || 0), 0);
+        const idleForMs = now - Math.max(lastClickTime || 0, lastBumpTime || 0, state.stats?.sessionStartTime || 0);
+        const stalledMs = Math.max(1500, Number(state.minimal?.stalledMs || 7000));
+
+        return hasInput && !isGenerating && actionableCount === 0 && idleForMs >= stalledMs;
+    }
+
+    function buildMinimalRuntimeState(mode, actionMap, stalled) {
+        const state = window.__autopilotState || {};
+        const fork = getForkSelectors(mode);
+        const hasInput = !!findVisibleBySelectors(fork.input);
+        const hasSend = !!findVisibleBySelectors(fork.send);
+        const pending = MINIMAL_INTENT_ORDER.reduce((sum, key) => sum + (actionMap[key]?.length || 0), 0);
+        const waiting = !!state.isRunning && stalled;
+
+        return {
+            status: waiting ? 'waiting_for_chat_message' : (pending > 0 ? 'pending_accept_actions' : (state.isRunning ? 'processing' : 'stopped')),
+            mode,
+            runtimeRole: getRuntimeRole(),
+            interactionEligible: isInteractionWindowEligible(),
+            isRunning: !!state.isRunning,
+            isIdle: stalled,
+            pendingAcceptButtons: pending,
+            hasVisibleInput: hasInput,
+            hasVisibleSendButton: hasSend,
+            totalTabs: 0,
+            doneTabs: 0,
+            allTasksCompleteByTabs: false,
+            allTasksCompleteBySignals: stalled && pending === 0,
+            allTasksComplete: stalled && pending === 0,
+            waitingForChatMessage: waiting,
+            completionWaiting: {
+                readyToResume: waiting,
+                isComplete: stalled && pending === 0,
+                isWaitingForChatMessage: waiting,
+                confidence: waiting ? 95 : 60,
+                confidenceLabel: waiting ? 'high' : 'medium',
+                reasons: waiting
+                    ? ['chat input is ready, no action buttons pending, generation appears idle']
+                    : ['actions still pending or generation in progress'],
+                recommendedAction: waiting
+                    ? 'Safe to send resume message.'
+                    : 'Continue waiting or process pending actions.'
+            },
+            buttonSignals: {
+                alwaysAllow: actionMap.always_allow.length,
+                acceptAll: actionMap.accept_all.length,
+                allow: actionMap.allow.length,
+                keep: actionMap.keep.length,
+                proceed: actionMap.proceed.length,
+                retry: actionMap.retry.length,
+                expand: actionMap.expand.length,
+                run: actionMap.run.length,
+                send: hasSend ? 1 : 0,
+                input: hasInput ? 1 : 0
+            },
+            safetyCounters: getSafetyCounters(),
+            blockedUnsafeActionsTotal: Object.values(getSafetyCounters()).reduce((sum, n) => sum + Number(n || 0), 0),
+            profileCoverage: {
+                antigravity: { pendingAcceptButtons: mode === 'antigravity' ? pending : 0, hasVisibleInput: mode === 'antigravity' ? hasInput : false, hasVisibleSendButton: mode === 'antigravity' ? hasSend : false },
+                vscode: { pendingAcceptButtons: mode === 'vscode' ? pending : 0, hasVisibleInput: mode === 'vscode' ? hasInput : false, hasVisibleSendButton: mode === 'vscode' ? hasSend : false },
+                cursor: { pendingAcceptButtons: mode === 'cursor' ? pending : 0, hasVisibleInput: mode === 'cursor' ? hasInput : false, hasVisibleSendButton: mode === 'cursor' ? hasSend : false }
+            },
+            lastClickTime,
+            lastBumpTime,
+            timestamp: Date.now()
+        };
+    }
+
+    async function runMinimalCycle() {
+        const state = window.__autopilotState;
+        if (!state || !state.isRunning) return;
+        if (!isInteractionWindowEligible()) return;
+
+        const mode = resolveForkMode();
+        state.currentMode = mode;
+        const actionMap = detectIntentButtons();
+        const clickThrottleMs = Math.max(40, Number(state.minimal?.clickThrottleMs || 120));
+        let clicked = 0;
+
+        for (const intent of MINIMAL_INTENT_ORDER) {
+            const bucket = actionMap[intent];
+            if (!bucket || bucket.length === 0) continue;
+
+            for (const el of bucket) {
+                const ok = await remoteClick(el);
+                if (ok) {
+                    clicked += 1;
+                    lastClickTime = Date.now();
+                    sendCommandToExtension(`__AUTOPILOT_ACTION__:${intent}|minimal`);
+                    await workerDelay(clickThrottleMs);
+                    // Keep the loop deterministic: one high-confidence action per cycle.
+                    break;
+                }
+            }
+
+            if (clicked > 0) break;
+        }
+
+        const stalled = detectStalledConversation(mode, actionMap);
+        if (clicked === 0 && stalled) {
+            const bumpCooldownMs = Math.max(1000, Number(state.minimal?.bumpCooldownMs || 12000));
+            if ((Date.now() - lastBumpTime) >= bumpCooldownMs) {
+                await typeAndSubmitBump(mode, state.bumpMessage || 'Proceed');
+            }
+        }
+
+        state.lastRuntimeSnapshot = buildMinimalRuntimeState(mode, actionMap, stalled);
+    }
+
+    window.__autopilotState.forceSubmit = async function () {
+        const mode = resolveForkMode();
+        const fork = getForkSelectors(mode);
+        const inputEl = findVisibleBySelectors(fork.input);
+        if (!inputEl) return false;
+        return await submitComposerByBestMethod(mode, inputEl);
     };
 
     window.showAutoAllToast = function (text, duration = 3000, color = 'rgba(0,100,0,0.8)') {
@@ -2505,8 +2833,6 @@
     window.__autopilotStart = async function (config) {
         try {
             const ide = (config.ide || 'cursor').toLowerCase();
-            const isPro = config.isPro !== false;
-            const isBG = config.isBackgroundMode === true;
             const cfgRole = String(config?.controllerRole || '').toLowerCase();
             const runtimeCfgRole = String(window.__antigravityConfig?.runtime?.role || '').toLowerCase();
             const runtimeCfgIsLeader = window.__antigravityConfig?.runtime?.isLeader;
@@ -2536,28 +2862,56 @@
                 window.__autoAllUpdateRejectPatterns(config.rejectPatterns);
             }
 
-            log(`__autopilotStart called: ide=${ide}, isPro=${isPro}, isBG=${isBG}`);
+            log(`__autopilotStart called: ide=${ide}, minimal-core=true`);
 
             const state = window.__autopilotState;
             state.controllerRole = role;
+            state.currentMode = ide;
+            state.bumpMessage = config.bumpMessage || state.bumpMessage || 'Proceed';
+            state.bumpEnabled = !!state.bumpMessage;
+            state.autoApproveDelay = (config.autoApproveDelay || 10) * 1000;
+            state.threadWaitInterval = (config.threadWaitInterval || 3) * 1000;
+            state.minimal = {
+                pollMs: Math.max(150, Number(config.pollInterval || window.__antigravityConfig?.timing?.pollIntervalMs || 900)),
+                clickThrottleMs: Math.max(40, Number(window.__antigravityConfig?.timing?.actionThrottleMs || 120)),
+                stalledMs: Math.max(1500, Number(window.__antigravityConfig?.timing?.stalledMs || state.threadWaitInterval || 7000)),
+                bumpCooldownMs: Math.max(1000, Number(window.__antigravityConfig?.timing?.bumpCooldownMs || state.autoApproveDelay || 12000)),
+                typingDelayMs: Math.max(20, Number(window.__antigravityConfig?.bump?.typingDelayMs || 80))
+            };
 
-            // If already running, just update config and return — do NOT restart
-            // The 5-second poll timer calls this repeatedly; restarting would kill the loop
+            state.forceAction = async function (action) {
+                const normalized = String(action || '').toLowerCase().replace(/\s+/g, '_');
+                const mode = resolveForkMode();
+                const map = detectIntentButtons();
+
+                const actionKey = normalized === 'always_allow' || normalized === 'always_approve'
+                    ? 'always_allow'
+                    : normalized === 'acceptall' ? 'accept_all' : normalized;
+
+                const bucket = map[actionKey] || [];
+                if (bucket.length === 0) {
+                    return false;
+                }
+
+                const ok = await remoteClick(bucket[0]);
+                if (ok) {
+                    lastClickTime = Date.now();
+                    state.lastRuntimeSnapshot = buildMinimalRuntimeState(mode, map, detectStalledConversation(mode, map));
+                }
+                return !!ok;
+            };
+
+            // Hot reload config without restarting loop.
             if (state.isRunning) {
-                // Update config values in-place (hot reload)
-                state.bumpMessage = config.bumpMessage || '';
-                state.autoApproveDelay = (config.autoApproveDelay || 30) * 1000;
-                state.bumpEnabled = !!config.bumpMessage;
-                state.threadWaitInterval = (config.threadWaitInterval || 5) * 1000;
-                log(`[Config] Hot-reloaded config (loop still running)`);
+                log('[MinimalCore] Hot-reloaded config (loop still running)');
                 return;
             }
 
             state.isRunning = true;
-            state.currentMode = ide;
-            state.isBackgroundMode = isBG;
             state.sessionID++;
-            const sid = state.sessionID;
+            if (!state.stats.sessionStartTime) {
+                state.stats.sessionStartTime = Date.now();
+            }
             state.safetyCounters = {
                 blockedForceActionAg: 0,
                 blockedAgExpandPass: 0,
@@ -2566,50 +2920,31 @@
                 blockedStuckKeypressFallback: 0
             };
 
-            // Store user config in state for bump/loops to use
-            state.bumpMessage = config.bumpMessage || '';
-            state.bumpMessage = config.bumpMessage || '';
-            state.autoApproveDelay = (config.autoApproveDelay || 10) * 1000; // Default 10s
-            state.bumpEnabled = !!config.bumpMessage;
-            state.threadWaitInterval = (config.threadWaitInterval || 3) * 1000;
-            state.bumpEnabled = !!config.bumpMessage;
-            state.threadWaitInterval = (config.threadWaitInterval || 5) * 1000;
-            log(`[Config] bumpMessage="${state.bumpMessage}", autoApproveDelay=${state.autoApproveDelay}ms, threadWait=${state.threadWaitInterval}ms`);
-            log(`[RoleGuard] Runtime role=${state.controllerRole}`);
+            log(`[MinimalCore] Loaded (mode=${state.currentMode}, role=${state.controllerRole}, bump="${state.bumpMessage}")`, true);
 
-            if (!state.stats.sessionStartTime) {
-                state.stats.sessionStartTime = Date.now();
+            if (state.__minimalTick) {
+                clearInterval(state.__minimalTick);
             }
+            state.__minimalBusy = false;
 
-            log(`Agent Loaded (IDE: ${ide}, BG: ${isBG}, isPro: ${isPro})`, true);
+            const tick = async () => {
+                if (!state.isRunning) return;
+                if (state.__minimalBusy) return;
+                state.__minimalBusy = true;
+                try {
+                    await runMinimalCycle();
+                } catch (loopErr) {
+                    log(`[MinimalCore] Tick error: ${loopErr.message || loopErr}`);
+                } finally {
+                    state.__minimalBusy = false;
+                }
+            };
 
-            if (isBG && isPro) {
-                log(`[BG] Starting background loop (no overlay)...`);
+            state.__minimalTick = setInterval(() => {
+                tick();
+            }, state.minimal.pollMs);
 
-                log(`[BG] Starting ${ide} loop...`);
-                if (ide === 'cursor') cursorLoop(sid);
-                else antigravityLoop(sid);
-            } else if (isBG && !isPro) {
-                log(`[BG] Background mode without Pro...`);
-
-                if (ide === 'cursor') cursorLoop(sid);
-                else antigravityLoop(sid);
-            } else {
-                hideOverlay();
-                log(`Starting static poll loop...`);
-                (async function staticLoop() {
-                    while (state.isRunning && state.sessionID === sid) {
-                        try {
-                            const clicks = await performClick(getUnifiedClickSelectors(getCurrentMode()));
-                            if (clicks === 0) await autoBump();
-                            await workerDelay(config.pollInterval || 1000);
-                        } catch (loopErr) {
-                            log(`[Loop] staticLoop ERROR: ${loopErr.message}`);
-                            await workerDelay(2000);
-                        }
-                    }
-                })();
-            }
+            await tick();
         } catch (e) {
             log(`ERROR in __autopilotStart: ${e.message}`);
             console.error('[autoAll] Start error:', e);
@@ -2617,7 +2952,13 @@
     };
 
     window.__autopilotStop = function () {
-        window.__autopilotState.isRunning = false;
+        const state = window.__autopilotState || {};
+        state.isRunning = false;
+        if (state.__minimalTick) {
+            clearInterval(state.__minimalTick);
+            state.__minimalTick = null;
+        }
+        state.__minimalBusy = false;
         hideOverlay();
         log("Agent Stopped.");
     };
