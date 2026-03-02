@@ -25,6 +25,170 @@ export class CDPHandler extends EventEmitter {
     private controllerRoleIsLeader = false;
     private hostWindowFocused = vscode.window.state.focused;
     private connectInFlight: Promise<boolean> | null = null;
+    private suppressedBrowserNoise: Map<string, number> = new Map();
+
+    private emitThrottledNoiseSummary(key: string, message: string, cooldownMs: number = 60000): void {
+        const now = Date.now();
+        const lastAt = this.suppressedBrowserNoise.get(key) || 0;
+        if ((now - lastAt) < cooldownMs) {
+            return;
+        }
+        this.suppressedBrowserNoise.set(key, now);
+        logToOutput(`[Browser-Noise] ${message}`);
+    }
+
+    private classifyBrowserConsoleNoise(rawText: string): { suppress: boolean; summaryKey?: string; summaryMessage?: string } {
+        const text = String(rawText || '').trim();
+        if (!text) {
+            return { suppress: true };
+        }
+
+        const lower = text.toLowerCase();
+
+        if (/^%c\s*(warn|err|info)\s*$/i.test(text)) {
+            return { suppress: true };
+        }
+
+        if (lower === 'extension host' || lower === 'console.groupend' || lower === '%cdebugger attached.' || lower === 'debugger attached.') {
+            return { suppress: true };
+        }
+
+        if (lower.includes('[debug bootstrap-window]')) {
+            return { suppress: true };
+        }
+
+        if (lower.includes("product.json#extensionenabledapiproposals") && lower.includes('does not exist')) {
+            return {
+                suppress: true,
+                summaryKey: 'host-api-proposal-noise',
+                summaryMessage: 'Suppressed repeated host extension API-proposal warnings (non-actionable compatibility noise).'
+            };
+        }
+
+        if (lower.includes('depends on unknown service agentsessions') || lower.includes('[createinstance]') && lower.includes('unknown service')) {
+            return {
+                suppress: true,
+                summaryKey: 'host-di-noise',
+                summaryMessage: 'Suppressed repeated host workbench service-construction noise (UNKNOWN service agentSessions).'
+            };
+        }
+
+        if (lower.includes('overwriting mcp server')) {
+            return {
+                suppress: true,
+                summaryKey: 'mcp-overwrite-noise',
+                summaryMessage: 'Suppressed repeated MCP overwrite warnings emitted by host configuration merge.'
+            };
+        }
+
+        if (lower.includes('[vscode.git]: property `title` is mandatory')) {
+            return {
+                suppress: true,
+                summaryKey: 'git-schema-noise',
+                summaryMessage: 'Suppressed repeated vscode.git schema validation noise (`title` mandatory).'
+            };
+        }
+
+        if (lower.includes('[google.antigravity]: menu item references a command') && lower.includes('not defined in the')) {
+            return {
+                suppress: true,
+                summaryKey: 'google-antigravity-menu-noise',
+                summaryMessage: 'Suppressed repeated external google.antigravity menu-command reference warnings.'
+            };
+        }
+
+        if (lower.includes('punycode') && lower.includes('[dep0040]')) {
+            return {
+                suppress: true,
+                summaryKey: 'dep0040-punycode',
+                summaryMessage: 'Suppressed host deprecation warning DEP0040 (punycode). External dependency warning; non-actionable for autopilot runtime.'
+            };
+        }
+
+        if (lower.includes('[module_typeless_package_json]')) {
+            return {
+                suppress: true,
+                summaryKey: 'module-typeless-package-json',
+                summaryMessage: 'Suppressed MODULE_TYPELESS_PACKAGE_JSON warnings from bundled host extensions. External warning; non-fatal for automation.'
+            };
+        }
+
+        if (lower.includes('giterrorcode') && lower.includes('isinsubmodule')) {
+            return {
+                suppress: true,
+                summaryKey: 'git-submodule-noise',
+                summaryMessage: 'Suppressed repeated Git IsInSubmodule host errors (external workspace noise).'
+            };
+        }
+
+        if ((lower.includes('error: git error') || lower.includes('[vscode.git]git error') || lower.includes('childprocess.<anonymous>'))
+            && (lower.includes('git\\dist\\main.js') || lower.includes('git/dist/main.js') || lower.includes('isin submodule') || lower.includes('isinsubmodule'))) {
+            return {
+                suppress: true,
+                summaryKey: 'git-submodule-noise',
+                summaryMessage: 'Suppressed repeated Git extension stack-trace noise related to IsInSubmodule errors.'
+            };
+        }
+
+        if (lower.includes('[vscode.git]git error') || lower === 'git error' || lower.includes('an unknown error occurred. please consult the log for more details.')) {
+            return {
+                suppress: true,
+                summaryKey: 'git-generic-noise',
+                summaryMessage: 'Suppressed repeated generic vscode.git error noise (details remain in host logs).'
+            };
+        }
+
+        if (lower.includes('failed to update user status')) {
+            return {
+                suppress: true,
+                summaryKey: 'external-status-update-noise',
+                summaryMessage: 'Suppressed repeated external host "Failed to update user status" noise.'
+            };
+        }
+
+        if (lower.includes('run state not found') && (lower.includes('google.antigravity') || lower.includes('acknowledgecodeactionstep') || lower.includes('connecterror'))) {
+            return {
+                suppress: true,
+                summaryKey: 'external-run-state-missing',
+                summaryMessage: 'Observed external host extension error: "run state not found". Suppressing repeats to preserve autopilot signal logs.'
+            };
+        }
+
+        return { suppress: false };
+    }
+
+    private reconstructConsolePayload(msg: any): string {
+        const parts: string[] = [];
+        const args = Array.isArray(msg?.params?.args) ? msg.params.args : [];
+
+        for (const arg of args) {
+            if (!arg || typeof arg !== 'object') {
+                continue;
+            }
+
+            if (typeof arg.value === 'string') {
+                parts.push(arg.value);
+                continue;
+            }
+
+            if (typeof arg.value === 'number' || typeof arg.value === 'boolean') {
+                parts.push(String(arg.value));
+                continue;
+            }
+
+            if (typeof arg.description === 'string' && arg.description.trim()) {
+                parts.push(arg.description);
+                continue;
+            }
+
+            if (arg.unserializableValue) {
+                parts.push(String(arg.unserializableValue));
+            }
+        }
+
+        const joined = parts.join(' ').replace(/\s+/g, ' ').trim();
+        return joined;
+    }
 
     private isSingleTargetMode(): boolean {
         const forceSinglePrimary = config.get<boolean>('automation.forceSinglePrimaryPage');
@@ -730,16 +894,29 @@ export class CDPHandler extends EventEmitter {
                         // Sinkhole legacy bridge calls to prevent legacy UI ghost loops
                     } else if (msg.method === 'Runtime.consoleAPICalled') {
                         // Fallback Console Bridge
-                        const text = msg.params.args[0]?.value || '';
+                        const text = this.reconstructConsolePayload(msg) || msg.params.args?.[0]?.value || '';
                         const originSessionId = msg.sessionId;
 
                         // Check if it's a bridge message
                         if (typeof text === 'string' && (text.startsWith('__ANTIGRAVITY') || text.startsWith('__AUTOPILOT'))) {
                             this.handleBridgeMessage(page.id, text, originSessionId);
                         } else {
+                            const noise = this.classifyBrowserConsoleNoise(String(text || ''));
+                            if (noise.suppress) {
+                                if (noise.summaryKey && noise.summaryMessage) {
+                                    this.emitThrottledNoiseSummary(noise.summaryKey, noise.summaryMessage);
+                                }
+                                return;
+                            }
+
                             // Forward interesting logs to OutputChannel
                             const lowerText = text.toLowerCase();
-                            if (lowerText.includes('[autoall]') || lowerText.includes('[cdp]') || lowerText.includes('antigravity')) {
+                            if (lowerText.includes('[autoall]')
+                                || lowerText.includes('[autocontinue]')
+                                || lowerText.includes('[autopilot]')
+                                || lowerText.includes('[cdp]')
+                                || lowerText.includes('[controllerlease]')
+                                || lowerText.includes('[extension]')) {
                                 logToOutput(`[Browser] ${text}`);
                             } else if (config.get('automation.debug.verboseLogging')) {
                                 logToOutput(`[Browser-Verbose] ${text}`);

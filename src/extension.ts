@@ -104,56 +104,6 @@ export function activate(context: vscode.ExtensionContext) {
             controllerLease.start();
             log.info(`[ControllerLease] Workspace binding refreshed (${reason}): ${previousWorkspaceId} -> ${workspaceId}`);
         };
-        const canonicalizeWorkspaceForCompare = (value: string): string => {
-            const raw = String(value || '').trim().replace(/^"|"$/g, '');
-            if (!raw) return '';
-            if (raw === 'no-workspace') return 'no-workspace';
-
-            let candidate = raw;
-            if (/^file:\/\//i.test(candidate)) {
-                try {
-                    candidate = vscode.Uri.parse(candidate).fsPath;
-                } catch {
-                    // Keep original candidate.
-                }
-            }
-
-            if (process.platform === 'win32') {
-                candidate = candidate.replace(/^\\\\\?\\/, '');
-                candidate = candidate.replace(/^\/\/\?\//, '');
-            }
-
-            let resolved = path.resolve(candidate);
-            try {
-                resolved = fs.realpathSync.native(resolved);
-            } catch {
-                // Path may not exist yet; keep resolved fallback.
-            }
-
-            const normalized = resolved.replace(/\\/g, '/').replace(/\/+$/, '');
-            return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
-        };
-        let lastWorkspaceMismatchLogAt = 0;
-        const isSameWorkspaceLease = (leaseWorkspace?: string | null): boolean => {
-            if (!leaseWorkspace) return false;
-            syncWorkspaceLeaseBinding('workspace compare');
-            const localWorkspace = getCurrentWorkspaceId();
-            const leaseCanonical = canonicalizeWorkspaceForCompare(leaseWorkspace);
-            const localCanonical = canonicalizeWorkspaceForCompare(localWorkspace);
-            const matches = leaseCanonical === localCanonical;
-
-            if (!matches) {
-                const now = Date.now();
-                if ((now - lastWorkspaceMismatchLogAt) >= 10000) {
-                    lastWorkspaceMismatchLogAt = now;
-                    log.info(
-                        `[ControllerLease] Workspace compare mismatch: leaseRaw=${JSON.stringify(leaseWorkspace)} localRaw=${JSON.stringify(localWorkspace)} leaseCanonical=${JSON.stringify(leaseCanonical)} localCanonical=${JSON.stringify(localCanonical)}`
-                    );
-                }
-            }
-
-            return matches;
-        };
         const updateControllerRoleStatus = () => {
             const leader = controllerLease?.getLeaderInfo();
             statusBar.updateControllerRole(isControllerLeader(), leader?.workspace || null);
@@ -165,13 +115,29 @@ export function activate(context: vscode.ExtensionContext) {
                 return true;
             }
 
+            const leaderBeforeSelfHeal = controllerLease?.getLeaderInfo();
+            const isBootstrapReason = reason.toLowerCase().includes('activation bootstrap');
+            const leaderWorkspace = String(leaderBeforeSelfHeal?.workspace || '').toLowerCase();
+            const currentWorkspace = String(workspaceId || '').toLowerCase();
+            const leaderIsDifferentWorkspace = !!leaderWorkspace && !!currentWorkspace && leaderWorkspace !== currentWorkspace;
+
+            if (isBootstrapReason && leaderIsDifferentWorkspace && controllerLease) {
+                controllerLease.forceAcquire();
+                updateControllerRoleStatus();
+                syncControllerRoleToCDP();
+                if (isControllerLeader()) {
+                    log.warn(`[ControllerLease] Bootstrap reclaimed leader from different workspace (${leaderBeforeSelfHeal?.workspace} -> ${workspaceId}).`);
+                    return true;
+                }
+            }
+
             if (attemptNoLeaderSelfHeal(reason)) {
                 return true;
             }
 
             const leader = controllerLease?.getLeaderInfo();
-            const leaderWorkspace = leader?.workspace ? ` | leader workspace: ${leader.workspace}` : '';
-            log.info(`[ControllerLease] Follower mode in this window; skipping ${reason}.${leaderWorkspace}`);
+            const leaderWorkspaceSuffix = leader?.workspace ? ` | leader workspace: ${leader.workspace}` : '';
+            log.info(`[ControllerLease] Follower mode in this window; skipping ${reason}.${leaderWorkspaceSuffix}`);
             if (notify) {
                 vscode.window.showInformationMessage('Antigravity is in follower mode in this window. Another window is the active controller.');
             }
@@ -269,59 +235,42 @@ export function activate(context: vscode.ExtensionContext) {
             return healed;
         };
 
-        const attemptFocusedWindowTakeover = (reason: string, options?: { allowUnfocused?: boolean; allowCrossWorkspaceOverride?: boolean }): boolean => {
-            if (!controllerLease) {
+        let lastNoLeaderSelfHealAt = 0;
+        let lastFocusedLeaderTakeoverAt = 0;
+
+        const attemptFocusedLeaderTakeover = (reason: string): boolean => {
+            if (!controllerLease || !vscode.window.state.focused) {
                 return false;
             }
-
-            syncWorkspaceLeaseBinding(`focused takeover (${reason})`);
 
             updateControllerRoleStatus();
             if (isControllerLeader()) {
                 return true;
             }
 
-            const allowFocusedTakeover = config.get<boolean>('controller.allowFocusedTakeover') ?? true;
-            const allowUnfocused = options?.allowUnfocused === true;
-            if (!allowFocusedTakeover || (!allowUnfocused && !vscode.window.state.focused)) {
-                if (!allowFocusedTakeover) {
-                    log.info(`[ControllerLease] Focused-window takeover skipped (${reason}): controller.allowFocusedTakeover=false`);
-                } else if (!allowUnfocused && !vscode.window.state.focused) {
-                    log.info(`[ControllerLease] Focused-window takeover skipped (${reason}): window not focused`);
-                }
+            const now = Date.now();
+            if ((now - lastFocusedLeaderTakeoverAt) < 2000) {
+                return false;
+            }
+            lastFocusedLeaderTakeoverAt = now;
+
+            // Never steal leadership from an active owner during focus changes.
+            // Focus takeover is now strictly a no-leader recovery path.
+            const existingLeader = controllerLease.getLeaderInfo();
+            if (existingLeader) {
                 return false;
             }
 
-            const leader = controllerLease.getLeaderInfo();
-            const sameWorkspace = !!leader && isSameWorkspaceLease(leader.workspace);
-            const allowCrossWorkspaceTakeover = config.get<boolean>('controller.allowCrossWorkspaceTakeover') ?? false;
-            const allowCrossWorkspaceForAttempt = allowCrossWorkspaceTakeover || options?.allowCrossWorkspaceOverride === true;
-
-            if (leader && !sameWorkspace && !allowCrossWorkspaceForAttempt) {
-                log.info(`[ControllerLease] Focused-window takeover skipped (${reason}): leader workspace mismatch (${leader.workspace}) and controller.allowCrossWorkspaceTakeover=false.`);
-                return false;
-            }
-
-            if (leader && !sameWorkspace && allowCrossWorkspaceForAttempt) {
-                const localWorkspace = getCurrentWorkspaceId();
-                log.warn(`[ControllerLease] Focused-window cross-workspace takeover override (${reason}): leader=${leader.workspace} local=${localWorkspace}.`);
-            }
-
-            controllerLease.forceAcquire();
+            controllerLease.tryAcquire();
             updateControllerRoleStatus();
             syncControllerRoleToCDP();
 
-            const healed = isControllerLeader();
-            if (healed) {
-                log.warn(`[ControllerLease] Focused-window takeover acquired leader role (${reason}).`);
-            } else {
-                const debug = controllerLease.getDebugState();
-                log.warn(`[ControllerLease] Focused-window takeover failed (${reason}). leasePath=${debug.leasePath} owner=${debug.lease?.ownerId || 'none'} pid=${debug.lease?.pid || 'none'} ageMs=${debug.leaseAgeMs ?? -1}`);
+            const acquired = isControllerLeader();
+            if (acquired) {
+                log.warn(`[ControllerLease] Focused window took leader role (${reason}).`);
             }
-            return healed;
+            return acquired;
         };
-
-        let lastNoLeaderSelfHealAt = 0;
 
         const alignDecentralizedAutomationToRole = async (source: string) => {
             if (!isUnifiedAutoAcceptEnabled()) {
@@ -358,10 +307,6 @@ export function activate(context: vscode.ExtensionContext) {
                 if (!isControllerLeader() && (roleNow - lastNoLeaderSelfHealAt) >= 5000) {
                     lastNoLeaderSelfHealAt = roleNow;
                     attemptNoLeaderSelfHeal('runtime refresh');
-                    const allowRuntimeRefreshTakeover = config.get<boolean>('controller.runtimeRefreshTakeoverEnabled') ?? false;
-                    if (!isControllerLeader() && allowRuntimeRefreshTakeover) {
-                        attemptFocusedWindowTakeover('runtime refresh');
-                    }
                 }
                 syncControllerRoleToCDP();
                 await alignDecentralizedAutomationToRole('runtime refresh');
@@ -1345,12 +1290,8 @@ export function activate(context: vscode.ExtensionContext) {
 
         context.subscriptions.push(vscode.window.onDidChangeWindowState((state) => {
             if (state.focused && controllerLease) {
-                // Do not unconditionally steal leader on focus.
-                // Only self-heal leader election when no active leader exists.
+                // Focus events only self-heal when no leader exists.
                 attemptNoLeaderSelfHeal('window focus event');
-                if (!isControllerLeader()) {
-                    attemptFocusedWindowTakeover('window focus event');
-                }
                 updateControllerRoleStatus();
                 syncControllerRoleToCDP();
                 void alignDecentralizedAutomationToRole('window focus takeover');
@@ -2316,18 +2257,10 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             const leaderAtBootstrap = ensureControllerLeader('activation bootstrap');
-            const takeoverSucceeded = !leaderAtBootstrap && attemptFocusedWindowTakeover('activation bootstrap follower', {
-                allowUnfocused: true,
-                allowCrossWorkspaceOverride: true
-            });
-            const leaderAfterBootstrap = leaderAtBootstrap || takeoverSucceeded || isControllerLeader();
+            const leaderAfterBootstrap = leaderAtBootstrap
+                || isControllerLeader();
 
             if (leaderAfterBootstrap) {
-                if (takeoverSucceeded) {
-                    strategyManager.start().catch(e => log.error(`Failed to start decentralized strategy after takeover: ${e.message}`));
-                    syncControllerRoleToCDP();
-                    refreshRuntimeState().catch(() => { });
-                }
                 // 2. Autonomous Loop (The "Brain" - stays gated to one leader)
                 if (config.get('autonomousEnabled')) {
                     const startOnActivation = config.get<boolean>('autonomousStartOnActivation') === true;

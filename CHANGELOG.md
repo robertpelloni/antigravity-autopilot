@@ -1,6 +1,190 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.264] - 2026-03-01
+### Changed
+* **Release Rebuild**: Bumped extension/version metadata and produced a fresh VSIX after the hard minimal-runtime simplification pass.
+* **Packaging Sync**: Synchronized version identifiers across `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js`.
+
+## [5.2.263] - 2026-03-01
+### Changed
+* **Hard Runtime Simplification**: Replaced `src/scripts/auto-continue.ts` with a compact deterministic core focused only on fork detection, stalled-conversation detection, bump typing/submission, and targeted action-button clicking.
+* **Minimal Action Surface**: Runtime now explicitly targets only `Run`, `Expand`, `Always Allow`, `Retry`, `Accept all`, `Allow`, `Proceed`, and `Keep`.
+* **Lean Config Contract**: Kept only essential timing controls and settable bump text path for predictable behavior under two-window leader/follower operation.
+
+## [5.2.262] - 2026-03-01
+### Fixed
+* **Residual Host Warning Flood**: Extended browser-console suppression to cover repeated host API proposal warnings (`extensionEnabledApiProposals ... DOES NOT EXIST`), repeated workbench DI noise (`UNKNOWN service agentSessions`), repeated MCP overwrite notices, repeated `vscode.git` schema/title errors, repeated `google.antigravity` menu-command reference errors, and repeated generic `vscode.git` error bursts.
+
+### Changed
+* **Noise Classification Coverage**: CDP console bridge now classifies/suppresses additional multi-line host noise signatures while preserving automation-critical runtime markers.
+
+## [5.2.261] - 2026-03-01
+### Fixed
+* **Residual Host Noise Flood**: Hardened browser-console forwarding to reconstruct multi-arg console payloads and suppress repeated external host noise (Git stack traces, `%c` token lines, module/deprecation spam, repeated status-update failures).
+* **Cross-Workspace Bootstrap Lockout**: Activation bootstrap now reclaims leader when the existing lease owner is from a different workspace, preventing unrelated workspace leases from pinning this workspace in follower mode.
+
+### Changed
+* **Signal Routing Tightening**: Browser log forwarding now prioritizes explicit automation markers (`[AutoContinue]`, `[Autopilot]`, `[CDP]`, `[ControllerLease]`, `[Extension]`) instead of broad `antigravity` text matching.
+
+## [5.2.260] - 2026-03-01
+### Fixed
+* **Host Console Noise Flooding Runtime Logs**: Added targeted suppression for known external noise patterns (`%c WARN/ERR/INFO`, bootstrap debug fragments, repeated module/deprecation warnings, repeated submodule Git noise).
+* **External "run state not found" Spam**: Added throttled summary handling for external host-extension `ConnectError: run state not found` traces so repeated bursts no longer drown actionable automation telemetry.
+
+### Changed
+* **Signal-First Browser Log Forwarding**: CDP console bridge now emits concise periodic summaries for suppressed external noise instead of forwarding every repeated line verbatim.
+
+## [5.2.259] - 2026-03-01
+### Fixed
+* **Focus-Driven Leader Thrash**: Focus/bootstrap role flow now only attempts no-leader self-heal and no longer steals an active leader lease during focus events.
+* **Follower Drift During Window Switching**: Removed focused takeover invocation points that caused leader/follower oscillation across two windows.
+* **No-Input Bump Dead Path**: Minimal runtime bump flow now dispatches hybrid bridge bump when input selectors are missing but chat is actionable, preventing silent no-bump stalls.
+
+### Changed
+* **Controller Arbitration Simplification**: Focus path is fail-safe and lease-respecting (claim only when leader is absent).
+
+## [5.2.258] - 2026-03-01
+### Fixed
+* **No Auto-Bump When Composer Selector Drifts**: `typeAndSubmitBump` now falls back to the hybrid host bump bridge when no input element is detected, so bump dispatch still occurs.
+* **Stalled Detection Too Strict**: Minimal stalled detection now accepts either visible input OR visible send button, preventing false negatives that blocked bump triggers.
+
+### Changed
+* **Bump Dispatch Robustness**: Hybrid fallback bump updates bump timestamps/action telemetry for deterministic cooldown behavior.
+
+## [5.2.257] - 2026-03-01
+### Fixed
+* **Leader/Follower Thrash Loop**: Removed focused-window leader takeover from periodic runtime refresh, which was causing repeated force-acquire churn when multiple windows competed.
+
+### Changed
+* **Deterministic Handoff Policy**: Leader takeover remains focus-event/bootstrap driven; refresh loop now only performs no-leader self-heal and role alignment, reducing role oscillation and status-bar drift.
+
+## [5.2.256] - 2026-03-01
+### Fixed
+* **Focused Window Falling Back to Follower**: Runtime refresh now re-attempts focused-window leader takeover when this window is focused but currently follower, preventing silent role drift after initial leader sync.
+
+### Changed
+* **Status/Role Convergence**: Focused leader handoff is now enforced both on focus events and refresh cycles for faster status-bar convergence to active-window control.
+
+## [5.2.255] - 2026-03-01
+### Changed
+* **Focused Leader Handoff**: Added a minimal focus-triggered lease takeover so the currently focused Antigravity window can claim the single app-scoped leader lease.
+* **Single-Leader + Usable Window Switching**: Kept app-scoped singleton lease while enabling deterministic leader transfer on focus (cooldowned) to avoid being stuck behind a background workspace leader.
+
+## [5.2.254] - 2026-03-01
+### Fixed
+* **Dual-Leader Across Windows**: Replaced workspace-scoped lease hashing with app-scoped lease hashing so all Antigravity windows share one controller lease and cannot all become leader simultaneously.
+
+### Changed
+* **Deterministic Leader Scope**: Lease identity now derives from host app runtime identity (`process.execPath` + user data context), isolating Antigravity from other IDE forks while preserving single-leader behavior across all Antigravity windows.
+
+## [5.2.253] - 2026-03-01
+### Fixed
+* **Cross-Workspace Lease Contention**: Restored workspace-scoped controller lease files (`.antigravity-controller-lease.<workspaceHash>.json`) so other projects/windows no longer hold this workspace in follower mode.
+
+### Changed
+* **Controller Recovery Simplification**: Removed focused-follower force-reclaim path and kept a single deterministic recovery rule: self-heal only when no active leader exists in the current workspace lease.
+* **Arbitration Churn Reduction**: Runtime/focus role handling no longer attempts aggressive lease steals, reducing role flip loops that suppressed bump typing/submission.
+
+## [5.2.252] - 2026-03-01
+### Fixed
+* **Persistent All-Follower Lock State**: Added a guarded focused-follower reclaim path (same-workspace only, cooldowned) so a focused window can recover leader when lease ownership gets stuck on another follower process.
+* **No-Bump Under Follower Deadlock**: Leader recovery now re-enables active runtime role alignment in focused windows to restore bump typing/submission path.
+
+### Changed
+* **Reclaim Safety Controls**: Focus/runtime reclaim is throttled (10s cooldown) and constrained to same-workspace leader leases to reduce churn.
+
+## [5.2.251] - 2026-03-01
+### Fixed
+* **Leader Split-Brain Regression**: Removed automatic focus/bootstrap `forceAcquire` takeover paths that could briefly create competing leader windows and unstable role sync.
+* **Bump Dispatch Starvation Under Dual Leaders**: Restored single-leader action authority by relying on atomic lease election + no-leader self-heal only.
+
+### Changed
+* **Controller Simplification**: Focus events now perform no-leader recovery only; activation bootstrap no longer force-promotes focused followers when a leader already exists.
+
+## [5.2.250] - 2026-03-01
+### Fixed
+* **Dual-Leader Window Collisions**: Restored a single global controller lease file (`~/.antigravity-controller-lease.json`) so only one window can own leader role at a time.
+* **Bump Typing Reliability Regression**: Prevented concurrent leader windows from racing action dispatch, which could suppress expected bump typing/submission behavior.
+
+### Changed
+* **Leader Arbitration Simplification**: Replaced per-workspace hashed lease paths with one global lease path for deterministic single-controller ownership.
+
+## [5.2.249] - 2026-03-01
+### Fixed
+* **Both Windows Showing Leader**: Removed temporary focus-authoritative leader override so status bar role and runtime role sync are once again strictly lease-owned.
+
+### Changed
+* **Controller Role Consistency**: Status display, CDP role sync, and role-alignment mode selection now consistently use `isControllerLeader()` only.
+
+## [5.2.248] - 2026-03-01
+### Changed
+* **Fresh VSIX Rebuild**: Issued a clean version bump and rebuilt packaging artifacts to resolve invalid-extension install rejection scenarios with stale/cached VSIX identities.
+
+## [5.2.247] - 2026-03-01
+### Fixed
+* **Cross-Workspace Follower Demotion**: Restored workspace-scoped controller lease files (hashed by normalized workspace path), preventing unrelated workspaces (e.g., `workspace\\borg`) from forcing this workspace into follower mode.
+
+### Changed
+* **Lease File Isolation**: Controller lease path now uses `.antigravity-controller-lease.<workspaceHash>.json` under the user home directory for deterministic per-workspace leader arbitration.
+
+## [5.2.246] - 2026-03-01
+### Fixed
+* **Focused Window Showing Follower**: Leadership status and runtime role sync now use focus-authoritative effective leadership, so the active window does not fall back to follower due transient lease churn.
+
+### Changed
+* **Controller Role Simplification**: `statusBar` role display and CDP role sync now align to effective leader (`lease leader OR focused window`) while lease acquisition remains best-effort.
+
+## [5.2.245] - 2026-03-01
+### Fixed
+* **Status Bar Leader/Follower Mismatch**: Added deterministic focused-window leader pinning on window focus, so the active window immediately acquires leader role and status bar role aligns with user focus.
+
+### Changed
+* **Controller Policy Simplification**: Focus events now use a single focused-window leader pin path (plus bootstrap fallback), while periodic runtime reclaim loops remain disabled to avoid churn.
+
+## [5.2.244] - 2026-03-01
+### Fixed
+* **Activation Bootstrap Leader Recovery**: Replaced a dangling bootstrap reclaim call with an explicit focused-bootstrap takeover helper, preventing activation-path failures and restoring deterministic leader recovery on startup.
+* **Both-Follower Startup Lock**: Added a single one-time focused takeover at bootstrap (no periodic reclaim loops), so focused startup windows can recover leader without reintroducing lease ping-pong.
+
+## [5.2.243] - 2026-03-01
+### Fixed
+* **Leader/Follower Ping-Pong Across Windows**: Removed focused force-reclaim loops that could cause cross-window lease steals and repeated role flapping.
+* **Dead Owner Lease Visibility Gap**: Lease reads now treat non-alive owner PIDs as inactive immediately, preventing follower lock states that waited for stale timeout.
+
+### Changed
+* **Controller Arbitration Simplification**: Focus and runtime refresh now rely on no-leader self-heal only, with liveness-aware lease checks in `ControllerLease` for deterministic role stability.
+
+## [5.2.242] - 2026-03-01
+### Fixed
+* **Restart-Time Both-Follower Lock-In**: Added a cooldowned focused-window leader reclaim attempt during runtime refresh, so focused windows can recover leader role even when bootstrap focus timing misses reclaim.
+
+### Changed
+* **Controller Reclaim Stability**: Focused reclaim now has explicit runtime cooldown pacing to reduce reclaim churn while preserving deterministic active-window leadership recovery.
+
+## [5.2.241] - 2026-03-01
+### Changed
+* **Runtime Core Simplification**: Removed dead legacy overlay/tab-tracking helpers and retired unused legacy cursor/antigravity loop variants in `main_scripts/full_cdp_script.js`.
+* **Single Active Loop Model**: Kept minimal-core scheduler as the sole active runtime loop path to reduce branching and maintenance complexity.
+
+## [5.2.240] - 2026-03-01
+### Changed
+* **Submit Path Simplification**: Reduced keyboard submit path duplication, lowered retry complexity, and added deterministic bridge escalation fallback when DOM submit attempts are exhausted.
+* **Expand Path Noise Reduction**: Limited expand candidate fanout per sweep and throttled repeated no-effect expand diagnostics to avoid log spam and action thrash.
+* **Runtime Simplification**: Cleaned `auto-continue` internals by removing redundant parameters and consolidating submit dispatch logic.
+
+## [5.2.239] - 2026-03-01
+### Changed
+* **Release Build Bump**: Incremented extension version for a fresh VSIX package.
+* **Leader Arbitration Simplification**: Removed focused/cross-workspace takeover paths and kept deterministic lease behavior centered on no-leader self-heal.
+
+## [5.2.238] - 2026-03-01
+### Fixed
+* **All-Follower Focus Deadlock**: Focus events now permit scoped cross-workspace leader reclaim by default, preventing windows from getting stuck as followers when an unrelated workspace holds lease ownership.
+
+### Changed
+* **Leader Reclaim Policy Simplification**: Cross-workspace takeover remains configurable, but focused-window activation now has deterministic reclaim behavior to maintain practical one-active-window control.
+
 ## [5.2.237] - 2026-03-01
 ### Changed
 * **Minimal Core Refactor**: Replaced complex runtime loop orchestration with a deterministic minimal core focused on fork detection, stalled-conversation detection, bump typing/submission, and explicit action-intent clicking.

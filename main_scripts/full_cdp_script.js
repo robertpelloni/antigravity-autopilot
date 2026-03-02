@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '5.2.237';
+        const ANTIGRAVITY_VERSION = '5.2.264';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
@@ -1155,237 +1155,7 @@
         }, 1);
     };
 
-    const deduplicateNames = (names) => {
-        const counts = {};
-        return names.map(name => {
-            if (counts[name] === undefined) {
-                counts[name] = 1;
-                return name;
-            } else {
-                counts[name]++;
-                return `${name} (${counts[name]})`;
-            }
-        });
-    };
-
-    const updateTabNames = (tabs) => {
-        const rawNames = Array.from(tabs).map(tab => stripTimeSuffix(tab.textContent));
-        const tabNames = deduplicateNames(rawNames);
-
-        if (JSON.stringify(window.__autopilotState.tabNames) !== JSON.stringify(tabNames)) {
-            log(`updateTabNames: Detected ${tabNames.length} tabs: ${tabNames.join(', ')}`);
-            window.__autopilotState.tabNames = tabNames;
-        }
-    };
-
-    const updateConversationCompletionState = (rawTabName, status) => {
-        const tabName = stripTimeSuffix(rawTabName);
-        const current = window.__autopilotState.completionStatus[tabName];
-        if (current !== status) {
-            log(`[State] ${tabName}: ${current} → ${status}`);
-            window.__autopilotState.completionStatus[tabName] = status;
-        }
-    };
-
-    const OVERLAY_ID = '__autoAllBgOverlay';
-    const STYLE_ID = '__autoAllBgStyles';
-    const STYLES = `
-        #__autoAllBgOverlay { position: fixed; background: rgba(0, 0, 0, 0.98); z-index: 2147483647; font-family: sans-serif; color: #fff; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
-        #__autoAllBgOverlay.visible { opacity: 1; }
-        .aab-slot { margin-bottom: 12px; width: 80%; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; }
-        .aab-header { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; }
-        .aab-progress-track { height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; }
-        .aab-progress-fill { height: 100%; width: 20%; background: #6b7280; transition: width 0.3s, background 0.3s; }
-        .aab-slot.working .aab-progress-fill { background: #a855f7; }
-        .aab-slot.done .aab-progress-fill { background: #22c55e; }
-        .aab-slot .status-text { color: #6b7280; }
-        .aab-slot.working .status-text { color: #a855f7; }
-        .aab-slot.done .status-text { color: #22c55e; }
-    `;
-
-    function showOverlay() {
-        if (document.getElementById(OVERLAY_ID)) {
-            log('[Overlay] Already exists, skipping creation');
-            return;
-        }
-
-        log('[Overlay] Creating overlay...');
-        const state = window.__autopilotState;
-
-        if (!document.getElementById(STYLE_ID)) {
-            const style = document.createElement('style');
-            style.id = STYLE_ID;
-            style.textContent = STYLES;
-            document.head.appendChild(style);
-            log('[Overlay] Styles injected');
-        }
-
-        const overlay = document.createElement('div');
-        overlay.id = OVERLAY_ID;
-
-        const container = document.createElement('div');
-        container.id = 'aab-c';
-        container.style.cssText = 'width:100%; display:flex; flex-direction:column; align-items:center;';
-        overlay.appendChild(container);
-
-        document.body.appendChild(overlay);
-        log('[Overlay] Overlay appended to body');
-
-        const ide = state.currentMode || 'cursor';
-        let panel = null;
-        if (ide === 'antigravity') {
-            panel = queryAll('#antigravity\\.agentPanel').find(p => p.offsetWidth > 50);
-        } else {
-            panel = queryAll('#workbench\\.parts\\.auxiliarybar').find(p => p.offsetWidth > 50);
-        }
-
-        if (panel) {
-            log(`[Overlay] Found panel for ${ide}, syncing position`);
-            const sync = () => {
-                const r = panel.getBoundingClientRect();
-                Object.assign(overlay.style, { top: r.top + 'px', left: r.left + 'px', width: r.width + 'px', height: r.height + 'px' });
-            };
-            sync();
-            new ResizeObserver(sync).observe(panel);
-        } else {
-            log('[Overlay] No panel found, using fullscreen');
-            Object.assign(overlay.style, { top: '0', left: '0', width: '100%', height: '100%' });
-        }
-
-        const waitingDiv = document.createElement('div');
-        waitingDiv.className = 'aab-waiting';
-        waitingDiv.style.cssText = 'color:#888; font-size:12px;';
-        waitingDiv.textContent = 'Scanning for conversations...';
-        container.appendChild(waitingDiv); // Re-added this line as it was missing from the snippet
-        // The original `overlay` variable is already defined.
-        // The user's snippet had `const overlay = document.getElementById('antigravity-overlay');` which is incorrect.
-        // Using the already defined `overlay` variable.
-        setTimeout(() => overlay.classList.add('visible'), 50);
-    }
-
-    function updateOverlay() {
-        const state = window.__autopilotState;
-        const container = document.getElementById('aab-c');
-
-        if (!container) {
-            log('[Overlay] updateOverlay: No container found, skipping');
-            return;
-        }
-
-        log(`[Overlay] updateOverlay call: tabNames count=${state.tabNames?.length || 0}`);
-        const newNames = state.tabNames || [];
-
-        if (newNames.length === 0) {
-            if (!container.querySelector('.aab-waiting')) {
-                container.textContent = '';
-                const waitingDiv = document.createElement('div');
-                waitingDiv.className = 'aab-waiting';
-                waitingDiv.style.cssText = 'color:#888; font-size:12px;';
-                waitingDiv.textContent = 'Scanning for conversations...';
-                container.appendChild(waitingDiv);
-            }
-            return;
-        }
-
-        const waiting = container.querySelector('.aab-waiting');
-        if (waiting) waiting.remove();
-
-        const currentSlots = Array.from(container.querySelectorAll('.aab-slot'));
-
-        currentSlots.forEach(slot => {
-            const name = slot.getAttribute('data-name');
-            if (!newNames.includes(name)) slot.remove();
-        });
-
-        newNames.forEach(name => {
-            const status = state.completionStatus[name];
-            const isDone = status === 'done';
-
-            const statusClass = isDone ? 'done' : 'working';
-            const statusText = isDone ? 'COMPLETED' : 'IN PROGRESS';
-            const progressWidth = isDone ? '100%' : '66%';
-
-            let slot = container.querySelector(`.aab-slot[data-name="${name}"]`);
-
-            if (!slot) {
-                slot = document.createElement('div');
-                slot.className = `aab-slot ${statusClass}`;
-                slot.setAttribute('data-name', name);
-
-                const header = document.createElement('div');
-                header.className = 'aab-header';
-
-                const nameSpan = document.createElement('span');
-                nameSpan.textContent = name;
-                header.appendChild(nameSpan);
-
-                const statusSpan = document.createElement('span');
-                statusSpan.className = 'status-text';
-                statusSpan.textContent = statusText;
-                header.appendChild(statusSpan);
-
-                slot.appendChild(header);
-
-                const track = document.createElement('div');
-                track.className = 'aab-progress-track';
-
-                const fill = document.createElement('div');
-                fill.className = 'aab-progress-fill';
-                fill.style.width = progressWidth;
-                track.appendChild(fill);
-
-                slot.appendChild(track);
-                container.appendChild(slot);
-                log(`[Overlay] Created slot: ${name} (${statusText})`);
-            } else {
-
-                slot.className = `aab-slot ${statusClass}`;
-
-                const statusSpan = slot.querySelector('.status-text');
-                if (statusSpan) statusSpan.textContent = statusText;
-
-                const bar = slot.querySelector('.aab-progress-fill');
-                if (bar) bar.style.width = progressWidth;
-            }
-        });
-
-        // Add Bump Timer Display
-        let timerSlot = container.querySelector('.aab-timer-slot');
-        if (!timerSlot) {
-            timerSlot = document.createElement('div');
-            timerSlot.className = 'aab-timer-slot';
-            timerSlot.style.cssText = 'font-size: 10px; color: #888; margin-top: 8px; text-align: center;';
-            container.appendChild(timerSlot);
-        }
-
-        if (state.bumpEnabled) {
-            const now = Date.now();
-            const cooldown = state.autoApproveDelay || 30000;
-            // logic: max delay - (now - lastAction)
-            let referenceTime = Math.max(lastClickTime || state.stats.sessionStartTime, lastBumpTime || 0);
-            const timeSinceRef = now - referenceTime;
-            const remaining = Math.max(0, Math.ceil((cooldown - timeSinceRef) / 1000));
-
-            if (remaining > 0) {
-                timerSlot.textContent = `Auto-Bump in ${remaining}s...`;
-                timerSlot.style.color = '#aaa';
-            } else {
-                timerSlot.textContent = `Auto-Bump: Ready`;
-                timerSlot.style.color = '#4ade80';
-            }
-        } else {
-            timerSlot.textContent = '';
-        }
-    }
-
-    function hideOverlay() {
-        const overlay = document.getElementById(OVERLAY_ID);
-        if (overlay) {
-            log('[Overlay] Hiding overlay...');
-            overlay.classList.remove('visible');
-            setTimeout(() => overlay.remove(), 300);
-        }
-    }
+    // Legacy overlay and tab-tracking helpers removed.
 
     function findNearbyCommandText(el) {
         const commandSelectors = ['pre', 'code', 'pre code'];
@@ -2206,215 +1976,7 @@
         };
     }
 
-    async function cursorLoop(sid) {
-        log('[Loop] cursorLoop STARTED');
-        let index = 0;
-        let cycle = 0;
-        while (window.__autopilotState.isRunning && window.__autopilotState.sessionID === sid) {
-            try {
-                const timing = window.__antigravityConfig?.timing || {};
-                const pollInterval = timing.pollIntervalMs || 800;
-                const throttle = timing.actionThrottleMs || 100;
-                const cooldown = timing.cooldownMs || 3000;
-
-                // Dismiss stray Customize Layout dialog
-
-                // Gold Standard: Update Coverage Metrics for Self-Test
-                updateProfileCoverage();
-
-                // 1.5 Click Accept All (if enabled)
-                if (window.__antigravityConfig && window.__antigravityConfig.clickAcceptAll) {
-                    const acceptAllSelectors = ['[title*="Accept All"]', '[aria-label*="Accept All"]', '[title="Keep"]', '[aria-label="Keep"]'];
-                    await performClick(acceptAllSelectors, { skipAcceptCheck: true });
-                }
-
-                // 2. Click Feedback Buttons (if enabled)
-                if (window.__antigravityConfig && window.__antigravityConfig.clickFeedback) {
-                    await performClick(getUnifiedFeedbackSelectors('cursor'), { skipAcceptCheck: true });
-                }
-
-                const clicked = await performClick(getUnifiedClickSelectors('cursor'));
-                if (clicked > 0) {
-                    log(`[Loop] Cycle ${cycle}: Clicked ${clicked} buttons`);
-                } else {
-                    const bumped = await autoBump();
-                    if (bumped) {
-                        log(`[Loop] Cycle ${cycle}: Auto-bumped conversation`);
-                        await workerDelay(cooldown);
-                    }
-                }
-
-                await workerDelay(pollInterval);
-
-                const tabSelectors = [
-                    '.chat-session-item',
-                    '.chat-session-item [role="tab"]',
-                    '[class*="chat-session"] [role="tab"]',
-                    '[data-testid*="chat"] [role="tab"]',
-                    '[aria-label*="chat" i][role="tab"]'
-                ];
-
-                let tabs = [];
-                for (const selector of tabSelectors) {
-                    tabs = queryAll(selector);
-                    if (tabs.length > 0) {
-                        log(`[Loop] Cycle ${cycle}: Found ${tabs.length} tabs using selector: ${selector}`);
-                        break;
-                    }
-                }
-
-                if (tabs.length === 0) {
-                    log(`[Loop] Cycle ${cycle}: No tabs found in any known locations.`);
-                }
-
-                const blockedTabTerms = ['extension', 'extensions', 'marketplace', 'plugin', 'mcp', 'source control', 'search', 'explorer', 'run and debug'];
-                tabs = tabs.filter(tab => {
-                    const label = (tab.getAttribute('aria-label') || tab.textContent || '').trim().toLowerCase();
-                    if (!label) return false;
-                    if (blockedTabTerms.some(term => label.includes(term))) return false;
-                    return label.includes('chat') || tab.className.toLowerCase().includes('chat-session');
-                });
-
-                updateTabNames(tabs);
-
-                if (tabs.length > 0) {
-                    const targetTab = tabs[index % tabs.length];
-                    const tabLabel = targetTab.getAttribute('aria-label') || targetTab.textContent?.trim() || 'unnamed tab';
-                    log(`[Loop] Cycle ${cycle}: Clicking tab "${tabLabel}"`);
-                    targetTab.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
-                    index++;
-                }
-
-                const state = window.__autopilotState;
-                log(`[Loop] Cycle ${cycle}: State = { tabs: ${state.tabNames?.length || 0}, isRunning: ${state.isRunning}, sid: ${state.sessionID} }`);
-
-                updateOverlay();
-
-                const waitTime = window.__autopilotState.threadWaitInterval || 5000;
-                log(`[Loop] Cycle ${cycle}: Overlay updated, waiting ${waitTime}ms...`);
-                await workerDelay(waitTime);
-            } catch (loopErr) {
-                log(`[Loop] Cycle ${cycle}: ERROR - ${loopErr.message}`);
-                await workerDelay(2000);
-            }
-        }
-        log('[Loop] cursorLoop STOPPED');
-    }
-
-    async function antigravityLoop(sid) {
-        log('[Loop] antigravityLoop STARTED');
-        let index = 0;
-        let cycle = 0;
-
-        while (window.__autopilotState.isRunning && window.__autopilotState.sessionID === sid) {
-            try {
-                cycle++;
-                log(`[Loop] Cycle ${cycle}: Starting...`);
-
-                // Dismiss stray Customize Layout dialog
-
-                // Expand any collapsed sections (e.g. "Step Requires Input")
-                await expandCollapsedSections();
-
-                // 1.5 Click Accept All (if enabled)
-                if (window.__antigravityConfig && window.__antigravityConfig.clickAcceptAll) {
-                    const acceptAllSelectors = ['[title*="Accept All"]', '[aria-label*="Accept All"]', '[title="Keep"]', '[aria-label="Keep"]'];
-                    await performClick(acceptAllSelectors, { skipAcceptCheck: true });
-                }
-
-                // 2. Click Feedback Buttons (if enabled)
-                if (window.__antigravityConfig && window.__antigravityConfig.clickFeedback) {
-                    await performClick(getUnifiedFeedbackSelectors('antigravity'), { skipAcceptCheck: true });
-                }
-
-                // Just click accept buttons directly - no dropdown interaction needed
-                // Added selectors for Diff Editor actions and SCM titles
-                const clicked = await performClick(getUnifiedClickSelectors('antigravity'));
-                if (clicked > 0) {
-                    log(`[Loop] Cycle ${cycle}: Clicked ${clicked} accept buttons`);
-                } else {
-                    // No buttons found — check if AI is idle and auto-bump
-                    const bumped = await autoBump();
-                    if (bumped) {
-                        log(`[Loop] Cycle ${cycle}: Auto-bumped conversation`);
-                        await workerDelay(3000);
-                    }
-                }
-
-                await workerDelay(1500);
-
-                const mode = getCurrentMode();
-                if (mode !== 'vscode') {
-                    const tabSelectors = [
-                        '[role="tab"]',
-                        '[aria-controls*="chat" i]',
-                        '[data-testid*="chat-tab" i]',
-                        '[class*="chat"] [role="tab"]',
-                        '[class*="conversation"] [role="tab"]'
-                    ];
-
-                    let tabs = [];
-                    for (const selector of tabSelectors) {
-                        tabs = queryAll(selector);
-                        if (tabs.length > 0) break;
-                    }
-                    log(`[Loop] Cycle ${cycle}: Found ${tabs.length} tabs`);
-
-                    const blockedTabTerms = ['extension', 'extensions', 'marketplace', 'plugin', 'mcp', 'source control', 'search', 'explorer', 'run and debug'];
-                    tabs = tabs.filter(tab => {
-                        const label = (tab.getAttribute('aria-label') || tab.textContent || '').trim().toLowerCase();
-                        if (!label) return false;
-                        if (blockedTabTerms.some(term => label.includes(term))) return false;
-
-                        const className = (tab.className || '').toLowerCase();
-                        const role = (tab.getAttribute('role') || '').toLowerCase();
-                        return role === 'tab' || label.includes('chat') || className.includes('chat-session') || className.includes('conversation');
-                    });
-
-                    updateTabNames(tabs);
-
-                    if (tabs.length > 1) {
-                        const targetTab = tabs[index % tabs.length];
-                        const tabName = stripTimeSuffix(targetTab.textContent);
-
-                        const state = window.__autopilotState;
-                        if (state.completionStatus[tabName] !== 'done') {
-                            log(`[Loop] Cycle ${cycle}: Switching to tab "${tabName}"`);
-                            targetTab.dispatchEvent(new MouseEvent('click', { view: window, bubbles: true, cancelable: true }));
-                            index++;
-
-                            await workerDelay(2000);
-
-                            const badges = queryAll('span').filter(s => {
-                                const t = s.textContent.trim();
-                                return t === 'Good' || t === 'Bad';
-                            });
-
-                            if (badges.length > 0) {
-                                updateConversationCompletionState(tabName, 'done');
-                                log(`[Loop] Cycle ${cycle}: Tab "${tabName}" marked as DONE`);
-                            }
-                        } else {
-
-                            index++;
-                            log(`[Loop] Cycle ${cycle}: Skipping completed tab "${tabName}"`);
-                        }
-                    }
-                } else {
-                    updateTabNames([]);
-                }
-
-                updateOverlay();
-
-                const waitTime = window.__autopilotState.threadWaitInterval || 5000;
-                await workerDelay(waitTime);
-            } catch (loopErr) {
-                log(`[Loop] antigravityLoop Cycle ${cycle}: ERROR - ${loopErr.message}`);
-                await workerDelay(2000);
-            }
-        }
-        log('[Loop] antigravityLoop STOPPED');
-    }
+    // Legacy cursor/antigravity loop variants removed. Minimal core scheduler is the single active loop.
 
     window.__autoAllUpdateBannedCommands = function (bannedList) {
         const state = window.__autopilotState;
@@ -2682,7 +2244,14 @@
 
         const fork = getForkSelectors(mode);
         const inputEl = findVisibleBySelectors(fork.input);
-        if (!inputEl) return false;
+        if (!inputEl) {
+            // Deterministic fallback for forks where composer selectors drift.
+            // Delegate to host bridge, which performs native typing/submission.
+            sendCommandToExtension('__AUTOPILOT_HYBRID_BUMP__:' + text);
+            lastBumpTime = Date.now();
+            sendCommandToExtension('__AUTOPILOT_ACTION__:submit|minimal-hybrid');
+            return true;
+        }
 
         const typed = setInputValue(inputEl, text);
         if (!typed) return false;
@@ -2702,13 +2271,14 @@
         const now = Date.now();
         const fork = getForkSelectors(mode);
         const hasInput = !!findVisibleBySelectors(fork.input);
+        const hasSend = !!findVisibleBySelectors(fork.send);
         const isGenerating = !!findVisibleBySelectors(fork.generating);
 
         const actionableCount = MINIMAL_INTENT_ORDER.reduce((sum, key) => sum + (actionMap[key]?.length || 0), 0);
         const idleForMs = now - Math.max(lastClickTime || 0, lastBumpTime || 0, state.stats?.sessionStartTime || 0);
         const stalledMs = Math.max(1500, Number(state.minimal?.stalledMs || 7000));
 
-        return hasInput && !isGenerating && actionableCount === 0 && idleForMs >= stalledMs;
+        return (hasInput || hasSend) && !isGenerating && actionableCount === 0 && idleForMs >= stalledMs;
     }
 
     function buildMinimalRuntimeState(mode, actionMap, stalled) {
@@ -2959,7 +2529,6 @@
             state.__minimalTick = null;
         }
         state.__minimalBusy = false;
-        hideOverlay();
         log("Agent Stopped.");
     };
 

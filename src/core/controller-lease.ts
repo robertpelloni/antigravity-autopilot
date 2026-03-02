@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { createHash } from 'crypto';
 
 export interface ControllerLeasePayload {
     ownerId: string;
@@ -37,12 +38,40 @@ export class ControllerLease {
     ) {
         this.staleMs = Math.max(5000, options?.staleMs ?? 15000);
         this.heartbeatMs = Math.max(1000, options?.heartbeatMs ?? 4000);
-        this.leasePath = options?.leasePath || this.getDefaultWorkspaceLeasePath(this.workspace);
+        this.leasePath = options?.leasePath || this.getDefaultAppLeasePath();
     }
 
-    private getDefaultWorkspaceLeasePath(workspace: string): string {
+    private getDefaultAppLeasePath(): string {
         const home = os.homedir() || os.tmpdir();
-        return path.join(home, '.antigravity-controller-lease.json');
+        const appKey = this.normalizeAppKey();
+        const appHash = createHash('sha1').update(appKey).digest('hex').slice(0, 12);
+        return path.join(home, `.antigravity-controller-lease.${appHash}.json`);
+    }
+
+    private normalizeAppKey(): string {
+        const execPath = String(process.execPath || '').trim().replace(/\\/g, '/').toLowerCase();
+        const appData = String(process.env.APPDATA || '').trim().replace(/\\/g, '/').toLowerCase();
+        const userDataDirArg = process.argv.find(arg => String(arg).startsWith('--user-data-dir=')) || '';
+        const userDataDir = userDataDirArg.replace(/^--user-data-dir=/, '').replace(/^"|"$/g, '').replace(/\\/g, '/').toLowerCase();
+        return `${execPath}|${appData}|${userDataDir}`;
+    }
+
+    private isOwnerProcessAlive(pid: number): boolean {
+        const normalizedPid = Number(pid || 0);
+        if (normalizedPid <= 0) {
+            return false;
+        }
+
+        try {
+            process.kill(normalizedPid, 0);
+            return true;
+        } catch (e: any) {
+            const code = String(e?.code || '').toUpperCase();
+            if (code === 'EPERM' || code === 'EACCES') {
+                return true;
+            }
+            return false;
+        }
     }
 
     private normalizeWorkspaceKey(workspace: string): string {
@@ -110,6 +139,7 @@ export class ControllerLease {
         const lease = this.readLease();
         if (!lease) return false;
         if (this.isStale(lease)) return false;
+        if (!this.isOwnerProcessAlive(lease.pid)) return false;
         return lease.ownerId === this.ownerId;
     }
 
@@ -117,28 +147,14 @@ export class ControllerLease {
         const lease = this.readLease();
         if (!lease) return null;
         if (this.isStale(lease)) return null;
+        if (!this.isOwnerProcessAlive(lease.pid)) return null;
         return lease;
     }
 
     tryAcquire(force: boolean = false): boolean {
         const existing = this.readLease();
         if (!force && existing && !this.isStale(existing) && existing.ownerId !== this.ownerId) {
-            const pid = Number(existing.pid || 0);
-            let isAlive = pid > 0;
-            if (isAlive) {
-                try {
-                    process.kill(pid, 0);
-                } catch (e: any) {
-                    const code = String(e?.code || '').toUpperCase();
-                    // EPERM/EACCES means the process exists but we cannot signal it.
-                    // Treat this as alive so we don't spuriously steal lease ownership.
-                    if (code === 'EPERM' || code === 'EACCES') {
-                        isAlive = true;
-                    } else {
-                        isAlive = false;
-                    }
-                }
-            }
+            const isAlive = this.isOwnerProcessAlive(existing.pid);
             if (isAlive) {
                 return false;
             }
