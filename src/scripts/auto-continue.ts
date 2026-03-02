@@ -27,20 +27,20 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   const PROFILES = {
     antigravity: {
-      root: '.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i]',
-      input: 'textarea, [contenteditable="true"], [role="textbox"]',
+      root: '.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i], .chat-input-container, .monaco-editor',
+      input: 'textarea, .monaco-editor textarea, [contenteditable="true"], [role="textbox"], [aria-label*="chat" i], [placeholder*="message" i], [placeholder*="ask" i], [id*="chat-input" i]',
       send: '[title*="Send" i], [aria-label*="Send" i], [title*="Send message" i], [aria-label*="Send message" i], [title*="Submit" i], [aria-label*="Submit" i], [title*="Continue" i], [aria-label*="Continue" i], [data-testid*="send" i], [data-testid*="submit" i], [class*="send-button" i], [class*="chat-submit" i], button[type="submit"], .codicon-send',
       generating: '[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator'
     },
     cursor: {
-      root: '.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i]',
-      input: 'textarea, [contenteditable="true"], [role="textbox"]',
+      root: '.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i], .chat-input-container, .monaco-editor',
+      input: 'textarea, .monaco-editor textarea, [contenteditable="true"], [role="textbox"], [aria-label*="chat" i], [placeholder*="message" i], [placeholder*="ask" i], [id*="chat-input" i]',
       send: '[title*="Send" i], [aria-label*="Send" i], [title*="Send message" i], [aria-label*="Send message" i], [title*="Submit" i], [aria-label*="Submit" i], [title*="Continue" i], [aria-label*="Continue" i], [data-testid*="send" i], [data-testid*="submit" i], [class*="send-button" i], [class*="chat-submit" i], button[type="submit"], .codicon-send',
       generating: '[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator'
     },
     vscode: {
-      root: '.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i]',
-      input: 'textarea, [contenteditable="true"], [role="textbox"]',
+      root: '.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i], .chat-input-container, .monaco-editor',
+      input: 'textarea, .monaco-editor textarea, [contenteditable="true"], [role="textbox"], [aria-label*="chat" i], [placeholder*="message" i], [placeholder*="ask" i], [id*="chat-input" i]',
       send: '[title*="Send" i], [aria-label*="Send" i], [title*="Send message" i], [aria-label*="Send message" i], [title*="Submit" i], [aria-label*="Submit" i], [title*="Continue" i], [aria-label*="Continue" i], [data-testid*="send" i], [data-testid*="submit" i], [class*="send-button" i], [class*="chat-submit" i], button[type="submit"], .codicon-send',
       generating: '[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator'
     }
@@ -184,28 +184,33 @@ export const AUTO_CONTINUE_SCRIPT = `
     return null;
   }
 
-  function isValidInput(input, root, rootSelector) {
+  function isValidInput(input) {
     if (!input || !isVisible(input) || isBlockedSurface(input)) return false;
     const tag = String(input.tagName || '').toLowerCase();
     const editable = tag === 'textarea' || input.isContentEditable || input.getAttribute('contenteditable') === 'true' || input.getAttribute('role') === 'textbox';
     if (!editable) return false;
-    if (root && input.closest) {
-      try {
-        if (rootSelector && !input.closest(rootSelector) && !root.contains(input)) return false;
-      } catch (e) {}
-    }
     return true;
   }
 
   function findInput(profile, root) {
     const local = root ? queryAllDeep(profile.input, root) : [];
     for (const input of local) {
-      if (isValidInput(input, root, profile.root)) return input;
+      if (isValidInput(input)) return input;
     }
     const global = queryAllDeep(profile.input, document);
     for (const input of global) {
-      if (isValidInput(input, root, profile.root)) return input;
+      if (isValidInput(input)) return input;
     }
+    return null;
+  }
+
+  function findInputFallback() {
+    const candidates = queryAllDeep('textarea, .monaco-editor textarea, [contenteditable="true"], [role="textbox"], [aria-label*="chat" i], [placeholder*="message" i], [placeholder*="ask" i], [id*="chat-input" i]', document);
+    for (const input of candidates) {
+      if (isValidInput(input)) return input;
+    }
+    const active = document.activeElement;
+    if (active && isValidInput(active)) return active;
     return null;
   }
 
@@ -334,12 +339,6 @@ export const AUTO_CONTINUE_SCRIPT = `
       if (readInputText(input) !== before) return true;
     } catch (e) {}
 
-    if (fork === 'antigravity') {
-      emitBridge('__AUTOPILOT_HYBRID_BUMP__:' + text);
-      emitAction('submit', 'minimal-hybrid');
-      return true;
-    }
-
     return false;
   }
 
@@ -428,7 +427,10 @@ export const AUTO_CONTINUE_SCRIPT = `
     }
     wasGenerating = generating;
 
-    const input = findInput(profile, root);
+    let input = findInput(profile, root);
+    if (!input) {
+      input = findInputFallback();
+    }
     const send = findSend(profile, input, root);
     const idleMs = now - lastActivityAt;
     const progressIdleMs = now - lastProgressAt;
@@ -473,8 +475,6 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (!bumpText) return;
 
     if (!input) {
-      emitBridge('__AUTOPILOT_HYBRID_BUMP__:' + bumpText);
-      emitAction('submit', 'minimal-hybrid');
       log('bump fallback: no input detected');
       lastBumpAt = now;
       submitInFlightUntil = now + submitCooldownMs;

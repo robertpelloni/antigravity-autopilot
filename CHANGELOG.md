@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.271] - 2026-03-01
+### Changed
+* **Core Runtime Simplification Pass**: Removed root-coupled input validation from minimal runtime and switched to direct editable-surface detection (`textarea`/contenteditable/role=textbox plus monaco/chat fallbacks).
+* **No-Input Path Simplification**: Removed hybrid bridge submit fallback from minimal runtime bump loop; when no composer is detected, runtime now logs and retries on next deterministic tick instead of clipboard-only pseudo-submit.
+
+### Fixed
+* **False No-Input Under Root Drift**: Added a global input fallback resolver independent of root detection, reducing `bump fallback: no input detected` when the fork chat root selector drifts.
+
 ## [5.2.270] - 2026-03-01
 ### Fixed
 * **Typed-Then-Hybrid Submit Escalation**: Expanded send button selector coverage and added a proximity-based heuristic send lookup near the detected composer, improving direct submit detection when explicit send selectors drift.
