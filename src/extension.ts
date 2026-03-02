@@ -115,22 +115,6 @@ export function activate(context: vscode.ExtensionContext) {
                 return true;
             }
 
-            const leaderBeforeSelfHeal = controllerLease?.getLeaderInfo();
-            const isBootstrapReason = reason.toLowerCase().includes('activation bootstrap');
-            const leaderWorkspace = String(leaderBeforeSelfHeal?.workspace || '').toLowerCase();
-            const currentWorkspace = String(workspaceId || '').toLowerCase();
-            const leaderIsDifferentWorkspace = !!leaderWorkspace && !!currentWorkspace && leaderWorkspace !== currentWorkspace;
-
-            if (isBootstrapReason && leaderIsDifferentWorkspace && controllerLease) {
-                controllerLease.forceAcquire();
-                updateControllerRoleStatus();
-                syncControllerRoleToCDP();
-                if (isControllerLeader()) {
-                    log.warn(`[ControllerLease] Bootstrap reclaimed leader from different workspace (${leaderBeforeSelfHeal?.workspace} -> ${workspaceId}).`);
-                    return true;
-                }
-            }
-
             if (attemptNoLeaderSelfHeal(reason)) {
                 return true;
             }

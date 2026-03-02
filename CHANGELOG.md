@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.272] - 2026-03-01
+### Fixed
+* **Leader/Follower Thrash Across Workspaces**: Removed bootstrap-time cross-workspace force-acquire behavior in `ensureControllerLeader`, so windows no longer steal leadership from unrelated workspaces during activation.
+* **Runtime Alignment Churn**: Controller role alignment now relies on no-leader self-heal only, reducing rapid `leader active` ↔ `follower with UI automation disabled` oscillation seen during extension host restarts.
+
 ## [5.2.271] - 2026-03-01
 ### Changed
 * **Core Runtime Simplification Pass**: Removed root-coupled input validation from minimal runtime and switched to direct editable-surface detection (`textarea`/contenteditable/role=textbox plus monaco/chat fallbacks).
