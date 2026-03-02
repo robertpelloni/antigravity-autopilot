@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.268] - 2026-03-01
+### Fixed
+* **No-Bump Under Continuous DOM Churn**: Minimal runtime stall detection now uses deterministic generation-progress timing instead of mutation-observer idle resets, preventing chat UI mutation noise from suppressing bump eligibility.
+* **First-Tick Visibility Diagnostics**: Added a one-time startup probe log (`fork/root/input/send/generating/role`) so selector availability can be confirmed immediately in production logs when bump typing fails.
+
 ## [5.2.267] - 2026-03-01
 ### Fixed
 * **Follower→Leader Runtime Restart Gap**: `CDPHandler.syncAutomationRuntimeEligibility()` now actively re-injects the auto-continue runtime when a page/session becomes eligible again, preventing dead runtime after role flips.

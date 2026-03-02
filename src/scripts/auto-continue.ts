@@ -58,12 +58,13 @@ export const AUTO_CONTINUE_SCRIPT = `
   ];
 
   let pollTimer = null;
-  let mutationObserver = null;
-  let observedRoot = null;
   let lastActionAt = 0;
   let lastBumpAt = 0;
   let submitInFlightUntil = 0;
   let lastActivityAt = Date.now();
+  let lastProgressAt = Date.now();
+  let wasGenerating = false;
+  let didInitialProbe = false;
 
   function getConfig() {
     const cfg = window.__antigravityConfig || {};
@@ -227,6 +228,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       log('clicked ' + label);
       emitAction(group || 'click', String(label || 'clicked').toLowerCase());
       lastActivityAt = Date.now();
+      lastProgressAt = Date.now();
       return true;
     } catch (e) {
       return false;
@@ -248,6 +250,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
       input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
       lastActivityAt = Date.now();
+      lastProgressAt = Date.now();
       return true;
     } catch (e) {
       return false;
@@ -296,26 +299,6 @@ export const AUTO_CONTINUE_SCRIPT = `
     }
 
     return false;
-  }
-
-  function ensureObserver(root) {
-    if (!root) return;
-    if (mutationObserver && observedRoot === root) return;
-
-    if (mutationObserver) {
-      try { mutationObserver.disconnect(); } catch (e) {}
-      mutationObserver = null;
-      observedRoot = null;
-    }
-
-    try {
-      mutationObserver = new MutationObserver(function () {
-        lastActivityAt = Date.now();
-      });
-      mutationObserver.observe(root, { subtree: true, childList: true, attributes: true, characterData: true });
-      observedRoot = root;
-      lastActivityAt = Date.now();
-    } catch (e) {}
   }
 
   function isGenerating(profile, root) {
@@ -367,14 +350,26 @@ export const AUTO_CONTINUE_SCRIPT = `
     const fork = detectFork(cfg);
     const profile = getProfile(fork);
     const root = findRoot(profile);
-    ensureObserver(root);
 
     const generating = isGenerating(profile, root);
+    if (generating) {
+      lastProgressAt = now;
+    } else if (wasGenerating) {
+      lastProgressAt = now;
+    }
+    wasGenerating = generating;
+
     const input = findInput(profile, root);
     const send = findSend(profile, input, root);
     const idleMs = now - lastActivityAt;
+    const progressIdleMs = now - lastProgressAt;
     const hasConversationSurface = !!root || !!input || !!send || document.visibilityState === 'visible';
-    const stalled = hasConversationSurface && !generating && idleMs >= Math.max(1000, Number(cfg.timing.stalledMs || 7000));
+    const stalled = hasConversationSurface && !generating && progressIdleMs >= Math.max(1000, Number(cfg.timing.stalledMs || 7000));
+
+    if (!didInitialProbe) {
+      didInitialProbe = true;
+      log('probe fork=' + fork + ' root=' + (!!root) + ' input=' + (!!input) + ' send=' + (!!send) + ' generating=' + generating + ' role=' + String(cfg.runtime?.role || 'unknown'));
+    }
 
     window.__antigravityRuntimeState = {
       fork,
@@ -384,6 +379,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       hasSend: !!send,
       stalled,
       idleMs,
+      progressIdleMs,
       ts: now
     };
 
@@ -414,6 +410,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       lastBumpAt = now;
       submitInFlightUntil = now + submitCooldownMs;
       lastActionAt = now;
+      lastProgressAt = now;
       return;
     }
 
@@ -431,6 +428,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     lastBumpAt = now;
     lastActionAt = now;
+    lastProgressAt = now;
   }
 
   function schedule() {
@@ -470,11 +468,6 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   window.stopAutoContinue = function () {
     if (pollTimer) clearTimeout(pollTimer);
-    if (mutationObserver) {
-      try { mutationObserver.disconnect(); } catch (e) {}
-      mutationObserver = null;
-      observedRoot = null;
-    }
     window.__antigravityAutoContinueRunning = false;
   };
 
