@@ -184,33 +184,59 @@ export const AUTO_CONTINUE_SCRIPT = `
     return null;
   }
 
-  function isValidInput(input) {
+  function isLikelyChatInput(input, root) {
+    if (!input) return false;
+
+    try {
+      if (root && typeof root.contains === 'function' && root.contains(input)) return true;
+    } catch (e) {}
+
+    const signature = [
+      String(input.getAttribute && input.getAttribute('aria-label') || ''),
+      String(input.getAttribute && input.getAttribute('placeholder') || ''),
+      String(input.getAttribute && input.getAttribute('id') || ''),
+      String(input.className || ''),
+      String(input.getAttribute && input.getAttribute('data-testid') || '')
+    ].join(' ').toLowerCase();
+
+    if (/(chat|message|ask|prompt|composer|copilot|assistant)/i.test(signature)) return true;
+
+    try {
+      const chatContainer = input.closest('.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i], .chat-input-container');
+      if (chatContainer) return true;
+    } catch (e) {}
+
+    return false;
+  }
+
+  function isValidInput(input, root) {
     if (!input || !isVisible(input) || isBlockedSurface(input)) return false;
     const tag = String(input.tagName || '').toLowerCase();
     const editable = tag === 'textarea' || input.isContentEditable || input.getAttribute('contenteditable') === 'true' || input.getAttribute('role') === 'textbox';
     if (!editable) return false;
+    if (!isLikelyChatInput(input, root)) return false;
     return true;
   }
 
   function findInput(profile, root) {
     const local = root ? queryAllDeep(profile.input, root) : [];
     for (const input of local) {
-      if (isValidInput(input)) return input;
+      if (isValidInput(input, root)) return input;
     }
     const global = queryAllDeep(profile.input, document);
     for (const input of global) {
-      if (isValidInput(input)) return input;
+      if (isValidInput(input, root)) return input;
     }
     return null;
   }
 
-  function findInputFallback() {
+  function findInputFallback(root) {
     const candidates = queryAllDeep('textarea, .monaco-editor textarea, [contenteditable="true"], [role="textbox"], [aria-label*="chat" i], [placeholder*="message" i], [placeholder*="ask" i], [id*="chat-input" i]', document);
     for (const input of candidates) {
-      if (isValidInput(input)) return input;
+      if (isValidInput(input, root)) return input;
     }
     const active = document.activeElement;
-    if (active && isValidInput(active)) return active;
+    if (active && isValidInput(active, root)) return active;
     return null;
   }
 
@@ -262,7 +288,8 @@ export const AUTO_CONTINUE_SCRIPT = `
     return null;
   }
 
-  function click(el, label, group) {
+  function click(el, label, group, opts) {
+    const options = opts || {};
     if (!el) return false;
     try {
       try { if (typeof el.focus === 'function') el.focus({ preventScroll: true }); } catch (e) {}
@@ -272,8 +299,12 @@ export const AUTO_CONTINUE_SCRIPT = `
       try { el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true })); } catch (e) {}
       try { el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); } catch (e) {}
       try { if (typeof el.click === 'function') el.click(); } catch (e) {}
-      log('clicked ' + label);
-      emitAction(group || 'click', String(label || 'clicked').toLowerCase());
+      if (!options.silentLog) {
+        log('clicked ' + label);
+      }
+      if (!options.silentAction) {
+        emitAction(group || 'click', String(label || 'clicked').toLowerCase());
+      }
       lastActivityAt = Date.now();
       lastProgressAt = Date.now();
       return true;
@@ -296,6 +327,14 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
       input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
       input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+
+      const readBack = readInputText(input);
+      const normalizedReadBack = String(readBack || '').replace(/\s+/g, ' ').trim();
+      const normalizedText = String(text || '').replace(/\s+/g, ' ').trim();
+      if (!normalizedReadBack || normalizedReadBack !== normalizedText) {
+        return false;
+      }
+
       lastActivityAt = Date.now();
       lastProgressAt = Date.now();
       return true;
@@ -319,13 +358,22 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (!before) return false;
 
     const send = findSend(profile, input, root);
-    if (send && click(send, 'Submit bump text', 'submit')) return true;
+    if (send && click(send, 'Submit bump text', 'submit', { silentLog: true, silentAction: true })) {
+      const afterClick = readInputText(input);
+      if (!afterClick || afterClick !== before || isGenerating(profile, root)) {
+        emitAction('submit', 'submit bump text');
+        return true;
+      }
+    }
 
     try {
       const form = input.closest && input.closest('form');
       if (form && typeof form.requestSubmit === 'function') {
         form.requestSubmit();
-        if (readInputText(input) !== before) return true;
+        if (readInputText(input) !== before || isGenerating(profile, root)) {
+          emitAction('submit', 'submit bump text');
+          return true;
+        }
       }
     } catch (e) {}
 
@@ -336,7 +384,10 @@ export const AUTO_CONTINUE_SCRIPT = `
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, ...mods }));
         input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, ...mods }));
       }
-      if (readInputText(input) !== before) return true;
+      if (readInputText(input) !== before || isGenerating(profile, root)) {
+        emitAction('submit', 'submit bump text');
+        return true;
+      }
     } catch (e) {}
 
     return false;
@@ -429,7 +480,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     let input = findInput(profile, root);
     if (!input) {
-      input = findInputFallback();
+      input = findInputFallback(root);
     }
     const send = findSend(profile, input, root);
     const idleMs = now - lastActivityAt;
@@ -484,7 +535,10 @@ export const AUTO_CONTINUE_SCRIPT = `
     }
 
     const typed = setInputText(input, bumpText);
-    if (!typed) return;
+    if (!typed) {
+      log('type verify failed');
+      return;
+    }
 
     log('typed bump text');
     submitInFlightUntil = now + submitCooldownMs;

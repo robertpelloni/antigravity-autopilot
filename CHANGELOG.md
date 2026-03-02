@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.276] - 2026-03-02
+### Fixed
+* **False Positive Bump Typing Logs**: Runtime now verifies that composer text readback exactly matches the bump payload after typing before logging `typed bump text`.
+* **False Positive Submit Success Logs**: Submit success now requires observed composer state transition (input changed/cleared or generation resumed); silent click attempts no longer emit success telemetry on their own.
+* **Non-Chat Textbox Mis-Targeting**: Tightened input validation to require chat/composer proximity/signatures, reducing accidental typing into unrelated editable surfaces.
+
 ## [5.2.275] - 2026-03-02
 ### Fixed
 * **Cross-Workspace Leader Collision**: Controller lease files are now scoped by both app identity and normalized workspace key, preventing unrelated workspaces (for example `borg`) from taking leader role ownership from this workspace.
