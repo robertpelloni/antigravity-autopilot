@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.273] - 2026-03-01
+### Fixed
+* **CDP Startup Readiness Race**: Added bounded warmup connect retries during strategy startup so transient `ECONNREFUSED` windows on freshly opened CDP ports recover immediately instead of waiting for slower background reconnect cycles.
+* **Cold-Start Injection Delay**: Startup now keeps retrying the initial CDP attach burst (with fallback path) before giving up, reducing no-runtime gaps right after extension host restart.
+
 ## [5.2.272] - 2026-03-01
 ### Fixed
 * **Leader/Follower Thrash Across Workspaces**: Removed bootstrap-time cross-workspace force-acquire behavior in `ensureControllerLeader`, so windows no longer steal leadership from unrelated workspaces during activation.

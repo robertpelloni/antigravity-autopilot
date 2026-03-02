@@ -35,6 +35,38 @@ export class CDPStrategy implements IStrategy {
     private appName: string;
     private controllerRoleIsLeader = false;
 
+    private async connectWithWarmupRetries(): Promise<boolean> {
+        // Fast path: initial filtered/unfiltered connect pair
+        let connected = await this.cdpHandler.connect();
+        if (!connected) {
+            connected = await this.cdpHandler.connect();
+        }
+        if (connected) {
+            return true;
+        }
+
+        // Warmup burst for Antigravity startup where CDP port exists but is not ready yet.
+        // Keep this bounded and quick to avoid blocking startup too long.
+        const retryCount = 8;
+        const retryDelayMs = 1500;
+
+        for (let attempt = 1; attempt <= retryCount; attempt++) {
+            await new Promise(r => setTimeout(r, retryDelayMs));
+
+            connected = await this.cdpHandler.connect();
+            if (!connected) {
+                connected = await this.cdpHandler.connect();
+            }
+
+            if (connected) {
+                logToOutput(`[CDPStrategy] CDP warmup connect succeeded on retry ${attempt}/${retryCount}.`);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // ... (private methods unchanged)
 
     private isUnifiedAutoAcceptEnabled(): boolean {
@@ -129,11 +161,7 @@ export class CDPStrategy implements IStrategy {
         this.isActive = true;
         this.updateStatusBar();
 
-        let connected = await this.cdpHandler.connect();
-        if (!connected) {
-            // Fallback
-            connected = await this.cdpHandler.connect();
-        }
+        const connected = await this.connectWithWarmupRetries();
         if (!connected) {
             vscode.window.showWarningMessage('Antigravity: CDP connection failed. Retrying in background...');
             logToOutput('[CDPStrategy] Initial CDP connect failed (filtered + unfiltered fallback).');
