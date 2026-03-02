@@ -29,19 +29,19 @@ export const AUTO_CONTINUE_SCRIPT = `
     antigravity: {
       root: '.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i]',
       input: 'textarea, [contenteditable="true"], [role="textbox"]',
-      send: '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], [title*="Continue" i], [aria-label*="Continue" i], [data-testid*="send" i], [data-testid*="submit" i], button[type="submit"], .codicon-send',
+      send: '[title*="Send" i], [aria-label*="Send" i], [title*="Send message" i], [aria-label*="Send message" i], [title*="Submit" i], [aria-label*="Submit" i], [title*="Continue" i], [aria-label*="Continue" i], [data-testid*="send" i], [data-testid*="submit" i], [class*="send-button" i], [class*="chat-submit" i], button[type="submit"], .codicon-send',
       generating: '[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator'
     },
     cursor: {
       root: '.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i]',
       input: 'textarea, [contenteditable="true"], [role="textbox"]',
-      send: '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], [title*="Continue" i], [aria-label*="Continue" i], [data-testid*="send" i], [data-testid*="submit" i], button[type="submit"], .codicon-send',
+      send: '[title*="Send" i], [aria-label*="Send" i], [title*="Send message" i], [aria-label*="Send message" i], [title*="Submit" i], [aria-label*="Submit" i], [title*="Continue" i], [aria-label*="Continue" i], [data-testid*="send" i], [data-testid*="submit" i], [class*="send-button" i], [class*="chat-submit" i], button[type="submit"], .codicon-send',
       generating: '[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator'
     },
     vscode: {
       root: '.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i]',
       input: 'textarea, [contenteditable="true"], [role="textbox"]',
-      send: '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], [title*="Continue" i], [aria-label*="Continue" i], [data-testid*="send" i], [data-testid*="submit" i], button[type="submit"], .codicon-send',
+      send: '[title*="Send" i], [aria-label*="Send" i], [title*="Send message" i], [aria-label*="Send message" i], [title*="Submit" i], [aria-label*="Submit" i], [title*="Continue" i], [aria-label*="Continue" i], [data-testid*="send" i], [data-testid*="submit" i], [class*="send-button" i], [class*="chat-submit" i], button[type="submit"], .codicon-send',
       generating: '[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator'
     }
   };
@@ -225,6 +225,35 @@ export const AUTO_CONTINUE_SCRIPT = `
         return el;
       }
     }
+
+    if (input) {
+      const nearbyScopes = [input.closest && input.closest('form'), input.parentElement, root, document].filter(Boolean);
+      for (const scope of nearbyScopes) {
+        const candidates = queryAllDeep('button, [role="button"], .monaco-button, [aria-label], [title], [data-testid], [class*="send" i], [class*="submit" i]', scope);
+        for (const node of candidates) {
+          const el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
+          if (!isVisible(el) || isBlockedSurface(el) || el === input) continue;
+          const signature = normalizeText(el);
+          const cls = String(el.className || '').toLowerCase();
+          const looksSend = /(\bsend\b|\bsubmit\b|send\s*message|chat\s*send|chat\s*submit|continue)/i.test(signature)
+            || cls.includes('send')
+            || cls.includes('submit')
+            || cls.includes('codicon-send');
+          if (!looksSend) continue;
+
+          try {
+            const ir = input.getBoundingClientRect();
+            const er = el.getBoundingClientRect();
+            const dx = Math.abs((er.left + er.width / 2) - (ir.left + ir.width / 2));
+            const dy = Math.abs((er.top + er.height / 2) - (ir.top + ir.height / 2));
+            if (dx <= 420 && dy <= 180) return el;
+          } catch (e) {
+            return el;
+          }
+        }
+      }
+    }
+
     return null;
   }
 
@@ -461,9 +490,12 @@ export const AUTO_CONTINUE_SCRIPT = `
     submitInFlightUntil = now + submitCooldownMs;
     const submitDelay = Math.max(40, Number(cfg.bump.submitDelayMs || 120));
     setTimeout(function () {
-      submitText(profile, fork, input, root, bumpText);
-      log('submitted bump text');
-      emitAction('submit', 'minimal');
+      const submitted = submitText(profile, fork, input, root, bumpText);
+      if (submitted) {
+        log('submitted bump text');
+      } else {
+        log('submit attempt failed');
+      }
     }, submitDelay);
 
     lastBumpAt = now;

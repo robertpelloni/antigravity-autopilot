@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.270] - 2026-03-01
+### Fixed
+* **Typed-Then-Hybrid Submit Escalation**: Expanded send button selector coverage and added a proximity-based heuristic send lookup near the detected composer, improving direct submit detection when explicit send selectors drift.
+* **Ambiguous Submit Telemetry**: Runtime now logs true submit outcomes (`submitted bump text` vs `submit attempt failed`) and no longer emits duplicate submit action telemetry from the delayed submit callback.
+
 ## [5.2.269] - 2026-03-01
 ### Fixed
 * **Silent Runtime Non-Execution After Start**: Minimal runtime now executes one immediate first loop tick at startup (before the poll timer), preventing delayed/hidden first-pass behavior under extension-host stalls.
