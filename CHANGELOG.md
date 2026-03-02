@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.275] - 2026-03-02
+### Fixed
+* **Cross-Workspace Leader Collision**: Controller lease files are now scoped by both app identity and normalized workspace key, preventing unrelated workspaces (for example `borg`) from taking leader role ownership from this workspace.
+* **Follower Demotion From Foreign Workspace Lease**: Leader/follower arbitration now isolates workspace domains at the lease-file level, so runtime alignment remains stable per workspace instead of sharing one global app lease.
+
 ## [5.2.274] - 2026-03-01
 ### Fixed
 * **Extension-Host Startup Stall Risk**: `CDPStrategy.start()` no longer blocks activation on CDP warmup retries; startup retries now run in the background so transient CDP boot delays do not freeze extension-host responsiveness.

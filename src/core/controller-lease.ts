@@ -38,14 +38,16 @@ export class ControllerLease {
     ) {
         this.staleMs = Math.max(5000, options?.staleMs ?? 15000);
         this.heartbeatMs = Math.max(1000, options?.heartbeatMs ?? 4000);
-        this.leasePath = options?.leasePath || this.getDefaultAppLeasePath();
+        this.leasePath = options?.leasePath || this.getDefaultWorkspaceLeasePath();
     }
 
-    private getDefaultAppLeasePath(): string {
+    private getDefaultWorkspaceLeasePath(): string {
         const home = os.homedir() || os.tmpdir();
         const appKey = this.normalizeAppKey();
+        const workspaceKey = this.normalizeWorkspaceKey(this.workspace);
         const appHash = createHash('sha1').update(appKey).digest('hex').slice(0, 12);
-        return path.join(home, `.antigravity-controller-lease.${appHash}.json`);
+        const workspaceHash = createHash('sha1').update(workspaceKey).digest('hex').slice(0, 12);
+        return path.join(home, `.antigravity-controller-lease.${appHash}.${workspaceHash}.json`);
     }
 
     private normalizeAppKey(): string {
