@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.277] - 2026-03-02
+### Fixed
+* **Dual-Window Active Runtime Contention**: In single-target mode, runtime injection now requires focused host window eligibility, preventing both windows from actively driving automation at the same time.
+* **Duplicate Runtime Startup Loops**: CDP attach paths now ensure existing runtime presence via guarded injection (`injectScript`) instead of unconditional `Runtime.evaluate`, reducing repeated `auto-continue minimal core started` bursts and startup churn.
+
 ## [5.2.276] - 2026-03-02
 ### Fixed
 * **False Positive Bump Typing Logs**: Runtime now verifies that composer text readback exactly matches the bump payload after typing before logging `typed bump text`.

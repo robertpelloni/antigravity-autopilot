@@ -243,6 +243,12 @@ export class CDPHandler extends EventEmitter {
             return false;
         }
 
+        // In single-target mode, only the focused host window should actively inject/run runtime automation.
+        // This prevents multi-window dual-leader behavior when host-level extension state is mirrored.
+        if (this.isSingleTargetMode() && !this.hostWindowFocused) {
+            return false;
+        }
+
         if (this.controllerRoleIsLeader) {
             return true;
         }
@@ -783,12 +789,9 @@ export class CDPHandler extends EventEmitter {
                             // Inject config first
                             await this.pushAutomationConfigToConnection(page.id);
 
-                            // Inject script
-                            await this.sendCommand(page.id, 'Runtime.evaluate', {
-                                expression: AUTO_CONTINUE_SCRIPT,
-                                awaitPromise: false
-                            });
-                            console.log(`[CDP] Injected Auto-Continue Script into ${page.id} with config`);
+                            // Inject script only when not already present to avoid duplicate startup loops.
+                            await this.injectScript(page.id, AUTO_CONTINUE_SCRIPT, false);
+                            console.log(`[CDP] Ensured Auto-Continue Script in ${page.id} with config`);
                         } catch (e) {
                             console.error(`[CDP] Failed to inject Auto-Continue Script into ${page.id}`, e);
                         }
@@ -870,11 +873,9 @@ export class CDPHandler extends EventEmitter {
                             try {
                                 this.pushAutomationConfigToConnection(page.id, sessionId).catch(e => console.error(`[CDP] config injection error on session ${sessionId}`, e));
 
-                                this.sendCommand(page.id, 'Runtime.evaluate', {
-                                    expression: AUTO_CONTINUE_SCRIPT,
-                                    awaitPromise: false
-                                }, undefined, sessionId).catch(e => console.error(`[CDP] script injection error on session ${sessionId}`, e));
-                                console.log(`[CDP] Injected Auto-Continue Script into nested session ${sessionId}`);
+                                this.injectScript(page.id, AUTO_CONTINUE_SCRIPT, false, sessionId)
+                                    .catch(e => console.error(`[CDP] script injection error on session ${sessionId}`, e));
+                                console.log(`[CDP] Ensured Auto-Continue Script in nested session ${sessionId}`);
                             } catch (e) {
                                 console.error(`[CDP] Failed to inject Auto-Continue into nested session ${sessionId}`, e);
                             }
