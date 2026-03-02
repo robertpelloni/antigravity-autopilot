@@ -161,11 +161,22 @@ export class CDPStrategy implements IStrategy {
         this.isActive = true;
         this.updateStatusBar();
 
-        const connected = await this.connectWithWarmupRetries();
-        if (!connected) {
-            vscode.window.showWarningMessage('Antigravity: CDP connection failed. Retrying in background...');
-            logToOutput('[CDPStrategy] Initial CDP connect failed (filtered + unfiltered fallback).');
-        }
+        // IMPORTANT: do not block extension activation/startup on CDP warmup retries.
+        // Startup warmup can take several seconds when the host CDP port is still booting.
+        // Keep retries, but run them in the background so the extension host stays responsive.
+        void (async () => {
+            try {
+                const connected = await this.connectWithWarmupRetries();
+                if (!connected && this.isActive) {
+                    vscode.window.showWarningMessage('Antigravity: CDP connection failed. Retrying in background...');
+                    logToOutput('[CDPStrategy] Initial CDP connect failed (filtered + unfiltered fallback).');
+                }
+            } catch (error: any) {
+                if (this.isActive) {
+                    logToOutput(`[CDPStrategy] Initial CDP warmup error: ${error?.message || error}`);
+                }
+            }
+        })();
 
         // Listen for frontend actions that failed DOM clicks and need Native fallback
         this.cdpHandler.on('action', async ({ group, detail }) => {

@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.274] - 2026-03-01
+### Fixed
+* **Extension-Host Startup Stall Risk**: `CDPStrategy.start()` no longer blocks activation on CDP warmup retries; startup retries now run in the background so transient CDP boot delays do not freeze extension-host responsiveness.
+* **Cold-Boot Responsiveness Under ECONNREFUSED**: Preserved bounded warmup connect retries while decoupling them from synchronous activation flow, keeping recovery behavior without long foreground blocking.
+
 ## [5.2.273] - 2026-03-01
 ### Fixed
 * **CDP Startup Readiness Race**: Added bounded warmup connect retries during strategy startup so transient `ECONNREFUSED` windows on freshly opened CDP ports recover immediately instead of waiting for slower background reconnect cycles.
