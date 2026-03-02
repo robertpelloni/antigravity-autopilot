@@ -29,15 +29,29 @@ export const AUTO_CONTINUE_SCRIPT = `
   const CHAT_INPUT_SELECTOR = [
     '.interactive-input-part textarea',
     '.chat-input-widget textarea',
+    '.interactive-editor textarea',
+    '.chat-editing-session-container textarea',
+    '.aichat-container textarea',
     '[data-testid*="chat" i] textarea',
     '[data-testid*="composer" i] textarea',
+    '[class*="chat" i] textarea',
+    '[class*="composer" i] textarea',
+    '[class*="interactive" i] textarea',
     '.interactive-input-part [contenteditable="true"]',
     '.chat-input-widget [contenteditable="true"]',
+    '.interactive-editor [contenteditable="true"]',
+    '.chat-editing-session-container [contenteditable="true"]',
+    '.aichat-container [contenteditable="true"]',
     '[data-testid*="chat" i] [contenteditable="true"]',
     '[data-testid*="composer" i] [contenteditable="true"]',
+    '[class*="chat" i] [contenteditable="true"]',
+    '[class*="composer" i] [contenteditable="true"]',
+    '[class*="interactive" i] [contenteditable="true"]',
+    '[contenteditable="true"][role="textbox"]',
     'textarea[placeholder*="ask" i]',
     'textarea[placeholder*="message" i]'
   ].join(',');
+  const CHAT_SURFACE_SELECTOR = '.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i]';
   const GENERATING_SELECTOR = '[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator';
 
   const ACTION_SPECS = [
@@ -144,6 +158,34 @@ export const AUTO_CONTINUE_SCRIPT = `
     return [text, aria, title, testid, className].join(' | ');
   }
 
+  function isLikelyChatInput(input) {
+    if (!input || !isVisible(input) || isBlockedSurface(input)) return false;
+    const tag = String(input.tagName || '').toLowerCase();
+    const editable = tag === 'textarea' || input.isContentEditable || input.getAttribute('contenteditable') === 'true';
+    if (!editable) return false;
+
+    const markerText = [
+      String(input.getAttribute('placeholder') || ''),
+      String(input.getAttribute('aria-label') || ''),
+      String(input.getAttribute('data-testid') || ''),
+      String(input.className || '')
+    ].join(' ').toLowerCase();
+
+    if (/(ask|message|prompt|chat|composer|reply|agent|assistant|continue)/i.test(markerText)) return true;
+    try {
+      if (input.closest && input.closest(CHAT_SURFACE_SELECTOR)) return true;
+    } catch (e) {}
+    return false;
+  }
+
+  function hasChatSurface() {
+    const nodes = queryAllDeep(CHAT_SURFACE_SELECTOR);
+    for (const node of nodes) {
+      if (isVisible(node) && !isBlockedSurface(node)) return true;
+    }
+    return false;
+  }
+
   function shouldAct(cfg) {
     if (cfg.bump.requireVisible !== false && document.visibilityState !== 'visible') return false;
     if (cfg.runtime.enforceLeader === true && cfg.runtime.isLeader !== true) return false;
@@ -158,10 +200,12 @@ export const AUTO_CONTINUE_SCRIPT = `
   function findChatInput() {
     const inputs = queryAllDeep(CHAT_INPUT_SELECTOR);
     for (const input of inputs) {
-      if (!isVisible(input) || isBlockedSurface(input)) continue;
-      const tag = String(input.tagName || '').toLowerCase();
-      const editable = tag === 'textarea' || input.isContentEditable || input.getAttribute('contenteditable') === 'true';
-      if (editable) return input;
+      if (isLikelyChatInput(input)) return input;
+    }
+
+    const broad = queryAllDeep('textarea, [contenteditable="true"], [role="textbox"]');
+    for (const input of broad) {
+      if (isLikelyChatInput(input)) return input;
     }
     return null;
   }
@@ -272,6 +316,14 @@ export const AUTO_CONTINUE_SCRIPT = `
     for (const node of nodes) {
       const el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
       if (!isVisible(el) || isBlockedSurface(el)) continue;
+      try {
+        if (!(el.closest && el.closest(CHAT_SURFACE_SELECTOR))) {
+          const normalized = normalizeText(el);
+          if (!/(run|execute|expand|requires\s*input|retry|accept\s*all|always\s*allow|allow|proceed|continue|keep)/i.test(normalized)) {
+            continue;
+          }
+        }
+      } catch (e) {}
       const text = normalizeText(el);
       for (const spec of ACTION_SPECS) {
         if (out[spec.key]) continue;
@@ -288,14 +340,16 @@ export const AUTO_CONTINUE_SCRIPT = `
     const hasSend = !!snapshot.send;
     const isGenerating = snapshot.isGenerating;
     const pendingActions = snapshot.pendingActions;
+    const chatSurfaceDetected = snapshot.chatSurfaceDetected;
     const stalledMs = Math.max(1000, Number(cfg.timing.stalledMs || 7000));
     const idleMs = Date.now() - lastProgressAt;
-    const stalled = (hasInput || hasSend) && !isGenerating && pendingActions === 0 && idleMs >= stalledMs;
+    const stalled = (hasInput || hasSend || chatSurfaceDetected) && !isGenerating && pendingActions === 0 && idleMs >= stalledMs;
 
     return {
       stalled,
       hasInput,
       hasSend,
+      chatSurfaceDetected,
       isGenerating,
       pendingActions,
       idleMs,
@@ -306,10 +360,11 @@ export const AUTO_CONTINUE_SCRIPT = `
   function buildSnapshot(cfg, mode) {
     const input = findChatInput();
     const send = findSendButton(input);
+    const chatSurfaceDetected = hasChatSurface();
     const isGenerating = queryAllDeep(GENERATING_SELECTOR).some(isVisible);
     const actions = detectActionElements();
     const pendingActions = ACTION_SPECS.reduce((sum, spec) => sum + (actions[spec.key] ? 1 : 0), 0);
-    return { input, send, isGenerating, actions, pendingActions, mode, cfg };
+    return { input, send, chatSurfaceDetected, isGenerating, actions, pendingActions, mode, cfg };
   }
 
   function updateProgress(snapshot) {
@@ -317,6 +372,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       snapshot.isGenerating ? '1' : '0',
       snapshot.input ? '1' : '0',
       snapshot.send ? '1' : '0',
+      snapshot.chatSurfaceDetected ? '1' : '0',
       ACTION_SPECS.map((s) => snapshot.actions[s.key] ? '1' : '0').join('')
     ].join('|');
 
@@ -343,7 +399,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     const cfg = snapshot.cfg;
     if (!cfg.bump.enabled) return false;
     if (snapshot.isGenerating) return false;
-    if (!stallState.stalled && !snapshot.send && !snapshot.input) return false;
+    if (!stallState.stalled && !snapshot.send && !snapshot.input && !snapshot.chatSurfaceDetected) return false;
 
     const now = Date.now();
     const bumpCooldownMs = Math.max(1000, Number(cfg.timing.bumpCooldownMs || 12000));
@@ -357,7 +413,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     const mode = snapshot.mode;
     const input = snapshot.input;
     if (!input) {
-      if (!snapshot.send && !stallState.stalled) return false;
+      if (!snapshot.send && !stallState.stalled && !snapshot.chatSurfaceDetected) return false;
       emitBridge('__AUTOPILOT_HYBRID_BUMP__:' + text);
       emitAction('submit', 'minimal-hybrid');
       log('bump fallback via bridge (no input selector)');
@@ -409,6 +465,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       isGenerating: snapshot.isGenerating,
       hasInput: !!snapshot.input,
       hasSend: !!snapshot.send,
+      chatSurfaceDetected: snapshot.chatSurfaceDetected,
       pendingActions: snapshot.pendingActions,
       stalled: stallState.stalled,
       idleMs: stallState.idleMs,

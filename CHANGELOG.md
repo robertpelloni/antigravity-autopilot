@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.265] - 2026-03-01
+### Fixed
+* **No Bump Typing Under Selector Drift**: Hardened minimal runtime composer detection with expanded chat/input selectors and broad editable fallback guarded by chat-surface heuristics.
+* **Stall Detection Dead Zone**: Stalled-conversation detection now considers visible chat surface presence (not only input/send selectors), so bump fallback still triggers when host DOM labels drift.
+* **False Action Blocking**: Tightened action target scoping toward chat surfaces to reduce non-chat button matches that could suppress bump eligibility.
+
 ## [5.2.264] - 2026-03-01
 ### Changed
 * **Release Rebuild**: Bumped extension/version metadata and produced a fresh VSIX after the hard minimal-runtime simplification pass.
