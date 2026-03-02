@@ -65,6 +65,8 @@ export const AUTO_CONTINUE_SCRIPT = `
   let lastProgressAt = Date.now();
   let wasGenerating = false;
   let didInitialProbe = false;
+  let lastGateReason = '';
+  let lastLoopErrorAt = 0;
 
   function getConfig() {
     const cfg = window.__antigravityConfig || {};
@@ -161,6 +163,17 @@ export const AUTO_CONTINUE_SCRIPT = `
       if (!docFocused && !hostFocused) return false;
     }
     return true;
+  }
+
+  function getGateReason(cfg) {
+    if (cfg.bump.requireVisible !== false && document.visibilityState !== 'visible') return 'hidden-document';
+    if (cfg.runtime.enforceLeader === true && cfg.runtime.isLeader !== true) return 'not-leader';
+    if (cfg.bump.requireFocused === true) {
+      const docFocused = (typeof document.hasFocus !== 'function') || document.hasFocus();
+      const hostFocused = cfg.runtime.windowFocused === true;
+      if (!docFocused && !hostFocused) return 'unfocused';
+    }
+    return '';
   }
 
   function findRoot(profile) {
@@ -342,12 +355,39 @@ export const AUTO_CONTINUE_SCRIPT = `
     window.__antigravityHeartbeat = Date.now();
 
     const cfg = getConfig();
+    const fork = detectFork(cfg);
+    const gateReason = getGateReason(cfg);
+    if (gateReason) {
+      window.__antigravityRuntimeState = {
+        fork,
+        blockedReason: gateReason,
+        role: String(cfg.runtime?.role || 'unknown'),
+        isLeader: cfg.runtime?.isLeader === true,
+        ts: Date.now()
+      };
+
+      if (!didInitialProbe) {
+        didInitialProbe = true;
+        log('probe fork=' + fork + ' gate=' + gateReason + ' role=' + String(cfg.runtime?.role || 'unknown'));
+      }
+
+      if (gateReason !== lastGateReason) {
+        log('gate blocked: ' + gateReason + ' role=' + String(cfg.runtime?.role || 'unknown') + ' leader=' + (cfg.runtime?.isLeader === true));
+        lastGateReason = gateReason;
+      }
+      return;
+    }
+
+    if (lastGateReason) {
+      log('gate open: role=' + String(cfg.runtime?.role || 'unknown') + ' leader=' + (cfg.runtime?.isLeader === true));
+      lastGateReason = '';
+    }
+
     if (!shouldAct(cfg)) return;
 
     const now = Date.now();
     if ((now - lastActionAt) < Math.max(50, Number(cfg.timing.actionThrottleMs || 250))) return;
 
-    const fork = detectFork(cfg);
     const profile = getProfile(fork);
     const root = findRoot(profile);
 
@@ -436,7 +476,15 @@ export const AUTO_CONTINUE_SCRIPT = `
     const cfg = getConfig();
     const pollMs = Math.max(150, Number(cfg.timing.pollIntervalMs || 500));
     pollTimer = setTimeout(function () {
-      try { runLoop(); } catch (e) {}
+      try {
+        runLoop();
+      } catch (e) {
+        const now = Date.now();
+        if ((now - lastLoopErrorAt) > 5000) {
+          lastLoopErrorAt = now;
+          log('loop error: ' + String((e && e.message) || e || 'unknown'));
+        }
+      }
       schedule();
     }, pollMs);
   }
@@ -472,6 +520,7 @@ export const AUTO_CONTINUE_SCRIPT = `
   };
 
   log('auto-continue minimal core started');
+  try { runLoop(); } catch (e) { log('loop error: ' + String((e && e.message) || e || 'unknown')); }
   schedule();
 })();
 `;

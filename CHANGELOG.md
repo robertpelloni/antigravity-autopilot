@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.269] - 2026-03-01
+### Fixed
+* **Silent Runtime Non-Execution After Start**: Minimal runtime now executes one immediate first loop tick at startup (before the poll timer), preventing delayed/hidden first-pass behavior under extension-host stalls.
+* **No-Bump Without Diagnostics**: Added explicit gate telemetry (`gate blocked/open`) for leader/visibility/focus checks, so blocked bump loops are visible in logs instead of failing silently.
+* **Swallowed Loop Exceptions**: Added throttled `loop error` reporting from the runtime scheduler to surface previously hidden execution faults.
+
 ## [5.2.268] - 2026-03-01
 ### Fixed
 * **No-Bump Under Continuous DOM Churn**: Minimal runtime stall detection now uses deterministic generation-progress timing instead of mutation-observer idle resets, preventing chat UI mutation noise from suppressing bump eligibility.
