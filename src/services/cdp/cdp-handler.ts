@@ -292,6 +292,15 @@ export class CDPHandler extends EventEmitter {
                 for (const sessionId of conn.sessions) {
                     await this.stopAutoContinueRuntime(pageId, sessionId);
                 }
+                continue;
+            }
+
+            // Critical recovery path:
+            // when role flips follower -> leader, runtime may have been stopped.
+            // Eligibility sync must actively re-inject runtime, not just push config.
+            await this.injectScript(pageId, AUTO_CONTINUE_SCRIPT, false);
+            for (const sessionId of conn.sessions) {
+                await this.injectScript(pageId, AUTO_CONTINUE_SCRIPT, false, sessionId);
             }
         }
     }

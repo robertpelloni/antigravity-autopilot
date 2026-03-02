@@ -373,7 +373,8 @@ export const AUTO_CONTINUE_SCRIPT = `
     const input = findInput(profile, root);
     const send = findSend(profile, input, root);
     const idleMs = now - lastActivityAt;
-    const stalled = !!root && !generating && idleMs >= Math.max(1000, Number(cfg.timing.stalledMs || 7000));
+    const hasConversationSurface = !!root || !!input || !!send || document.visibilityState === 'visible';
+    const stalled = hasConversationSurface && !generating && idleMs >= Math.max(1000, Number(cfg.timing.stalledMs || 7000));
 
     window.__antigravityRuntimeState = {
       fork,

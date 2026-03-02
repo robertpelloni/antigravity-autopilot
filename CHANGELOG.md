@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [5.2.267] - 2026-03-01
+### Fixed
+* **Follower→Leader Runtime Restart Gap**: `CDPHandler.syncAutomationRuntimeEligibility()` now actively re-injects the auto-continue runtime when a page/session becomes eligible again, preventing dead runtime after role flips.
+* **No-Bump Under Root Selector Miss**: Minimal runtime stalled detection now allows conversation-surface fallback (`root || input || send || visible`) so bump fallback can still trigger when fork DOM root selectors drift.
+
 ## [5.2.265] - 2026-03-01
 ### Fixed
 * **No Bump Typing Under Selector Drift**: Hardened minimal runtime composer detection with expanded chat/input selectors and broad editable fallback guarded by chat-surface heuristics.
