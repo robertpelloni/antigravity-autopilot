@@ -7,6 +7,12 @@ All notable changes to the Antigravity Autopilot extension will be documented in
 * **Stall Detection Dead Zone**: Stalled-conversation detection now considers visible chat surface presence (not only input/send selectors), so bump fallback still triggers when host DOM labels drift.
 * **False Action Blocking**: Tightened action target scoping toward chat surfaces to reduce non-chat button matches that could suppress bump eligibility.
 
+## [5.2.266] - 2026-03-01
+### Changed
+* **Ultra-Minimal Runtime Core**: Rewrote `src/scripts/auto-continue.ts` to only the required primitives: fork detection, stalled conversation detection, bump typing/submission, and deterministic action-button click handling.
+* **Per-Fork Deterministic Profile**: Runtime now resolves a fork profile (`antigravity`, `cursor`, `vscode`) and applies a single explicit selector contract per profile for root/input/send/generating signals.
+* **Simplified Stall Engine**: Replaced broad heuristic state machine with mutation-observer idle timing + generating guard + leader/focus gating.
+
 ## [5.2.264] - 2026-03-01
 ### Changed
 * **Release Rebuild**: Bumped extension/version metadata and produced a fresh VSIX after the hard minimal-runtime simplification pass.

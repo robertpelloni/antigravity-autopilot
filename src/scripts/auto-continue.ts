@@ -11,7 +11,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   const DEFAULTS = {
     runtime: { isLeader: false, role: 'follower', windowFocused: true, enforceLeader: true },
-    bump: { enabled: true, text: 'Proceed', requireVisible: true, requireFocused: false, submitDelayMs: 150 },
+    bump: { enabled: true, text: 'Proceed', requireVisible: true, requireFocused: false, submitDelayMs: 120 },
     timing: { pollIntervalMs: 500, actionThrottleMs: 250, stalledMs: 7000, bumpCooldownMs: 12000, submitCooldownMs: 3500 },
     actions: {
       clickRun: true,
@@ -25,34 +25,26 @@ export const AUTO_CONTINUE_SCRIPT = `
     }
   };
 
-  const CLICKABLE_SELECTOR = 'button, [role="button"], a, .monaco-button, [aria-label], [title], [data-testid]';
-  const CHAT_INPUT_SELECTOR = [
-    '.interactive-input-part textarea',
-    '.chat-input-widget textarea',
-    '.interactive-editor textarea',
-    '.chat-editing-session-container textarea',
-    '.aichat-container textarea',
-    '[data-testid*="chat" i] textarea',
-    '[data-testid*="composer" i] textarea',
-    '[class*="chat" i] textarea',
-    '[class*="composer" i] textarea',
-    '[class*="interactive" i] textarea',
-    '.interactive-input-part [contenteditable="true"]',
-    '.chat-input-widget [contenteditable="true"]',
-    '.interactive-editor [contenteditable="true"]',
-    '.chat-editing-session-container [contenteditable="true"]',
-    '.aichat-container [contenteditable="true"]',
-    '[data-testid*="chat" i] [contenteditable="true"]',
-    '[data-testid*="composer" i] [contenteditable="true"]',
-    '[class*="chat" i] [contenteditable="true"]',
-    '[class*="composer" i] [contenteditable="true"]',
-    '[class*="interactive" i] [contenteditable="true"]',
-    '[contenteditable="true"][role="textbox"]',
-    'textarea[placeholder*="ask" i]',
-    'textarea[placeholder*="message" i]'
-  ].join(',');
-  const CHAT_SURFACE_SELECTOR = '.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i]';
-  const GENERATING_SELECTOR = '[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator';
+  const PROFILES = {
+    antigravity: {
+      root: '.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i]',
+      input: 'textarea, [contenteditable="true"], [role="textbox"]',
+      send: '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], [title*="Continue" i], [aria-label*="Continue" i], [data-testid*="send" i], [data-testid*="submit" i], button[type="submit"], .codicon-send',
+      generating: '[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator'
+    },
+    cursor: {
+      root: '.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i]',
+      input: 'textarea, [contenteditable="true"], [role="textbox"]',
+      send: '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], [title*="Continue" i], [aria-label*="Continue" i], [data-testid*="send" i], [data-testid*="submit" i], button[type="submit"], .codicon-send',
+      generating: '[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator'
+    },
+    vscode: {
+      root: '.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i]',
+      input: 'textarea, [contenteditable="true"], [role="textbox"]',
+      send: '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], [title*="Continue" i], [aria-label*="Continue" i], [data-testid*="send" i], [data-testid*="submit" i], button[type="submit"], .codicon-send',
+      generating: '[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator'
+    }
+  };
 
   const ACTION_SPECS = [
     { key: 'clickRun', label: 'Run', regex: /(^|\b)(run(\s+in\s+terminal|\s+command)?|execute)(\b|$)/i },
@@ -66,11 +58,12 @@ export const AUTO_CONTINUE_SCRIPT = `
   ];
 
   let pollTimer = null;
+  let mutationObserver = null;
+  let observedRoot = null;
   let lastActionAt = 0;
   let lastBumpAt = 0;
   let submitInFlightUntil = 0;
-  let lastProgressAt = Date.now();
-  let lastSignalHash = '';
+  let lastActivityAt = Date.now();
 
   function getConfig() {
     const cfg = window.__antigravityConfig || {};
@@ -86,11 +79,8 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   function emitBridge(payload) {
     try {
-      if (typeof window.__AUTOPILOT_BRIDGE__ === 'function') {
-        window.__AUTOPILOT_BRIDGE__(payload);
-      } else {
-        console.log(payload);
-      }
+      if (typeof window.__AUTOPILOT_BRIDGE__ === 'function') window.__AUTOPILOT_BRIDGE__(payload);
+      else console.log(payload);
     } catch (e) {}
   }
 
@@ -105,6 +95,10 @@ export const AUTO_CONTINUE_SCRIPT = `
     if (title.includes('antigravity') || url.includes('antigravity')) return 'antigravity';
     if (title.includes('cursor') || url.includes('cursor')) return 'cursor';
     return 'vscode';
+  }
+
+  function getProfile(fork) {
+    return PROFILES[fork] || PROFILES.vscode;
   }
 
   function queryAllDeep(selector, root) {
@@ -154,36 +148,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     const aria = String(el.getAttribute('aria-label') || '').toLowerCase();
     const title = String(el.getAttribute('title') || '').toLowerCase();
     const testid = String(el.getAttribute('data-testid') || '').toLowerCase();
-    const className = String(el.className || '').toLowerCase();
-    return [text, aria, title, testid, className].join(' | ');
-  }
-
-  function isLikelyChatInput(input) {
-    if (!input || !isVisible(input) || isBlockedSurface(input)) return false;
-    const tag = String(input.tagName || '').toLowerCase();
-    const editable = tag === 'textarea' || input.isContentEditable || input.getAttribute('contenteditable') === 'true';
-    if (!editable) return false;
-
-    const markerText = [
-      String(input.getAttribute('placeholder') || ''),
-      String(input.getAttribute('aria-label') || ''),
-      String(input.getAttribute('data-testid') || ''),
-      String(input.className || '')
-    ].join(' ').toLowerCase();
-
-    if (/(ask|message|prompt|chat|composer|reply|agent|assistant|continue)/i.test(markerText)) return true;
-    try {
-      if (input.closest && input.closest(CHAT_SURFACE_SELECTOR)) return true;
-    } catch (e) {}
-    return false;
-  }
-
-  function hasChatSurface() {
-    const nodes = queryAllDeep(CHAT_SURFACE_SELECTOR);
-    for (const node of nodes) {
-      if (isVisible(node) && !isBlockedSurface(node)) return true;
-    }
-    return false;
+    return [text, aria, title, testid].join(' | ');
   }
 
   function shouldAct(cfg) {
@@ -197,30 +162,50 @@ export const AUTO_CONTINUE_SCRIPT = `
     return true;
   }
 
-  function findChatInput() {
-    const inputs = queryAllDeep(CHAT_INPUT_SELECTOR);
-    for (const input of inputs) {
-      if (isLikelyChatInput(input)) return input;
-    }
-
-    const broad = queryAllDeep('textarea, [contenteditable="true"], [role="textbox"]');
-    for (const input of broad) {
-      if (isLikelyChatInput(input)) return input;
+  function findRoot(profile) {
+    const roots = queryAllDeep(profile.root);
+    for (const root of roots) {
+      if (isVisible(root) && !isBlockedSurface(root)) return root;
     }
     return null;
   }
 
-  function findSendButton(input) {
-    const selector = '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], [title*="Continue" i], [aria-label*="Continue" i], [data-testid*="send" i], [data-testid*="submit" i], button[type="submit"], .codicon-send';
-    const roots = [
+  function isValidInput(input, root, rootSelector) {
+    if (!input || !isVisible(input) || isBlockedSurface(input)) return false;
+    const tag = String(input.tagName || '').toLowerCase();
+    const editable = tag === 'textarea' || input.isContentEditable || input.getAttribute('contenteditable') === 'true' || input.getAttribute('role') === 'textbox';
+    if (!editable) return false;
+    if (root && input.closest) {
+      try {
+        if (rootSelector && !input.closest(rootSelector) && !root.contains(input)) return false;
+      } catch (e) {}
+    }
+    return true;
+  }
+
+  function findInput(profile, root) {
+    const local = root ? queryAllDeep(profile.input, root) : [];
+    for (const input of local) {
+      if (isValidInput(input, root, profile.root)) return input;
+    }
+    const global = queryAllDeep(profile.input, document);
+    for (const input of global) {
+      if (isValidInput(input, root, profile.root)) return input;
+    }
+    return null;
+  }
+
+  function findSend(profile, input, root) {
+    const scopes = [
       input && input.closest && input.closest('form'),
-      input && input.closest && input.closest('[class*="chat" i], [class*="composer" i], .chat-editing-session-container, .aichat-container'),
       input && input.parentElement,
+      root,
       document
     ].filter(Boolean);
-    for (const root of roots) {
-      const matches = queryAllDeep(selector, root);
-      for (const node of matches) {
+
+    for (const scope of scopes) {
+      const nodes = queryAllDeep(profile.send, scope);
+      for (const node of nodes) {
         const el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
         if (!isVisible(el) || isBlockedSurface(el)) continue;
         return el;
@@ -241,6 +226,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       try { if (typeof el.click === 'function') el.click(); } catch (e) {}
       log('clicked ' + label);
       emitAction(group || 'click', String(label || 'clicked').toLowerCase());
+      lastActivityAt = Date.now();
       return true;
     } catch (e) {
       return false;
@@ -252,6 +238,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     try {
       if (typeof input.focus === 'function') input.focus();
       if (input.isContentEditable || input.getAttribute('contenteditable') === 'true') {
+        try { document.execCommand('selectAll', false, null); } catch (e) {}
         try { document.execCommand('insertText', false, text); } catch (e) { input.textContent = text; }
       } else {
         const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
@@ -260,6 +247,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
       input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
       input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+      lastActivityAt = Date.now();
       return true;
     } catch (e) {
       return false;
@@ -276,11 +264,11 @@ export const AUTO_CONTINUE_SCRIPT = `
     }
   }
 
-  function submitBumpText(mode, input, cfg) {
+  function submitText(profile, fork, input, root, text) {
     const before = readInputText(input);
     if (!before) return false;
 
-    const send = findSendButton(input);
+    const send = findSend(profile, input, root);
     if (send && click(send, 'Submit bump text', 'submit')) return true;
 
     try {
@@ -301,148 +289,69 @@ export const AUTO_CONTINUE_SCRIPT = `
       if (readInputText(input) !== before) return true;
     } catch (e) {}
 
-    if (mode === 'antigravity') {
-      emitBridge('__AUTOPILOT_HYBRID_BUMP__:' + before);
+    if (fork === 'antigravity') {
+      emitBridge('__AUTOPILOT_HYBRID_BUMP__:' + text);
+      emitAction('submit', 'minimal-hybrid');
       return true;
     }
 
     return false;
   }
 
-  function detectActionElements() {
-    const out = {};
-    for (const spec of ACTION_SPECS) out[spec.key] = null;
-    const nodes = queryAllDeep(CLICKABLE_SELECTOR);
+  function ensureObserver(root) {
+    if (!root) return;
+    if (mutationObserver && observedRoot === root) return;
+
+    if (mutationObserver) {
+      try { mutationObserver.disconnect(); } catch (e) {}
+      mutationObserver = null;
+      observedRoot = null;
+    }
+
+    try {
+      mutationObserver = new MutationObserver(function () {
+        lastActivityAt = Date.now();
+      });
+      mutationObserver.observe(root, { subtree: true, childList: true, attributes: true, characterData: true });
+      observedRoot = root;
+      lastActivityAt = Date.now();
+    } catch (e) {}
+  }
+
+  function isGenerating(profile, root) {
+    const scope = root || document;
+    const nodes = queryAllDeep(profile.generating, scope);
+    return nodes.some(function (node) {
+      const el = node.closest ? (node.closest('button, [role="button"], .monaco-button') || node) : node;
+      return isVisible(el) && !isBlockedSurface(el);
+    });
+  }
+
+  function findActionTarget(root, cfg) {
+    const scope = root || document;
+    const nodes = queryAllDeep('button, [role="button"], a, .monaco-button, [aria-label], [title], [data-testid]', scope);
     for (const node of nodes) {
       const el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
       if (!isVisible(el) || isBlockedSurface(el)) continue;
-      try {
-        if (!(el.closest && el.closest(CHAT_SURFACE_SELECTOR))) {
-          const normalized = normalizeText(el);
-          if (!/(run|execute|expand|requires\s*input|retry|accept\s*all|always\s*allow|allow|proceed|continue|keep)/i.test(normalized)) {
-            continue;
-          }
-        }
-      } catch (e) {}
       const text = normalizeText(el);
       for (const spec of ACTION_SPECS) {
-        if (out[spec.key]) continue;
-        if (spec.regex.test(text)) {
-          out[spec.key] = el;
-        }
+        if (cfg.actions[spec.key] !== true) continue;
+        if (spec.regex.test(text)) return spec;
       }
     }
-    return out;
+    return null;
   }
 
-  function detectStalledConversation(cfg, mode, snapshot) {
-    const hasInput = !!snapshot.input;
-    const hasSend = !!snapshot.send;
-    const isGenerating = snapshot.isGenerating;
-    const pendingActions = snapshot.pendingActions;
-    const chatSurfaceDetected = snapshot.chatSurfaceDetected;
-    const stalledMs = Math.max(1000, Number(cfg.timing.stalledMs || 7000));
-    const idleMs = Date.now() - lastProgressAt;
-    const stalled = (hasInput || hasSend || chatSurfaceDetected) && !isGenerating && pendingActions === 0 && idleMs >= stalledMs;
-
-    return {
-      stalled,
-      hasInput,
-      hasSend,
-      chatSurfaceDetected,
-      isGenerating,
-      pendingActions,
-      idleMs,
-      mode
-    };
-  }
-
-  function buildSnapshot(cfg, mode) {
-    const input = findChatInput();
-    const send = findSendButton(input);
-    const chatSurfaceDetected = hasChatSurface();
-    const isGenerating = queryAllDeep(GENERATING_SELECTOR).some(isVisible);
-    const actions = detectActionElements();
-    const pendingActions = ACTION_SPECS.reduce((sum, spec) => sum + (actions[spec.key] ? 1 : 0), 0);
-    return { input, send, chatSurfaceDetected, isGenerating, actions, pendingActions, mode, cfg };
-  }
-
-  function updateProgress(snapshot) {
-    const hash = [
-      snapshot.isGenerating ? '1' : '0',
-      snapshot.input ? '1' : '0',
-      snapshot.send ? '1' : '0',
-      snapshot.chatSurfaceDetected ? '1' : '0',
-      ACTION_SPECS.map((s) => snapshot.actions[s.key] ? '1' : '0').join('')
-    ].join('|');
-
-    if (hash !== lastSignalHash) {
-      lastSignalHash = hash;
-      lastProgressAt = Date.now();
+  function findElementBySpec(root, spec) {
+    if (!spec) return null;
+    const nodes = queryAllDeep('button, [role="button"], a, .monaco-button, [aria-label], [title], [data-testid]', root || document);
+    for (const node of nodes) {
+      const el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
+      if (!isVisible(el) || isBlockedSurface(el)) continue;
+      const text = normalizeText(el);
+      if (spec.regex.test(text)) return el;
     }
-  }
-
-  function tryClickActions(snapshot) {
-    for (const spec of ACTION_SPECS) {
-      if (snapshot.cfg.actions[spec.key] !== true) continue;
-      const el = snapshot.actions[spec.key];
-      if (!el) continue;
-      if (click(el, spec.label, 'click')) {
-        lastActionAt = Date.now();
-        return true;
-      }
-    }
-    return false;
-  }
-
-  function tryBump(snapshot, stallState) {
-    const cfg = snapshot.cfg;
-    if (!cfg.bump.enabled) return false;
-    if (snapshot.isGenerating) return false;
-    if (!stallState.stalled && !snapshot.send && !snapshot.input && !snapshot.chatSurfaceDetected) return false;
-
-    const now = Date.now();
-    const bumpCooldownMs = Math.max(1000, Number(cfg.timing.bumpCooldownMs || 12000));
-    const submitCooldownMs = Math.max(500, Number(cfg.timing.submitCooldownMs || 3500));
-    if ((now - lastBumpAt) < bumpCooldownMs) return false;
-    if (now < submitInFlightUntil) return false;
-
-    const text = String(cfg.bump.text || 'Proceed').trim();
-    if (!text) return false;
-
-    const mode = snapshot.mode;
-    const input = snapshot.input;
-    if (!input) {
-      if (!snapshot.send && !stallState.stalled && !snapshot.chatSurfaceDetected) return false;
-      emitBridge('__AUTOPILOT_HYBRID_BUMP__:' + text);
-      emitAction('submit', 'minimal-hybrid');
-      log('bump fallback via bridge (no input selector)');
-      lastBumpAt = now;
-      submitInFlightUntil = now + submitCooldownMs;
-      return true;
-    }
-
-    if (!setInputText(input, text)) return false;
-    const typedNow = readInputText(input).toLowerCase();
-    if (!typedNow.includes(text.toLowerCase())) {
-      emitBridge('__AUTOPILOT_HYBRID_BUMP__:' + text);
-      log('bump typing did not persist; escalated to bridge');
-      lastBumpAt = now;
-      submitInFlightUntil = now + submitCooldownMs;
-      return true;
-    }
-
-    log('typed bump text');
-    submitInFlightUntil = now + submitCooldownMs;
-    const delay = Math.max(40, Number(cfg.bump.submitDelayMs || 150));
-    setTimeout(function () {
-      submitBumpText(mode, input, cfg);
-      log('submitted bump text');
-      emitAction('submit', 'minimal');
-    }, delay);
-
-    lastBumpAt = now;
-    return true;
+    return null;
   }
 
   function runLoop() {
@@ -455,31 +364,72 @@ export const AUTO_CONTINUE_SCRIPT = `
     const now = Date.now();
     if ((now - lastActionAt) < Math.max(50, Number(cfg.timing.actionThrottleMs || 250))) return;
 
-    const mode = detectFork(cfg);
-    const snapshot = buildSnapshot(cfg, mode);
-    updateProgress(snapshot);
-    const stallState = detectStalledConversation(cfg, mode, snapshot);
+    const fork = detectFork(cfg);
+    const profile = getProfile(fork);
+    const root = findRoot(profile);
+    ensureObserver(root);
+
+    const generating = isGenerating(profile, root);
+    const input = findInput(profile, root);
+    const send = findSend(profile, input, root);
+    const idleMs = now - lastActivityAt;
+    const stalled = !!root && !generating && idleMs >= Math.max(1000, Number(cfg.timing.stalledMs || 7000));
 
     window.__antigravityRuntimeState = {
-      fork: mode,
-      isGenerating: snapshot.isGenerating,
-      hasInput: !!snapshot.input,
-      hasSend: !!snapshot.send,
-      chatSurfaceDetected: snapshot.chatSurfaceDetected,
-      pendingActions: snapshot.pendingActions,
-      stalled: stallState.stalled,
-      idleMs: stallState.idleMs,
+      fork,
+      isGenerating: generating,
+      hasRoot: !!root,
+      hasInput: !!input,
+      hasSend: !!send,
+      stalled,
+      idleMs,
       ts: now
     };
 
-    if (tryBump(snapshot, stallState)) {
+    const actionSpec = findActionTarget(root, cfg);
+    if (actionSpec) {
+      const actionEl = findElementBySpec(root, actionSpec);
+      if (actionEl && click(actionEl, actionSpec.label, 'click')) {
+        lastActionAt = now;
+        return;
+      }
+    }
+
+    if (!cfg.bump.enabled || generating) return;
+
+    const bumpCooldownMs = Math.max(1000, Number(cfg.timing.bumpCooldownMs || 12000));
+    const submitCooldownMs = Math.max(500, Number(cfg.timing.submitCooldownMs || 3500));
+    if ((now - lastBumpAt) < bumpCooldownMs) return;
+    if (now < submitInFlightUntil) return;
+    if (!stalled) return;
+
+    const bumpText = String(cfg.bump.text || 'Proceed').trim();
+    if (!bumpText) return;
+
+    if (!input) {
+      emitBridge('__AUTOPILOT_HYBRID_BUMP__:' + bumpText);
+      emitAction('submit', 'minimal-hybrid');
+      log('bump fallback: no input detected');
+      lastBumpAt = now;
+      submitInFlightUntil = now + submitCooldownMs;
       lastActionAt = now;
       return;
     }
 
-    if (tryClickActions(snapshot)) {
-      lastActionAt = now;
-    }
+    const typed = setInputText(input, bumpText);
+    if (!typed) return;
+
+    log('typed bump text');
+    submitInFlightUntil = now + submitCooldownMs;
+    const submitDelay = Math.max(40, Number(cfg.bump.submitDelayMs || 120));
+    setTimeout(function () {
+      submitText(profile, fork, input, root, bumpText);
+      log('submitted bump text');
+      emitAction('submit', 'minimal');
+    }, submitDelay);
+
+    lastBumpAt = now;
+    lastActionAt = now;
   }
 
   function schedule() {
@@ -499,20 +449,31 @@ export const AUTO_CONTINUE_SCRIPT = `
   window.__antigravityTypeAndSubmit = function (text) {
     const cfg = getConfig();
     if (!shouldAct(cfg)) return false;
-    const mode = detectFork(cfg);
-    const input = findChatInput();
+
+    const fork = detectFork(cfg);
+    const profile = getProfile(fork);
+    const root = findRoot(profile);
+    const input = findInput(profile, root);
     const payload = String(text || cfg.bump.text || 'Proceed').trim();
     if (!payload) return false;
+
     if (!input) {
       emitBridge('__AUTOPILOT_HYBRID_BUMP__:' + payload);
+      emitAction('submit', 'manual-hybrid');
       return true;
     }
+
     if (!setInputText(input, payload)) return false;
-    return submitBumpText(mode, input, cfg);
+    return submitText(profile, fork, input, root, payload);
   };
 
   window.stopAutoContinue = function () {
     if (pollTimer) clearTimeout(pollTimer);
+    if (mutationObserver) {
+      try { mutationObserver.disconnect(); } catch (e) {}
+      mutationObserver = null;
+      observedRoot = null;
+    }
     window.__antigravityAutoContinueRunning = false;
   };
 
