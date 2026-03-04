@@ -160,17 +160,36 @@ export class CDPStrategy implements IStrategy {
 
         // --- INDEPENDENT STALL TIMER ---
         this.stallTimer = setInterval(async () => {
-            if (!this.isActive || !this.controllerRoleIsLeader) return;
+            if (!this.isActive) {
+                logToOutput('[StallCheck] SKIP: not active');
+                return;
+            }
+            if (!this.controllerRoleIsLeader) {
+                logToOutput('[StallCheck] SKIP: not leader');
+                return;
+            }
 
-            const bumpEnabled = config.get<boolean>('automation.actions.autoReply') ?? true;
-            if (!bumpEnabled) return;
+            // Use SAME master toggle as button clicking — no separate config key to go stale
+            const enabled = !!config.get<boolean>('autopilotAutoAcceptEnabled')
+                || !!config.get<boolean>('autoAllEnabled')
+                || !!config.get<boolean>('autoAcceptEnabled')
+                || !!(config.get<boolean>('actions.bump.enabled') ?? true)
+                || !!(config.get<boolean>('automation.actions.autoReply') ?? true);
+            if (!enabled) {
+                logToOutput('[StallCheck] SKIP: all toggles off');
+                return;
+            }
 
             const now = Date.now();
             const stalledMs = config.get<number>('automation.timing.autoReplyDelayMs') || 10000;
             const bumpCooldown = (config.get<number>('actions.bump.cooldown') ?? 30) * 1000;
+            const activityAge = now - this.lastActivityAt;
+            const actionAge = now - this.lastActionAt;
 
-            if ((now - this.lastActivityAt) < stalledMs) return;
-            if ((now - this.lastActionAt) < bumpCooldown) return;
+            logToOutput('[StallCheck] activityAge=' + activityAge + 'ms (need>' + stalledMs + '), actionAge=' + actionAge + 'ms (need>' + bumpCooldown + ')');
+
+            if (activityAge < stalledMs) return;
+            if (actionAge < bumpCooldown) return;
 
             const bumpText = config.get<string>('actions.bump.text') || 'Proceed';
             this.lastActionAt = now;
