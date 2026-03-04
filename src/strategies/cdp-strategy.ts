@@ -179,87 +179,52 @@ export class CDPStrategy implements IStrategy {
             this.lastActivityAt = now;
             logToOutput('[Bump] FIRING — stalled ' + activityAge + 'ms, sending: "' + BUMP_TEXT + '"');
 
-            // Multi-strategy bump — tries several approaches to send text to chat
+            // PROVEN: VS Code `type` command WORKS for text input.
+            // PROBLEM: All VS Code submit commands fail in Antigravity.
+            // SOLUTION: Use CDP Input.dispatchKeyEvent for real Enter keypress.
             try {
-                let sent = false;
+                // Step 1: Focus chat and type bump text
+                logToOutput('[Bump] Step 1: Focus chat + type text...');
+                try { await vscode.commands.executeCommand('workbench.action.chat.open'); } catch (_) { }
+                await new Promise(r => setTimeout(r, 400));
+                try { await vscode.commands.executeCommand('editor.action.selectAll'); } catch (_) { }
+                try { await vscode.commands.executeCommand('type', { text: BUMP_TEXT }); } catch (_) { }
+                await new Promise(r => setTimeout(r, 300));
 
-                // ---- STRATEGY A: chat.open with query param (sets text in one call) ----
-                logToOutput('[Bump] Strategy A: chat.open with query...');
-                const openCommands = [
-                    'workbench.action.chat.open',
-                    'workbench.action.chat.newChat',
-                ];
-                for (const cmd of openCommands) {
-                    if (sent) break;
+                // Step 2: Send Enter key via CDP Input.dispatchKeyEvent (real keyboard event)
+                logToOutput('[Bump] Step 2: CDP Enter keypress...');
+                let enterSent = false;
+                for (const [pageId] of (this.cdpHandler as any).connections || []) {
                     try {
-                        await vscode.commands.executeCommand(cmd, { query: BUMP_TEXT, isPartialQuery: false });
-                        logToOutput('[Bump] Opened with query via: ' + cmd);
-                        await new Promise(r => setTimeout(r, 500));
-                        // Now try to submit the pre-filled text
-                        const submitCmds = [
-                            'workbench.action.chat.acceptInput',
-                            'workbench.action.chat.submit',
-                            'interactive.acceptInput',
-                            'workbench.action.chat.send',
-                            'google.gemini.chat.send',
-                        ];
-                        for (const sub of submitCmds) {
-                            try {
-                                await vscode.commands.executeCommand(sub);
-                                logToOutput('[Bump] Submitted via: ' + sub);
-                                sent = true;
-                                break;
-                            } catch (_) { }
-                        }
-                        // If submit commands failed, try Enter key
-                        if (!sent) {
-                            logToOutput('[Bump] Submit cmds failed, trying Enter...');
-                            try { await vscode.commands.executeCommand('type', { text: '\n' }); } catch (_) { }
-                            // Check if it may have worked despite no explicit submit
-                        }
+                        await this.cdpHandler.sendCommand(pageId, 'Input.dispatchKeyEvent', {
+                            type: 'keyDown',
+                            key: 'Enter',
+                            code: 'Enter',
+                            windowsVirtualKeyCode: 13,
+                            nativeVirtualKeyCode: 13,
+                        });
+                        await this.cdpHandler.sendCommand(pageId, 'Input.dispatchKeyEvent', {
+                            type: 'keyUp',
+                            key: 'Enter',
+                            code: 'Enter',
+                            windowsVirtualKeyCode: 13,
+                            nativeVirtualKeyCode: 13,
+                        });
+                        logToOutput('[Bump] Enter sent via CDP on page: ' + pageId.substring(0, 8));
+                        enterSent = true;
+                        break;
                     } catch (e: any) {
-                        logToOutput('[Bump] ' + cmd + ' failed: ' + (e?.message || ''));
+                        logToOutput('[Bump] CDP Enter failed on ' + pageId.substring(0, 8) + ': ' + (e?.message || ''));
                     }
                 }
 
-                // ---- STRATEGY B: sendToNewChat (sends message directly without needing submit) ----
-                if (!sent) {
-                    logToOutput('[Bump] Strategy B: sendToNewChat...');
-                    const directSendCmds = [
-                        { cmd: 'workbench.action.chat.sendToNewChat', args: { message: BUMP_TEXT } },
-                        { cmd: 'workbench.action.chat.sendToNewChat', args: BUMP_TEXT },
-                    ];
-                    for (const { cmd, args } of directSendCmds) {
-                        try {
-                            await vscode.commands.executeCommand(cmd, args);
-                            logToOutput('[Bump] Sent via: ' + cmd);
-                            sent = true;
-                            break;
-                        } catch (_) { }
-                    }
+                // Fallback: try VS Code type with newline
+                if (!enterSent) {
+                    logToOutput('[Bump] CDP Enter failed, trying type newline fallback...');
+                    try { await vscode.commands.executeCommand('type', { text: '\n' }); } catch (_) { }
                 }
 
-                // ---- STRATEGY C: Clipboard paste approach ----
-                if (!sent) {
-                    logToOutput('[Bump] Strategy C: clipboard + paste...');
-                    try {
-                        // Focus chat panel first
-                        try { await vscode.commands.executeCommand('workbench.action.chat.open'); } catch (_) { }
-                        await new Promise(r => setTimeout(r, 400));
-                        // Write to clipboard and paste
-                        await vscode.env.clipboard.writeText(BUMP_TEXT);
-                        try { await vscode.commands.executeCommand('editor.action.clipboardPasteAction'); } catch (_) { }
-                        await new Promise(r => setTimeout(r, 200));
-                        // Submit
-                        try { await vscode.commands.executeCommand('workbench.action.chat.acceptInput'); } catch (_) { }
-                        try { await vscode.commands.executeCommand('type', { text: '\n' }); } catch (_) { }
-                        logToOutput('[Bump] Clipboard paste attempted');
-                    } catch (e: any) {
-                        logToOutput('[Bump] Clipboard failed: ' + (e?.message || ''));
-                    }
-                }
-
-                logToOutput('[Bump] Done — all strategies attempted, sent=' + sent);
+                logToOutput('[Bump] Done — enterSent=' + enterSent);
             } catch (e: any) {
                 logToOutput('[Bump] ERROR: ' + (e?.message || e));
             }
