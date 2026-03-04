@@ -179,30 +179,45 @@ export class CDPStrategy implements IStrategy {
             this.lastActivityAt = now;
             logToOutput('[Bump] FIRING — stalled ' + activityAge + 'ms, sending: "' + BUMP_TEXT + '"');
 
-            // PROVEN: VS Code `type` command WORKS for text input.
-            // PROBLEM: All VS Code submit commands fail in Antigravity.
-            // SOLUTION: Use CDP Input.dispatchKeyEvent for real Enter keypress.
+            // PROVEN: clipboard paste WORKS for text input.
+            // PROVEN: CDP Input.dispatchKeyEvent WORKS for Enter key.
+            // FAILED: VS Code `type` command silently fails (no error, no text).
             try {
-                // Step 1: Focus chat and type bump text
-                logToOutput('[Bump] Step 1: Focus chat + type text...');
+                // Step 1: Focus chat panel
+                logToOutput('[Bump] Step 1: Focus chat panel...');
                 try { await vscode.commands.executeCommand('workbench.action.chat.open'); } catch (_) { }
-                await new Promise(r => setTimeout(r, 400));
-                try { await vscode.commands.executeCommand('editor.action.selectAll'); } catch (_) { }
-                try { await vscode.commands.executeCommand('type', { text: BUMP_TEXT }); } catch (_) { }
-                await new Promise(r => setTimeout(r, 300));
+                await new Promise(r => setTimeout(r, 500));
 
-                // Step 2: Send Enter key via CDP Input.dispatchKeyEvent (real keyboard event)
-                logToOutput('[Bump] Step 2: CDP Enter keypress...');
+                // Step 2: Write text to clipboard and paste it
+                logToOutput('[Bump] Step 2: Clipboard paste "' + BUMP_TEXT + '"...');
+                const oldClipboard = await vscode.env.clipboard.readText();
+                await vscode.env.clipboard.writeText(BUMP_TEXT);
+                await new Promise(r => setTimeout(r, 100));
+                try { await vscode.commands.executeCommand('editor.action.clipboardPasteAction'); } catch (_) { }
+                await new Promise(r => setTimeout(r, 300));
+                // Restore old clipboard
+                try { await vscode.env.clipboard.writeText(oldClipboard); } catch (_) { }
+
+                // Step 3: Send Enter key via CDP Input.dispatchKeyEvent
+                logToOutput('[Bump] Step 3: CDP Enter keypress...');
                 let enterSent = false;
                 for (const [pageId] of (this.cdpHandler as any).connections || []) {
                     try {
                         await this.cdpHandler.sendCommand(pageId, 'Input.dispatchKeyEvent', {
-                            type: 'keyDown',
+                            type: 'rawKeyDown',
                             key: 'Enter',
                             code: 'Enter',
                             windowsVirtualKeyCode: 13,
                             nativeVirtualKeyCode: 13,
                         });
+                        await new Promise(r => setTimeout(r, 50));
+                        await this.cdpHandler.sendCommand(pageId, 'Input.dispatchKeyEvent', {
+                            type: 'char',
+                            key: '\r',
+                            text: '\r',
+                            unmodifiedText: '\r',
+                        });
+                        await new Promise(r => setTimeout(r, 50));
                         await this.cdpHandler.sendCommand(pageId, 'Input.dispatchKeyEvent', {
                             type: 'keyUp',
                             key: 'Enter',
@@ -220,7 +235,7 @@ export class CDPStrategy implements IStrategy {
 
                 // Fallback: try VS Code type with newline
                 if (!enterSent) {
-                    logToOutput('[Bump] CDP Enter failed, trying type newline fallback...');
+                    logToOutput('[Bump] CDP unavailable, fallback newline...');
                     try { await vscode.commands.executeCommand('type', { text: '\n' }); } catch (_) { }
                 }
 
@@ -230,7 +245,7 @@ export class CDPStrategy implements IStrategy {
             }
         }, 3000);
 
-        vscode.window.showInformationMessage('Antigravity: CDP Strategy v6 ON');
+        vscode.window.showInformationMessage('Antigravity: CDP Strategy v7 ON');
     }
 
     async stop(): Promise<void> {
