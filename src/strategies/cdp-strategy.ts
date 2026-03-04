@@ -179,47 +179,87 @@ export class CDPStrategy implements IStrategy {
             this.lastActivityAt = now;
             logToOutput('[Bump] FIRING — stalled ' + activityAge + 'ms, sending: "' + BUMP_TEXT + '"');
 
-            // USE VS CODE COMMANDS API — bypasses all DOM element detection issues.
-            // Antigravity's chat input is a Monaco editor; DOM scripts can't type into it.
+            // Multi-strategy bump — tries several approaches to send text to chat
             try {
-                // Step 1: Focus the chat panel
-                logToOutput('[Bump] Step 1: Focusing chat panel...');
-                try { await vscode.commands.executeCommand('workbench.action.chat.open'); } catch (_) { }
-                await new Promise(r => setTimeout(r, 300));
+                let sent = false;
 
-                // Step 2: Clear any existing text and type bump text
-                logToOutput('[Bump] Step 2: Typing "' + BUMP_TEXT + '"...');
-                // Select all existing text first, then replace with bump text
-                try { await vscode.commands.executeCommand('editor.action.selectAll'); } catch (_) { }
-                try { await vscode.commands.executeCommand('type', { text: BUMP_TEXT }); } catch (_) { }
-                await new Promise(r => setTimeout(r, 200));
-
-                // Step 3: Submit via acceptInput command (works for VS Code chat panels)
-                logToOutput('[Bump] Step 3: Submitting...');
-                let submitted = false;
-
-                // Try Antigravity/Gemini-specific submit commands first
-                const submitCommands = [
-                    'workbench.action.chat.acceptInput',
-                    'interactive.acceptInput',
-                    'workbench.action.chat.submit',
+                // ---- STRATEGY A: chat.open with query param (sets text in one call) ----
+                logToOutput('[Bump] Strategy A: chat.open with query...');
+                const openCommands = [
+                    'workbench.action.chat.open',
+                    'workbench.action.chat.newChat',
                 ];
-                for (const cmd of submitCommands) {
+                for (const cmd of openCommands) {
+                    if (sent) break;
                     try {
-                        await vscode.commands.executeCommand(cmd);
-                        logToOutput('[Bump] Submitted via: ' + cmd);
-                        submitted = true;
-                        break;
-                    } catch (_) { }
+                        await vscode.commands.executeCommand(cmd, { query: BUMP_TEXT, isPartialQuery: false });
+                        logToOutput('[Bump] Opened with query via: ' + cmd);
+                        await new Promise(r => setTimeout(r, 500));
+                        // Now try to submit the pre-filled text
+                        const submitCmds = [
+                            'workbench.action.chat.acceptInput',
+                            'workbench.action.chat.submit',
+                            'interactive.acceptInput',
+                            'workbench.action.chat.send',
+                            'google.gemini.chat.send',
+                        ];
+                        for (const sub of submitCmds) {
+                            try {
+                                await vscode.commands.executeCommand(sub);
+                                logToOutput('[Bump] Submitted via: ' + sub);
+                                sent = true;
+                                break;
+                            } catch (_) { }
+                        }
+                        // If submit commands failed, try Enter key
+                        if (!sent) {
+                            logToOutput('[Bump] Submit cmds failed, trying Enter...');
+                            try { await vscode.commands.executeCommand('type', { text: '\n' }); } catch (_) { }
+                            // Check if it may have worked despite no explicit submit
+                        }
+                    } catch (e: any) {
+                        logToOutput('[Bump] ' + cmd + ' failed: ' + (e?.message || ''));
+                    }
                 }
 
-                // Fallback: send Enter key via type command
-                if (!submitted) {
-                    logToOutput('[Bump] Submit commands failed, trying Enter key...');
-                    try { await vscode.commands.executeCommand('type', { text: '\n' }); } catch (_) { }
+                // ---- STRATEGY B: sendToNewChat (sends message directly without needing submit) ----
+                if (!sent) {
+                    logToOutput('[Bump] Strategy B: sendToNewChat...');
+                    const directSendCmds = [
+                        { cmd: 'workbench.action.chat.sendToNewChat', args: { message: BUMP_TEXT } },
+                        { cmd: 'workbench.action.chat.sendToNewChat', args: BUMP_TEXT },
+                    ];
+                    for (const { cmd, args } of directSendCmds) {
+                        try {
+                            await vscode.commands.executeCommand(cmd, args);
+                            logToOutput('[Bump] Sent via: ' + cmd);
+                            sent = true;
+                            break;
+                        } catch (_) { }
+                    }
                 }
 
-                logToOutput('[Bump] Done — bump text sent');
+                // ---- STRATEGY C: Clipboard paste approach ----
+                if (!sent) {
+                    logToOutput('[Bump] Strategy C: clipboard + paste...');
+                    try {
+                        // Focus chat panel first
+                        try { await vscode.commands.executeCommand('workbench.action.chat.open'); } catch (_) { }
+                        await new Promise(r => setTimeout(r, 400));
+                        // Write to clipboard and paste
+                        await vscode.env.clipboard.writeText(BUMP_TEXT);
+                        try { await vscode.commands.executeCommand('editor.action.clipboardPasteAction'); } catch (_) { }
+                        await new Promise(r => setTimeout(r, 200));
+                        // Submit
+                        try { await vscode.commands.executeCommand('workbench.action.chat.acceptInput'); } catch (_) { }
+                        try { await vscode.commands.executeCommand('type', { text: '\n' }); } catch (_) { }
+                        logToOutput('[Bump] Clipboard paste attempted');
+                    } catch (e: any) {
+                        logToOutput('[Bump] Clipboard failed: ' + (e?.message || ''));
+                    }
+                }
+
+                logToOutput('[Bump] Done — all strategies attempted, sent=' + sent);
             } catch (e: any) {
                 logToOutput('[Bump] ERROR: ' + (e?.message || e));
             }
