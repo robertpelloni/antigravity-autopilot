@@ -238,21 +238,13 @@ export class CDPHandler extends EventEmitter {
     }
 
     private shouldInjectAutoContinueRuntime(): boolean {
+        // Always inject the probe script unless explicitly disabled.
+        // The probe just polls DOM state passively - it's harmless.
+        // ACTIONS based on probe data are gated by controllerRoleIsLeader in cdp-strategy.ts.
         if (config.get<boolean>('autoContinueScriptEnabled') === false) {
             return false;
         }
-
-        // In single-target mode, only the focused host window should actively inject/run runtime automation.
-        // This prevents multi-window dual-leader behavior when host-level extension state is mirrored.
-        if (this.isSingleTargetMode() && !this.hostWindowFocused) {
-            return false;
-        }
-
-        if (this.controllerRoleIsLeader) {
-            return true;
-        }
-
-        return config.get<boolean>('controller.followerUiAutomationEnabled') ?? false;
+        return true;
     }
 
     private async pushAutomationConfigToConnection(pageId: string, sessionId?: string): Promise<void> {
