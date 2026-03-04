@@ -192,11 +192,10 @@ export class CDPHandler extends EventEmitter {
 
     private isSingleTargetMode(): boolean {
         const forceSinglePrimary = config.get<boolean>('automation.forceSinglePrimaryPage');
-        if (forceSinglePrimary !== false) {
+        if (forceSinglePrimary === true) {
             return true;
         }
-
-        return !(config.get<boolean>('multiTabEnabled') ?? false);
+        return false;
     }
 
     private getPrimaryConnectedPageId(): string | null {

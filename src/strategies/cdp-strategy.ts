@@ -123,42 +123,66 @@ export class CDPStrategy implements IStrategy {
                     const bumpText = config.get<string>('actions.bump.text') || 'Proceed';
                     this.lastActionAt = now;
                     this.lastActivityAt = now; // reset
-                    logToOutput(`[Autopilot] Stalled for ${stalledMs}ms, using pure CDP to type text: "${bumpText}"`);
+                    logToOutput(`[Autopilot] Stalled for ${stalledMs}ms, bumping with: "${bumpText}"`);
 
-                    // 1. Focus the chat input box using Shadow DOM
-                    const focusScript = `
-                        (() => {
+                    // 0. Check if input already has text (prevent duplicate typing)
+                    const checkScript = `(() => {
+                        ${SHADOW_DOM_HELPER}
+                        const els = queryShadowDOMAll('textarea, [contenteditable="true"], [role="textbox"]');
+                        const ta = els.find(t => t.isConnected && (t.offsetParent !== null || t.clientWidth > 0));
+                        if (!ta) return 'no-input';
+                        const val = (ta.value || ta.textContent || '').trim();
+                        return val.length > 0 ? 'has-text' : 'empty';
+                    })()`;
+                    const checkResults = await this.cdpHandler.executeInAllSessions(checkScript);
+                    const hasText = checkResults.some(r => r === 'has-text');
+
+                    if (hasText) {
+                        logToOutput('[Autopilot] Input already has text, skipping type, going straight to submit');
+                    } else {
+                        // 1. Focus the chat input
+                        const focusScript = `(() => {
                             ${SHADOW_DOM_HELPER}
-                            const textareas = queryShadowDOMAll('textarea, .monaco-editor textarea, [contenteditable="true"], [role="textbox"], [aria-label*="chat" i], [placeholder*="message" i]');
-                            const ta = textareas.find(t => t.isConnected && !t.disabled && t.offsetParent !== null);
-                            if (ta) ta.focus();
-                        })();
-                    `;
-                    await this.cdpHandler.executeInAllSessions(focusScript);
+                            const els = queryShadowDOMAll('textarea, [contenteditable="true"], [role="textbox"], [aria-label*="chat" i]');
+                            const ta = els.find(t => t.isConnected && (t.offsetParent !== null || t.clientWidth > 0));
+                            if (ta) { ta.focus(); return 'focused'; }
+                            return 'not-found';
+                        })()`;
+                        await this.cdpHandler.executeInAllSessions(focusScript);
 
-                    // 2. Insert text using raw Chromium CDP to bypass React/Monaco strictness
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                    await this.cdpHandler.insertTextToAll(bumpText);
+                        // 2. Insert text using raw CDP Input.insertText
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        await this.cdpHandler.insertTextToAll(bumpText);
+                    }
 
-                    // 3. Click the send button (or simulate Enter)
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    const submitScript = `
-                        (() => {
-                            ${SHADOW_DOM_HELPER}
-                            const btns = queryShadowDOMAll('.monaco-button[title*="Send" i], button[aria-label*="Send" i], button[title*="Submit" i], .codicon-send, [title*="Continue" i]');
-                            const sendBtn = btns.find(b => b.isConnected && !b.disabled);
-                            if (sendBtn) {
-                                sendBtn.closest('button')?.click() || sendBtn.click();
-                            } else {
-                                // Fallback: dispatch enter if no button found
-                                const active = document.activeElement;
-                                if (active) {
-                                    active.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-                                }
-                            }
-                        })();
-                    `;
-                    this.cdpHandler.executeInAllSessions(submitScript).catch(() => { });
+                    // 3. Submit: Click send button OR use CDP Enter key
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    const submitScript = `(() => {
+                        ${SHADOW_DOM_HELPER}
+                        const btns = queryShadowDOMAll('[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send, .send-button');
+                        const sendBtn = btns.find(b => b.isConnected && !b.disabled && (b.offsetParent !== null || b.clientWidth > 0));
+                        if (sendBtn) {
+                            const target = sendBtn.closest('button') || sendBtn;
+                            target.click();
+                            return 'clicked';
+                        }
+                        return 'no-button';
+                    })()`;
+                    const submitResults = await this.cdpHandler.executeInAllSessions(submitScript);
+                    const clicked = submitResults.some(r => r === 'clicked');
+
+                    if (!clicked) {
+                        // Fallback: use raw CDP Input.dispatchKeyEvent for Enter
+                        logToOutput('[Autopilot] No send button found, using CDP Enter key');
+                        await this.cdpHandler.dispatchKeyEventToAll({
+                            type: 'keyDown', key: 'Enter', code: 'Enter',
+                            windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
+                        });
+                        await this.cdpHandler.dispatchKeyEventToAll({
+                            type: 'keyUp', key: 'Enter', code: 'Enter',
+                            windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
+                        });
+                    }
                 }
             }
         });
