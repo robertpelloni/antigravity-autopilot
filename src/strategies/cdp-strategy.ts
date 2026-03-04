@@ -158,106 +158,89 @@ export class CDPStrategy implements IStrategy {
             logToOutput('[Click] ' + targetBtn + ' => ' + JSON.stringify(results));
         });
 
-        // --- INDEPENDENT STALL TIMER ---
+        // --- INDEPENDENT STALL TIMER (HARDCODED — zero config dependencies) ---
+        const STALL_TIMEOUT_MS = 10000;  // 10 seconds of no activity = stalled
+        const BUMP_COOLDOWN_MS = 30000;  // 30 seconds between bumps
+        const BUMP_TEXT = config.get<string>('actions.bump.text') || 'Proceed';
+
         this.stallTimer = setInterval(async () => {
-            if (!this.isActive) {
-                logToOutput('[StallCheck] SKIP: not active');
-                return;
-            }
-            if (!this.controllerRoleIsLeader) {
-                logToOutput('[StallCheck] SKIP: not leader');
-                return;
-            }
-
-            // Use SAME master toggle as button clicking — no separate config key to go stale
-            const enabled = !!config.get<boolean>('autopilotAutoAcceptEnabled')
-                || !!config.get<boolean>('autoAllEnabled')
-                || !!config.get<boolean>('autoAcceptEnabled')
-                || !!(config.get<boolean>('actions.bump.enabled') ?? true)
-                || !!(config.get<boolean>('automation.actions.autoReply') ?? true);
-            if (!enabled) {
-                logToOutput('[StallCheck] SKIP: all toggles off');
-                return;
-            }
-
             const now = Date.now();
-            const stalledMs = config.get<number>('automation.timing.autoReplyDelayMs') || 10000;
-            const bumpCooldown = (config.get<number>('actions.bump.cooldown') ?? 30) * 1000;
             const activityAge = now - this.lastActivityAt;
             const actionAge = now - this.lastActionAt;
 
-            logToOutput('[StallCheck] activityAge=' + activityAge + 'ms (need>' + stalledMs + '), actionAge=' + actionAge + 'ms (need>' + bumpCooldown + ')');
+            // UNCONDITIONAL log — this MUST appear every 3 seconds to prove the timer runs
+            logToOutput(`[TICK] active=${this.isActive} leader=${this.controllerRoleIsLeader} actAge=${activityAge}ms actionAge=${actionAge}ms`);
 
-            if (activityAge < stalledMs) return;
-            if (actionAge < bumpCooldown) return;
+            if (!this.isActive || !this.controllerRoleIsLeader) return;
+            if (activityAge < STALL_TIMEOUT_MS) return;
+            if (actionAge < BUMP_COOLDOWN_MS) return;
 
-            const bumpText = config.get<string>('actions.bump.text') || 'Proceed';
             this.lastActionAt = now;
             this.lastActivityAt = now;
-            logToOutput('[Bump] Stalled ' + stalledMs + 'ms, sending: "' + bumpText + '"');
+            logToOutput('[Bump] FIRING — stalled ' + activityAge + 'ms, sending: "' + BUMP_TEXT + '"');
 
-            // Find chat input INSIDE chat containers, type text, submit via Enter.
-            // NO focus() — no cursor stealing.
-            const bumpScript = `(() => {
-                var bumpText = ${JSON.stringify(bumpText)};
-                function findChatContainers() {
-                    var containers = [];
-                    var queue = [document];
-                    while (queue.length > 0) {
-                        var root = queue.shift();
+            try {
+                const bumpScript = `(() => {
+                    var bumpText = ${JSON.stringify(BUMP_TEXT)};
+                    function findChatContainers() {
+                        var containers = [];
+                        var queue = [document];
+                        while (queue.length > 0) {
+                            var root = queue.shift();
+                            try {
+                                var found = root.querySelectorAll('.interactive-session, .chat-widget, .interactive-input-part, [class*="chat-editor"]');
+                                for (var i = 0; i < found.length; i++) containers.push(found[i]);
+                                var all = root.querySelectorAll('*');
+                                for (var j = 0; j < all.length; j++) {
+                                    try { if (all[j].shadowRoot) queue.push(all[j].shadowRoot); } catch(e) {}
+                                }
+                            } catch(e) {}
+                        }
+                        return containers;
+                    }
+                    var containers = findChatContainers();
+                    var chatInput = null;
+                    for (var c = 0; c < containers.length; c++) {
                         try {
-                            var found = root.querySelectorAll('.interactive-session, .chat-widget, .interactive-input-part, [class*="chat-editor"]');
-                            for (var i = 0; i < found.length; i++) containers.push(found[i]);
-                            var all = root.querySelectorAll('*');
-                            for (var j = 0; j < all.length; j++) {
-                                try { if (all[j].shadowRoot) queue.push(all[j].shadowRoot); } catch(e) {}
+                            var inputs = containers[c].querySelectorAll('textarea, [contenteditable="true"], [role="textbox"]');
+                            for (var i = 0; i < inputs.length; i++) {
+                                var el = inputs[i];
+                                if (!el.isConnected || el.clientWidth === 0) continue;
+                                var label = (el.getAttribute('aria-label') || '').toLowerCase();
+                                if (label.indexOf('search') >= 0 || label.indexOf('find') >= 0 || label.indexOf('filter') >= 0) continue;
+                                chatInput = el;
+                                break;
                             }
+                            if (chatInput) break;
                         } catch(e) {}
                     }
-                    return containers;
-                }
-                var containers = findChatContainers();
-                var chatInput = null;
-                for (var c = 0; c < containers.length; c++) {
-                    try {
-                        var inputs = containers[c].querySelectorAll('textarea, [contenteditable="true"], [role="textbox"]');
-                        for (var i = 0; i < inputs.length; i++) {
-                            var el = inputs[i];
-                            if (!el.isConnected || el.clientWidth === 0) continue;
-                            var label = (el.getAttribute('aria-label') || '').toLowerCase();
-                            if (label.indexOf('search') >= 0 || label.indexOf('find') >= 0 || label.indexOf('filter') >= 0) continue;
-                            chatInput = el;
-                            break;
-                        }
-                        if (chatInput) break;
-                    } catch(e) {}
-                }
-                if (!chatInput) return 'no-chat-input';
+                    if (!chatInput) return 'no-chat-input';
 
-                // Type text (no focus!)
-                if (chatInput.tagName === 'TEXTAREA' || chatInput.tagName === 'INPUT') {
-                    var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value') ||
-                                 Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-                    if (setter && setter.set) setter.set.call(chatInput, bumpText);
-                    else chatInput.value = bumpText;
-                    chatInput.dispatchEvent(new Event('input', {bubbles: true}));
-                } else {
-                    chatInput.textContent = bumpText;
-                    chatInput.dispatchEvent(new InputEvent('input', {bubbles: true, inputType: 'insertText', data: bumpText}));
-                }
+                    if (chatInput.tagName === 'TEXTAREA' || chatInput.tagName === 'INPUT') {
+                        var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value') ||
+                                     Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+                        if (setter && setter.set) setter.set.call(chatInput, bumpText);
+                        else chatInput.value = bumpText;
+                        chatInput.dispatchEvent(new Event('input', {bubbles: true}));
+                    } else {
+                        chatInput.textContent = bumpText;
+                        chatInput.dispatchEvent(new InputEvent('input', {bubbles: true, inputType: 'insertText', data: bumpText}));
+                    }
 
-                // Submit via Enter
-                setTimeout(function() {
-                    try {
-                        chatInput.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
-                    } catch(e) {}
-                }, 200);
+                    setTimeout(function() {
+                        try {
+                            chatInput.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+                        } catch(e) {}
+                    }, 200);
 
-                return 'bumped:' + (chatInput.getAttribute('aria-label') || chatInput.tagName);
-            })()`;
+                    return 'bumped:' + (chatInput.getAttribute('aria-label') || chatInput.tagName);
+                })()`;
 
-            const results = await this.cdpHandler.executeInAllSessions(bumpScript).catch(() => null);
-            logToOutput('[Bump] Result: ' + JSON.stringify(results));
+                const results = await this.cdpHandler.executeInAllSessions(bumpScript).catch((e: any) => 'exec-error:' + (e?.message || e));
+                logToOutput('[Bump] Result: ' + JSON.stringify(results));
+            } catch (e: any) {
+                logToOutput('[Bump] ERROR: ' + (e?.message || e));
+            }
         }, 3000);
 
         vscode.window.showInformationMessage('Antigravity: CDP Strategy v6 ON');
