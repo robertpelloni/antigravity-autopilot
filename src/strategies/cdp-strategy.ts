@@ -180,60 +180,107 @@ export class CDPStrategy implements IStrategy {
             logToOutput('[Bump] FIRING — stalled ' + activityAge + 'ms, sending: "' + BUMP_TEXT + '"');
 
             try {
+                // Diagnostic + multi-strategy bump script
                 const bumpScript = `(() => {
                     var bumpText = ${JSON.stringify(BUMP_TEXT)};
-                    function findChatContainers() {
-                        var containers = [];
-                        var queue = [document];
-                        while (queue.length > 0) {
-                            var root = queue.shift();
-                            try {
-                                var found = root.querySelectorAll('.interactive-session, .chat-widget, .interactive-input-part, [class*="chat-editor"]');
-                                for (var i = 0; i < found.length; i++) containers.push(found[i]);
-                                var all = root.querySelectorAll('*');
-                                for (var j = 0; j < all.length; j++) {
-                                    try { if (all[j].shadowRoot) queue.push(all[j].shadowRoot); } catch(e) {}
-                                }
-                            } catch(e) {}
-                        }
-                        return containers;
-                    }
-                    var containers = findChatContainers();
+                    var diag = {};
+
+                    // ---- STRATEGY 1: Scoped to chat containers ----
+                    var chatSelectors = [
+                        '.interactive-session', '.chat-widget', '.interactive-input-part',
+                        '[class*="chat-editor"]', '[class*="chat-input"]',
+                        '.aichat-input', '.aichat', '[class*="aichat"]',
+                        '[class*="interactive"]'
+                    ].join(', ');
+                    var containers = [];
+                    try {
+                        containers = Array.from(document.querySelectorAll(chatSelectors));
+                    } catch(e) {}
+                    diag.containers = containers.length;
+                    diag.containerClasses = containers.slice(0,3).map(function(c) { return c.className.substring(0,80); });
+
                     var chatInput = null;
-                    for (var c = 0; c < containers.length; c++) {
+                    // Look inside containers for inputs
+                    for (var c = 0; c < containers.length && !chatInput; c++) {
                         try {
-                            var inputs = containers[c].querySelectorAll('textarea, [contenteditable="true"], [role="textbox"]');
+                            var inputs = containers[c].querySelectorAll('textarea, [contenteditable="true"], [role="textbox"], .monaco-editor textarea');
                             for (var i = 0; i < inputs.length; i++) {
                                 var el = inputs[i];
-                                if (!el.isConnected || el.clientWidth === 0) continue;
+                                if (!el.isConnected || el.clientWidth === 0 && el.clientHeight === 0) continue;
                                 var label = (el.getAttribute('aria-label') || '').toLowerCase();
                                 if (label.indexOf('search') >= 0 || label.indexOf('find') >= 0 || label.indexOf('filter') >= 0) continue;
                                 chatInput = el;
                                 break;
                             }
-                            if (chatInput) break;
                         } catch(e) {}
                     }
-                    if (!chatInput) return 'no-chat-input';
+                    diag.strategy1 = chatInput ? 'found' : 'miss';
 
-                    if (chatInput.tagName === 'TEXTAREA' || chatInput.tagName === 'INPUT') {
-                        var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value') ||
-                                     Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-                        if (setter && setter.set) setter.set.call(chatInput, bumpText);
-                        else chatInput.value = bumpText;
-                        chatInput.dispatchEvent(new Event('input', {bubbles: true}));
-                    } else {
-                        chatInput.textContent = bumpText;
-                        chatInput.dispatchEvent(new InputEvent('input', {bubbles: true, inputType: 'insertText', data: bumpText}));
+                    // ---- STRATEGY 2: Look for Monaco editor textareas in whole document ----
+                    if (!chatInput) {
+                        try {
+                            var monacoTextareas = document.querySelectorAll('.monaco-editor textarea.inputarea');
+                            diag.monacoTextareas = monacoTextareas.length;
+                            for (var m = 0; m < monacoTextareas.length; m++) {
+                                var mt = monacoTextareas[m];
+                                if (!mt.isConnected) continue;
+                                // Find the closest ancestor with 'chat' or 'interactive' or 'input-part' in class
+                                var ancestor = mt.closest('[class*="chat"], [class*="interactive"], [class*="input-part"], [class*="aichat"]');
+                                if (ancestor) {
+                                    chatInput = mt;
+                                    diag.strategy2 = 'found-via-ancestor:' + ancestor.className.substring(0,50);
+                                    break;
+                                }
+                            }
+                            if (!chatInput) diag.strategy2 = 'miss';
+                        } catch(e) { diag.strategy2 = 'error:' + e.message; }
                     }
 
+                    // ---- STRATEGY 3: Any textarea or contenteditable in whole doc, skip search/find ----
+                    if (!chatInput) {
+                        try {
+                            var allInputs = document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"]');
+                            diag.allInputs = allInputs.length;
+                            var inputLabels = [];
+                            for (var a = 0; a < allInputs.length; a++) {
+                                var ai = allInputs[a];
+                                var lbl = (ai.getAttribute('aria-label') || ai.getAttribute('placeholder') || ai.tagName).substring(0,40);
+                                inputLabels.push(lbl + '(' + ai.clientWidth + 'x' + ai.clientHeight + ')');
+                                if (!ai.isConnected || ai.clientWidth === 0 && ai.clientHeight === 0) continue;
+                                var l2 = (ai.getAttribute('aria-label') || '').toLowerCase();
+                                if (l2.indexOf('search') >= 0 || l2.indexOf('find') >= 0 || l2.indexOf('filter') >= 0) continue;
+                                // Take the last visible non-search input (likely the chat input at the bottom)
+                                chatInput = ai;
+                            }
+                            diag.inputLabels = inputLabels;
+                            diag.strategy3 = chatInput ? 'found' : 'miss';
+                        } catch(e) { diag.strategy3 = 'error:' + e.message; }
+                    }
+
+                    if (!chatInput) return 'no-chat-input|diag:' + JSON.stringify(diag);
+
+                    // ---- TYPE TEXT ----
+                    try {
+                        if (chatInput.tagName === 'TEXTAREA' || chatInput.tagName === 'INPUT') {
+                            var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value') ||
+                                         Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+                            if (setter && setter.set) setter.set.call(chatInput, bumpText);
+                            else chatInput.value = bumpText;
+                            chatInput.dispatchEvent(new Event('input', {bubbles: true}));
+                        } else {
+                            chatInput.textContent = bumpText;
+                            chatInput.dispatchEvent(new InputEvent('input', {bubbles: true, inputType: 'insertText', data: bumpText}));
+                        }
+                    } catch(e) { return 'type-error:' + e.message + '|diag:' + JSON.stringify(diag); }
+
+                    // ---- SUBMIT VIA ENTER ----
                     setTimeout(function() {
                         try {
                             chatInput.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
                         } catch(e) {}
                     }, 200);
 
-                    return 'bumped:' + (chatInput.getAttribute('aria-label') || chatInput.tagName);
+                    return 'bumped:' + (chatInput.getAttribute('aria-label') || chatInput.tagName) + '|diag:' + JSON.stringify(diag);
                 })()`;
 
                 const results = await this.cdpHandler.executeInAllSessions(bumpScript).catch((e: any) => 'exec-error:' + (e?.message || e));
