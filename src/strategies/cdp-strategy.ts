@@ -72,27 +72,45 @@ export class CDPStrategy implements IStrategy {
             // Unified action flag
             const autopilotEnabled = !!config.get<boolean>('autopilotAutoAcceptEnabled') || !!config.get<boolean>('autoAllEnabled') || !!config.get<boolean>('autoAcceptEnabled');
 
+            // Helper to pierce Shadow DOMs during script injection
+            const SHADOW_DOM_HELPER = `
+                function queryShadowDOMAll(selector, root) {
+                    root = root || document;
+                    let results = [];
+                    if (root.querySelectorAll) {
+                        try { results = Array.from(root.querySelectorAll(selector)); } catch(e) {}
+                    }
+                    const all = root.querySelectorAll ? root.querySelectorAll('*') : [];
+                    for (let i = 0; i < all.length; i++) {
+                        if (all[i].shadowRoot) {
+                            results = results.concat(queryShadowDOMAll(selector, all[i].shadowRoot));
+                        }
+                    }
+                    return results;
+                }
+            `;
+
             if (autopilotEnabled && buttons.length > 0) {
                 // Prioritize specific buttons
                 if (buttons.includes('run')) {
                     this.lastActionAt = now;
                     logToOutput('[Autopilot] Clicking Run natively via CDP');
-                    const script = `(() => { const btn = document.querySelector('[title*="Run" i], [aria-label*="Run" i]'); if (btn) btn.click(); })();`;
+                    const script = `(() => { ${SHADOW_DOM_HELPER} const btns = queryShadowDOMAll('[title*="Run" i], [aria-label*="Run" i]'); const btn = btns.find(b => b.isConnected && !b.disabled); if (btn) btn.click(); })();`;
                     this.cdpHandler.executeScriptInAllSessions(script).catch(() => { });
                 } else if (buttons.includes('expand')) {
                     this.lastActionAt = now;
                     logToOutput('[Autopilot] Clicking Expand natively via CDP');
-                    const script = `(() => { const btn = document.querySelector('[title*="Expand" i], [aria-label*="Expand" i], [title*="Input" i]'); if (btn) btn.click(); })();`;
+                    const script = `(() => { ${SHADOW_DOM_HELPER} const btns = queryShadowDOMAll('[title*="Expand" i], [aria-label*="Expand" i], [title*="Input" i]'); const btn = btns.find(b => b.isConnected && !b.disabled); if (btn) btn.click(); })();`;
                     this.cdpHandler.executeScriptInAllSessions(script).catch(() => { });
                 } else if (buttons.includes('accept') || buttons.includes('keep')) {
                     this.lastActionAt = now;
                     logToOutput('[Autopilot] Clicking Accept natively via CDP');
-                    const script = `(() => { const btn = document.querySelector('[title*="Accept" i], [aria-label*="Accept" i], [title*="Keep" i], [title*="Apply" i]'); if (btn) btn.click(); })();`;
+                    const script = `(() => { ${SHADOW_DOM_HELPER} const btns = queryShadowDOMAll('[title*="Accept" i], [aria-label*="Accept" i], [title*="Keep" i], [title*="Apply" i]'); const btn = btns.find(b => b.isConnected && !b.disabled); if (btn) btn.click(); })();`;
                     this.cdpHandler.executeScriptInAllSessions(script).catch(() => { });
                 } else if (buttons.includes('retry')) {
                     this.lastActionAt = now;
                     logToOutput('[Autopilot] Clicking Retry natively via CDP');
-                    const script = `(() => { const btn = document.querySelector('[title*="Retry" i], [aria-label*="Retry" i]'); if (btn) btn.click(); })();`;
+                    const script = `(() => { ${SHADOW_DOM_HELPER} const btns = queryShadowDOMAll('[title*="Retry" i], [aria-label*="Retry" i]'); const btn = btns.find(b => b.isConnected && !b.disabled); if (btn) btn.click(); })();`;
                     this.cdpHandler.executeScriptInAllSessions(script).catch(() => { });
                 }
             }
@@ -107,10 +125,12 @@ export class CDPStrategy implements IStrategy {
                     this.lastActivityAt = now; // reset
                     logToOutput(`[Autopilot] Stalled for ${stalledMs}ms, using pure CDP to type text: "${bumpText}"`);
 
-                    // 1. Focus the chat input box
+                    // 1. Focus the chat input box using Shadow DOM
                     const focusScript = `
                         (() => {
-                            const ta = document.querySelector('textarea, .monaco-editor textarea, [contenteditable="true"], [role="textbox"], [aria-label*="chat" i], [placeholder*="message" i]');
+                            ${SHADOW_DOM_HELPER}
+                            const textareas = queryShadowDOMAll('textarea, .monaco-editor textarea, [contenteditable="true"], [role="textbox"], [aria-label*="chat" i], [placeholder*="message" i]');
+                            const ta = textareas.find(t => t.isConnected && !t.disabled && t.offsetParent !== null);
                             if (ta) ta.focus();
                         })();
                     `;
@@ -124,7 +144,9 @@ export class CDPStrategy implements IStrategy {
                     await new Promise(resolve => setTimeout(resolve, 100));
                     const submitScript = `
                         (() => {
-                            const sendBtn = document.querySelector('.monaco-button[title*="Send" i], button[aria-label*="Send" i], button[title*="Submit" i], .codicon-send, [title*="Continue" i]');
+                            ${SHADOW_DOM_HELPER}
+                            const btns = queryShadowDOMAll('.monaco-button[title*="Send" i], button[aria-label*="Send" i], button[title*="Submit" i], .codicon-send, [title*="Continue" i]');
+                            const sendBtn = btns.find(b => b.isConnected && !b.disabled);
                             if (sendBtn) {
                                 sendBtn.closest('button')?.click() || sendBtn.click();
                             } else {
