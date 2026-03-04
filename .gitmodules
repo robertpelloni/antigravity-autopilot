@@ -28,3 +28,6 @@
 [submodule "yoke-antigravity"]
 	path = yoke-antigravity
 	url = https://github.com/ai-dev-2024/yoke-antigravity
+[submodule "submodules/antigravity-sdk"]
+	path = submodules/antigravity-sdk
+	url = https://github.com/Kanezal/antigravity-sdk
