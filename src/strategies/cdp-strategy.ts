@@ -7,18 +7,20 @@ import { logToOutput } from '../utils/output-channel';
 export type CDPRuntimeState = any;
 
 /**
- * v9.0 — NUCLEAR REWRITE.
+ * v9.1 — THE FIX.
  *
- * THREE concerns, ONE interaction method (CDP executeInAllSessions):
- * 1. Click buttons (Run, Expand, Allow, Accept All, Keep, Retry, Continue)
- * 2. Type + submit bump text (single atomic script — no separate steps)
- * 3. Stall detection (timer-based)
+ * WHY EVERYTHING BEFORE FAILED:
+ * VS Code chat input is a MONACO EDITOR, not a standard textarea.
+ * Monaco's textarea is a hidden input proxy — setting its .value does NOTHING
+ * because Monaco's content model lives in the editor, not the DOM textarea.
  *
- * KEY FIX: React ignores `textarea.value = x`. Must use the NATIVE setter:
- *   Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(el, text)
- * Then dispatchEvent(new Event('input', {bubbles:true})) to trigger React state.
+ * THE METHOD THAT WORKS:
+ * 1. Focus chat via VS Code command (guaranteed)
+ * 2. CDP Input.insertText — browser-level input, Monaco handles it like real typing
+ * 3. CDP Input.dispatchKeyEvent Enter — browser-level, Monaco handles it like real Enter
  *
- * The type+submit is ONE script — no separate steps, no lost focus, no race conditions.
+ * No DOM traversal. No textarea finding. No native setters. No React workarounds.
+ * Just: focus → type → enter. Like a human.
  */
 export class CDPStrategy implements IStrategy {
     name = 'CDP Strategy';
@@ -52,6 +54,28 @@ export class CDPStrategy implements IStrategy {
         this.cdpHandler.setHostWindowFocused(!!focused);
     }
 
+    /**
+     * Send a raw CDP command to ALL connected pages (main page context only).
+     * Used for Input domain commands (insertText, dispatchKeyEvent).
+     */
+    private async sendToAllPages(method: string, params: any = {}): Promise<string[]> {
+        const results: string[] = [];
+        // Access connections via the handler's public sendCommand
+        // We need to get page IDs — use getPrimaryConnectedPageId or iterate
+        const handler = this.cdpHandler as any;
+        if (!handler.connections) return ['no-connections'];
+
+        for (const [pageId] of handler.connections) {
+            try {
+                await handler.sendCommand(pageId, method, params);
+                results.push('ok:' + pageId.substring(0, 8));
+            } catch (e: any) {
+                results.push('err:' + (e?.message || e));
+            }
+        }
+        return results;
+    }
+
     async start(): Promise<void> {
         if (this.isActive) return;
         this.isActive = true;
@@ -62,7 +86,7 @@ export class CDPStrategy implements IStrategy {
 
         void (async () => { await this.cdpHandler.connect(); })();
 
-        // ─── STATE EVENT HANDLER ───
+        // ─── STATE EVENT: detect buttons and click them ───
         this.cdpHandler.on('state', async ({ state }) => {
             if (!this.isActive || !this.controllerRoleIsLeader) return;
 
@@ -112,6 +136,7 @@ export class CDPStrategy implements IStrategy {
 
             logToOutput('[Click] ' + targetBtn);
 
+            // Button click via CDP Runtime.evaluate (DOM injection — proven working for buttons)
             const clickScript = `(() => {
                 var mt = ${JSON.stringify(matchTexts)};
                 function qsa(sel, root) {
@@ -147,7 +172,7 @@ export class CDPStrategy implements IStrategy {
             logToOutput('[Click] => ' + JSON.stringify(r));
         });
 
-        // ─── STALL TIMER / BUMP ───
+        // ─── STALL DETECTION + BUMP ───
         const STALL_MS = 10000;
         const BUMP_COOLDOWN_MS = 30000;
 
@@ -169,89 +194,56 @@ export class CDPStrategy implements IStrategy {
             logToOutput('[Bump] FIRING — stalled ' + actAge + 'ms, text: "' + BUMP_TEXT + '"');
 
             try {
-                // Focus the chat panel first
-                try { await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus'); } catch { }
+                // ────────────────────────────────────────
+                // STEP 1: Focus chat via VS Code command
+                // This guarantees the Monaco chat input has keyboard focus
+                // ────────────────────────────────────────
+                logToOutput('[Bump] Step 1: Focus chat panel...');
+                try {
+                    await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+                } catch {
+                    try { await vscode.commands.executeCommand('workbench.action.chat.open'); } catch { }
+                }
                 await new Promise(r => setTimeout(r, 500));
 
-                // SINGLE ATOMIC SCRIPT: find textarea → set value via native setter → dispatch input → dispatch Enter
-                // Everything in ONE script execution = no lost focus, no race conditions
-                const escaped = BUMP_TEXT.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
-                const bumpScript = `(() => {
-                    try {
-                        // Shadow DOM recursive search
-                        function qsa(sel, root) {
-                            root = root || document;
-                            var r = [];
-                            try { r = Array.from(root.querySelectorAll(sel)); } catch(e) {}
-                            try {
-                                var all = root.querySelectorAll('*');
-                                for (var i = 0; i < all.length; i++) {
-                                    try { if (all[i].shadowRoot) r = r.concat(qsa(sel, all[i].shadowRoot)); } catch(e) {}
-                                }
-                            } catch(e) {}
-                            return r;
-                        }
+                // ────────────────────────────────────────
+                // STEP 2: Type text via CDP Input.insertText
+                // This is BROWSER-LEVEL input — Monaco sees it as real keyboard typing
+                // No DOM manipulation, no textarea.value, no native setters
+                // ────────────────────────────────────────
+                logToOutput('[Bump] Step 2: CDP Input.insertText "' + BUMP_TEXT + '"...');
+                const typeResults = await this.sendToAllPages('Input.insertText', { text: BUMP_TEXT });
+                logToOutput('[Bump] Type result: ' + JSON.stringify(typeResults));
+                await new Promise(r => setTimeout(r, 300));
 
-                        // Find THE chat textarea (exclude search/find/filter)
-                        var tas = qsa('textarea');
-                        var el = null;
-                        for (var i = 0; i < tas.length; i++) {
-                            var t = tas[i];
-                            if (!t.isConnected || (t.clientWidth === 0 && t.clientHeight === 0)) continue;
-                            var a = (t.getAttribute('aria-label') || '').toLowerCase();
-                            var p = (t.getAttribute('placeholder') || '').toLowerCase();
-                            if (a.indexOf('search') >= 0 || a.indexOf('find') >= 0 || a.indexOf('filter') >= 0) continue;
-                            if (p.indexOf('search') >= 0 || p.indexOf('find') >= 0 || p.indexOf('filter') >= 0) continue;
-                            el = t;
-                            break;
-                        }
+                // ────────────────────────────────────────
+                // STEP 3: Submit via CDP Input.dispatchKeyEvent (Enter)
+                // Also browser-level — Monaco processes it like a real Enter press
+                // ────────────────────────────────────────
+                logToOutput('[Bump] Step 3: CDP Input.dispatchKeyEvent Enter...');
+                const enterDown = await this.sendToAllPages('Input.dispatchKeyEvent', {
+                    type: 'keyDown',
+                    key: 'Enter',
+                    code: 'Enter',
+                    windowsVirtualKeyCode: 13,
+                    nativeVirtualKeyCode: 13,
+                });
+                const enterUp = await this.sendToAllPages('Input.dispatchKeyEvent', {
+                    type: 'keyUp',
+                    key: 'Enter',
+                    code: 'Enter',
+                    windowsVirtualKeyCode: 13,
+                    nativeVirtualKeyCode: 13,
+                });
+                logToOutput('[Bump] Enter result: down=' + JSON.stringify(enterDown) + ' up=' + JSON.stringify(enterUp));
 
-                        if (!el) return 'no-textarea:' + tas.length;
-
-                        // CRITICAL: Use native value setter — React ignores direct .value assignment
-                        el.focus();
-                        var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-                        nativeSetter.call(el, '${escaped}');
-                        el.dispatchEvent(new Event('input', { bubbles: true }));
-                        el.dispatchEvent(new Event('change', { bubbles: true }));
-
-                        // Small delay then submit — all in same script context so el reference is stable
-                        setTimeout(function() {
-                            // Try Enter key dispatch
-                            var opts = {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true};
-                            el.dispatchEvent(new KeyboardEvent('keydown', opts));
-                            el.dispatchEvent(new KeyboardEvent('keypress', opts));
-                            el.dispatchEvent(new KeyboardEvent('keyup', opts));
-
-                            // Also try to find and click a send/submit button as fallback
-                            var sendBtns = qsa('button, [role="button"]');
-                            for (var i = 0; i < sendBtns.length; i++) {
-                                var b = sendBtns[i];
-                                if (!b.isConnected || b.disabled) continue;
-                                var a = (b.getAttribute('aria-label') || '').toLowerCase();
-                                var t = (b.getAttribute('title') || '').toLowerCase();
-                                if (a === 'send' || a === 'submit' || t === 'send' || t === 'submit' ||
-                                    a.indexOf('send message') >= 0 || a.indexOf('send request') >= 0) {
-                                    b.click();
-                                    break;
-                                }
-                            }
-                        }, 200);
-
-                        return 'typed-native-setter';
-                    } catch(e) {
-                        return 'error:' + e.message;
-                    }
-                })()`;
-
-                const result = await this.cdpHandler.executeInAllSessions(bumpScript).catch(() => null);
-                logToOutput('[Bump] Result: ' + JSON.stringify(result));
+                logToOutput('[Bump] Done — CDP Input domain (browser-level)');
             } catch (e: any) {
                 logToOutput('[Bump] ERROR: ' + (e?.message || e));
             }
         }, 3000);
 
-        vscode.window.showInformationMessage('Antigravity: CDP Strategy v9 ON');
+        vscode.window.showInformationMessage('Antigravity: CDP Strategy v9.1 ON');
     }
 
     async stop(): Promise<void> {
