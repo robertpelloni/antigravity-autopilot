@@ -48,6 +48,24 @@ export class CDPStrategy implements IStrategy {
             await this.cdpHandler.connect();
         })();
 
+        // Helper to pierce Shadow DOMs during script injection
+        const SHADOW_DOM_HELPER = `
+            function queryShadowDOMAll(selector, root) {
+                root = root || document;
+                var results = [];
+                if (root.querySelectorAll) {
+                    try { results = Array.from(root.querySelectorAll(selector)); } catch(e) {}
+                }
+                var children = root.querySelectorAll ? root.querySelectorAll('*') : [];
+                for (var i = 0; i < children.length; i++) {
+                    if (children[i].shadowRoot) {
+                        results = results.concat(queryShadowDOMAll(selector, children[i].shadowRoot));
+                    }
+                }
+                return results;
+            }
+        `;
+
         this.cdpHandler.on('state', async ({ state }) => {
             if (!this.isActive || !this.controllerRoleIsLeader) return;
 
@@ -61,56 +79,36 @@ export class CDPStrategy implements IStrategy {
                 this.wasGenerating = true;
                 this.lastActivityAt = now;
             } else if (this.wasGenerating) {
-                // Stopped generating just now
                 this.wasGenerating = false;
                 this.lastActivityAt = now;
             }
 
-            // Throttle actions tightly to prevent duplicate triggering
+            // Throttle actions to prevent duplicate triggering
             if (now - this.lastActionAt < 1500) return;
 
             // Unified action flag
             const autopilotEnabled = !!config.get<boolean>('autopilotAutoAcceptEnabled') || !!config.get<boolean>('autoAllEnabled') || !!config.get<boolean>('autoAcceptEnabled');
 
-            // Helper to pierce Shadow DOMs during script injection
-            const SHADOW_DOM_HELPER = `
-                function queryShadowDOMAll(selector, root) {
-                    root = root || document;
-                    let results = [];
-                    if (root.querySelectorAll) {
-                        try { results = Array.from(root.querySelectorAll(selector)); } catch(e) {}
-                    }
-                    const all = root.querySelectorAll ? root.querySelectorAll('*') : [];
-                    for (let i = 0; i < all.length; i++) {
-                        if (all[i].shadowRoot) {
-                            results = results.concat(queryShadowDOMAll(selector, all[i].shadowRoot));
-                        }
-                    }
-                    return results;
-                }
-            `;
-
             if (autopilotEnabled && buttons.length > 0) {
-                // Prioritize specific buttons
                 if (buttons.includes('run')) {
                     this.lastActionAt = now;
-                    logToOutput('[Autopilot] Clicking Run natively via CDP');
-                    const script = `(() => { ${SHADOW_DOM_HELPER} const btns = queryShadowDOMAll('[title*="Run" i], [aria-label*="Run" i]'); const btn = btns.find(b => b.isConnected && !b.disabled); if (btn) { btn.click(); return 'clicked'; } return 'not found'; })()`;
+                    logToOutput('[Autopilot] Clicking Run via CDP');
+                    const script = `(() => { ${SHADOW_DOM_HELPER} var btns = queryShadowDOMAll('[title*="Run" i], [aria-label*="Run" i]'); var btn = btns.find(function(b) { return b.isConnected && !b.disabled; }); if (btn) { btn.click(); return 'clicked'; } return 'not-found'; })()`;
                     this.cdpHandler.executeInAllSessions(script).catch(() => { });
                 } else if (buttons.includes('expand')) {
                     this.lastActionAt = now;
-                    logToOutput('[Autopilot] Clicking Expand natively via CDP');
-                    const script = `(() => { ${SHADOW_DOM_HELPER} const btns = queryShadowDOMAll('[title*="Expand" i], [aria-label*="Expand" i], [title*="Input" i]'); const btn = btns.find(b => b.isConnected && !b.disabled); if (btn) { btn.click(); return 'clicked'; } return 'not found'; })()`;
+                    logToOutput('[Autopilot] Clicking Expand via CDP');
+                    const script = `(() => { ${SHADOW_DOM_HELPER} var btns = queryShadowDOMAll('[title*="Expand" i], [aria-label*="Expand" i], [title*="Input" i]'); var btn = btns.find(function(b) { return b.isConnected && !b.disabled; }); if (btn) { btn.click(); return 'clicked'; } return 'not-found'; })()`;
                     this.cdpHandler.executeInAllSessions(script).catch(() => { });
                 } else if (buttons.includes('accept') || buttons.includes('keep')) {
                     this.lastActionAt = now;
-                    logToOutput('[Autopilot] Clicking Accept natively via CDP');
-                    const script = `(() => { ${SHADOW_DOM_HELPER} const btns = queryShadowDOMAll('[title*="Accept" i], [aria-label*="Accept" i], [title*="Keep" i], [title*="Apply" i]'); const btn = btns.find(b => b.isConnected && !b.disabled); if (btn) { btn.click(); return 'clicked'; } return 'not found'; })()`;
+                    logToOutput('[Autopilot] Clicking Accept via CDP');
+                    const script = `(() => { ${SHADOW_DOM_HELPER} var btns = queryShadowDOMAll('[title*="Accept" i], [aria-label*="Accept" i], [title*="Keep" i], [title*="Apply" i]'); var btn = btns.find(function(b) { return b.isConnected && !b.disabled; }); if (btn) { btn.click(); return 'clicked'; } return 'not-found'; })()`;
                     this.cdpHandler.executeInAllSessions(script).catch(() => { });
                 } else if (buttons.includes('retry')) {
                     this.lastActionAt = now;
-                    logToOutput('[Autopilot] Clicking Retry natively via CDP');
-                    const script = `(() => { ${SHADOW_DOM_HELPER} const btns = queryShadowDOMAll('[title*="Retry" i], [aria-label*="Retry" i]'); const btn = btns.find(b => b.isConnected && !b.disabled); if (btn) { btn.click(); return 'clicked'; } return 'not found'; })()`;
+                    logToOutput('[Autopilot] Clicking Retry via CDP');
+                    const script = `(() => { ${SHADOW_DOM_HELPER} var btns = queryShadowDOMAll('[title*="Retry" i], [aria-label*="Retry" i]'); var btn = btns.find(function(b) { return b.isConnected && !b.disabled; }); if (btn) { btn.click(); return 'clicked'; } return 'not-found'; })()`;
                     this.cdpHandler.executeInAllSessions(script).catch(() => { });
                 }
             }
@@ -122,67 +120,70 @@ export class CDPStrategy implements IStrategy {
                 if ((now - this.lastActivityAt) > stalledMs) {
                     const bumpText = config.get<string>('actions.bump.text') || 'Proceed';
                     this.lastActionAt = now;
-                    this.lastActivityAt = now; // reset
-                    logToOutput(`[Autopilot] Stalled for ${stalledMs}ms, bumping with: "${bumpText}"`);
+                    this.lastActivityAt = now;
+                    logToOutput('[Bump] Stalled ' + stalledMs + 'ms, bumping: "' + bumpText + '"');
 
-                    // 0. Check if input already has text (prevent duplicate typing)
-                    const checkScript = `(() => {
+                    // Step 1: Focus ONLY the chat input (exclude search boxes)
+                    const focusScript = `(() => {
                         ${SHADOW_DOM_HELPER}
-                        const els = queryShadowDOMAll('textarea, [contenteditable="true"], [role="textbox"]');
-                        const ta = els.find(t => t.isConnected && (t.offsetParent !== null || t.clientWidth > 0));
-                        if (!ta) return 'no-input';
-                        const val = (ta.value || ta.textContent || '').trim();
-                        return val.length > 0 ? 'has-text' : 'empty';
-                    })()`;
-                    const checkResults = await this.cdpHandler.executeInAllSessions(checkScript);
-                    const hasText = checkResults.some(r => r === 'has-text');
-
-                    if (hasText) {
-                        logToOutput('[Autopilot] Input already has text, skipping type, going straight to submit');
-                    } else {
-                        // 1. Focus the chat input
-                        const focusScript = `(() => {
-                            ${SHADOW_DOM_HELPER}
-                            const els = queryShadowDOMAll('textarea, [contenteditable="true"], [role="textbox"], [aria-label*="chat" i]');
-                            const ta = els.find(t => t.isConnected && (t.offsetParent !== null || t.clientWidth > 0));
-                            if (ta) { ta.focus(); return 'focused'; }
-                            return 'not-found';
-                        })()`;
-                        await this.cdpHandler.executeInAllSessions(focusScript);
-
-                        // 2. Insert text using raw CDP Input.insertText
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                        await this.cdpHandler.insertTextToAll(bumpText);
-                    }
-
-                    // 3. Submit: Click send button OR use CDP Enter key
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                    const submitScript = `(() => {
-                        ${SHADOW_DOM_HELPER}
-                        const btns = queryShadowDOMAll('[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], button[type="submit"], .codicon-send, .send-button');
-                        const sendBtn = btns.find(b => b.isConnected && !b.disabled && (b.offsetParent !== null || b.clientWidth > 0));
-                        if (sendBtn) {
-                            const target = sendBtn.closest('button') || sendBtn;
-                            target.click();
-                            return 'clicked';
+                        var all = queryShadowDOMAll('textarea, [contenteditable="true"], [role="textbox"]');
+                        var chatInput = null;
+                        for (var i = 0; i < all.length; i++) {
+                            var el = all[i];
+                            if (!el.isConnected || (el.clientWidth === 0 && el.clientHeight === 0)) continue;
+                            var label = (el.getAttribute('aria-label') || '').toLowerCase();
+                            var ph = (el.getAttribute('placeholder') || '').toLowerCase();
+                            // Skip search/find/filter inputs
+                            if (label.indexOf('search') >= 0 || label.indexOf('find') >= 0 || label.indexOf('filter') >= 0) continue;
+                            if (ph.indexOf('search') >= 0 || ph.indexOf('find') >= 0) continue;
+                            // Prefer chat-related inputs
+                            if (label.indexOf('chat') >= 0 || label.indexOf('ask') >= 0 || label.indexOf('message') >= 0 || label.indexOf('prompt') >= 0) {
+                                chatInput = el;
+                                break;
+                            }
+                            if (ph.indexOf('chat') >= 0 || ph.indexOf('ask') >= 0 || ph.indexOf('message') >= 0 || ph.indexOf('type') >= 0) {
+                                chatInput = el;
+                                break;
+                            }
+                            // Check for chat container
+                            if (el.closest && (el.closest('.interactive-session') || el.closest('.interactive-input-part') || el.closest('.chat-widget') || el.closest('.chat-input'))) {
+                                chatInput = el;
+                                break;
+                            }
+                            // Generic fallback (non-search textarea)
+                            if (!chatInput) chatInput = el;
                         }
-                        return 'no-button';
+                        if (chatInput) {
+                            chatInput.focus();
+                            return 'focused:' + (chatInput.getAttribute('aria-label') || chatInput.tagName || 'unknown');
+                        }
+                        return 'no-chat-input:' + all.length + '-total';
                     })()`;
-                    const submitResults = await this.cdpHandler.executeInAllSessions(submitScript);
-                    const clicked = submitResults.some(r => r === 'clicked');
+                    const focusResults = await this.cdpHandler.executeInAllSessions(focusScript);
+                    logToOutput('[Bump] Focus: ' + JSON.stringify(focusResults));
 
-                    if (!clicked) {
-                        // Fallback: use raw CDP Input.dispatchKeyEvent for Enter
-                        logToOutput('[Autopilot] No send button found, using CDP Enter key');
-                        await this.cdpHandler.dispatchKeyEventToAll({
-                            type: 'keyDown', key: 'Enter', code: 'Enter',
-                            windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
-                        });
-                        await this.cdpHandler.dispatchKeyEventToAll({
-                            type: 'keyUp', key: 'Enter', code: 'Enter',
-                            windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
-                        });
-                    }
+                    // Step 2: Type text via CDP Input.insertText
+                    await new Promise(resolve => setTimeout(resolve, 150));
+                    await this.cdpHandler.insertTextToAll(bumpText);
+                    logToOutput('[Bump] Typed text');
+
+                    // Step 3: Submit via CDP Enter key (rawKeyDown + char + keyUp)
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    await this.cdpHandler.dispatchKeyEventToAll({
+                        type: 'rawKeyDown', key: 'Enter', code: 'Enter',
+                        windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
+                    });
+                    await new Promise(resolve => setTimeout(resolve, 30));
+                    await this.cdpHandler.dispatchKeyEventToAll({
+                        type: 'char', text: '\r', key: 'Enter',
+                        windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
+                    });
+                    await new Promise(resolve => setTimeout(resolve, 30));
+                    await this.cdpHandler.dispatchKeyEventToAll({
+                        type: 'keyUp', key: 'Enter', code: 'Enter',
+                        windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
+                    });
+                    logToOutput('[Bump] Enter dispatched');
                 }
             }
         });
@@ -194,7 +195,6 @@ export class CDPStrategy implements IStrategy {
         if (!this.isActive) return;
         this.isActive = false;
         this.cdpHandler.disconnectAll();
-        // Clear all listeners so we don't leak when toggling
         this.cdpHandler.removeAllListeners('state');
         this.updateStatusBar();
         vscode.window.showInformationMessage('Antigravity: CDP Strategy OFF');
