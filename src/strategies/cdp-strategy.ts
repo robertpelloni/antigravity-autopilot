@@ -4,26 +4,21 @@ import { config } from '../utils/config';
 import { CDPHandler } from '../services/cdp/cdp-handler';
 import { logToOutput } from '../utils/output-channel';
 
-// Legacy Type stub for extension.ts compatibility
 export type CDPRuntimeState = any;
 
 /**
- * v8.1.0 — Radically simplified CDP Strategy.
+ * v9.0 — NUCLEAR REWRITE.
  *
- * FIVE functions, ZERO clipboard usage:
- * 1. Detect fork (Antigravity vs VS Code vs Cursor)
- * 2. Detect stalled conversation (timer-based)
- * 3. Click buttons (Run, Expand, Accept All, Keep, Retry, Allow, Continue) — via CDP DOM injection
- * 4. Type bump text — via CDP DOM injection (textarea .value direct assignment)
- * 5. Submit bump text — via CDP DOM injection (KeyboardEvent Enter on textarea)
+ * THREE concerns, ONE interaction method (CDP executeInAllSessions):
+ * 1. Click buttons (Run, Expand, Allow, Accept All, Keep, Retry, Continue)
+ * 2. Type + submit bump text (single atomic script — no separate steps)
+ * 3. Stall detection (timer-based)
  *
- * ALL interaction goes through cdpHandler.executeInAllSessions() — the ONE method proven to work.
+ * KEY FIX: React ignores `textarea.value = x`. Must use the NATIVE setter:
+ *   Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(el, text)
+ * Then dispatchEvent(new Event('input', {bubbles:true})) to trigger React state.
  *
- * KEY DOCS (from KI):
- * - Focus hazard: CDP Input commands target active element; if chat isn't focused, they hit wrong UI
- * - Solution: Use pure script injection targeting textarea elements
- * - Must exclude search/find/filter inputs by aria-label/placeholder
- * - Use .value = text, dispatch input+change events, then synthetic Enter
+ * The type+submit is ONE script — no separate steps, no lost focus, no race conditions.
  */
 export class CDPStrategy implements IStrategy {
     name = 'CDP Strategy';
@@ -33,7 +28,6 @@ export class CDPStrategy implements IStrategy {
     private context: vscode.ExtensionContext;
     private controllerRoleIsLeader = false;
 
-    // Separate throttles for clicks vs bumps
     private lastClickAt = 0;
     private lastBumpAt = 0;
     private lastActivityAt = Date.now();
@@ -68,7 +62,7 @@ export class CDPStrategy implements IStrategy {
 
         void (async () => { await this.cdpHandler.connect(); })();
 
-        // ─── STATE EVENT HANDLER (from probe) ───
+        // ─── STATE EVENT HANDLER ───
         this.cdpHandler.on('state', async ({ state }) => {
             if (!this.isActive || !this.controllerRoleIsLeader) return;
 
@@ -78,7 +72,6 @@ export class CDPStrategy implements IStrategy {
 
             logToOutput('[State] Gen: ' + isGenerating + ', Buttons: ' + buttons.join(', '));
 
-            // Track activity for stall detection
             if (isGenerating) {
                 this.wasGenerating = true;
                 this.lastActivityAt = now;
@@ -87,7 +80,7 @@ export class CDPStrategy implements IStrategy {
                 this.lastActivityAt = now;
             }
 
-            // Button clicks have their own separate 2s throttle
+            // Button click throttle: 2s
             if (now - this.lastClickAt < 2000) return;
 
             const enabled = !!config.get<boolean>('autopilotAutoAcceptEnabled')
@@ -96,7 +89,6 @@ export class CDPStrategy implements IStrategy {
 
             if (!enabled || buttons.length === 0 || isGenerating) return;
 
-            // Priority order for button clicks
             const btnPriority = ['run', 'expand', 'allow', 'accept_all', 'keep', 'retry', 'continue'];
             let targetBtn: string | null = null;
             for (const b of btnPriority) {
@@ -118,181 +110,148 @@ export class CDPStrategy implements IStrategy {
             };
             const matchTexts = textMap[targetBtn] || [targetBtn];
 
-            logToOutput('[Autopilot] Clicking: ' + targetBtn);
+            logToOutput('[Click] ' + targetBtn);
 
-            // ─── BUTTON CLICK via CDP DOM injection (PROVEN WORKING) ───
             const clickScript = `(() => {
-                var matchTexts = ${JSON.stringify(matchTexts)};
-                function findChatContainers() {
-                    var containers = [];
-                    var queue = [document];
-                    while (queue.length > 0) {
-                        var root = queue.shift();
-                        try {
-                            var found = root.querySelectorAll('.interactive-session, .chat-widget, .interactive-input-part, [class*="chat-editor"]');
-                            for (var i = 0; i < found.length; i++) containers.push(found[i]);
-                            var all = root.querySelectorAll('*');
-                            for (var j = 0; j < all.length; j++) {
-                                try { if (all[j].shadowRoot) queue.push(all[j].shadowRoot); } catch(e) {}
-                            }
-                        } catch(e) {}
-                    }
-                    return containers;
-                }
-                var containers = findChatContainers();
-                for (var c = 0; c < containers.length; c++) {
+                var mt = ${JSON.stringify(matchTexts)};
+                function qsa(sel, root) {
+                    root = root || document;
+                    var r = [];
+                    try { r = Array.from(root.querySelectorAll(sel)); } catch(e) {}
                     try {
-                        var btns = containers[c].querySelectorAll('button, [role="button"], .monaco-button');
-                        for (var i = 0; i < btns.length; i++) {
-                            try {
-                                var b = btns[i];
-                                if (!b.isConnected || b.disabled) continue;
-                                if (b.clientWidth === 0 && b.clientHeight === 0) continue;
-                                var text = (b.textContent || '').replace(/\\s+/g, ' ').trim().toLowerCase();
-                                var title = (b.getAttribute('title') || '').toLowerCase().trim();
-                                var aria = (b.getAttribute('aria-label') || '').toLowerCase().trim();
-                                for (var m = 0; m < matchTexts.length; m++) {
-                                    if (text === matchTexts[m] || title === matchTexts[m] || aria === matchTexts[m] ||
-                                        text.indexOf(matchTexts[m]) >= 0) {
-                                        b.click();
-                                        return 'clicked:' + text;
-                                    }
-                                }
-                            } catch(e) {}
+                        var all = root.querySelectorAll('*');
+                        for (var i = 0; i < all.length; i++) {
+                            try { if (all[i].shadowRoot) r = r.concat(qsa(sel, all[i].shadowRoot)); } catch(e) {}
                         }
                     } catch(e) {}
+                    return r;
+                }
+                var btns = qsa('button, [role="button"], .monaco-button');
+                for (var i = 0; i < btns.length; i++) {
+                    var b = btns[i];
+                    if (!b.isConnected || b.disabled || (b.clientWidth === 0 && b.clientHeight === 0)) continue;
+                    var t = (b.textContent || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+                    var a = (b.getAttribute('aria-label') || '').toLowerCase();
+                    var ti = (b.getAttribute('title') || '').toLowerCase();
+                    for (var m = 0; m < mt.length; m++) {
+                        if (t === mt[m] || a === mt[m] || ti === mt[m] || t.indexOf(mt[m]) >= 0) {
+                            b.click();
+                            return 'clicked:' + t;
+                        }
+                    }
                 }
                 return 'not-found';
             })()`;
 
-            const results = await this.cdpHandler.executeInAllSessions(clickScript).catch(() => null);
-            logToOutput('[Click] ' + targetBtn + ' => ' + JSON.stringify(results));
+            const r = await this.cdpHandler.executeInAllSessions(clickScript).catch(() => null);
+            logToOutput('[Click] => ' + JSON.stringify(r));
         });
 
-        // ─── STALL TIMER ───
-        const STALL_TIMEOUT_MS = 10000;  // 10 seconds of no activity = stalled
-        const BUMP_COOLDOWN_MS = 30000;  // 30 seconds between bumps
-        const BUMP_TEXT = config.get<string>('actions.bump.text') || 'Proceed';
+        // ─── STALL TIMER / BUMP ───
+        const STALL_MS = 10000;
+        const BUMP_COOLDOWN_MS = 30000;
 
         this.stallTimer = setInterval(async () => {
             const now = Date.now();
-            const activityAge = now - this.lastActivityAt;
+            const actAge = now - this.lastActivityAt;
             const bumpAge = now - this.lastBumpAt;
 
-            logToOutput(`[TICK] active=${this.isActive} leader=${this.controllerRoleIsLeader} actAge=${activityAge}ms bumpAge=${bumpAge}ms`);
+            logToOutput(`[TICK] active=${this.isActive} leader=${this.controllerRoleIsLeader} actAge=${actAge}ms bumpAge=${bumpAge}ms`);
 
             if (!this.isActive || !this.controllerRoleIsLeader) return;
-            if (activityAge < STALL_TIMEOUT_MS) return;
+            if (actAge < STALL_MS) return;
             if (bumpAge < BUMP_COOLDOWN_MS) return;
+
+            const BUMP_TEXT = config.get<string>('actions.bump.text') || 'Proceed';
 
             this.lastBumpAt = now;
             this.lastActivityAt = now;
-            logToOutput('[Bump] FIRING — stalled ' + activityAge + 'ms, sending: "' + BUMP_TEXT + '"');
+            logToOutput('[Bump] FIRING — stalled ' + actAge + 'ms, text: "' + BUMP_TEXT + '"');
 
-            // ALL via CDP executeInAllSessions — ZERO clipboard, ZERO VS Code Input commands
             try {
-                // Step 1: Focus the chat panel via VS Code command (safe, just changes focus)
-                logToOutput('[Bump] Step 1: Focus chat panel via VS Code command...');
-                try {
-                    await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-                } catch {
-                    // Fallback: try other focus commands
-                    try { await vscode.commands.executeCommand('workbench.action.chat.open'); } catch { }
-                }
+                // Focus the chat panel first
+                try { await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus'); } catch { }
                 await new Promise(r => setTimeout(r, 500));
 
-                // Step 2: Type text via CDP script injection into textarea (KI-documented method)
-                // Find textarea, exclude search/find inputs, set .value directly
-                logToOutput('[Bump] Step 2: DOM textarea value injection "' + BUMP_TEXT + '"...');
-                const escapedText = BUMP_TEXT.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
-                const typeScript = `(() => {
+                // SINGLE ATOMIC SCRIPT: find textarea → set value via native setter → dispatch input → dispatch Enter
+                // Everything in ONE script execution = no lost focus, no race conditions
+                const escaped = BUMP_TEXT.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+                const bumpScript = `(() => {
                     try {
-                        // Strategy from KI: find textarea, exclude search/find/filter by aria-label
-                        function queryShadowDOMAll(selector, root) {
+                        // Shadow DOM recursive search
+                        function qsa(sel, root) {
                             root = root || document;
-                            var results = [];
-                            if (root.querySelectorAll) {
-                                try { results = Array.from(root.querySelectorAll(selector)); } catch(e) {}
-                            }
-                            var children = root.querySelectorAll ? root.querySelectorAll('*') : [];
-                            for (var i = 0; i < children.length; i++) {
-                                if (children[i].shadowRoot) {
-                                    results = results.concat(queryShadowDOMAll(selector, children[i].shadowRoot));
+                            var r = [];
+                            try { r = Array.from(root.querySelectorAll(sel)); } catch(e) {}
+                            try {
+                                var all = root.querySelectorAll('*');
+                                for (var i = 0; i < all.length; i++) {
+                                    try { if (all[i].shadowRoot) r = r.concat(qsa(sel, all[i].shadowRoot)); } catch(e) {}
                                 }
-                            }
-                            return results;
+                            } catch(e) {}
+                            return r;
                         }
 
-                        // Find ALL textareas across shadow DOMs
-                        var textareas = queryShadowDOMAll('textarea');
-                        var chatInput = null;
-
-                        for (var i = 0; i < textareas.length; i++) {
-                            var ta = textareas[i];
-                            if (!ta.isConnected) continue;
-                            if (ta.clientWidth === 0 && ta.clientHeight === 0) continue;
-
-                            // Exclude search/find/filter inputs
-                            var aria = (ta.getAttribute('aria-label') || '').toLowerCase();
-                            var placeholder = (ta.getAttribute('placeholder') || '').toLowerCase();
-                            if (aria.indexOf('search') >= 0 || aria.indexOf('find') >= 0 || aria.indexOf('filter') >= 0) continue;
-                            if (placeholder.indexOf('search') >= 0 || placeholder.indexOf('find') >= 0 || placeholder.indexOf('filter') >= 0) continue;
-
-                            chatInput = ta;
+                        // Find THE chat textarea (exclude search/find/filter)
+                        var tas = qsa('textarea');
+                        var el = null;
+                        for (var i = 0; i < tas.length; i++) {
+                            var t = tas[i];
+                            if (!t.isConnected || (t.clientWidth === 0 && t.clientHeight === 0)) continue;
+                            var a = (t.getAttribute('aria-label') || '').toLowerCase();
+                            var p = (t.getAttribute('placeholder') || '').toLowerCase();
+                            if (a.indexOf('search') >= 0 || a.indexOf('find') >= 0 || a.indexOf('filter') >= 0) continue;
+                            if (p.indexOf('search') >= 0 || p.indexOf('find') >= 0 || p.indexOf('filter') >= 0) continue;
+                            el = t;
                             break;
                         }
 
-                        if (!chatInput) {
-                            // Fallback: try contentEditable elements
-                            var el = document.activeElement;
-                            if (el && (el.isContentEditable || (el.closest && el.closest('[contenteditable="true"]')))) {
-                                document.execCommand('insertText', false, '${escapedText}');
-                                return 'inserted-execCommand-fallback';
+                        if (!el) return 'no-textarea:' + tas.length;
+
+                        // CRITICAL: Use native value setter — React ignores direct .value assignment
+                        el.focus();
+                        var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+                        nativeSetter.call(el, '${escaped}');
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+
+                        // Small delay then submit — all in same script context so el reference is stable
+                        setTimeout(function() {
+                            // Try Enter key dispatch
+                            var opts = {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true};
+                            el.dispatchEvent(new KeyboardEvent('keydown', opts));
+                            el.dispatchEvent(new KeyboardEvent('keypress', opts));
+                            el.dispatchEvent(new KeyboardEvent('keyup', opts));
+
+                            // Also try to find and click a send/submit button as fallback
+                            var sendBtns = qsa('button, [role="button"]');
+                            for (var i = 0; i < sendBtns.length; i++) {
+                                var b = sendBtns[i];
+                                if (!b.isConnected || b.disabled) continue;
+                                var a = (b.getAttribute('aria-label') || '').toLowerCase();
+                                var t = (b.getAttribute('title') || '').toLowerCase();
+                                if (a === 'send' || a === 'submit' || t === 'send' || t === 'submit' ||
+                                    a.indexOf('send message') >= 0 || a.indexOf('send request') >= 0) {
+                                    b.click();
+                                    break;
+                                }
                             }
-                            return 'no-chat-textarea-found:' + textareas.length + '-total';
-                        }
+                        }, 200);
 
-                        // KI-documented method: direct .value assignment + event dispatch
-                        chatInput.focus();
-                        chatInput.value = '${escapedText}';
-                        chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-                        chatInput.dispatchEvent(new Event('change', { bubbles: true }));
-                        return 'inserted-textarea-value';
+                        return 'typed-native-setter';
                     } catch(e) {
                         return 'error:' + e.message;
                     }
                 })()`;
-                const typeResult = await this.cdpHandler.executeInAllSessions(typeScript).catch(() => null);
-                logToOutput('[Bump] Type result: ' + JSON.stringify(typeResult));
-                await new Promise(r => setTimeout(r, 300));
 
-                // Step 3: Submit via Enter key dispatch on the textarea
-                logToOutput('[Bump] Step 3: Submit via DOM Enter key...');
-                const submitScript = `(() => {
-                    try {
-                        var el = document.activeElement;
-                        if (!el) return 'no-active-element';
-
-                        // Dispatch Enter key sequence
-                        var opts = {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true};
-                        el.dispatchEvent(new KeyboardEvent('keydown', opts));
-                        el.dispatchEvent(new KeyboardEvent('keypress', opts));
-                        el.dispatchEvent(new KeyboardEvent('keyup', opts));
-                        return 'enter-dispatched';
-                    } catch(e) {
-                        return 'error:' + e.message;
-                    }
-                })()`;
-                const submitResult = await this.cdpHandler.executeInAllSessions(submitScript).catch(() => null);
-                logToOutput('[Bump] Submit result: ' + JSON.stringify(submitResult));
-
-                logToOutput('[Bump] Done — all via CDP DOM injection');
+                const result = await this.cdpHandler.executeInAllSessions(bumpScript).catch(() => null);
+                logToOutput('[Bump] Result: ' + JSON.stringify(result));
             } catch (e: any) {
                 logToOutput('[Bump] ERROR: ' + (e?.message || e));
             }
         }, 3000);
 
-        vscode.window.showInformationMessage('Antigravity: CDP Strategy v8 ON');
+        vscode.window.showInformationMessage('Antigravity: CDP Strategy v9 ON');
     }
 
     async stop(): Promise<void> {
@@ -319,7 +278,7 @@ export class CDPStrategy implements IStrategy {
 
     dispose() { this.stop(); this.statusBarItem.dispose(); }
 
-    // --- STUBS for extension.ts compatibility ---
+    // Compatibility stubs
     isConnected(): boolean { return this.cdpHandler.isConnected(); }
     async getRuntimeState(): Promise<CDPRuntimeState> { return {}; }
     async executeAction(action: string): Promise<void> { }
