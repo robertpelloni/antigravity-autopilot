@@ -623,97 +623,12 @@ export class CDPHandler extends EventEmitter {
     }
 
     private getAutomationConfigExpression(): string {
-        const getArr = (key: string, defItems: string[]) => {
-            const val = config.get<string[]>(key);
-            if (!val || val.length === 0) return defItems;
-            return val;
-        };
-
-        const automationConfig = {
-            clickRun: config.get<boolean>('automation.actions.clickRun') ?? true,
-            clickExpand: config.get<boolean>('automation.actions.clickExpand') ?? true,
-            clickAccept: config.get<boolean>('automation.actions.clickAccept') ?? true,
-            clickAcceptAll: config.get<boolean>('automation.actions.clickAcceptAll') ?? true,
-            clickContinue: config.get<boolean>('automation.actions.clickContinue') ?? true,
-            clickSubmit: config.get<boolean>('automation.actions.clickSubmit') ?? false,
-            clickFeedback: config.get<boolean>('automation.actions.clickFeedback') ?? false,
-            autoScroll: config.get<boolean>('automation.actions.autoScroll') ?? true,
-            autoReply: config.get<boolean>('automation.actions.autoReply') ?? true,
-            controls: {
-                run: {
-                    detectMethods: getArr('automation.controls.run.detectMethods', ['enabled-flag', 'not-generating', 'action-cooldown']),
-                    actionMethods: getArr('automation.controls.run.actionMethods', ['dom-click', 'native-click']),
-                    delayMs: config.get<number>('automation.controls.run.delayMs') ?? 100
-                },
-                expand: {
-                    detectMethods: getArr('automation.controls.expand.detectMethods', ['enabled-flag', 'not-generating', 'action-cooldown']),
-                    actionMethods: getArr('automation.controls.expand.actionMethods', ['dom-click', 'native-click']),
-                    delayMs: config.get<number>('automation.controls.expand.delayMs') ?? 50
-                },
-                accept: {
-                    detectMethods: getArr('automation.controls.accept.detectMethods', ['enabled-flag', 'not-generating', 'action-cooldown']),
-                    actionMethods: getArr('automation.controls.accept.actionMethods', ['accept-all-first', 'accept-single', 'dom-click']),
-                    delayMs: config.get<number>('automation.controls.accept.delayMs') ?? 100
-                },
-                submit: {
-                    detectMethods: getArr('automation.controls.submit.detectMethods', ['enabled-flag', 'not-generating']),
-                    actionMethods: getArr('automation.controls.submit.actionMethods', ['click-send', 'enter-key']),
-                    delayMs: config.get<number>('automation.controls.submit.delayMs') ?? 100
-                },
-                acceptAll: {
-                    detectMethods: getArr('automation.controls.acceptAll.detectMethods', ['enabled-flag', 'not-generating', 'action-cooldown']),
-                    actionMethods: getArr('automation.controls.acceptAll.actionMethods', ['accept-all-button', 'keep-button', 'allow-all-button', 'dom-click']),
-                    delayMs: config.get<number>('automation.controls.acceptAll.delayMs') ?? 100
-                },
-                continue: {
-                    detectMethods: getArr('automation.controls.continue.detectMethods', ['enabled-flag', 'not-generating', 'action-cooldown']),
-                    actionMethods: getArr('automation.controls.continue.actionMethods', ['continue-button', 'keep-button', 'dom-click']),
-                    delayMs: config.get<number>('automation.controls.continue.delayMs') ?? 100
-                },
-                feedback: {
-                    detectMethods: getArr('automation.controls.feedback.detectMethods', ['enabled-flag', 'not-generating', 'action-cooldown']),
-                    actionMethods: getArr('automation.controls.feedback.actionMethods', ['thumbs-up', 'helpful-button', 'dom-click']),
-                    delayMs: config.get<number>('automation.controls.feedback.delayMs') ?? 150
-                }
-            },
-            bump: {
-                text: config.get<string>('actions.bump.text') || 'Proceed',
-                requireFocused: config.get<boolean>('automation.bump.requireFocused') ?? false,
-                requireVisible: config.get<boolean>('automation.bump.requireVisible') ?? true,
-                detectMethods: getArr('automation.bump.detectMethods', ['feedback-visible', 'not-generating', 'last-sender-user', 'network-error-retry', 'waiting-for-input', 'loaded-conversation', 'completed-all-tasks', 'skip-ai-question']),
-                typeMethods: getArr('automation.bump.typeMethods', ['exec-command', 'native-setter', 'dispatch-events']),
-                submitMethods: getArr('automation.bump.submitMethods', ['click-send']),
-                userDelayMs: config.get<number>('automation.bump.userDelayMs') ?? 3000,
-                retryDelayMs: config.get<number>('automation.bump.retryDelayMs') ?? 2000,
-                typingDelayMs: config.get<number>('actions.bump.typingDelayMs') ?? 50,
-                submitDelayMs: config.get<number>('actions.bump.submitDelayMs') ?? 100
-            },
-            debug: {
-                highlightClicks: config.get<boolean>('automation.debug.highlightClicks') ?? false,
-                verboseLogging: config.get<boolean>('automation.debug.verboseLogging') ?? false,
-                logAllActions: config.get<boolean>('automation.debug.logAllActions') ?? true,
-                logToExtension: config.get<boolean>('automation.debug.logToExtension') ?? true
-            },
-            timing: {
-                pollIntervalMs: config.get<number>('automation.timing.pollIntervalMs') ?? 1500,
-                actionThrottleMs: config.get<number>('automation.timing.actionThrottleMs') ?? 1000,
-                cooldownMs: config.get<number>('automation.timing.cooldownMs') ?? 2500,
-                randomness: config.get<number>('automation.timing.randomness') ?? 100,
-                autoReplyDelayMs: config.get<number>('automation.timing.autoReplyDelayMs') ?? 10000,
-                stalledMs: config.get<number>('automation.bump.userDelayMs') ?? 7000,
-                bumpCooldownMs: (config.get<number>('actions.bump.cooldown') ?? 30) * 1000,
-                submitCooldownMs: Math.max(500, config.get<number>('actions.bump.submitDelayMs') ?? 100) * 10
-            },
-            runtime: {
-                isLeader: this.controllerRoleIsLeader,
-                role: this.controllerRoleIsLeader ? 'leader' : 'follower',
-                windowFocused: this.hostWindowFocused,
-                enforceLeader: true,
-                mode: this.resolveRuntimeUiMode()
-            }
-        };
-
-        return `window.__antigravityConfig = ${JSON.stringify(automationConfig)};`;
+        // v6.0.0: Minimal config — probe no longer reads most of this.
+        // Strategy handles all logic directly.
+        return `window.__antigravityConfig = ${JSON.stringify({
+            isLeader: this.controllerRoleIsLeader,
+            windowFocused: this.hostWindowFocused
+        })};`;
     }
 
     async connectToPage(page: any): Promise<boolean> {

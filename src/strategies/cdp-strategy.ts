@@ -4,9 +4,19 @@ import { config } from '../utils/config';
 import { CDPHandler } from '../services/cdp/cdp-handler';
 import { logToOutput } from '../utils/output-channel';
 
-// Legacy Type stub for backwards compatibility with extension.ts
+// Legacy Type stub for extension.ts compatibility
 export type CDPRuntimeState = any;
 
+/**
+ * v6.0.0 — Nuclear simplified CDP Strategy.
+ *
+ * Does exactly 2 things:
+ * 1. Clicks action buttons (Run, Expand, Accept All, Keep, Retry, Allow, Continue) when probe detects them
+ * 2. Types and submits bump text when conversation is stalled
+ *
+ * All button detection is scoped to chat panel containers (.interactive-session, .chat-widget).
+ * NO focus() calls. NO keyboard dispatching to global window.
+ */
 export class CDPStrategy implements IStrategy {
     name = 'CDP Strategy';
     isActive = false;
@@ -25,7 +35,6 @@ export class CDPStrategy implements IStrategy {
         this.context = context;
         const { cdpClient } = require('../providers/cdp-client');
         this.cdpHandler = cdpClient.getHandler();
-
         this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 9999);
         this.statusBarItem.command = 'antigravity.toggleAutoAccept';
         this.cdpHandler.setControllerRole(this.controllerRoleIsLeader);
@@ -40,28 +49,6 @@ export class CDPStrategy implements IStrategy {
         this.cdpHandler.setHostWindowFocused(!!focused);
     }
 
-    // Helper to pierce Shadow DOMs during script injection.
-    private readonly SHADOW_DOM_HELPER = `
-        function queryShadowDOMAll(selector, root) {
-            root = root || document;
-            var results = [];
-            try {
-                if (root.querySelectorAll) {
-                    results = Array.from(root.querySelectorAll(selector));
-                }
-                var children = root.querySelectorAll ? root.querySelectorAll('*') : [];
-                for (var i = 0; i < children.length; i++) {
-                    try {
-                        if (children[i].shadowRoot) {
-                            results = results.concat(queryShadowDOMAll(selector, children[i].shadowRoot));
-                        }
-                    } catch(e) {}
-                }
-            } catch(e) {}
-            return results;
-        }
-    `;
-
     async start(): Promise<void> {
         if (this.isActive) return;
         this.isActive = true;
@@ -71,13 +58,13 @@ export class CDPStrategy implements IStrategy {
             await this.cdpHandler.connect();
         })();
 
-        // --- STATE EVENT HANDLER ---
+        // --- STATE EVENT HANDLER (from probe) ---
         this.cdpHandler.on('state', async ({ state }) => {
             if (!this.isActive || !this.controllerRoleIsLeader) return;
 
             const now = Date.now();
             const isGenerating = state.isGenerating;
-            const buttons = state.buttons || [];
+            const buttons: string[] = state.buttons || [];
 
             logToOutput('[State] Gen: ' + isGenerating + ', Buttons: ' + buttons.join(', '));
 
@@ -89,62 +76,89 @@ export class CDPStrategy implements IStrategy {
                 this.lastActivityAt = now;
             }
 
-            // Throttle actions
-            if (now - this.lastActionAt < 2000) return;
+            // Throttle: no action within 3 seconds of last action
+            if (now - this.lastActionAt < 3000) return;
 
-            const autopilotEnabled = !!config.get<boolean>('autopilotAutoAcceptEnabled') || !!config.get<boolean>('autoAllEnabled') || !!config.get<boolean>('autoAcceptEnabled');
+            const enabled = !!config.get<boolean>('autopilotAutoAcceptEnabled')
+                || !!config.get<boolean>('autoAllEnabled')
+                || !!config.get<boolean>('autoAcceptEnabled');
 
-            // --- BUTTON CLICKS ---
-            if (autopilotEnabled && buttons.length > 0) {
-                const btnAction = buttons.includes('run') ? 'run'
-                    : buttons.includes('expand') ? 'expand'
-                        : (buttons.includes('accept') || buttons.includes('keep')) ? 'accept'
-                            : buttons.includes('retry') ? 'retry'
-                                : null;
+            if (!enabled || buttons.length === 0 || isGenerating) return;
 
-                if (btnAction) {
-                    this.lastActionAt = now;
-                    this.lastActivityAt = now; // clicking = activity
-                    const selectorMap: Record<string, string> = {
-                        run: 'button, [role="button"]',
-                        expand: 'button, [role="button"]',
-                        accept: 'button, [role="button"]',
-                        retry: 'button, [role="button"]',
-                    };
-                    // Use text matching in the script instead of CSS selectors for reliability
-                    const textMatch: Record<string, string> = {
-                        run: 'run',
-                        expand: 'expand',
-                        accept: 'accept',
-                        retry: 'retry',
-                    };
-                    logToOutput('[Autopilot] Clicking ' + btnAction + ' via script');
-                    const matchText = textMatch[btnAction];
-                    const script = `(() => {
-                        ${this.SHADOW_DOM_HELPER}
-                        var btns = queryShadowDOMAll('button, [role="button"], .monaco-button');
+            // Priority order: run > expand > allow > accept_all > keep > retry > continue
+            const btnPriority = ['run', 'expand', 'allow', 'accept_all', 'keep', 'retry', 'continue'];
+            let targetBtn: string | null = null;
+            for (const b of btnPriority) {
+                if (buttons.includes(b)) { targetBtn = b; break; }
+            }
+            if (!targetBtn) return;
+
+            this.lastActionAt = now;
+            this.lastActivityAt = now;
+
+            // Map button ID to exact text to match in the click script
+            const textMap: Record<string, string[]> = {
+                run: ['run', 'run tool'],
+                expand: ['expand', 'requires input'],
+                allow: ['allow', 'always allow'],
+                accept_all: ['accept all', 'apply all'],
+                keep: ['keep'],
+                retry: ['retry'],
+                continue: ['continue'],
+            };
+            const matchTexts = textMap[targetBtn] || [targetBtn];
+
+            logToOutput('[Autopilot] Clicking: ' + targetBtn);
+
+            // Script that finds and clicks the EXACT button inside chat containers
+            const clickScript = `(() => {
+                var matchTexts = ${JSON.stringify(matchTexts)};
+                function findChatContainers() {
+                    var containers = [];
+                    var queue = [document];
+                    while (queue.length > 0) {
+                        var root = queue.shift();
+                        try {
+                            var found = root.querySelectorAll('.interactive-session, .chat-widget, .interactive-input-part, [class*="chat-editor"]');
+                            for (var i = 0; i < found.length; i++) containers.push(found[i]);
+                            var all = root.querySelectorAll('*');
+                            for (var j = 0; j < all.length; j++) {
+                                try { if (all[j].shadowRoot) queue.push(all[j].shadowRoot); } catch(e) {}
+                            }
+                        } catch(e) {}
+                    }
+                    return containers;
+                }
+                var containers = findChatContainers();
+                for (var c = 0; c < containers.length; c++) {
+                    try {
+                        var btns = containers[c].querySelectorAll('button, [role="button"], .monaco-button');
                         for (var i = 0; i < btns.length; i++) {
                             try {
                                 var b = btns[i];
                                 if (!b.isConnected || b.disabled) continue;
-                                var text = ((b.textContent || '') + ' ' + (b.getAttribute('title') || '') + ' ' + (b.getAttribute('aria-label') || '')).toLowerCase();
-                                if (text.indexOf('${matchText}') >= 0) {
-                                    b.click();
-                                    return 'clicked:' + text.substring(0, 40);
+                                if (b.clientWidth === 0 && b.clientHeight === 0) continue;
+                                var text = (b.textContent || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+                                var title = (b.getAttribute('title') || '').toLowerCase().trim();
+                                var aria = (b.getAttribute('aria-label') || '').toLowerCase().trim();
+                                for (var m = 0; m < matchTexts.length; m++) {
+                                    if (text === matchTexts[m] || title === matchTexts[m] || aria === matchTexts[m]) {
+                                        b.click();
+                                        return 'clicked:' + text;
+                                    }
                                 }
                             } catch(e) {}
                         }
-                        return 'not-found';
-                    })()`;
-                    const results = await this.cdpHandler.executeInAllSessions(script).catch(() => null);
-                    logToOutput('[Click] Results: ' + JSON.stringify(results));
+                    } catch(e) {}
                 }
-            }
+                return 'not-found';
+            })()`;
+
+            const results = await this.cdpHandler.executeInAllSessions(clickScript).catch(() => null);
+            logToOutput('[Click] ' + targetBtn + ' => ' + JSON.stringify(results));
         });
 
         // --- INDEPENDENT STALL TIMER ---
-        // Runs every 3 seconds regardless of state events.
-        // If no activity for stalledMs, bump the conversation.
         this.stallTimer = setInterval(async () => {
             if (!this.isActive || !this.controllerRoleIsLeader) return;
 
@@ -152,119 +166,110 @@ export class CDPStrategy implements IStrategy {
             if (!bumpEnabled) return;
 
             const now = Date.now();
-            const stalledMs = config.get<number>('automation.timing.autoReplyDelayMs') || 7000;
+            const stalledMs = config.get<number>('automation.timing.autoReplyDelayMs') || 10000;
+            const bumpCooldown = (config.get<number>('actions.bump.cooldown') ?? 30) * 1000;
 
-            if ((now - this.lastActivityAt) > stalledMs && (now - this.lastActionAt) > stalledMs) {
-                const bumpText = config.get<string>('actions.bump.text') || 'Proceed';
-                this.lastActionAt = now;
-                this.lastActivityAt = now;
-                logToOutput('[Bump] Stalled ' + stalledMs + 'ms, bumping: "' + bumpText + '"');
+            if ((now - this.lastActivityAt) < stalledMs) return;
+            if ((now - this.lastActionAt) < bumpCooldown) return;
 
-                // Combined script: find chat input → type → submit
-                // NO focus() call — we don't want to steal the user's cursor.
-                // We directly manipulate the element's value/textContent.
-                const bumpScript = `(() => {
-                    ${this.SHADOW_DOM_HELPER}
-                    var bumpText = ${JSON.stringify(bumpText)};
+            const bumpText = config.get<string>('actions.bump.text') || 'Proceed';
+            this.lastActionAt = now;
+            this.lastActivityAt = now;
+            logToOutput('[Bump] Stalled ' + stalledMs + 'ms, sending: "' + bumpText + '"');
 
-                    // Find chat input (skip search boxes)
-                    var all = queryShadowDOMAll('textarea, [contenteditable="true"], [role="textbox"]');
-                    var chatInput = null;
-                    for (var i = 0; i < all.length; i++) {
+            // Find chat input INSIDE chat containers, type text, submit via Enter.
+            // NO focus() — no cursor stealing.
+            const bumpScript = `(() => {
+                var bumpText = ${JSON.stringify(bumpText)};
+                function findChatContainers() {
+                    var containers = [];
+                    var queue = [document];
+                    while (queue.length > 0) {
+                        var root = queue.shift();
                         try {
-                            var el = all[i];
-                            if (!el.isConnected) continue;
-                            if (el.clientWidth === 0 && el.clientHeight === 0) continue;
+                            var found = root.querySelectorAll('.interactive-session, .chat-widget, .interactive-input-part, [class*="chat-editor"]');
+                            for (var i = 0; i < found.length; i++) containers.push(found[i]);
+                            var all = root.querySelectorAll('*');
+                            for (var j = 0; j < all.length; j++) {
+                                try { if (all[j].shadowRoot) queue.push(all[j].shadowRoot); } catch(e) {}
+                            }
+                        } catch(e) {}
+                    }
+                    return containers;
+                }
+                var containers = findChatContainers();
+                var chatInput = null;
+                for (var c = 0; c < containers.length; c++) {
+                    try {
+                        var inputs = containers[c].querySelectorAll('textarea, [contenteditable="true"], [role="textbox"]');
+                        for (var i = 0; i < inputs.length; i++) {
+                            var el = inputs[i];
+                            if (!el.isConnected || el.clientWidth === 0) continue;
                             var label = (el.getAttribute('aria-label') || '').toLowerCase();
-                            var ph = (el.getAttribute('placeholder') || '').toLowerCase();
-                            // Skip search/find/filter
                             if (label.indexOf('search') >= 0 || label.indexOf('find') >= 0 || label.indexOf('filter') >= 0) continue;
-                            if (ph.indexOf('search') >= 0 || ph.indexOf('find') >= 0) continue;
-                            // Prefer chat-related inputs
-                            if (label.indexOf('chat') >= 0 || label.indexOf('ask') >= 0 || label.indexOf('message') >= 0 || label.indexOf('prompt') >= 0) {
-                                chatInput = el; break;
-                            }
-                            if (ph.indexOf('chat') >= 0 || ph.indexOf('ask') >= 0 || ph.indexOf('message') >= 0 || ph.indexOf('type') >= 0) {
-                                chatInput = el; break;
-                            }
-                            // Check parent containers
-                            if (el.closest && (el.closest('.interactive-session') || el.closest('.interactive-input-part') || el.closest('.chat-widget') || el.closest('.chat-input'))) {
-                                chatInput = el; break;
-                            }
-                            // Fallback: first non-search input
-                            if (!chatInput) chatInput = el;
-                        } catch(e) {}
-                    }
-                    if (!chatInput) return 'no-chat-input';
-
-                    // Type via DOM manipulation (no focus() — don't steal user cursor)
-                    if (chatInput.tagName === 'TEXTAREA' || chatInput.tagName === 'INPUT') {
-                        var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value') ||
-                                     Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-                        if (setter && setter.set) {
-                            setter.set.call(chatInput, bumpText);
-                        } else {
-                            chatInput.value = bumpText;
+                            chatInput = el;
+                            break;
                         }
-                        chatInput.dispatchEvent(new Event('input', {bubbles: true}));
-                        chatInput.dispatchEvent(new Event('change', {bubbles: true}));
-                    } else {
-                        chatInput.textContent = bumpText;
-                        chatInput.dispatchEvent(new InputEvent('input', {bubbles: true, inputType: 'insertText', data: bumpText}));
-                    }
+                        if (chatInput) break;
+                    } catch(e) {}
+                }
+                if (!chatInput) return 'no-chat-input';
 
-                    // Submit via Enter key
-                    setTimeout(function() {
-                        try {
-                            chatInput.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
-                            chatInput.dispatchEvent(new KeyboardEvent('keypress', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
-                            chatInput.dispatchEvent(new KeyboardEvent('keyup', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
-                        } catch(e) {}
-                    }, 200);
+                // Type text (no focus!)
+                if (chatInput.tagName === 'TEXTAREA' || chatInput.tagName === 'INPUT') {
+                    var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value') ||
+                                 Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+                    if (setter && setter.set) setter.set.call(chatInput, bumpText);
+                    else chatInput.value = bumpText;
+                    chatInput.dispatchEvent(new Event('input', {bubbles: true}));
+                } else {
+                    chatInput.textContent = bumpText;
+                    chatInput.dispatchEvent(new InputEvent('input', {bubbles: true, inputType: 'insertText', data: bumpText}));
+                }
 
-                    return 'bumped:' + (chatInput.getAttribute('aria-label') || chatInput.tagName);
-                })()`;
-                const results = await this.cdpHandler.executeInAllSessions(bumpScript).catch(() => null);
-                logToOutput('[Bump] Results: ' + JSON.stringify(results));
-            }
+                // Submit via Enter
+                setTimeout(function() {
+                    try {
+                        chatInput.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+                    } catch(e) {}
+                }, 200);
+
+                return 'bumped:' + (chatInput.getAttribute('aria-label') || chatInput.tagName);
+            })()`;
+
+            const results = await this.cdpHandler.executeInAllSessions(bumpScript).catch(() => null);
+            logToOutput('[Bump] Result: ' + JSON.stringify(results));
         }, 3000);
 
-        vscode.window.showInformationMessage('Antigravity: Simplified Native CDP Strategy ON');
+        vscode.window.showInformationMessage('Antigravity: CDP Strategy v6 ON');
     }
 
     async stop(): Promise<void> {
         if (!this.isActive) return;
         this.isActive = false;
-        if (this.stallTimer) {
-            clearInterval(this.stallTimer);
-            this.stallTimer = null;
-        }
+        if (this.stallTimer) { clearInterval(this.stallTimer); this.stallTimer = null; }
         this.cdpHandler.disconnectAll();
         this.cdpHandler.removeAllListeners('state');
         this.updateStatusBar();
-        vscode.window.showInformationMessage('Antigravity: CDP Strategy OFF');
     }
 
     private updateStatusBar() {
         if (this.isActive) {
             this.statusBarItem.text = '$(check) CDP: ON';
-            this.statusBarItem.tooltip = 'Native CDP Strategy Active';
+            this.statusBarItem.tooltip = 'CDP Strategy Active';
             this.statusBarItem.backgroundColor = undefined;
         } else {
             this.statusBarItem.text = '$(circle-slash) CDP: OFF';
-            this.statusBarItem.tooltip = 'Native CDP Strategy Inactive';
+            this.statusBarItem.tooltip = 'CDP Strategy Inactive';
             this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
         }
         this.statusBarItem.show();
     }
 
-    dispose() {
-        this.stop();
-        this.statusBarItem.dispose();
-    }
+    dispose() { this.stop(); this.statusBarItem.dispose(); }
 
-    // --- LEGACY STUBS for compatibility with untouched extension.ts commands ---
-    isConnected(): boolean { return true; }
+    // --- STUBS for extension.ts compatibility ---
+    isConnected(): boolean { return this.cdpHandler.isConnected(); }
     async getRuntimeState(): Promise<CDPRuntimeState> { return {}; }
     async executeAction(action: string): Promise<void> { }
     async sendHybridBump(message: string): Promise<boolean> { return true; }
