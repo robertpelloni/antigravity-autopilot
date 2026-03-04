@@ -76,57 +76,67 @@ export class CDPStrategy implements IStrategy {
                 // Prioritize specific buttons
                 if (buttons.includes('run')) {
                     this.lastActionAt = now;
-                    logToOutput('[Autopilot] Clicking Run natively');
-                    await vscode.commands.executeCommand('workbench.action.terminal.chat.runCommand').then(undefined, () => { });
-                    await vscode.commands.executeCommand('antigravity.terminalCommand.run').then(undefined, () => { });
+                    logToOutput('[Autopilot] Clicking Run natively via CDP');
+                    const script = `(() => { const btn = document.querySelector('[title*="Run" i], [aria-label*="Run" i]'); if (btn) btn.click(); })();`;
+                    this.cdpHandler.executeScriptInAllSessions(script).catch(() => { });
                 } else if (buttons.includes('expand')) {
                     this.lastActionAt = now;
-                    logToOutput('[Autopilot] Clicking Expand natively');
-                    await vscode.commands.executeCommand('workbench.action.terminal.chat.viewInEditor').then(undefined, () => { });
-                    await vscode.commands.executeCommand('antigravity.command.accept').then(undefined, () => { });
+                    logToOutput('[Autopilot] Clicking Expand natively via CDP');
+                    const script = `(() => { const btn = document.querySelector('[title*="Expand" i], [aria-label*="Expand" i], [title*="Input" i]'); if (btn) btn.click(); })();`;
+                    this.cdpHandler.executeScriptInAllSessions(script).catch(() => { });
                 } else if (buttons.includes('accept') || buttons.includes('keep')) {
                     this.lastActionAt = now;
-                    logToOutput('[Autopilot] Clicking Accept natively');
-                    await vscode.commands.executeCommand('antigravity.agent.acceptAgentStep').then(undefined, () => { });
+                    logToOutput('[Autopilot] Clicking Accept natively via CDP');
+                    const script = `(() => { const btn = document.querySelector('[title*="Accept" i], [aria-label*="Accept" i], [title*="Keep" i], [title*="Apply" i]'); if (btn) btn.click(); })();`;
+                    this.cdpHandler.executeScriptInAllSessions(script).catch(() => { });
                 } else if (buttons.includes('retry')) {
                     this.lastActionAt = now;
-                    logToOutput('[Autopilot] Clicking Retry natively');
-                    await vscode.commands.executeCommand('antigravity.agent.rejectAgentStep').then(undefined, () => { });
+                    logToOutput('[Autopilot] Clicking Retry natively via CDP');
+                    const script = `(() => { const btn = document.querySelector('[title*="Retry" i], [aria-label*="Retry" i]'); if (btn) btn.click(); })();`;
+                    this.cdpHandler.executeScriptInAllSessions(script).catch(() => { });
                 }
             }
 
             // Handle stalled conversation (Bump)
-            const bumpEnabled = config.get<boolean>('actions.bump.enabled') ?? true;
+            const bumpEnabled = config.get<boolean>('automation.actions.autoReply') ?? true;
             if (bumpEnabled && !isGenerating) {
-                const stalledMs = config.get<number>('timing.stalledMs') || 7000;
+                const stalledMs = config.get<number>('automation.timing.autoReplyDelayMs') || 7000;
                 if ((now - this.lastActivityAt) > stalledMs) {
                     const bumpText = config.get<string>('actions.bump.text') || 'Proceed';
                     this.lastActionAt = now;
                     this.lastActivityAt = now; // reset
-                    logToOutput(`[Autopilot] Stalled for ${stalledMs}ms, executing CDP script to inject text: "${bumpText}"`);
+                    logToOutput(`[Autopilot] Stalled for ${stalledMs}ms, using pure CDP to type text: "${bumpText}"`);
 
-                    const injectionScript = `
+                    // 1. Focus the chat input box
+                    const focusScript = `
                         (() => {
-                            const ta = document.querySelector('textarea, .interactive-input-part textarea, [aria-label*="chat input" i]');
-                            if (ta) {
-                                ta.focus();
-                                // We use execCommand for robust React change detection if possible
-                                if (!document.execCommand('insertText', false, ${JSON.stringify(bumpText)})) {
-                                    ta.value = ${JSON.stringify(bumpText)};
-                                    ta.dispatchEvent(new Event('input', { bubbles: true }));
+                            const ta = document.querySelector('textarea, .monaco-editor textarea, [contenteditable="true"], [role="textbox"], [aria-label*="chat" i], [placeholder*="message" i]');
+                            if (ta) ta.focus();
+                        })();
+                    `;
+                    await this.cdpHandler.executeScriptInAllSessions(focusScript);
+
+                    // 2. Insert text using raw Chromium CDP to bypass React/Monaco strictness
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    await this.cdpHandler.insertTextToAll(bumpText);
+
+                    // 3. Click the send button (or simulate Enter)
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    const submitScript = `
+                        (() => {
+                            const sendBtn = document.querySelector('.monaco-button[title*="Send" i], button[aria-label*="Send" i], button[title*="Submit" i], .codicon-send, [title*="Continue" i]');
+                            if (sendBtn) {
+                                sendBtn.closest('button')?.click() || sendBtn.click();
+                            } else {
+                                // Fallback: dispatch enter if no button found
+                                const active = document.activeElement;
+                                if (active) {
+                                    active.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
                                 }
-                                setTimeout(() => {
-                                    const sendBtn = document.querySelector('.monaco-button[title*="Send" i], button[aria-label*="Send" i], button[title*="Submit" i], .codicon-send');
-                                    if (sendBtn) {
-                                        sendBtn.closest('button')?.click() || sendBtn.click();
-                                    } else {
-                                        ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-                                    }
-                                }, 150);
                             }
                         })();
                     `;
-                    this.cdpHandler.executeScriptInAllSessions(injectionScript).catch(() => { });
+                    this.cdpHandler.executeScriptInAllSessions(submitScript).catch(() => { });
                 }
             }
         });

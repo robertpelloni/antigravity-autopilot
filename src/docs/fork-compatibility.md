@@ -12,7 +12,7 @@ Instead of scraping the webview for "Run" or "Accept" buttons, Autopilot now int
 - **Expand**: `workbench.action.terminal.chat.viewInEditor` (VS Code) + `antigravity.command.accept` (Antigravity SDK)
 - **Accept / Keep**: `antigravity.agent.acceptAgentStep`
 - **Retry**: `antigravity.agent.rejectAgentStep`
-- **Bump (Text Entry)**: `antigravity.sendTextToChat`
+- **Bump (Text Entry)**: *Does NOT have a native VS Code command.* Strictly implemented via pure Chromium CDP `Input.insertText` targeting `textarea` or Monaco `contenteditable` objects, followed by simulated button clicks or Enter dispatch.
 
 *(Note: Native standard commands like `interactive.acceptChanges` or `chat.open` were observed to trigger layout configurations on the Antigravity fork, and are strictly avoided).*
 
