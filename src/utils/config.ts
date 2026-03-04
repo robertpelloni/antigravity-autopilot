@@ -36,20 +36,10 @@ class ConfigManager {
         await config.update(key, value, target);
     }
 
-    /** Returns all settings as a plain object — used by dashboard UI */
-    getAll(): Record<string, any> {
-        const cfg = vscode.workspace.getConfiguration(CONFIG_SECTION);
-        // Convert VS Code's WorkspaceConfiguration to a plain object
-        const result: Record<string, any> = {};
-        const inspect = cfg as any;
-        // Get all keys that have values
-        if (inspect && typeof inspect === 'object') {
-            for (const key of Object.keys(inspect)) {
-                if (key.startsWith('_') || typeof (inspect as any)[key] === 'function') continue;
-                try { result[key] = cfg.get(key); } catch { }
-            }
-        }
-        return result;
+    /** Returns config object — used by dashboard UI. Returns the WorkspaceConfiguration
+     *  directly since it supports property access (cfg.actions, cfg.autopilotAutoAcceptEnabled etc). */
+    getAll(): any {
+        return vscode.workspace.getConfiguration(CONFIG_SECTION);
     }
 }
 
