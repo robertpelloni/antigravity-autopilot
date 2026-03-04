@@ -11,13 +11,16 @@ export const AUTO_CONTINUE_SCRIPT = `
       if (typeof window.__AUTOPILOT_BRIDGE__ === 'function') {
           window.__AUTOPILOT_BRIDGE__(payload);
       }
+      console.log('__AUTOPILOT_STATE_LOG__: ' + payload);
     } catch (e) {}
   }
 
   let pollTimer = null;
 
   function isGenerating() {
-    return !!document.querySelector('.codicon-loading, .typing-indicator');
+    return !!document.querySelector(
+      '.interactive-input-part .codicon-loading, [role="button"][title*="Stop" i], [role="button"][aria-label*="Stop" i], .typing-indicator'
+    );
   }
 
   function detectButtons() {

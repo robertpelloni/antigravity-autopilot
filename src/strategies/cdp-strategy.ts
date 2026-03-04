@@ -55,6 +55,8 @@ export class CDPStrategy implements IStrategy {
             const isGenerating = state.isGenerating;
             const buttons = state.buttons || [];
 
+            logToOutput(`[State] Gen: ${isGenerating}, Buttons: ${buttons.join(', ')}`);
+
             if (isGenerating) {
                 this.wasGenerating = true;
                 this.lastActivityAt = now;
@@ -101,8 +103,30 @@ export class CDPStrategy implements IStrategy {
                     const bumpText = config.get<string>('actions.bump.text') || 'Proceed';
                     this.lastActionAt = now;
                     this.lastActivityAt = now; // reset
-                    logToOutput(`[Autopilot] Stalled for ${stalledMs}ms, executing native sendTextToChat: "${bumpText}"`);
-                    await vscode.commands.executeCommand('antigravity.sendTextToChat', bumpText).then(undefined, () => { });
+                    logToOutput(`[Autopilot] Stalled for ${stalledMs}ms, executing CDP script to inject text: "${bumpText}"`);
+
+                    const injectionScript = `
+                        (() => {
+                            const ta = document.querySelector('textarea, .interactive-input-part textarea, [aria-label*="chat input" i]');
+                            if (ta) {
+                                ta.focus();
+                                // We use execCommand for robust React change detection if possible
+                                if (!document.execCommand('insertText', false, ${JSON.stringify(bumpText)})) {
+                                    ta.value = ${JSON.stringify(bumpText)};
+                                    ta.dispatchEvent(new Event('input', { bubbles: true }));
+                                }
+                                setTimeout(() => {
+                                    const sendBtn = document.querySelector('.monaco-button[title*="Send" i], button[aria-label*="Send" i], button[title*="Submit" i], .codicon-send');
+                                    if (sendBtn) {
+                                        sendBtn.closest('button')?.click() || sendBtn.click();
+                                    } else {
+                                        ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+                                    }
+                                }, 150);
+                            }
+                        })();
+                    `;
+                    this.cdpHandler.executeScriptInAllSessions(injectionScript).catch(() => { });
                 }
             }
         });
