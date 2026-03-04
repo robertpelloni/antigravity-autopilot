@@ -16,62 +16,70 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   function queryShadowDOMAll(selector, root) {
       root = root || document;
-      let results = [];
-      if (root.querySelectorAll) {
-          try { results = Array.from(root.querySelectorAll(selector)); } catch(e) {}
-      }
-      const all = root.querySelectorAll ? root.querySelectorAll('*') : [];
-      for (let i = 0; i < all.length; i++) {
-          if (all[i].shadowRoot) {
-              results = results.concat(queryShadowDOMAll(selector, all[i].shadowRoot));
-          }
-      }
+      var results = [];
+      try {
+        if (root.querySelectorAll) {
+            results = Array.from(root.querySelectorAll(selector));
+        }
+        var all = root.querySelectorAll ? root.querySelectorAll('*') : [];
+        for (var i = 0; i < all.length; i++) {
+            try {
+              if (all[i].shadowRoot) {
+                  results = results.concat(queryShadowDOMAll(selector, all[i].shadowRoot));
+              }
+            } catch (innerErr) {}
+        }
+      } catch (outerErr) {}
       return results;
   }
 
-  let pollTimer = null;
+  var pollTimer = null;
 
   function isGenerating() {
-    const spinners = queryShadowDOMAll('.interactive-input-part .codicon-loading, [role="button"][title*="Stop" i], [role="button"][aria-label*="Stop" i], .typing-indicator');
-    return spinners.length > 0;
+    try {
+      var spinners = queryShadowDOMAll('.interactive-input-part .codicon-loading, [role="button"][title*="Stop" i], [role="button"][aria-label*="Stop" i], .typing-indicator');
+      return spinners.length > 0;
+    } catch (e) { return false; }
   }
 
   function detectButtons() {
-    const buttons = [];
-    const actionSpecs = [
-      { key: 'run', regex: /(^|\\b)(run(\\s+in\\s+terminal|\\s+command)?|execute)(\\b|$)/i },
-      { key: 'expand', regex: /(expand|requires\\s*input|step\\s*requires\\s*input)/i },
-      { key: 'accept', regex: /(accept\\s*all|apply\\s*all|accept\\s*all\\s*changes|apply\\s*all\\s*changes)/i },
-      { key: 'accept', regex: /^accept$/i },
-      { key: 'retry', regex: /\\bretry\\b/i },
-      { key: 'keep', regex: /\\bkeep\\b/i }
-    ];
+    var buttons = [];
+    try {
+      var elements = queryShadowDOMAll('button, [role="button"], .monaco-button, a[role="button"]');
+      for (var i = 0; i < elements.length; i++) {
+        var el = elements[i];
+        try {
+          if (!el.isConnected || el.disabled || el.classList.contains('disabled')) continue;
+          var width = el.clientWidth || 0;
+          var height = el.clientHeight || 0;
+          if (width === 0 && height === 0 && !el.offsetParent) continue;
 
-    const elements = queryShadowDOMAll('button, [role="button"], .monaco-button, a[role="button"]');
-    for (const el of elements) {
-      if (!el.isConnected || el.disabled || el.classList.contains('disabled')) continue;
-      
-      const width = el.clientWidth || 0;
-      const height = el.clientHeight || 0;
-      if (width === 0 && height === 0 && !el.offsetParent) continue;
-      
-      const text = (el.textContent || '') + ' ' + (el.getAttribute('title') || '') + ' ' + (el.getAttribute('aria-label') || '');
-      for (const spec of actionSpecs) {
-         if (spec.regex.test(text)) {
-            if (!buttons.includes(spec.key)) buttons.push(spec.key);
-         }
+          var text = (el.textContent || '') + ' ' + (el.getAttribute('title') || '') + ' ' + (el.getAttribute('aria-label') || '');
+          var lower = text.toLowerCase();
+
+          if (lower.indexOf('run') >= 0 && buttons.indexOf('run') < 0) buttons.push('run');
+          if ((lower.indexOf('expand') >= 0 || lower.indexOf('requires input') >= 0) && buttons.indexOf('expand') < 0) buttons.push('expand');
+          if ((lower.indexOf('accept') >= 0 || lower.indexOf('apply') >= 0) && buttons.indexOf('accept') < 0) buttons.push('accept');
+          if (lower.indexOf('retry') >= 0 && buttons.indexOf('retry') < 0) buttons.push('retry');
+          if (lower.indexOf('keep') >= 0 && buttons.indexOf('keep') < 0) buttons.push('keep');
+        } catch (elErr) {}
       }
-    }
+    } catch (e) {}
     return buttons;
   }
 
   function poll() {
-    const payload = JSON.stringify({
-      type: 'state',
-      isGenerating: isGenerating(),
-      buttons: detectButtons()
-    });
-    emitBridge(payload);
+    try {
+      var payload = JSON.stringify({
+        type: 'state',
+        isGenerating: isGenerating(),
+        buttons: detectButtons()
+      });
+      emitBridge(payload);
+    } catch (e) {
+      // Catch everything so setInterval survives
+      try { emitBridge(JSON.stringify({type:'state',isGenerating:false,buttons:[]})); } catch(x) {}
+    }
   }
 
   pollTimer = setInterval(poll, 1000);
