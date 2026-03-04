@@ -48,7 +48,8 @@ export class CDPStrategy implements IStrategy {
             await this.cdpHandler.connect();
         })();
 
-        // Helper to pierce Shadow DOMs during script injection
+        // Helper to pierce Shadow DOMs during script injection.
+        // Uses var (not const/let) for maximum compat inside eval'd scripts.
         const SHADOW_DOM_HELPER = `
             function queryShadowDOMAll(selector, root) {
                 root = root || document;
@@ -66,6 +67,22 @@ export class CDPStrategy implements IStrategy {
             }
         `;
 
+        // Helper: find a visible, connected, non-disabled button matching selectors.
+        // Returns the first match or null.
+        const FIND_AND_CLICK_HELPER = `
+            function findAndClick(selectors) {
+                var btns = queryShadowDOMAll(selectors);
+                for (var i = 0; i < btns.length; i++) {
+                    var b = btns[i];
+                    if (b.isConnected && !b.disabled) {
+                        b.click();
+                        return 'clicked';
+                    }
+                }
+                return 'not-found';
+            }
+        `;
+
         this.cdpHandler.on('state', async ({ state }) => {
             if (!this.isActive || !this.controllerRoleIsLeader) return;
 
@@ -73,7 +90,7 @@ export class CDPStrategy implements IStrategy {
             const isGenerating = state.isGenerating;
             const buttons = state.buttons || [];
 
-            logToOutput(`[State] Gen: ${isGenerating}, Buttons: ${buttons.join(', ')}`);
+            logToOutput('[State] Gen: ' + isGenerating + ', Buttons: ' + buttons.join(', '));
 
             if (isGenerating) {
                 this.wasGenerating = true;
@@ -84,36 +101,41 @@ export class CDPStrategy implements IStrategy {
             }
 
             // Throttle actions to prevent duplicate triggering
-            if (now - this.lastActionAt < 1500) return;
+            if (now - this.lastActionAt < 2000) return;
 
-            // Unified action flag
             const autopilotEnabled = !!config.get<boolean>('autopilotAutoAcceptEnabled') || !!config.get<boolean>('autoAllEnabled') || !!config.get<boolean>('autoAcceptEnabled');
 
+            // --- BUTTON CLICKS ---
+            // All done via script injection (no CDP Input commands).
+            // executeInAllSessions runs in every connected session; sessions without matching
+            // buttons simply return 'not-found'.
             if (autopilotEnabled && buttons.length > 0) {
-                if (buttons.includes('run')) {
+                const btnAction = buttons.includes('run') ? 'run'
+                    : buttons.includes('expand') ? 'expand'
+                        : (buttons.includes('accept') || buttons.includes('keep')) ? 'accept'
+                            : buttons.includes('retry') ? 'retry'
+                                : null;
+
+                if (btnAction) {
                     this.lastActionAt = now;
-                    logToOutput('[Autopilot] Clicking Run via CDP');
-                    const script = `(() => { ${SHADOW_DOM_HELPER} var btns = queryShadowDOMAll('[title*="Run" i], [aria-label*="Run" i]'); var btn = btns.find(function(b) { return b.isConnected && !b.disabled; }); if (btn) { btn.click(); return 'clicked'; } return 'not-found'; })()`;
-                    this.cdpHandler.executeInAllSessions(script).catch(() => { });
-                } else if (buttons.includes('expand')) {
-                    this.lastActionAt = now;
-                    logToOutput('[Autopilot] Clicking Expand via CDP');
-                    const script = `(() => { ${SHADOW_DOM_HELPER} var btns = queryShadowDOMAll('[title*="Expand" i], [aria-label*="Expand" i], [title*="Input" i]'); var btn = btns.find(function(b) { return b.isConnected && !b.disabled; }); if (btn) { btn.click(); return 'clicked'; } return 'not-found'; })()`;
-                    this.cdpHandler.executeInAllSessions(script).catch(() => { });
-                } else if (buttons.includes('accept') || buttons.includes('keep')) {
-                    this.lastActionAt = now;
-                    logToOutput('[Autopilot] Clicking Accept via CDP');
-                    const script = `(() => { ${SHADOW_DOM_HELPER} var btns = queryShadowDOMAll('[title*="Accept" i], [aria-label*="Accept" i], [title*="Keep" i], [title*="Apply" i]'); var btn = btns.find(function(b) { return b.isConnected && !b.disabled; }); if (btn) { btn.click(); return 'clicked'; } return 'not-found'; })()`;
-                    this.cdpHandler.executeInAllSessions(script).catch(() => { });
-                } else if (buttons.includes('retry')) {
-                    this.lastActionAt = now;
-                    logToOutput('[Autopilot] Clicking Retry via CDP');
-                    const script = `(() => { ${SHADOW_DOM_HELPER} var btns = queryShadowDOMAll('[title*="Retry" i], [aria-label*="Retry" i]'); var btn = btns.find(function(b) { return b.isConnected && !b.disabled; }); if (btn) { btn.click(); return 'clicked'; } return 'not-found'; })()`;
+                    const selectorMap: Record<string, string> = {
+                        run: '[title*="Run" i], [aria-label*="Run" i]',
+                        expand: '[title*="Expand" i], [aria-label*="Expand" i], [title*="Input" i]',
+                        accept: '[title*="Accept" i], [aria-label*="Accept" i], [title*="Keep" i], [title*="Apply" i]',
+                        retry: '[title*="Retry" i], [aria-label*="Retry" i]',
+                    };
+                    logToOutput('[Autopilot] Clicking ' + btnAction + ' via script');
+                    const sel = selectorMap[btnAction];
+                    const script = `(() => { ${SHADOW_DOM_HELPER} ${FIND_AND_CLICK_HELPER} return findAndClick('${sel}'); })()`;
                     this.cdpHandler.executeInAllSessions(script).catch(() => { });
                 }
             }
 
-            // Handle stalled conversation (Bump)
+            // --- BUMP (stalled conversation) ---
+            // Everything is done via script injection — focus, type, and submit all happen
+            // inside the script targeting the exact DOM element. No CDP Input.insertText or
+            // Input.dispatchKeyEvent, which would type into whatever element has focus in the
+            // main Electron page (often the wrong element like a search box).
             const bumpEnabled = config.get<boolean>('automation.actions.autoReply') ?? true;
             if (bumpEnabled && !isGenerating) {
                 const stalledMs = config.get<number>('automation.timing.autoReplyDelayMs') || 7000;
@@ -123,9 +145,13 @@ export class CDPStrategy implements IStrategy {
                     this.lastActivityAt = now;
                     logToOutput('[Bump] Stalled ' + stalledMs + 'ms, bumping: "' + bumpText + '"');
 
-                    // Step 1: Focus ONLY the chat input (exclude search boxes)
-                    const focusScript = `(() => {
+                    // Combined script: find chat input → focus → type → submit
+                    // All in one script so it's atomic within each session.
+                    const bumpScript = `(() => {
                         ${SHADOW_DOM_HELPER}
+                        var bumpText = ${JSON.stringify(bumpText)};
+
+                        // Step 1: Find the chat input (skip search boxes)
                         var all = queryShadowDOMAll('textarea, [contenteditable="true"], [role="textbox"]');
                         var chatInput = null;
                         for (var i = 0; i < all.length; i++) {
@@ -133,7 +159,6 @@ export class CDPStrategy implements IStrategy {
                             if (!el.isConnected || (el.clientWidth === 0 && el.clientHeight === 0)) continue;
                             var label = (el.getAttribute('aria-label') || '').toLowerCase();
                             var ph = (el.getAttribute('placeholder') || '').toLowerCase();
-                            // Skip search/find/filter inputs
                             if (label.indexOf('search') >= 0 || label.indexOf('find') >= 0 || label.indexOf('filter') >= 0) continue;
                             if (ph.indexOf('search') >= 0 || ph.indexOf('find') >= 0) continue;
                             // Prefer chat-related inputs
@@ -145,45 +170,44 @@ export class CDPStrategy implements IStrategy {
                                 chatInput = el;
                                 break;
                             }
-                            // Check for chat container
                             if (el.closest && (el.closest('.interactive-session') || el.closest('.interactive-input-part') || el.closest('.chat-widget') || el.closest('.chat-input'))) {
                                 chatInput = el;
                                 break;
                             }
-                            // Generic fallback (non-search textarea)
                             if (!chatInput) chatInput = el;
                         }
-                        if (chatInput) {
-                            chatInput.focus();
-                            return 'focused:' + (chatInput.getAttribute('aria-label') || chatInput.tagName || 'unknown');
+                        if (!chatInput) return 'no-chat-input';
+
+                        // Step 2: Focus and type
+                        chatInput.focus();
+                        if (chatInput.tagName === 'TEXTAREA' || chatInput.tagName === 'INPUT') {
+                            // Native textarea: set value + fire input event
+                            var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value') ||
+                                              Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+                            if (nativeSetter && nativeSetter.set) {
+                                nativeSetter.set.call(chatInput, bumpText);
+                            } else {
+                                chatInput.value = bumpText;
+                            }
+                            chatInput.dispatchEvent(new Event('input', {bubbles: true}));
+                            chatInput.dispatchEvent(new Event('change', {bubbles: true}));
+                        } else {
+                            // contenteditable: set textContent + fire input
+                            chatInput.textContent = bumpText;
+                            chatInput.dispatchEvent(new InputEvent('input', {bubbles: true, inputType: 'insertText', data: bumpText}));
                         }
-                        return 'no-chat-input:' + all.length + '-total';
+
+                        // Step 3: Submit via Enter key event on the element
+                        setTimeout(function() {
+                            chatInput.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+                            chatInput.dispatchEvent(new KeyboardEvent('keypress', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+                            chatInput.dispatchEvent(new KeyboardEvent('keyup', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+                        }, 200);
+
+                        return 'bumped:' + (chatInput.getAttribute('aria-label') || chatInput.tagName);
                     })()`;
-                    const focusResults = await this.cdpHandler.executeInAllSessions(focusScript);
-                    logToOutput('[Bump] Focus: ' + JSON.stringify(focusResults));
-
-                    // Step 2: Type text via CDP Input.insertText
-                    await new Promise(resolve => setTimeout(resolve, 150));
-                    await this.cdpHandler.insertTextToAll(bumpText);
-                    logToOutput('[Bump] Typed text');
-
-                    // Step 3: Submit via CDP Enter key (rawKeyDown + char + keyUp)
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                    await this.cdpHandler.dispatchKeyEventToAll({
-                        type: 'rawKeyDown', key: 'Enter', code: 'Enter',
-                        windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
-                    });
-                    await new Promise(resolve => setTimeout(resolve, 30));
-                    await this.cdpHandler.dispatchKeyEventToAll({
-                        type: 'char', text: '\r', key: 'Enter',
-                        windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
-                    });
-                    await new Promise(resolve => setTimeout(resolve, 30));
-                    await this.cdpHandler.dispatchKeyEventToAll({
-                        type: 'keyUp', key: 'Enter', code: 'Enter',
-                        windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
-                    });
-                    logToOutput('[Bump] Enter dispatched');
+                    const results = await this.cdpHandler.executeInAllSessions(bumpScript);
+                    logToOutput('[Bump] Results: ' + JSON.stringify(results));
                 }
             }
         });
