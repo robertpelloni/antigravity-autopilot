@@ -1110,106 +1110,12 @@ export class CDPHandler extends EventEmitter {
         if (typeof text !== 'string') return;
 
         try {
-            // Text input routing
-            if (text.startsWith('__AUTOPILOT_TYPE__:')) {
-                const content = text.substring('__AUTOPILOT_TYPE__:'.length);
-                this.insertTextToOriginSession(pageId, sessionId, content).catch(() => { });
-            } else if (text.startsWith('__ANTIGRAVITY_COMMAND__:')) {
-                // [LEGACY ZOMBIE KILLER]
-                // The legacy `full_cdp_script.js` sends `__ANTIGRAVITY_COMMAND__:workbench.action.terminal.chat.accept` 
-                // which aliases to "Customize Layout" on the Antigravity fork.
-                // The modern extension never uses `__ANTIGRAVITY_COMMAND__`. It uses `__AUTOPILOT_ACTION__`.
-                // Severing this bridge permanently stops the ghost clicks.
-                const raw = text.substring('__ANTIGRAVITY_COMMAND__:'.length);
-                logToOutput(`[Bridge] Blocked legacy command execution: ${raw}`);
-            } else if (text.startsWith('__AUTOPILOT_PLAY_SOUND__:')) {
-                const effect = text.substring('__AUTOPILOT_PLAY_SOUND__:'.length).trim() as any;
-                if (config.get<boolean>('audioFeedbackEnabled')) {
-                    SoundEffects.play(effect);
-                }
-            } else if (text.startsWith('__AUTOPILOT_DEBUG_LOG__:')) {
-                const logMsg = text.substring('__AUTOPILOT_DEBUG_LOG__:'.length).trim();
-                if (config.get<boolean>('debugLoggingEnabled')) {
-                    console.log(`[Browser Debug] ${logMsg}`);
-                }
-            } else if (text.startsWith('__AUTOPILOT_HYBRID_BUMP__:')) {
-                if (!this.controllerRoleIsLeader) {
-                    logToOutput('[Bump-Blocked] Ignoring hybrid bump bridge payload in follower window.');
-                    return;
-                }
-
-                // Phase 52: Hybrid Bump Strategy
-                const bumpText = text.substring('__AUTOPILOT_HYBRID_BUMP__:'.length);
-                const vscode = require('vscode');
-
-                if (bumpText) {
-                    logToOutput(`[Bump-Start] Initiating Hybrid Bump: "${bumpText}"`);
-                }
-
-                // Read configuration for delays
-                const bumpConfig = config.get<{ typingDelayMs: number; submitDelayMs: number; openChat?: boolean }>('actions.bump') || {};
-                const typingDelay = bumpConfig.typingDelayMs || 50;
-                const submitDelay = bumpConfig.submitDelayMs || 800;
-                const shouldOpenChat = bumpConfig.openChat === true; // Default false to avoid opening new threads; user can explicitly enable
-
-                if (bumpText) {
-                    try {
-                        logToOutput(`[Bump-Step] 1. Writing to Clipboard`);
-                        await vscode.env.clipboard.writeText(bumpText);
-
-                        // NOTE: chat.open / chat.focusInput REMOVED — triggers Customize Layout on Antigravity fork
-                        logToOutput(`[Bump-Step] 2-3. Skipping all chat.* commands (Antigravity fork safety)`);
-
-                        logToOutput(`[Bump-Step] 4. Pasting Clipboard`);
-                        await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
-                    } catch (e: any) {
-                        logToOutput(`[Bump-Error] Text Entry Failed: ${e.message}`);
-                    }
-                }
-
-                // NO COMMANDS! We rely purely on the frontend CDP script to click the submit button.
-                // Any command we execute here (even interactive.acceptChanges) might be aliased to Customize Layout on the fork.
-                logToOutput(`[Bump-Step] 5. Skipping command-based submits (Safety)`);
-
-                // 3. Safety: Do NOT emit global CDP Enter fallback.
-                // It can target non-chat UI focus and trigger native menu/layout actions.
-                await new Promise(r => setTimeout(r, Math.max(100, submitDelay / 2)));
-                logToOutput(`[Bump-Step] 6. Skipping unsafe global CDP Enter fallback`);
-                logToOutput(`[Bump-End] Hybrid Bump Sequence Complete`);
-            } else if (text.startsWith('__AUTOPILOT_ACTION__:')) {
-                const raw = text.substring('__AUTOPILOT_ACTION__:'.length);
-                const [groupRaw, detailRaw] = raw.split('|');
-                const group = (groupRaw || 'click').trim() as ActionSoundGroup;
-                const detail = (detailRaw || '').trim();
-                this.noteAutomationSignal(pageId, sessionId);
-
-                if (!this.shouldDispatchAction(pageId, sessionId, group, detail)) {
-                    return;
-                }
-
-                logToOutput(`[AutoAction:${group}] ${detail || 'triggered'}`);
-                const soundGroup = group === 'accept-all' ? 'accept' : group;
-                SoundEffects.playActionGroup(soundGroup as ActionSoundGroup);
-
-                if (group === 'submit') {
-                    // Frontend runtime already performed submit attempts directly.
-                    // Do not relay submit back into backend interaction methods, which can re-type
-                    // action detail text (e.g. "alt-enter or enter key") and create noisy loops.
-                    if (detail === 'keys') {
-                        logToOutput(`[AutoAction:submit] Blocked unsafe CDP Enter relay for submit|keys`);
-                    }
-                } else if (group === 'run' || group === 'expand' || group === 'continue' || group === 'accept' || group === 'accept-all') {
-                    const routedGroup = group === 'accept-all' ? 'accept' : group;
-                    this.emit('action', { group: routedGroup, detail });
-                }
-            } else if (text.startsWith('__AUTOPILOT_LOG__:')) {
-                const raw = text.substring('__AUTOPILOT_LOG__:'.length);
-                this.noteAutomationSignal(pageId, sessionId);
-                logToOutput(`[AutoContinue] ${raw}`);
+            const data = JSON.parse(text);
+            if (data.type === 'state') {
+                this.emit('state', { pageId, sessionId, state: data });
             }
         } catch (e) {
-            console.error('Bridge Message Handler Error', e);
-            logToOutput(`[Bridge-Error] ${e}`);
+            // Ignore format errors or legacy string-based bridge messages
         }
     }
 

@@ -19,6 +19,7 @@ import { buildAutoResumeGuardReport, evaluateEscalationArming, evaluateCrossUiHe
 import { runAutoResumeReadinessFix, sendAutoResumeMessage } from './core/runtime-auto-resume-guard-effects';
 import { projectManager } from './providers/project-manager';
 import { ControllerLease } from './core/controller-lease';
+import { applyWorkbenchPatches } from './core/workbench-patcher';
 
 import { StatusBarManager } from './ui/status-bar';
 import { CDPStrategy, CDPRuntimeState } from './strategies/cdp-strategy';
