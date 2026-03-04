@@ -95,23 +95,23 @@ export class CDPStrategy implements IStrategy {
                 if (buttons.includes('run')) {
                     this.lastActionAt = now;
                     logToOutput('[Autopilot] Clicking Run natively via CDP');
-                    const script = `(() => { ${SHADOW_DOM_HELPER} const btns = queryShadowDOMAll('[title*="Run" i], [aria-label*="Run" i]'); const btn = btns.find(b => b.isConnected && !b.disabled); if (btn) btn.click(); })();`;
-                    this.cdpHandler.executeScriptInAllSessions(script).catch(() => { });
+                    const script = `(() => { ${SHADOW_DOM_HELPER} const btns = queryShadowDOMAll('[title*="Run" i], [aria-label*="Run" i]'); const btn = btns.find(b => b.isConnected && !b.disabled); if (btn) { btn.click(); return 'clicked'; } return 'not found'; })()`;
+                    this.cdpHandler.executeInAllSessions(script).catch(() => { });
                 } else if (buttons.includes('expand')) {
                     this.lastActionAt = now;
                     logToOutput('[Autopilot] Clicking Expand natively via CDP');
-                    const script = `(() => { ${SHADOW_DOM_HELPER} const btns = queryShadowDOMAll('[title*="Expand" i], [aria-label*="Expand" i], [title*="Input" i]'); const btn = btns.find(b => b.isConnected && !b.disabled); if (btn) btn.click(); })();`;
-                    this.cdpHandler.executeScriptInAllSessions(script).catch(() => { });
+                    const script = `(() => { ${SHADOW_DOM_HELPER} const btns = queryShadowDOMAll('[title*="Expand" i], [aria-label*="Expand" i], [title*="Input" i]'); const btn = btns.find(b => b.isConnected && !b.disabled); if (btn) { btn.click(); return 'clicked'; } return 'not found'; })()`;
+                    this.cdpHandler.executeInAllSessions(script).catch(() => { });
                 } else if (buttons.includes('accept') || buttons.includes('keep')) {
                     this.lastActionAt = now;
                     logToOutput('[Autopilot] Clicking Accept natively via CDP');
-                    const script = `(() => { ${SHADOW_DOM_HELPER} const btns = queryShadowDOMAll('[title*="Accept" i], [aria-label*="Accept" i], [title*="Keep" i], [title*="Apply" i]'); const btn = btns.find(b => b.isConnected && !b.disabled); if (btn) btn.click(); })();`;
-                    this.cdpHandler.executeScriptInAllSessions(script).catch(() => { });
+                    const script = `(() => { ${SHADOW_DOM_HELPER} const btns = queryShadowDOMAll('[title*="Accept" i], [aria-label*="Accept" i], [title*="Keep" i], [title*="Apply" i]'); const btn = btns.find(b => b.isConnected && !b.disabled); if (btn) { btn.click(); return 'clicked'; } return 'not found'; })()`;
+                    this.cdpHandler.executeInAllSessions(script).catch(() => { });
                 } else if (buttons.includes('retry')) {
                     this.lastActionAt = now;
                     logToOutput('[Autopilot] Clicking Retry natively via CDP');
-                    const script = `(() => { ${SHADOW_DOM_HELPER} const btns = queryShadowDOMAll('[title*="Retry" i], [aria-label*="Retry" i]'); const btn = btns.find(b => b.isConnected && !b.disabled); if (btn) btn.click(); })();`;
-                    this.cdpHandler.executeScriptInAllSessions(script).catch(() => { });
+                    const script = `(() => { ${SHADOW_DOM_HELPER} const btns = queryShadowDOMAll('[title*="Retry" i], [aria-label*="Retry" i]'); const btn = btns.find(b => b.isConnected && !b.disabled); if (btn) { btn.click(); return 'clicked'; } return 'not found'; })()`;
+                    this.cdpHandler.executeInAllSessions(script).catch(() => { });
                 }
             }
 
@@ -134,7 +134,7 @@ export class CDPStrategy implements IStrategy {
                             if (ta) ta.focus();
                         })();
                     `;
-                    await this.cdpHandler.executeScriptInAllSessions(focusScript);
+                    await this.cdpHandler.executeInAllSessions(focusScript);
 
                     // 2. Insert text using raw Chromium CDP to bypass React/Monaco strictness
                     await new Promise(resolve => setTimeout(resolve, 50));
@@ -158,7 +158,7 @@ export class CDPStrategy implements IStrategy {
                             }
                         })();
                     `;
-                    this.cdpHandler.executeScriptInAllSessions(submitScript).catch(() => { });
+                    this.cdpHandler.executeInAllSessions(submitScript).catch(() => { });
                 }
             }
         });

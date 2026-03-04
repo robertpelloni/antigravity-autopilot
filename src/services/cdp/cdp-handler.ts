@@ -801,7 +801,7 @@ export class CDPHandler extends EventEmitter {
                     }
 
                     // 3. Explicit Target Discovery (Belt & Suspenders) - CONFIG GATED (Default: True)
-                    const explicitDiscovery = config.get<boolean>('experimental.cdpExplicitDiscovery') ?? false;
+                    const explicitDiscovery = config.get<boolean>('experimental.cdpExplicitDiscovery') ?? true;
                     if (explicitDiscovery) {
                         try {
                             const { targetInfos } = await this.sendCommand(page.id, 'Target.getTargets');
