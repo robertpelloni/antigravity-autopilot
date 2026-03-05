@@ -533,6 +533,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     for (var i = 0; i < ACTION_SPECS.length; i++) {
       var spec = ACTION_SPECS[i];
       if (cfg.actions[spec.key] !== true) continue;
+      if (spec.key === 'clickRetry' && fork === 'vscode') continue;
       var actionEl = findActionElement(root, spec);
       if (actionEl && click(actionEl, spec.label, 'click')) {
         lastActionAt = now;
