@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.13] - 2026-03-05
+### Fixed
+* **Per-Window Bump Target Drift**: CDP fallback now evaluates all connected candidates and selects ready windows instead of relying on an arbitrary primary target.
+* **Typed-But-Not-Submitted Cross-Fork Cases**: CDP fallback now tries session-aware send-button submit first and falls back to Enter only when no submit control is available.
+* **Premature Cross-Window Submit**: Submit is now restricted to targets that successfully typed bump text in the same cycle and only when composer content contains the expected bump payload.
+
 ## [6.2.12] - 2026-03-04
 ### Fixed
 * **`Keep` Action Detection Scope**: Action scanning now checks chat-root first and then full-document fallback, improving detection for `Keep` buttons rendered outside composer-root containers.
