@@ -30,8 +30,29 @@ export class DashboardPanel {
                 }
                 case 'runCommand': {
                     const commandId = String(message.id || '').trim();
+                  const requestId = String(message.requestId || '').trim();
                     if (commandId) {
-                        await vscode.commands.executeCommand(commandId);
+                    const args = Array.isArray(message.args) ? message.args : [];
+                    try {
+                      const result = await vscode.commands.executeCommand(commandId, ...args);
+                      if (requestId) {
+                        this.panel.webview.postMessage({
+                          command: 'runCommandResult',
+                          requestId,
+                          ok: true,
+                          result
+                        });
+                      }
+                    } catch (error: any) {
+                      if (requestId) {
+                        this.panel.webview.postMessage({
+                          command: 'runCommandResult',
+                          requestId,
+                          ok: false,
+                          error: String(error?.message || error || 'unknown-error')
+                        });
+                      }
+                    }
                     }
                     return;
                 }
@@ -105,6 +126,7 @@ export class DashboardPanel {
         const bumpCooldownSec = config.get<number>('actions.bump.cooldown') || 30;
         const submitDelayMs = config.get<number>('actions.bump.submitDelayMs') || 120;
         const cdpPort = config.get<number>('cdpPort') || 9222;
+        const testBumpText = config.get<string>('actions.bump.text') || 'Proceed';
 
         return `<!DOCTYPE html>
 <html lang="en">
@@ -125,6 +147,12 @@ export class DashboardPanel {
     button:hover { background: var(--vscode-button-hoverBackground); }
     .muted { color: var(--vscode-descriptionForeground); font-size: 12px; }
     .runtime { font-family: var(--vscode-editor-font-family, monospace); font-size: 12px; white-space: pre-wrap; border: 1px dashed var(--vscode-widget-border); padding: 8px; border-radius: 4px; }
+    .test-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+    .test-table th, .test-table td { border: 1px solid var(--vscode-widget-border); padding: 6px 8px; text-align: left; vertical-align: top; }
+    .test-table th { color: var(--vscode-descriptionForeground); font-weight: 600; }
+    .badge { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 700; }
+    .badge-pass { background: color-mix(in srgb, var(--vscode-testing-iconPassed) 20%, transparent); color: var(--vscode-testing-iconPassed); }
+    .badge-fail { background: color-mix(in srgb, var(--vscode-testing-iconFailed) 20%, transparent); color: var(--vscode-testing-iconFailed); }
   </style>
 </head>
 <body>
@@ -159,19 +187,127 @@ export class DashboardPanel {
   <div class="card">
     <h2>Diagnostics</h2>
     <div class="row"><button onclick="runCommand('antigravity.checkRuntimeState')">Check Runtime State</button><button onclick="requestRuntimeState()">Refresh Snapshot</button></div>
+    <div class="row"><label>Current Window Automation</label><button onclick="runCommand('antigravity.toggleCurrentWindowAutomationDisable'); setTimeout(requestRuntimeState, 120)">Toggle ON/OFF</button></div>
+    <div id="cdpIndicator" class="runtime">CDP status loading...</div>
+    <div class="row"><label>Test Bump Text</label><input id="testBumpText" type="text" value="${escapeHtml(testBumpText)}" /></div>
+
+    <h2>Test: Bump Typing Methods</h2>
+    <div class="row"><button onclick="runTest('typing:cdp-insert-text')">CDP InsertText</button><button onclick="runTest('typing:dom-set-input')">DOM Set Input</button><button onclick="runTest('typing:vscode-fallback')">VSCode Fallback InputEvent</button></div>
+
+    <h2>Test: Stalled Detection Methods</h2>
+    <div class="row"><button onclick="runTest('stalled:runtime-stalled')">Runtime Stalled</button><button onclick="runTest('stalled:waiting-for-chat-message')">Waiting For Chat Message</button><button onclick="runTest('stalled:ready-to-resume')">Ready To Resume</button></div>
+
+    <h2>Test: Button Detection Methods</h2>
+    <div class="row"><button onclick="runTest('detect:send-button')">Detect Send Button</button><button onclick="runTest('detect:keep-button')">Detect Keep Button</button><button onclick="runTest('detect:run-button')">Detect Run Button</button></div>
+    <div class="row"><button onclick="runTest('detect:thumbs-signal')">Detect Thumbs Signal</button></div>
+
+    <h2>Test: Button Clicking Methods</h2>
+    <div class="row"><button onclick="runTest('click:send-dom')">DOM Click Send</button><button onclick="runTest('click:send-cdp-mouse')">CDP Mouse Click Send</button><button onclick="runTest('click:enter-key')">CDP Enter Key</button></div>
+
+    <h2>Test History</h2>
+    <div class="row"><button onclick="clearTestHistory()">Clear History</button></div>
+    <table class="test-table" aria-label="Method test history">
+      <thead>
+        <tr>
+          <th style="width: 140px;">Time</th>
+          <th style="width: 240px;">Method</th>
+          <th style="width: 90px;">Status</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody id="testHistoryBody">
+        <tr><td colspan="4" class="muted">No test runs yet.</td></tr>
+      </tbody>
+    </table>
+
     <div id="runtime" class="runtime">Loading...</div>
     <p class="muted">This panel only exposes the minimal settings required for fork detect, stall detect, bump type/submit, and required action clicks.</p>
   </div>
 
   <script>
     const vscode = acquireVsCodeApi();
+    const pendingCommandResolvers = new Map();
+    const testHistory = [];
+    let commandCounter = 0;
 
     function setCfg(key, value) {
       vscode.postMessage({ command: 'updateConfig', key, value });
     }
 
-    function runCommand(id) {
-      vscode.postMessage({ command: 'runCommand', id });
+    function runCommand(id, args) {
+      commandCounter += 1;
+      const requestId = 'req-' + String(Date.now()) + '-' + String(commandCounter);
+      vscode.postMessage({ command: 'runCommand', id, args: Array.isArray(args) ? args : [], requestId });
+      return new Promise((resolve) => {
+        pendingCommandResolvers.set(requestId, resolve);
+      });
+    }
+
+    function formatResult(value) {
+      if (typeof value === 'string') return value;
+      if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+      if (value == null) return 'null';
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return '[unserializable]';
+      }
+    }
+
+    function escapeHtmlJs(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function renderTestHistory() {
+      const body = document.getElementById('testHistoryBody');
+      if (!body) return;
+      if (testHistory.length === 0) {
+        body.innerHTML = '<tr><td colspan="4" class="muted">No test runs yet.</td></tr>';
+        return;
+      }
+
+      body.innerHTML = testHistory.map((entry) => {
+        const badgeClass = entry.passed ? 'badge badge-pass' : 'badge badge-fail';
+        const badgeText = entry.passed ? 'PASS' : 'FAIL';
+        return '<tr>'
+          + '<td>' + entry.time + '</td>'
+          + '<td>' + entry.method + '</td>'
+          + '<td><span class="' + badgeClass + '">' + badgeText + '</span></td>'
+          + '<td>' + escapeHtmlJs(String(entry.result || '')) + '</td>'
+          + '</tr>';
+      }).join('');
+    }
+
+    async function runTest(method) {
+      const textEl = document.getElementById('testBumpText');
+      const text = textEl && typeof textEl.value === 'string' ? textEl.value : '';
+      const response = await runCommand('antigravity.testMethod', [{ method, text }]);
+      const passed = !!(response && response.ok === true && response.result === true);
+      const resultText = response && response.ok === true
+        ? formatResult(response.result)
+        : ('error: ' + formatResult(response ? response.error : 'no-response'));
+
+      testHistory.unshift({
+        time: new Date().toLocaleTimeString(),
+        method,
+        passed,
+        result: resultText
+      });
+      if (testHistory.length > 100) {
+        testHistory.length = 100;
+      }
+      renderTestHistory();
+      requestRuntimeState();
+    }
+
+    function clearTestHistory() {
+      testHistory.length = 0;
+      renderTestHistory();
     }
 
     function requestRuntimeState() {
@@ -180,10 +316,45 @@ export class DashboardPanel {
 
     window.addEventListener('message', (event) => {
       const message = event.data;
-      if (!message || message.command !== 'runtimeStateUpdate') return;
+      if (!message) return;
+
+      if (message.command === 'runCommandResult') {
+        const requestId = String(message.requestId || '');
+        const resolver = pendingCommandResolvers.get(requestId);
+        if (resolver) {
+          pendingCommandResolvers.delete(requestId);
+          resolver({ ok: message.ok === true, result: message.result, error: message.error });
+        }
+        return;
+      }
+
+      if (message.command !== 'runtimeStateUpdate') return;
       const target = document.getElementById('runtime');
+      const cdpTarget = document.getElementById('cdpIndicator');
       if (!target) return;
-      target.textContent = message.state ? JSON.stringify(message.state, null, 2) : 'Runtime unavailable';
+      if (!message.state) {
+        target.textContent = 'Runtime unavailable';
+        if (cdpTarget) cdpTarget.textContent = 'CDP: unavailable';
+        return;
+      }
+
+      const cdp = message.state.cdp || {};
+      const wc = message.state.windowControl || {};
+      const primary = cdp.primaryWindow;
+      const primaryLabel = primary
+        ? (String(primary.id || '') + ' • ' + String(primary.title || ''))
+        : 'none';
+      if (cdpTarget) {
+        cdpTarget.textContent = [
+          'CDP Port: ' + (cdp.port ?? 'unknown'),
+          'Connected: ' + (cdp.connected ? 'YES' : 'NO') + ' (' + (cdp.connectionCount ?? 0) + ')',
+          'Primary Window: ' + primaryLabel,
+          'Current Window Automation: ' + (wc.enabled === false ? 'OFF' : 'ON')
+        ].join('\n');
+      }
+
+      const runtimePayload = message.state.runtime ?? null;
+      target.textContent = runtimePayload ? JSON.stringify(runtimePayload, null, 2) : 'Runtime unavailable';
     });
 
     requestRuntimeState();

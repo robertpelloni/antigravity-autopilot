@@ -393,13 +393,27 @@ export const AUTO_CONTINUE_SCRIPT = `
       }
     }
 
-    var wordNodes = queryAllDeep('button, [role="button"], span, div, p, [aria-label], [title], [data-testid]', scope);
+    var interactiveWordNodes = queryAllDeep('button, [role="button"], [aria-label], [title], [data-testid]', scope);
+    var contentWordNodes = queryAllDeep('button, [role="button"], span, div, p, [aria-label], [title], [data-testid]', scope);
     var feedbackWordPattern = /(^|\b)(good|bad|helpful|not helpful|thumbs up|thumbs down)(\b|$)/i;
     var completionWordPattern = /(all tasks completed|task completed|completed|done|finished|need anything else|anything else\?|waiting for input|requires input)/i;
+    var completionControlPattern = /(copy|regenerate|retry|try again|keep|accept all|apply all|submit|send)/i;
+    var hasInteractiveWordSignal = false;
     var hasWordSignal = false;
 
-    for (var w = 0; w < wordNodes.length; w++) {
-      var n = wordNodes[w];
+    for (var iw = 0; iw < interactiveWordNodes.length; iw++) {
+      var inNode = interactiveWordNodes[iw];
+      var inEl = inNode.closest ? (inNode.closest('button, [role="button"]') || inNode) : inNode;
+      if (!isVisible(inEl) || isBlockedSurface(inEl)) continue;
+      var interactiveText = normalizeText(inEl);
+      if (feedbackWordPattern.test(interactiveText) || completionWordPattern.test(interactiveText) || completionControlPattern.test(interactiveText)) {
+        hasInteractiveWordSignal = true;
+        break;
+      }
+    }
+
+    for (var w = 0; w < contentWordNodes.length; w++) {
+      var n = contentWordNodes[w];
       var e = n.closest ? (n.closest('button, [role="button"], span, div, p') || n) : n;
       if (!isVisible(e) || isBlockedSurface(e)) continue;
       var text = normalizeText(e);
@@ -410,7 +424,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     }
 
     if (fork === 'vscode') {
-      return hasThumbSignal;
+      return hasThumbSignal || hasInteractiveWordSignal;
     }
 
     if (fork === 'antigravity' || fork === 'cursor') {

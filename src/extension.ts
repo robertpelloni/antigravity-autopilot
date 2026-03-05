@@ -24,6 +24,7 @@ import { diagnoseCdp } from './commands/diagnose-cdp';
 const log = createLogger('Extension');
 let statusBar: StatusBarManager;
 let controllerLease: ControllerLease | null = null;
+let currentWindowAutomationDisabled = false;
 
 function safeRegisterCommand(commandId: string, callback: (...args: any[]) => any): vscode.Disposable {
     try {
@@ -69,7 +70,9 @@ export function activate(context: vscode.ExtensionContext) {
         // Sync leader role to strategy
         const syncLeaderRole = () => {
             updateLeaderStatus();
-            cdpStrategy.setControllerRole(isLeader());
+            const effectiveLeader = isLeader() && !currentWindowAutomationDisabled;
+            cdpStrategy.setControllerRole(effectiveLeader);
+            cdpStrategy.setWindowAutomationEnabled(!currentWindowAutomationDisabled);
         };
 
         // Start strategy
@@ -83,6 +86,8 @@ export function activate(context: vscode.ExtensionContext) {
             syncLeaderRole();
             log.info('Antigravity Autopilot: Brain ACTIVE as controller leader.');
         }
+
+        DashboardPanel.setRuntimeStateProvider(async () => cdpStrategy.getDashboardSnapshot());
 
         // Update status bar
         const refreshStatusBar = () => {
@@ -144,6 +149,29 @@ export function activate(context: vscode.ExtensionContext) {
             DashboardPanel.createOrShow(context.extensionUri);
         }));
 
+        context.subscriptions.push(safeRegisterCommand('antigravity.toggleCurrentWindowAutomationDisable', async () => {
+            currentWindowAutomationDisabled = !currentWindowAutomationDisabled;
+            syncLeaderRole();
+            refreshStatusBar();
+            const stateLabel = currentWindowAutomationDisabled ? 'DISABLED' : 'ENABLED';
+            vscode.window.showInformationMessage(`Antigravity: Current window automation ${stateLabel}`);
+        }));
+
+        context.subscriptions.push(safeRegisterCommand('antigravity.testMethod', async (payload?: any) => {
+            const methodName = typeof payload === 'string'
+                ? payload
+                : String(payload?.method || payload?.id || '').trim();
+            const text = typeof payload === 'object' ? String(payload?.text || '') : '';
+            if (!methodName) {
+                vscode.window.showWarningMessage('Antigravity: Missing test method id.');
+                return false;
+            }
+
+            const ok = await cdpStrategy.testMethod(methodName, text || undefined);
+            vscode.window.showInformationMessage(`Antigravity test ${methodName}: ${ok ? 'OK' : 'MISS'}`);
+            return ok;
+        }));
+
         // Native settings
         context.subscriptions.push(safeRegisterCommand('antigravity.openExtensionSettings', () => {
             vscode.commands.executeCommand('workbench.action.openSettings', '@ext:robertpelloni.antigravity-autopilot');
@@ -190,7 +218,7 @@ export function activate(context: vscode.ExtensionContext) {
         const noopCommands = [
             'antigravity.clickRun', 'antigravity.clickExpand', 'antigravity.clickAccept',
             'antigravity.resetConnection', 'antigravity.agent.acceptAgentStep',
-            'antigravity.terminal.accept', 'antigravity.testMethod',
+            'antigravity.terminal.accept',
             'antigravity.checkSettingsSurfacesHealth', 'antigravity.generateTests',
             'antigravity.runCodeReview', 'antigravity.startMultiAgent',
             'antigravity.showMemory', 'antigravity.syncProjectTasks',

@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 5.2.231  
-**Last Updated**: 2026-02-28  
-**Status**: Production stabilization shipped (workspace-scoped single leader + interactive-only action targeting + unsuppressed bump typing with submit retries)
+**Version**: 6.2.14  
+**Last Updated**: 2026-03-05  
+**Status**: Production stabilization + dashboard method-test controls shipped (CDP/window diagnostics, per-window automation toggle, and test-result history)
 
 ## Project Structure at a Glance
 

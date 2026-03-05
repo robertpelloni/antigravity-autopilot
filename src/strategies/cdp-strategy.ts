@@ -29,11 +29,13 @@ export class CDPStrategy implements IStrategy {
     private statusBarItem: vscode.StatusBarItem;
     private context: vscode.ExtensionContext;
     private controllerRoleIsLeader = false;
+    private automationEnabledForWindow = true;
 
     private lastBumpAt = 0;
     private lastActivityAt = Date.now();
     private lastReconnectAttemptAt = 0;
     private lastStopSignalSkipLogAt = 0;
+    private lastBumpTargetPageId: string | null = null;
     private stallTimer: NodeJS.Timeout | null = null;
 
     constructor(context: vscode.ExtensionContext) {
@@ -48,6 +50,15 @@ export class CDPStrategy implements IStrategy {
     setControllerRole(isLeader: boolean): void {
         this.controllerRoleIsLeader = !!isLeader;
         this.cdpHandler.setControllerRole(this.controllerRoleIsLeader);
+    }
+
+    setWindowAutomationEnabled(enabled: boolean): void {
+        this.automationEnabledForWindow = !!enabled;
+        this.cdpHandler.setControllerRole(this.controllerRoleIsLeader && this.automationEnabledForWindow);
+    }
+
+    isWindowAutomationEnabled(): boolean {
+        return this.automationEnabledForWindow;
     }
 
     setHostWindowFocused(focused: boolean): void {
@@ -194,7 +205,12 @@ export class CDPStrategy implements IStrategy {
 
         const broadcastToAll = config.get<boolean>('automation.bump.broadcastToAllPages') === true;
         if (!broadcastToAll && readyTargets.length > 1) {
-            return { readyTargets: [readyTargets[0]], skipped };
+            const lastTarget = this.lastBumpTargetPageId;
+            const lastIndex = lastTarget ? readyTargets.indexOf(lastTarget) : -1;
+            const nextIndex = lastIndex >= 0
+                ? (lastIndex + 1) % readyTargets.length
+                : 0;
+            return { readyTargets: [readyTargets[nextIndex]], skipped };
         }
 
         return { readyTargets, skipped };
@@ -285,11 +301,13 @@ export class CDPStrategy implements IStrategy {
         this.lastBumpAt = 0;
         this.updateStatusBar();
 
+        this.cdpHandler.setControllerRole(this.controllerRoleIsLeader && this.automationEnabledForWindow);
+
         void (async () => { await this.cdpHandler.connect(); })();
 
         // ─── STATE EVENT: keep activity heartbeat from injected runtime ───
         this.cdpHandler.on('state', async ({ state }) => {
-            if (!this.isActive || !this.controllerRoleIsLeader) return;
+            if (!this.isActive || !this.controllerRoleIsLeader || !this.automationEnabledForWindow) return;
 
             const now = Date.now();
             const generating = state?.isGenerating === true;
@@ -311,7 +329,7 @@ export class CDPStrategy implements IStrategy {
 
             logToOutput(`[TICK] active=${this.isActive} leader=${this.controllerRoleIsLeader} connected=${connected} actAge=${actAge}ms bumpAge=${bumpAge}ms`);
 
-            if (!this.isActive || !this.controllerRoleIsLeader) return;
+            if (!this.isActive || !this.controllerRoleIsLeader || !this.automationEnabledForWindow) return;
 
             // Recover if startup happened before CDP endpoint became available.
             if (!connected) {
@@ -340,6 +358,9 @@ export class CDPStrategy implements IStrategy {
 
             this.lastBumpAt = now;
             this.lastActivityAt = now;
+            if (readyTargets.length > 0) {
+                this.lastBumpTargetPageId = readyTargets[0];
+            }
             logToOutput('[Bump] FIRING — stalled ' + actAge + 'ms, text: "' + BUMP_TEXT + '"');
 
             try {
@@ -429,8 +450,11 @@ export class CDPStrategy implements IStrategy {
 
     private updateStatusBar() {
         if (this.isActive) {
-            this.statusBarItem.text = '$(check) CDP: ON';
-            this.statusBarItem.tooltip = 'CDP Strategy Active';
+            const windowFlag = this.automationEnabledForWindow ? 'ON' : 'OFF';
+            this.statusBarItem.text = `$(check) CDP: ${windowFlag}`;
+            this.statusBarItem.tooltip = this.automationEnabledForWindow
+                ? 'CDP Strategy Active (current window enabled)'
+                : 'CDP Strategy Active (current window automation disabled)';
             this.statusBarItem.backgroundColor = undefined;
         } else {
             this.statusBarItem.text = '$(circle-slash) CDP: OFF';
@@ -444,9 +468,213 @@ export class CDPStrategy implements IStrategy {
 
     // Compatibility stubs
     isConnected(): boolean { return this.cdpHandler.isConnected(); }
-    async getRuntimeState(): Promise<CDPRuntimeState> { return {}; }
+    async getRuntimeState(): Promise<CDPRuntimeState> {
+        const runtime = await this.cdpHandler.executeInFirstTruthySession('window.__antigravityGetState ? window.__antigravityGetState() : null', true).catch(() => null);
+        return runtime || {};
+    }
+    async getDashboardSnapshot(): Promise<any> {
+        const tracked = this.cdpHandler.getTrackedSessions();
+        const primary = tracked.length > 0 ? tracked[0] : null;
+        const runtime = await this.cdpHandler.executeInFirstTruthySession('window.__antigravityGetState ? window.__antigravityGetState() : null', true).catch(() => null);
+
+        return {
+            cdp: {
+                port: config.get<number>('cdpPort') || 9222,
+                connected: this.cdpHandler.isConnected(),
+                connectionCount: tracked.length,
+                primaryWindow: primary ? {
+                    id: String(primary.id || '').substring(0, 8),
+                    title: primary.title || 'Untitled',
+                    url: primary.url || ''
+                } : null,
+                windows: tracked.map((s) => ({
+                    id: String(s.id || '').substring(0, 8),
+                    title: s.title || 'Untitled',
+                    url: s.url || ''
+                }))
+            },
+            windowControl: {
+                enabled: this.automationEnabledForWindow,
+                effectiveLeader: this.controllerRoleIsLeader && this.automationEnabledForWindow,
+                controllerRoleIsLeader: this.controllerRoleIsLeader
+            },
+            runtime: runtime || null
+        };
+    }
     async executeAction(action: string): Promise<void> { }
     async sendHybridBump(message: string): Promise<boolean> { return true; }
     async sendInputSubmitFallback(): Promise<boolean> { return true; }
-    async testMethod(methodName: string, text?: string): Promise<boolean> { return true; }
+    async testMethod(methodName: string, text?: string): Promise<boolean> {
+        const method = String(methodName || '').trim().toLowerCase();
+        const bumpText = String((text || config.get<string>('actions.bump.text') || 'Proceed')).trim();
+        const targetPageIds = this.getConfiguredBumpTargetPageIds();
+
+        if (!method || targetPageIds.length === 0) {
+            logToOutput(`[TestMethod] skipped method=${method || 'empty'} reason=no-targets`);
+            return false;
+        }
+
+        const firstTarget = targetPageIds[0];
+
+        if (method === 'typing:cdp-insert-text') {
+            const results = await this.sendBumpInputCommand('Input.insertText', { text: bumpText }, [firstTarget]);
+            logToOutput(`[TestMethod] typing:cdp-insert-text => ${JSON.stringify(results)}`);
+            return results.some((r) => r.startsWith('ok:'));
+        }
+
+        if (method === 'typing:dom-set-input') {
+            const expression = `(() => {
+                const text = ${JSON.stringify(bumpText)};
+                const isVisible = (el) => {
+                    if (!el || !el.isConnected || el.disabled) return false;
+                    const r = el.getBoundingClientRect();
+                    if (!r || r.width <= 0 || r.height <= 0) return false;
+                    const s = window.getComputedStyle(el);
+                    return !(s.display === 'none' || s.visibility === 'hidden' || s.pointerEvents === 'none');
+                };
+                const candidates = Array.from(document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"], .monaco-editor textarea'));
+                for (const c of candidates) {
+                    if (!isVisible(c)) continue;
+                    try { if (typeof c.focus === 'function') c.focus(); } catch {}
+                    if (c.isContentEditable || c.getAttribute('contenteditable') === 'true') {
+                        try { document.execCommand('selectAll', false, null); } catch {}
+                        try { document.execCommand('insertText', false, text); } catch { c.textContent = text; }
+                    } else {
+                        c.value = text;
+                    }
+                    c.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                    c.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                    return true;
+                }
+                return false;
+            })()`;
+            const result = await (this.cdpHandler as any).sendCommand(firstTarget, 'Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }).catch(() => null);
+            const ok = result?.result?.value === true;
+            logToOutput(`[TestMethod] typing:dom-set-input => ${ok}`);
+            return ok;
+        }
+
+        if (method === 'typing:vscode-fallback') {
+            const expression = `(() => {
+                const text = ${JSON.stringify(bumpText)};
+                const candidates = Array.from(document.querySelectorAll('textarea, .monaco-editor textarea'));
+                for (const c of candidates) {
+                    if (!c || c.disabled) continue;
+                    try { if (typeof c.focus === 'function') c.focus(); } catch {}
+                    c.value = '';
+                    try { c.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text })); } catch {}
+                    c.value = text;
+                    try { c.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: text })); } catch {}
+                    c.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                    return true;
+                }
+                return false;
+            })()`;
+            const result = await (this.cdpHandler as any).sendCommand(firstTarget, 'Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }).catch(() => null);
+            const ok = result?.result?.value === true;
+            logToOutput(`[TestMethod] typing:vscode-fallback => ${ok}`);
+            return ok;
+        }
+
+        if (method === 'stalled:runtime-stalled'
+            || method === 'stalled:waiting-for-chat-message'
+            || method === 'stalled:ready-to-resume') {
+            const expression = `(() => {
+                const s = window.__antigravityRuntimeState || null;
+                return {
+                    hasRuntime: !!s,
+                    stalled: s?.stalled === true,
+                    waitingForChatMessage: s?.waitingForChatMessage === true,
+                    readyToResume: s?.completionWaiting?.readyToResume === true,
+                    completeStopSignal: s?.completeStopSignal === true,
+                    status: s?.status || 'unknown'
+                };
+            })()`;
+            const result = await (this.cdpHandler as any).sendCommand(firstTarget, 'Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }).catch(() => null);
+            const value = result?.result?.value || null;
+            logToOutput(`[TestMethod] ${method} => ${JSON.stringify(value)}`);
+            if (!value) return false;
+            if (method === 'stalled:runtime-stalled') return value.stalled === true;
+            if (method === 'stalled:waiting-for-chat-message') return value.waitingForChatMessage === true;
+            return value.readyToResume === true;
+        }
+
+        if (method === 'detect:send-button' || method === 'detect:keep-button' || method === 'detect:run-button' || method === 'detect:thumbs-signal') {
+            const selectorMap: Record<string, string> = {
+                'detect:send-button': '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], [data-testid*="send" i], [data-testid*="submit" i], button[type="submit"], .codicon-send',
+                'detect:keep-button': '[title*="Keep" i], [aria-label*="Keep" i], [data-testid*="keep" i], button[title*="Keep" i], button[aria-label*="Keep" i]',
+                'detect:run-button': '[title*="Run" i], [aria-label*="Run" i], [data-testid*="run" i], .codicon-play, button[title*="Run in Terminal" i], button[aria-label*="Run in Terminal" i]',
+                'detect:thumbs-signal': '.codicon-thumbsup, .codicon-thumbsdown, [class*="thumbsup" i], [class*="thumbsdown" i], [title*="thumbs up" i], [title*="thumbs down" i], [aria-label*="thumbs up" i], [aria-label*="thumbs down" i]'
+            };
+            const selector = selectorMap[method];
+            const expression = `(() => {
+                const nodes = Array.from(document.querySelectorAll(${JSON.stringify(selector)}));
+                let visible = 0;
+                for (const n of nodes) {
+                    const el = n.closest?.('button, [role="button"], a, span, div') || n;
+                    if (!el || !el.isConnected) continue;
+                    const r = el.getBoundingClientRect();
+                    if (!r || r.width <= 0 || r.height <= 0) continue;
+                    const s = window.getComputedStyle(el);
+                    if (s.display === 'none' || s.visibility === 'hidden' || s.pointerEvents === 'none') continue;
+                    visible++;
+                }
+                return { total: nodes.length, visible };
+            })()`;
+            const result = await (this.cdpHandler as any).sendCommand(firstTarget, 'Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }).catch(() => null);
+            const value = result?.result?.value || { total: 0, visible: 0 };
+            logToOutput(`[TestMethod] ${method} => ${JSON.stringify(value)}`);
+            return Number(value.visible || 0) > 0;
+        }
+
+        if (method === 'click:send-dom') {
+            const ok = await this.clickSubmitButtonOnPage(firstTarget, bumpText);
+            logToOutput(`[TestMethod] click:send-dom => ${ok}`);
+            return ok;
+        }
+
+        if (method === 'click:enter-key') {
+            const down = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
+                type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
+            }, [firstTarget]);
+            const up = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
+                type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
+            }, [firstTarget]);
+            logToOutput(`[TestMethod] click:enter-key => down=${JSON.stringify(down)} up=${JSON.stringify(up)}`);
+            return down.some((r) => r.startsWith('ok:')) || up.some((r) => r.startsWith('ok:'));
+        }
+
+        if (method === 'click:send-cdp-mouse') {
+            const expression = `(() => {
+                const selectors = [
+                    '[title*="Send" i]','[aria-label*="Send" i]','[title*="Submit" i]','[aria-label*="Submit" i]',
+                    '[data-testid*="send" i]','[data-testid*="submit" i]','button[type="submit"]','.codicon-send'
+                ];
+                for (const sel of selectors) {
+                    const node = document.querySelector(sel);
+                    const el = node?.closest?.('button, [role="button"], a, .monaco-button') || node;
+                    if (!el) continue;
+                    const r = el.getBoundingClientRect();
+                    if (!r || r.width <= 0 || r.height <= 0) continue;
+                    return { x: Math.floor(r.left + r.width / 2), y: Math.floor(r.top + r.height / 2) };
+                }
+                return null;
+            })()`;
+            const coordsResult = await (this.cdpHandler as any).sendCommand(firstTarget, 'Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }).catch(() => null);
+            const coords = coordsResult?.result?.value;
+            if (!coords || typeof coords.x !== 'number' || typeof coords.y !== 'number') {
+                logToOutput('[TestMethod] click:send-cdp-mouse => no-send-coordinates');
+                return false;
+            }
+
+            const moved = await this.sendBumpInputCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', x: coords.x, y: coords.y, button: 'left', clickCount: 0 }, [firstTarget]);
+            const pressed = await this.sendBumpInputCommand('Input.dispatchMouseEvent', { type: 'mousePressed', x: coords.x, y: coords.y, button: 'left', clickCount: 1 }, [firstTarget]);
+            const released = await this.sendBumpInputCommand('Input.dispatchMouseEvent', { type: 'mouseReleased', x: coords.x, y: coords.y, button: 'left', clickCount: 1 }, [firstTarget]);
+            logToOutput(`[TestMethod] click:send-cdp-mouse => move=${JSON.stringify(moved)} down=${JSON.stringify(pressed)} up=${JSON.stringify(released)}`);
+            return pressed.some((r) => r.startsWith('ok:')) || released.some((r) => r.startsWith('ok:'));
+        }
+
+        logToOutput(`[TestMethod] unknown method=${method}`);
+        return false;
+    }
 }

@@ -1,6 +1,16 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.14] - 2026-03-05
+### Added
+* **Method Test Control Surface**: Dashboard now exposes one-click test buttons for bump typing methods, stalled-conversation detection methods, button detection methods, and button-clicking methods for manual cross-fork verification.
+* **CDP Runtime Status Indicator**: Dashboard diagnostics now show current CDP port, connected state, connection count, and primary connected window metadata.
+* **Current-Window Automation Toggle**: Added a per-window enable/disable control to temporarily suppress automation in the active window without shutting down the strategy globally.
+* **Method Test History Table**: Dashboard now captures timestamped PASS/FAIL results with raw response/error payloads and clear-history control for iterative manual testing.
+
+### Changed
+* **Dashboard Command Bridge**: Webview command dispatch now supports request/response correlation so test actions can return deterministic results to the UI.
+
 ## [6.2.13] - 2026-03-05
 ### Fixed
 * **Per-Window Bump Target Drift**: CDP fallback now evaluates all connected candidates and selects ready windows instead of relying on an arbitrary primary target.
