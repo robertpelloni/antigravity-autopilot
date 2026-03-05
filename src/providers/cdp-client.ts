@@ -1,6 +1,7 @@
 
 import { CDPHandler } from '../services/cdp/cdp-handler';
 import { createLogger } from '../utils/logger';
+import { config } from '../utils/config';
 
 const log = createLogger('CDPClient');
 
@@ -9,7 +10,11 @@ export class CDPClient {
     private isPro = true;
 
     constructor() {
-        this.handler = new CDPHandler();
+        const configuredPortRaw = config.get<number | string>('cdpPort');
+        const configuredPort = typeof configuredPortRaw === 'string' ? parseInt(configuredPortRaw, 10) : configuredPortRaw;
+        const startupPort = (typeof configuredPort === 'number' && Number.isFinite(configuredPort) && configuredPort > 0) ? configuredPort : 9222;
+        this.handler = new CDPHandler(startupPort, startupPort);
+        log.info(`CDP client initialized with startup port ${startupPort}`);
     }
 
     getHandler(): CDPHandler {

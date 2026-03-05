@@ -30,10 +30,10 @@ export class CDPStrategy implements IStrategy {
     private context: vscode.ExtensionContext;
     private controllerRoleIsLeader = false;
 
-    private lastClickAt = 0;
     private lastBumpAt = 0;
     private lastActivityAt = Date.now();
-    private wasGenerating = false;
+    private lastReconnectAttemptAt = 0;
+    private lastStopSignalSkipLogAt = 0;
     private stallTimer: NodeJS.Timeout | null = null;
 
     constructor(context: vscode.ExtensionContext) {
@@ -55,17 +55,23 @@ export class CDPStrategy implements IStrategy {
     }
 
     /**
-     * Send a raw CDP command to ALL connected pages (main page context only).
-     * Used for Input domain commands (insertText, dispatchKeyEvent).
+     * Send a raw CDP command for bump input/submit.
+     * Default behavior targets only the primary connected page to avoid cross-window fan-out.
+     * Set antigravity.automation.bump.broadcastToAllPages=true to opt into legacy broadcast behavior.
      */
-    private async sendToAllPages(method: string, params: any = {}): Promise<string[]> {
+    private async sendBumpInputCommand(method: string, params: any = {}, targetPageIds?: string[]): Promise<string[]> {
         const results: string[] = [];
-        // Access connections via the handler's public sendCommand
-        // We need to get page IDs — use getPrimaryConnectedPageId or iterate
         const handler = this.cdpHandler as any;
         if (!handler.connections) return ['no-connections'];
+        if (handler.connections.size === 0) return ['no-connections'];
 
-        for (const [pageId] of handler.connections) {
+        const resolvedTargets = Array.isArray(targetPageIds)
+            ? targetPageIds.filter((id) => typeof id === 'string' && id.length > 0)
+            : this.getConfiguredBumpTargetPageIds();
+
+        if (resolvedTargets.length === 0) return ['no-connections'];
+
+        for (const pageId of resolvedTargets) {
             try {
                 await handler.sendCommand(pageId, method, params);
                 results.push('ok:' + pageId.substring(0, 8));
@@ -76,100 +82,101 @@ export class CDPStrategy implements IStrategy {
         return results;
     }
 
+    private getConfiguredBumpTargetPageIds(): string[] {
+        const handler = this.cdpHandler as any;
+        if (!handler?.connections || handler.connections.size === 0) return [];
+
+        const broadcastToAll = config.get<boolean>('automation.bump.broadcastToAllPages') === true;
+        if (broadcastToAll) {
+            const all: string[] = [];
+            for (const [pageId] of handler.connections) {
+                all.push(pageId);
+            }
+            return all;
+        }
+
+        if (typeof handler.getPrimaryConnectedPageId === 'function') {
+            const primary = handler.getPrimaryConnectedPageId();
+            if (primary) return [primary];
+        }
+
+        const fallback = handler.connections.keys().next();
+        return (!fallback.done && fallback.value) ? [fallback.value as string] : [];
+    }
+
+    private async hasCompleteStopSignalOnPage(pageId: string): Promise<{ ready: boolean; reason: string }> {
+        if (!pageId) return { ready: false, reason: 'missing-page-id' };
+
+        const expression = `(() => {
+            const state = window.__antigravityRuntimeState || null;
+            if (!state || typeof state !== 'object') {
+                return { ready: false, reason: 'runtime-state-missing' };
+            }
+
+            const readyToResume = state?.completionWaiting?.readyToResume === true;
+            const stopped = state?.stalled === true;
+            const completeSignal = state?.completeStopSignal === true;
+
+            const ready = readyToResume && stopped && completeSignal;
+            if (ready) {
+                return { ready: true, reason: 'runtime-ready-to-resume' };
+            }
+
+            if (!stopped) return { ready: false, reason: 'runtime-not-stalled' };
+            if (!completeSignal) return { ready: false, reason: 'runtime-missing-stop-signal' };
+            return { ready: false, reason: 'runtime-not-ready' };
+        })()`;
+
+        const result = await (this.cdpHandler as any).sendCommand(pageId, 'Runtime.evaluate', {
+            expression,
+            returnByValue: true,
+            awaitPromise: true
+        }).catch(() => null);
+
+        const value = result?.result?.value;
+        if (!value || typeof value.ready !== 'boolean') {
+            return { ready: false, reason: 'signal-eval-failed' };
+        }
+
+        return { ready: value.ready === true, reason: String(value.reason || '') || 'unknown' };
+    }
+
+    private async getReadyStopSignalTargets(): Promise<{ readyTargets: string[]; skipped: string[] }> {
+        const configuredTargets = this.getConfiguredBumpTargetPageIds();
+        const readyTargets: string[] = [];
+        const skipped: string[] = [];
+
+        for (const pageId of configuredTargets) {
+            const signal = await this.hasCompleteStopSignalOnPage(pageId);
+            if (signal.ready) {
+                readyTargets.push(pageId);
+            } else {
+                skipped.push(`${pageId.substring(0, 8)}:${signal.reason}`);
+            }
+        }
+
+        return { readyTargets, skipped };
+    }
+
     async start(): Promise<void> {
         if (this.isActive) return;
         this.isActive = true;
         this.lastActivityAt = Date.now();
-        this.lastClickAt = 0;
         this.lastBumpAt = 0;
         this.updateStatusBar();
 
         void (async () => { await this.cdpHandler.connect(); })();
 
-        // ─── STATE EVENT: detect buttons and click them ───
+        // ─── STATE EVENT: keep activity heartbeat from injected runtime ───
         this.cdpHandler.on('state', async ({ state }) => {
             if (!this.isActive || !this.controllerRoleIsLeader) return;
 
             const now = Date.now();
-            const isGenerating = state.isGenerating;
-            const buttons: string[] = state.buttons || [];
-
-            logToOutput('[State] Gen: ' + isGenerating + ', Buttons: ' + buttons.join(', '));
-
-            if (isGenerating) {
-                this.wasGenerating = true;
-                this.lastActivityAt = now;
-            } else if (this.wasGenerating) {
-                this.wasGenerating = false;
+            const generating = state?.isGenerating === true;
+            const stalled = state?.stalled === true;
+            if (generating || !stalled) {
                 this.lastActivityAt = now;
             }
-
-            // Button click throttle: 2s
-            if (now - this.lastClickAt < 2000) return;
-
-            const enabled = !!config.get<boolean>('autopilotAutoAcceptEnabled')
-                || !!config.get<boolean>('autoAllEnabled')
-                || !!config.get<boolean>('autoAcceptEnabled');
-
-            if (!enabled || buttons.length === 0 || isGenerating) return;
-
-            const btnPriority = ['run', 'expand', 'allow', 'accept_all', 'keep', 'retry', 'continue'];
-            let targetBtn: string | null = null;
-            for (const b of btnPriority) {
-                if (buttons.includes(b)) { targetBtn = b; break; }
-            }
-            if (!targetBtn) return;
-
-            this.lastClickAt = now;
-            this.lastActivityAt = now;
-
-            const textMap: Record<string, string[]> = {
-                run: ['run', 'run tool'],
-                expand: ['expand', 'requires input'],
-                allow: ['allow', 'always allow'],
-                accept_all: ['accept all', 'apply all'],
-                keep: ['keep'],
-                retry: ['retry'],
-                continue: ['continue'],
-            };
-            const matchTexts = textMap[targetBtn] || [targetBtn];
-
-            logToOutput('[Click] ' + targetBtn);
-
-            // Button click via CDP Runtime.evaluate (DOM injection — proven working for buttons)
-            const clickScript = `(() => {
-                var mt = ${JSON.stringify(matchTexts)};
-                function qsa(sel, root) {
-                    root = root || document;
-                    var r = [];
-                    try { r = Array.from(root.querySelectorAll(sel)); } catch(e) {}
-                    try {
-                        var all = root.querySelectorAll('*');
-                        for (var i = 0; i < all.length; i++) {
-                            try { if (all[i].shadowRoot) r = r.concat(qsa(sel, all[i].shadowRoot)); } catch(e) {}
-                        }
-                    } catch(e) {}
-                    return r;
-                }
-                var btns = qsa('button, [role="button"], .monaco-button');
-                for (var i = 0; i < btns.length; i++) {
-                    var b = btns[i];
-                    if (!b.isConnected || b.disabled || (b.clientWidth === 0 && b.clientHeight === 0)) continue;
-                    var t = (b.textContent || '').replace(/\\s+/g, ' ').trim().toLowerCase();
-                    var a = (b.getAttribute('aria-label') || '').toLowerCase();
-                    var ti = (b.getAttribute('title') || '').toLowerCase();
-                    for (var m = 0; m < mt.length; m++) {
-                        if (t === mt[m] || a === mt[m] || ti === mt[m] || t.indexOf(mt[m]) >= 0) {
-                            b.click();
-                            return 'clicked:' + t;
-                        }
-                    }
-                }
-                return 'not-found';
-            })()`;
-
-            const r = await this.cdpHandler.executeInAllSessions(clickScript).catch(() => null);
-            logToOutput('[Click] => ' + JSON.stringify(r));
         });
 
         // ─── STALL DETECTION + BUMP ───
@@ -180,12 +187,34 @@ export class CDPStrategy implements IStrategy {
             const now = Date.now();
             const actAge = now - this.lastActivityAt;
             const bumpAge = now - this.lastBumpAt;
+            const connected = this.cdpHandler.isConnected();
 
-            logToOutput(`[TICK] active=${this.isActive} leader=${this.controllerRoleIsLeader} actAge=${actAge}ms bumpAge=${bumpAge}ms`);
+            logToOutput(`[TICK] active=${this.isActive} leader=${this.controllerRoleIsLeader} connected=${connected} actAge=${actAge}ms bumpAge=${bumpAge}ms`);
 
             if (!this.isActive || !this.controllerRoleIsLeader) return;
+
+            // Recover if startup happened before CDP endpoint became available.
+            if (!connected) {
+                const reconnectCooldownMs = 5000;
+                if ((now - this.lastReconnectAttemptAt) >= reconnectCooldownMs) {
+                    this.lastReconnectAttemptAt = now;
+                    const ok = await this.cdpHandler.connect().catch(() => false);
+                    logToOutput(`[CDP] Reconnect attempt => ${ok ? 'connected' : 'no-targets'}`);
+                }
+                return;
+            }
+
             if (actAge < STALL_MS) return;
             if (bumpAge < BUMP_COOLDOWN_MS) return;
+
+            const { readyTargets, skipped } = await this.getReadyStopSignalTargets();
+            if (readyTargets.length === 0) {
+                if ((now - this.lastStopSignalSkipLogAt) > 5000) {
+                    this.lastStopSignalSkipLogAt = now;
+                    logToOutput(`[Bump] Skipped: no complete-stop target windows (${skipped.join(', ') || 'none-ready'}).`);
+                }
+                return;
+            }
 
             const BUMP_TEXT = config.get<string>('actions.bump.text') || 'Proceed';
 
@@ -212,8 +241,12 @@ export class CDPStrategy implements IStrategy {
                 // No DOM manipulation, no textarea.value, no native setters
                 // ────────────────────────────────────────
                 logToOutput('[Bump] Step 2: CDP Input.insertText "' + BUMP_TEXT + '"...');
-                const typeResults = await this.sendToAllPages('Input.insertText', { text: BUMP_TEXT });
+                const typeResults = await this.sendBumpInputCommand('Input.insertText', { text: BUMP_TEXT }, readyTargets);
                 logToOutput('[Bump] Type result: ' + JSON.stringify(typeResults));
+                if (typeResults.length === 0 || typeResults.includes('no-connections')) {
+                    logToOutput('[Bump] Aborted: no connected CDP targets available for typing.');
+                    return;
+                }
                 await new Promise(r => setTimeout(r, 300));
 
                 // ────────────────────────────────────────
@@ -221,20 +254,20 @@ export class CDPStrategy implements IStrategy {
                 // Also browser-level — Monaco processes it like a real Enter press
                 // ────────────────────────────────────────
                 logToOutput('[Bump] Step 3: CDP Input.dispatchKeyEvent Enter...');
-                const enterDown = await this.sendToAllPages('Input.dispatchKeyEvent', {
+                const enterDown = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
                     type: 'keyDown',
                     key: 'Enter',
                     code: 'Enter',
                     windowsVirtualKeyCode: 13,
                     nativeVirtualKeyCode: 13,
-                });
-                const enterUp = await this.sendToAllPages('Input.dispatchKeyEvent', {
+                }, readyTargets);
+                const enterUp = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
                     type: 'keyUp',
                     key: 'Enter',
                     code: 'Enter',
                     windowsVirtualKeyCode: 13,
                     nativeVirtualKeyCode: 13,
-                });
+                }, readyTargets);
                 logToOutput('[Bump] Enter result: down=' + JSON.stringify(enterDown) + ' up=' + JSON.stringify(enterUp));
 
                 logToOutput('[Bump] Done — CDP Input domain (browser-level)');

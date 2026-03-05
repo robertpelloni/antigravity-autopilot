@@ -11,7 +11,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   var DEFAULTS = {
     runtime: { isLeader: false, role: 'follower', windowFocused: true, enforceLeader: true, mode: 'auto' },
-    bump: { enabled: true, text: 'Proceed', requireVisible: true, requireFocused: false, submitDelayMs: 120 },
+    bump: { enabled: true, text: 'Proceed', submitDelayMs: 120 },
     timing: { pollIntervalMs: 800, actionThrottleMs: 300, stalledMs: 7000, bumpCooldownMs: 30000, submitCooldownMs: 3000 },
     actions: {
       clickRun: true,
@@ -58,8 +58,10 @@ export const AUTO_CONTINUE_SCRIPT = `
   var lastBumpAt = 0;
   var submitInFlightUntil = 0;
   var lastProgressAt = Date.now();
+  var lastProgressSignature = '';
   var wasGenerating = false;
   var didInitialProbe = false;
+  var lastStopSignalLogAt = 0;
 
   function emitBridge(payload) {
     try {
@@ -229,7 +231,26 @@ export const AUTO_CONTINUE_SCRIPT = `
     }
   }
 
-  function setInputText(input, text) {
+  function normalizeForVerify(value) {
+    return String(value || '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/\u00A0/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function verifyInputText(input, text, loose) {
+    var readBack = normalizeForVerify(readInputText(input));
+    var expected = normalizeForVerify(text);
+    if (!readBack || !expected) return false;
+    if (readBack === expected) return true;
+    if (loose === true && (readBack.indexOf(expected) >= 0 || expected.indexOf(readBack) >= 0)) return true;
+    return false;
+  }
+
+  function setInputText(input, text, opts) {
+    var options = opts || {};
+    var looseVerify = options.looseVerify === true;
     if (!input) return false;
     try {
       if (typeof input.focus === 'function') input.focus();
@@ -241,18 +262,58 @@ export const AUTO_CONTINUE_SCRIPT = `
         var tag = String(input.tagName || '').toLowerCase();
         if (setter && setter.set && tag === 'textarea') setter.set.call(input, text);
         else input.value = text;
+
+        if (!verifyInputText(input, text, looseVerify)) {
+          try {
+            if (typeof input.setSelectionRange === 'function') {
+              input.setSelectionRange(0, String(input.value || '').length);
+            }
+          } catch (e) {}
+          try { input.setRangeText(String(text || ''), 0, String(input.value || '').length, 'end'); } catch (e) {}
+        }
       }
       input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
       input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-
-      var normalizedReadBack = String(readInputText(input) || '').replace(/\\s+/g, ' ').trim();
-      var normalizedText = String(text || '').replace(/\\s+/g, ' ').trim();
-      if (!normalizedReadBack || normalizedReadBack !== normalizedText) return false;
-
-      return true;
+      return verifyInputText(input, text, looseVerify);
     } catch (e) {
       return false;
     }
+  }
+
+  function setInputTextVscodeFallback(input, text) {
+    if (!input) return false;
+    try {
+      if (typeof input.focus === 'function') input.focus();
+      if (input.isContentEditable || input.getAttribute('contenteditable') === 'true') {
+        try { document.execCommand('selectAll', false, null); } catch (e) {}
+        try { document.execCommand('insertText', false, text); } catch (e) { input.textContent = text; }
+      } else {
+        input.value = '';
+        input.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: String(text || '') }));
+        input.value = String(text || '');
+      }
+      input.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: String(text || '') }));
+      input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+      return verifyInputText(input, text, true);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function computeProgressSignature(root) {
+    var scope = root || document;
+    var selectors = '[data-testid*="message" i], [class*="message" i], .interactive-response, .chat-turn, .response, [data-testid*="response" i]';
+    var nodes = queryAllDeep(selectors, scope);
+    var samples = [];
+    for (var i = nodes.length - 1; i >= 0 && samples.length < 3; i--) {
+      var node = nodes[i];
+      if (!node || !isVisible(node) || isBlockedSurface(node)) continue;
+      var text = normalizeForVerify(node.textContent || '');
+      if (!text) continue;
+      samples.unshift(text.slice(0, 120));
+    }
+    if (samples.length === 0) return '';
+    return String(samples.length) + '|' + samples.join('||');
   }
 
   function click(el, label, group, opts) {
@@ -286,38 +347,91 @@ export const AUTO_CONTINUE_SCRIPT = `
     return false;
   }
 
+  function hasCompleteStopSignal(fork, root) {
+    var scope = root || document;
+
+    function visibleMatch(selector) {
+      var nodes = queryAllDeep(selector, scope);
+      for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        var el = node.closest ? (node.closest('button, [role="button"], a, span, div') || node) : node;
+        if (isVisible(el) && !isBlockedSurface(el)) return true;
+      }
+      return false;
+    }
+
+    var thumbsSelectors = [
+      '.codicon-thumbsup',
+      '.codicon-thumbsdown',
+      '[class*="thumbsup" i]',
+      '[class*="thumbsdown" i]',
+      'button[title*="Helpful" i]',
+      'button[aria-label*="Helpful" i]',
+      'button[title*="Not Helpful" i]',
+      'button[aria-label*="Not Helpful" i]',
+      '[title*="thumbs up" i]',
+      '[title*="thumbs down" i]',
+      '[aria-label*="thumbs up" i]',
+      '[aria-label*="thumbs down" i]'
+    ];
+
+    var hasThumbSignal = false;
+    for (var t = 0; t < thumbsSelectors.length; t++) {
+      if (visibleMatch(thumbsSelectors[t])) {
+        hasThumbSignal = true;
+        break;
+      }
+    }
+
+    var wordNodes = queryAllDeep('button, [role="button"], span, div, p, [aria-label], [title], [data-testid]', scope);
+    var feedbackWordPattern = /(^|\b)(good|bad|helpful|not helpful|thumbs up|thumbs down)(\b|$)/i;
+    var completionWordPattern = /(all tasks completed|task completed|completed|done|finished|need anything else|anything else\?|waiting for input|requires input)/i;
+    var hasWordSignal = false;
+
+    for (var w = 0; w < wordNodes.length; w++) {
+      var n = wordNodes[w];
+      var e = n.closest ? (n.closest('button, [role="button"], span, div, p') || n) : n;
+      if (!isVisible(e) || isBlockedSurface(e)) continue;
+      var text = normalizeText(e);
+      if (feedbackWordPattern.test(text) || completionWordPattern.test(text)) {
+        hasWordSignal = true;
+        break;
+      }
+    }
+
+    if (fork === 'vscode') {
+      return hasThumbSignal;
+    }
+
+    if (fork === 'antigravity' || fork === 'cursor') {
+      return hasWordSignal;
+    }
+
+    return hasThumbSignal || hasWordSignal;
+  }
+
   function submitText(profile, input, root) {
     var before = readInputText(input);
     if (!before) return false;
 
-    var send = findSend(profile, input, root);
-    if (send && click(send, 'Submit bump text', 'submit', { silentLog: true, silentAction: true })) {
-      var afterSend = readInputText(input);
-      if (!afterSend || afterSend !== before || isGenerating(profile, root)) {
-        emitAction('submit', 'submit bump text');
-        return true;
-      }
-    }
+    var preferred = profile === 'vscode' ? 'enter' : 'send';
 
-    try {
-      var form = input.closest && input.closest('form');
-      if (form && typeof form.requestSubmit === 'function') {
-        form.requestSubmit();
-        if (readInputText(input) !== before || isGenerating(profile, root)) {
+    if (preferred === 'send') {
+      var sendBtn = findSend(profile, input, root);
+      if (sendBtn && click(sendBtn, 'Submit bump text', 'submit', { silentLog: true, silentAction: true })) {
+        var afterSend = readInputText(input);
+        if (!afterSend || afterSend !== before || isGenerating(profile, root)) {
           emitAction('submit', 'submit bump text');
           return true;
         }
       }
-    } catch (e) {}
+      return false;
+    }
 
     try {
       if (typeof input.focus === 'function') input.focus();
-      var combos = [{ ctrlKey: true }, { metaKey: true }, { altKey: true }, {}];
-      for (var i = 0; i < combos.length; i++) {
-        var mods = combos[i];
-        input.dispatchEvent(new KeyboardEvent('keydown', Object.assign({ key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }, mods)));
-        input.dispatchEvent(new KeyboardEvent('keyup', Object.assign({ key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }, mods)));
-      }
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
       if (readInputText(input) !== before || isGenerating(profile, root)) {
         emitAction('submit', 'submit bump text');
         return true;
@@ -339,13 +453,11 @@ export const AUTO_CONTINUE_SCRIPT = `
   }
 
   function shouldAct(cfg) {
-    if (cfg.bump.requireVisible !== false && document.visibilityState !== 'visible') return false;
+    if (document.visibilityState !== 'visible') return false;
     if (cfg.runtime.enforceLeader === true && cfg.runtime.isLeader !== true) return false;
-    if (cfg.bump.requireFocused === true) {
-      var docFocused = (typeof document.hasFocus !== 'function') || document.hasFocus();
-      var hostFocused = cfg.runtime.windowFocused === true;
-      if (!docFocused && !hostFocused) return false;
-    }
+    var docFocused = (typeof document.hasFocus !== 'function') || document.hasFocus();
+    var hostFocused = cfg.runtime.windowFocused === true;
+    if (!docFocused && !hostFocused) return false;
     return true;
   }
 
@@ -372,8 +484,15 @@ export const AUTO_CONTINUE_SCRIPT = `
     }
     wasGenerating = generating;
 
+    var progressSignature = computeProgressSignature(root);
+    if (progressSignature && progressSignature !== lastProgressSignature) {
+      lastProgressSignature = progressSignature;
+      lastProgressAt = now;
+    }
+
     var stalledMs = Math.max(1000, Number(cfg.timing.stalledMs || 7000));
     var stalled = !generating && (now - lastProgressAt) >= stalledMs;
+    var completeStopSignal = hasCompleteStopSignal(fork, root || document);
 
     if (!didInitialProbe) {
       didInitialProbe = true;
@@ -383,19 +502,24 @@ export const AUTO_CONTINUE_SCRIPT = `
     window.__antigravityRuntimeState = {
       fork: fork,
       mode: fork,
-      status: generating ? 'processing' : (stalled ? 'waiting_for_chat_message' : 'idle'),
-      waitingForChatMessage: stalled,
+      status: generating ? 'processing' : (stalled && completeStopSignal ? 'waiting_for_chat_message' : 'idle'),
+      waitingForChatMessage: stalled && completeStopSignal,
       completionWaiting: {
-        readyToResume: stalled,
-        confidence: stalled ? 85 : 40,
-        confidenceLabel: stalled ? 'high' : 'low',
-        reasons: stalled ? ['not generating', 'stall timeout reached'] : ['generation active or recently active']
+        readyToResume: stalled && completeStopSignal,
+        confidence: stalled && completeStopSignal ? 90 : (stalled ? 55 : 35),
+        confidenceLabel: stalled && completeStopSignal ? 'high' : (stalled ? 'medium' : 'low'),
+        reasons: stalled
+          ? (completeStopSignal
+            ? ['not generating', 'stall timeout reached', 'complete-stop signal detected']
+            : ['not generating', 'stall timeout reached', 'waiting for complete-stop signal'])
+          : ['generation active or recently active']
       },
       hasRoot: !!root,
       hasInput: !!input,
       hasSend: !!send,
       isGenerating: generating,
       stalled: stalled,
+      completeStopSignal: completeStopSignal,
       timestamp: now
     };
 
@@ -412,6 +536,14 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     if (!cfg.bump.enabled || generating || !stalled) return;
 
+    if (!completeStopSignal) {
+      if ((now - lastStopSignalLogAt) > 5000) {
+        lastStopSignalLogAt = now;
+        log('stall detected but complete-stop signal missing; skipping bump');
+      }
+      return;
+    }
+
     var bumpCooldownMs = Math.max(1000, Number(cfg.timing.bumpCooldownMs || 30000));
     var submitCooldownMs = Math.max(500, Number(cfg.timing.submitCooldownMs || 3000));
     if ((now - lastBumpAt) < bumpCooldownMs) return;
@@ -420,7 +552,12 @@ export const AUTO_CONTINUE_SCRIPT = `
     var bumpText = String(cfg.bump.text || 'Proceed').trim();
     if (!bumpText || !input) return;
 
-    if (!setInputText(input, bumpText)) {
+    var typed = setInputText(input, bumpText, { looseVerify: fork === 'vscode' });
+    if (!typed && fork === 'vscode') {
+      typed = setInputTextVscodeFallback(input, bumpText);
+    }
+
+    if (!typed) {
       log('type verify failed');
       lastActionAt = now;
       return;

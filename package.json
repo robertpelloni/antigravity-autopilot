@@ -2,7 +2,7 @@
   "name": "antigravity-autopilot",
   "displayName": "Antigravity Autopilot (Unified)",
   "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-  "version": "6.2.9",
+  "version": "6.2.11",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -608,6 +608,12 @@
           "default": true,
           "description": "Require the chat document to be visible (not a background tab) before bumping a thread.",
           "markdownDescription": "**Require Visibility**: If true, the extension will only bump active/visible tabs, preventing it from ghost-typing in background tabs. If false, it will bump all available threads simultaneously. (Default: true)"
+        },
+        "antigravity.automation.bump.broadcastToAllPages": {
+          "type": "boolean",
+          "default": false,
+          "description": "Broadcast bump typing and Enter submit across every connected CDP page instead of only the primary page.",
+          "markdownDescription": "**Broadcast Bump To All Pages**: If true, bump text + Enter are sent to all connected pages (legacy behavior). If false, only the primary connected page receives bump input to reduce cross-window chatter. (Default: false)"
         },
         "antigravity.automation.actions.clickFeedback": {
           "type": "boolean",

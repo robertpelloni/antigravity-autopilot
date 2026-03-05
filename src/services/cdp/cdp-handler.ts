@@ -311,6 +311,27 @@ export class CDPHandler extends EventEmitter {
         }
     }
 
+    private isCursorHostApp(): boolean {
+        try {
+            const appName = String((vscode as any)?.env?.appName || '').toLowerCase();
+            return appName.includes('cursor');
+        } catch {
+            return false;
+        }
+    }
+
+    private isVsCodeHostApp(): boolean {
+        if (this.isAntigravityHostApp() || this.isCursorHostApp()) {
+            return false;
+        }
+        try {
+            const appName = String((vscode as any)?.env?.appName || '').toLowerCase();
+            return appName.includes('visual studio code') || appName.includes('vscode') || appName.includes('insiders');
+        } catch {
+            return true;
+        }
+    }
+
     private resolveRuntimeUiMode(): 'auto' | 'vscode' | 'antigravity' | 'cursor' {
         const configured = String(config.get<string>('interactionUiProfile') || 'auto').toLowerCase();
         if (configured === 'vscode' || configured === 'antigravity' || configured === 'cursor') {
@@ -483,15 +504,21 @@ export class CDPHandler extends EventEmitter {
             portsToCheck.add(this.discoveredPort);
         }
 
-        // Recovery fallback: allow explicit configured cdpPort only inside Antigravity host.
-        // This is not a hardwired port; it's user-controlled config and only used when discovery is absent.
-        if (portsToCheck.size === 0 && this.isAntigravityHostApp()) {
+        // Recovery fallback: use explicit configured cdpPort across all hosts when discovery is absent.
+        // This is user-controlled config and critical for VS Code/Cursor where Antigravity-only discovery does not apply.
+        if (portsToCheck.size === 0) {
             const configuredPortRaw = config.get<number | string>('cdpPort');
             const configuredPort = typeof configuredPortRaw === 'string' ? parseInt(configuredPortRaw, 10) : configuredPortRaw;
             if (typeof configuredPort === 'number' && Number.isFinite(configuredPort) && configuredPort > 0) {
                 portsToCheck.add(configuredPort);
-                logToOutput(`[CDPHandler] Auto-discovery unavailable; using explicit configured cdpPort=${configuredPort} (Antigravity host only).`);
+                logToOutput(`[CDPHandler] Auto-discovery unavailable; using configured cdpPort=${configuredPort}.`);
             }
+        }
+
+        // Last-resort host fallback for non-Antigravity apps when config is missing/invalid.
+        if (portsToCheck.size === 0 && !this.isAntigravityHostApp()) {
+            portsToCheck.add(9222);
+            logToOutput('[CDPHandler] Auto-discovery unavailable; using fallback CDP port 9222 for non-Antigravity host.');
         }
 
         // Optional explicit constructor port range fallback (only if caller supplied it).
@@ -561,6 +588,12 @@ export class CDPHandler extends EventEmitter {
         if (!p || typeof p !== 'object') return false;
         if (!p.webSocketDebuggerUrl) return false;
         if (p.type !== 'page') return false;
+
+        // VS Code / Cursor frequently expose sparse page metadata in /json/list.
+        // Fail-open for non-Antigravity hosts to keep compatibility with Insiders/Cursor.
+        if (!this.isAntigravityHostApp()) {
+            return this.isVsCodeHostApp() || this.isCursorHostApp();
+        }
 
         const title = String(p.title || '').toLowerCase();
         const url = String(p.url || '').toLowerCase();
@@ -642,8 +675,6 @@ export class CDPHandler extends EventEmitter {
             bump: {
                 enabled: config.get<boolean>('actions.bump.enabled') !== false,
                 text: config.get<string>('actions.bump.text') || 'Proceed',
-                requireVisible: config.get<boolean>('automation.bump.requireVisible') !== false,
-                requireFocused: config.get<boolean>('automation.bump.requireFocused') === true,
                 submitDelayMs: Math.max(40, submitDelayMs)
             },
             timing: {

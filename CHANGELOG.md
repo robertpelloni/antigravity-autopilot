@@ -1,6 +1,23 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.11] - 2026-03-04
+### Fixed
+* **Strict Stop-Only Bump Dispatch**: Bump typing/submission is now gated by per-window runtime readiness (`completionWaiting.readyToResume`, `stalled`, and `completeStopSignal`) so bump only fires where the conversation is actually stopped and needs it.
+* **Single Submit Per Bump Cycle**: Runtime submit flow now uses one deterministic submit path per fork (VS Code: Enter once; Antigravity/Cursor: Send once), eliminating multi-submit fallback bursts.
+* **Behavior Source-of-Truth Drift**: CDP fallback now trusts injected runtime state for stop readiness instead of duplicating separate DOM signal logic.
+
+## [6.2.10] - 2026-03-04
+### Fixed
+* **VS Code Insiders No-Target Startup**: `CDPClient` now initializes `CDPHandler` with an explicit startup port from `antigravity.cdpPort` (fallback `9222`) so CDP scanning no longer starts in an empty auto-discovery-only path in non-Antigravity hosts.
+* **Disconnected Bump No-Ops**: `CDPStrategy` now attempts periodic reconnect while disconnected and blocks bump typing/submission attempts when no CDP targets are attached, eliminating repeated `Type result: []` / `Enter result: []` loops.
+* **CDP Settings Surface**: Dashboard now exposes `CDP Port` in core settings so host-specific CDP port configuration is directly editable from the extension UI.
+* **Excessive Cross-Window Bump Fan-Out**: Bump typing + Enter dispatch now target only the primary connected CDP page by default, with opt-in legacy broadcasting via `antigravity.automation.bump.broadcastToAllPages`.
+* **Over-Complex Runtime Paths**: Simplified to a strict minimal loop (fork detect, stall detect, bump type/submit, required action clicks only) with explicit complete-stop signal gating before bump typing.
+* **Ambiguous Stop Detection**: Bump now requires concrete stop signals (`thumbs up/down` style signals in VS Code, completion/feedback words in Antigravity/Cursor) in addition to stall timing before typing.
+* **Optional Gating Drift**: Removed optional bump visibility/focus config branches from runtime gating; behavior is now deterministic under leader + focused + visible constraints.
+* **Cross-Window Over-Typing + Duplicate Submit Risk**: CDP bump fallback now evaluates complete-stop signals per target window and sends bump only to ready windows; runtime submit path now executes a single submit method per bump cycle instead of multi-combo retries.
+
 ## [6.2.9] - 2026-03-04
 ### Changed
 * **Core Runtime Simplification**: Replaced passive poll-only `auto-continue` script with a minimal active loop that only performs the required core behaviors: fork detection, stall detection, bump typing, bump submission, and action-button detection/clicking.

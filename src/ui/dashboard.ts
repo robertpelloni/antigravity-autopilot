@@ -104,6 +104,7 @@ export class DashboardPanel {
         const stallTimeoutSec = config.get<number>('actions.bump.stallTimeout') || 7;
         const bumpCooldownSec = config.get<number>('actions.bump.cooldown') || 30;
         const submitDelayMs = config.get<number>('actions.bump.submitDelayMs') || 120;
+        const cdpPort = config.get<number>('cdpPort') || 9222;
 
         return `<!DOCTYPE html>
 <html lang="en">
@@ -134,6 +135,7 @@ export class DashboardPanel {
     <div class="row"><label>Automation Enabled</label><input type="checkbox" ${autoContinueEnabled ? 'checked' : ''} onchange="setCfg('autoContinueScriptEnabled', this.checked)" /></div>
     <div class="row"><label>Bump Enabled</label><input type="checkbox" ${bumpEnabled ? 'checked' : ''} onchange="setCfg('actions.bump.enabled', this.checked)" /></div>
     <div class="row"><label>Bump Text</label><input type="text" value="${escapeHtml(bumpText)}" onchange="setCfg('actions.bump.text', this.value)" /></div>
+    <div class="row"><label>CDP Port</label><input type="number" min="1" max="65535" value="${cdpPort}" onchange="setCfg('cdpPort', Math.min(65535, Math.max(1, Number(this.value) || 9222)))" /></div>
   </div>
 
   <div class="card">
