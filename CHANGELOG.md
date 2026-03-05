@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.12] - 2026-03-04
+### Fixed
+* **`Keep` Action Detection Scope**: Action scanning now checks chat-root first and then full-document fallback, improving detection for `Keep` buttons rendered outside composer-root containers.
+* **Fork-Specific `Retry` Safety**: Automatic `Retry` clicks are disabled for `vscode` fork while remaining enabled for Antigravity/Cursor forks to avoid semantic mismatch loops.
+
 ## [6.2.11] - 2026-03-04
 ### Fixed
 * **Strict Stop-Only Bump Dispatch**: Bump typing/submission is now gated by per-window runtime readiness (`completionWaiting.readyToResume`, `stalled`, and `completeStopSignal`) so bump only fires where the conversation is actually stopped and needs it.
