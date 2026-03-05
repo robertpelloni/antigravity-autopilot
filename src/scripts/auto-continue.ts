@@ -48,7 +48,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     { key: 'clickRun', label: 'Run', regex: /(^|\\b)(run(\\s+in\\s+terminal|\\s+command)?|execute)(\\b|$)/i },
     { key: 'clickExpand', label: 'Expand', regex: /(expand|requires\\s*input|step\\s*requires\\s*input)/i },
     { key: 'clickAlwaysAllow', label: 'Always Allow', regex: /(always\\s*allow|always\\s*approve)/i },
-    { key: 'clickRetry', label: 'Retry', regex: /\\bretry\\b/i },
+      { key: 'clickRetry', label: 'Retry', regex: /(\bretry\b|\btry\s+again\b)/i },
     { key: 'clickAcceptAll', label: 'Accept all', regex: /(accept\\s*all|apply\\s*all|accept\\s*all\\s*changes|apply\\s*all\\s*changes)/i },
     { key: 'clickKeep', label: 'Keep', regex: /\\bkeep\\b/i }
   ];
@@ -138,6 +138,16 @@ export const AUTO_CONTINUE_SCRIPT = `
     var terminal = '.terminal-instance, .terminal-wrapper, .xterm, [data-testid*="terminal" i], [class*="terminal" i]';
     try {
       return !!(el.closest(blockedChrome) || el.closest(terminal));
+    } catch (e) {
+      return true;
+    }
+  }
+
+  function isTerminalSurface(el) {
+    if (!el || !el.closest) return true;
+    var terminal = '.terminal-instance, .terminal-wrapper, .xterm, [data-testid*="terminal" i], [class*="terminal" i]';
+    try {
+      return !!el.closest(terminal);
     } catch (e) {
       return true;
     }
@@ -414,18 +424,15 @@ export const AUTO_CONTINUE_SCRIPT = `
     var before = readInputText(input);
     if (!before) return false;
 
-    var preferred = profile === 'vscode' ? 'enter' : 'send';
-
-    if (preferred === 'send') {
-      var sendBtn = findSend(profile, input, root);
-      if (sendBtn && click(sendBtn, 'Submit bump text', 'submit', { silentLog: true, silentAction: true })) {
-        var afterSend = readInputText(input);
-        if (!afterSend || afterSend !== before || isGenerating(profile, root)) {
-          emitAction('submit', 'submit bump text');
-          return true;
-        }
+    // Prefer explicit send button when available (works across forks);
+    // fallback to Enter only when no viable send path is present.
+    var sendBtn = findSend(profile, input, root);
+    if (sendBtn && click(sendBtn, 'Submit bump text', 'submit', { silentLog: true, silentAction: true })) {
+      var afterSend = readInputText(input);
+      if (!afterSend || afterSend !== before || isGenerating(profile, root)) {
+        emitAction('submit', 'submit bump text');
+        return true;
       }
-      return false;
     }
 
     try {
@@ -456,6 +463,51 @@ export const AUTO_CONTINUE_SCRIPT = `
         if (spec.regex.test(normalizeText(el))) return el;
       }
     }
+    return null;
+  }
+
+  function findKeepElement(root) {
+    var keepSelectors = [
+      '[title="Keep" i]',
+      '[aria-label="Keep" i]',
+      'button[title*="Keep" i]',
+      'button[aria-label*="Keep" i]',
+      '[role="button"][title*="Keep" i]',
+      '[role="button"][aria-label*="Keep" i]',
+      '[data-testid*="keep" i]'
+    ];
+
+    var scopes = [];
+    if (root) scopes.push(root);
+    scopes.push(document);
+
+    for (var s = 0; s < scopes.length; s++) {
+      var scope = scopes[s];
+
+      for (var k = 0; k < keepSelectors.length; k++) {
+        var explicitNodes = queryAllDeep(keepSelectors[k], scope);
+        for (var e = 0; e < explicitNodes.length; e++) {
+          var explicitNode = explicitNodes[e];
+          var explicitEl = explicitNode.closest ? (explicitNode.closest('button, a, [role="button"], [role="menuitem"], .monaco-button') || explicitNode) : explicitNode;
+          if (!isVisible(explicitEl)) continue;
+          if (isTerminalSurface(explicitEl)) continue;
+          return explicitEl;
+        }
+      }
+
+      var nodes = queryAllDeep('button, [role="button"], [role="menuitem"], a, .monaco-button, [aria-label], [title], [data-testid]', scope);
+      for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        var el = node.closest ? (node.closest('button, a, [role="button"], [role="menuitem"], .monaco-button') || node) : node;
+        if (!isVisible(el)) continue;
+        if (isTerminalSurface(el)) continue;
+        var txt = normalizeText(el);
+        if (/(^|\b)keep(\b|$)|\bkeep\s+changes\b|\bkeep\s+all\b/i.test(txt)) {
+          return el;
+        }
+      }
+    }
+
     return null;
   }
 
@@ -530,9 +582,19 @@ export const AUTO_CONTINUE_SCRIPT = `
       timestamp: now
     };
 
+    if (cfg.actions.clickKeep === true) {
+      var keepEl = findKeepElement(root);
+      if (keepEl && click(keepEl, 'Keep', 'click')) {
+        lastActionAt = now;
+        lastProgressAt = now;
+        return;
+      }
+    }
+
     for (var i = 0; i < ACTION_SPECS.length; i++) {
       var spec = ACTION_SPECS[i];
       if (cfg.actions[spec.key] !== true) continue;
+      if (spec.key === 'clickKeep') continue;
       if (spec.key === 'clickRetry' && fork === 'vscode') continue;
       var actionEl = findActionElement(root, spec);
       if (actionEl && click(actionEl, spec.label, 'click')) {

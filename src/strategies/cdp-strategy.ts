@@ -253,16 +253,10 @@ export class CDPStrategy implements IStrategy {
 
             try {
                 // ────────────────────────────────────────
-                // STEP 1: Focus chat via VS Code command
-                // This guarantees the Monaco chat input has keyboard focus
+                // STEP 1: No host-focus stealing
+                // Keep fallback fully background-safe; do not pull focus every tick.
                 // ────────────────────────────────────────
-                logToOutput('[Bump] Step 1: Focus chat panel...');
-                try {
-                    await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-                } catch {
-                    try { await vscode.commands.executeCommand('workbench.action.chat.open'); } catch { }
-                }
-                await new Promise(r => setTimeout(r, 500));
+                logToOutput('[Bump] Step 1: Background-safe bump (skip focus command).');
 
                 // ────────────────────────────────────────
                 // STEP 2: Type text via CDP Input.insertText
