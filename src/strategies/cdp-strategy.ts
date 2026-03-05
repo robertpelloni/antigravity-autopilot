@@ -82,26 +82,34 @@ export class CDPStrategy implements IStrategy {
         return results;
     }
 
+    private getSuccessfulTargetsFromResults(results: string[], targetPageIds: string[]): string[] {
+        const successful: string[] = [];
+        for (let i = 0; i < results.length && i < targetPageIds.length; i++) {
+            const r = String(results[i] || '');
+            if (r.startsWith('ok:')) {
+                successful.push(targetPageIds[i]);
+            }
+        }
+        return successful;
+    }
+
     private getConfiguredBumpTargetPageIds(): string[] {
         const handler = this.cdpHandler as any;
         if (!handler?.connections || handler.connections.size === 0) return [];
 
         const broadcastToAll = config.get<boolean>('automation.bump.broadcastToAllPages') === true;
+        const all: string[] = [];
+        for (const [pageId] of handler.connections) {
+            all.push(pageId);
+        }
+
+        // Non-broadcast mode still considers all candidates, but later narrows to a single
+        // ready target. This avoids getting stuck on an arbitrary "primary" target.
         if (broadcastToAll) {
-            const all: string[] = [];
-            for (const [pageId] of handler.connections) {
-                all.push(pageId);
-            }
             return all;
         }
 
-        if (typeof handler.getPrimaryConnectedPageId === 'function') {
-            const primary = handler.getPrimaryConnectedPageId();
-            if (primary) return [primary];
-        }
-
-        const fallback = handler.connections.keys().next();
-        return (!fallback.done && fallback.value) ? [fallback.value as string] : [];
+        return all;
     }
 
     private async hasCompleteStopSignalOnPage(pageId: string): Promise<{ ready: boolean; reason: string }> {
@@ -184,7 +192,90 @@ export class CDPStrategy implements IStrategy {
             }
         }
 
+        const broadcastToAll = config.get<boolean>('automation.bump.broadcastToAllPages') === true;
+        if (!broadcastToAll && readyTargets.length > 1) {
+            return { readyTargets: [readyTargets[0]], skipped };
+        }
+
         return { readyTargets, skipped };
+    }
+
+    private async clickSubmitButtonOnPage(pageId: string, expectedText: string): Promise<boolean> {
+        const handler = this.cdpHandler as any;
+        const conn = handler?.connections?.get?.(pageId);
+
+        const expression = `(() => {
+            const expected = ${JSON.stringify(String(expectedText || ''))};
+            const normalize = (v) => String(v || '').replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+            const isVisible = (el) => {
+                if (!el || !el.isConnected || el.disabled) return false;
+                const r = el.getBoundingClientRect();
+                if (!r || r.width <= 0 || r.height <= 0) return false;
+                const s = window.getComputedStyle(el);
+                return !(s.display === 'none' || s.visibility === 'hidden' || s.pointerEvents === 'none');
+            };
+
+            const readComposerText = () => {
+                const candidates = Array.from(document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"], .monaco-editor textarea'));
+                for (const c of candidates) {
+                    if (!isVisible(c)) continue;
+                    const raw = (c && (c.value ?? c.textContent)) || '';
+                    const txt = normalize(raw);
+                    if (txt) return txt;
+                }
+                return '';
+            };
+
+            const composerText = readComposerText();
+            const expectedNorm = normalize(expected);
+            if (!expectedNorm || !composerText || composerText.indexOf(expectedNorm) < 0) {
+                return false;
+            }
+
+            const selectors = [
+                '[title*="Send" i]',
+                '[aria-label*="Send" i]',
+                '[title*="Submit" i]',
+                '[aria-label*="Submit" i]',
+                '[data-testid*="send" i]',
+                '[data-testid*="submit" i]',
+                'button[type="submit"]',
+                '.codicon-send'
+            ];
+            for (const sel of selectors) {
+                const nodes = Array.from(document.querySelectorAll(sel));
+                for (const node of nodes) {
+                    const el = node.closest?.('button, [role="button"], a, .monaco-button') || node;
+                    if (!isVisible(el)) continue;
+                    try { if (typeof el.focus === 'function') el.focus({ preventScroll: true }); } catch {}
+                    try { el.click(); } catch {}
+                    return true;
+                }
+            }
+            return false;
+        })()`;
+
+        const evaluate = async (sessionId?: string): Promise<boolean> => {
+            const result = await handler.sendCommand(pageId, 'Runtime.evaluate', {
+                expression,
+                returnByValue: true,
+                awaitPromise: true
+            }, undefined, sessionId).catch(() => null);
+            return result?.result?.value === true;
+        };
+
+        if (await evaluate()) {
+            return true;
+        }
+
+        const sessions: string[] = conn?.sessions ? Array.from(conn.sessions) : [];
+        for (const sessionId of sessions) {
+            if (await evaluate(sessionId)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     async start(): Promise<void> {
@@ -273,24 +364,49 @@ export class CDPStrategy implements IStrategy {
                 await new Promise(r => setTimeout(r, 300));
 
                 // ────────────────────────────────────────
-                // STEP 3: Submit via CDP Input.dispatchKeyEvent (Enter)
-                // Also browser-level — Monaco processes it like a real Enter press
+                // STEP 3: Submit via send-button click when available (session-aware)
+                // Fallback to Enter only for targets without a clickable send control.
                 // ────────────────────────────────────────
-                logToOutput('[Bump] Step 3: CDP Input.dispatchKeyEvent Enter...');
+                const typedTargets = this.getSuccessfulTargetsFromResults(typeResults, readyTargets);
+                if (typedTargets.length === 0) {
+                    logToOutput('[Bump] Aborted: no targets confirmed typed bump text.');
+                    return;
+                }
+
+                const enterFallbackTargets: string[] = [];
+                const submitClickedTargets: string[] = [];
+
+                for (const pageId of typedTargets) {
+                    const clicked = await this.clickSubmitButtonOnPage(pageId, BUMP_TEXT);
+                    if (clicked) {
+                        submitClickedTargets.push(pageId.substring(0, 8));
+                    } else {
+                        enterFallbackTargets.push(pageId);
+                    }
+                }
+
+                logToOutput('[Bump] Submit click result: clicked=' + JSON.stringify(submitClickedTargets) + ' enterFallback=' + JSON.stringify(enterFallbackTargets.map((id) => id.substring(0, 8))));
+
+                if (enterFallbackTargets.length === 0) {
+                    logToOutput('[Bump] Done — submit via send button');
+                    return;
+                }
+
+                logToOutput('[Bump] Step 4: CDP Input.dispatchKeyEvent Enter (fallback)...');
                 const enterDown = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
                     type: 'keyDown',
                     key: 'Enter',
                     code: 'Enter',
                     windowsVirtualKeyCode: 13,
                     nativeVirtualKeyCode: 13,
-                }, readyTargets);
+                }, enterFallbackTargets);
                 const enterUp = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
                     type: 'keyUp',
                     key: 'Enter',
                     code: 'Enter',
                     windowsVirtualKeyCode: 13,
                     nativeVirtualKeyCode: 13,
-                }, readyTargets);
+                }, enterFallbackTargets);
                 logToOutput('[Bump] Enter result: down=' + JSON.stringify(enterDown) + ' up=' + JSON.stringify(enterUp));
 
                 logToOutput('[Bump] Done — CDP Input domain (browser-level)');

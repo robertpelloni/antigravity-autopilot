@@ -7,6 +7,7 @@ All notable changes to the Antigravity Autopilot extension will be documented in
 * **Fork-Specific `Retry` Safety**: Automatic `Retry` clicks are disabled for `vscode` fork while remaining enabled for Antigravity/Cursor forks to avoid semantic mismatch loops.
 * **Focus-Stealing Bump Fallback**: Removed forced chat-focus commands from CDP fallback bump cycle so background windows are no longer pulled to foreground every tick.
 * **Typed-But-Not-Submitted Bump**: Submit flow now prefers visible send-button submission and falls back to Enter only when needed, improving bump send reliability across forks.
+* **Cross-Window Premature Submit**: CDP fallback submit now runs only on targets that successfully typed bump text in the same cycle, and send-button submit is gated on composer text containing the expected bump payload.
 
 ## [6.2.11] - 2026-03-04
 ### Fixed
