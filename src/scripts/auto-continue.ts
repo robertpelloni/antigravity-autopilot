@@ -442,12 +442,19 @@ export const AUTO_CONTINUE_SCRIPT = `
   }
 
   function findActionElement(root, spec) {
-    var nodes = queryAllDeep('button, [role="button"], a, .monaco-button, [aria-label], [title], [data-testid]', root || document);
-    for (var i = 0; i < nodes.length; i++) {
-      var node = nodes[i];
-      var el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
-      if (!isVisible(el) || isBlockedSurface(el)) continue;
-      if (spec.regex.test(normalizeText(el))) return el;
+    var scopes = [];
+    if (root) scopes.push(root);
+    scopes.push(document);
+
+    for (var s = 0; s < scopes.length; s++) {
+      var scope = scopes[s];
+      var nodes = queryAllDeep('button, [role="button"], a, .monaco-button, [aria-label], [title], [data-testid]', scope);
+      for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        var el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
+        if (!isVisible(el) || isBlockedSurface(el)) continue;
+        if (spec.regex.test(normalizeText(el))) return el;
+      }
     }
     return null;
   }
@@ -526,7 +533,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     for (var i = 0; i < ACTION_SPECS.length; i++) {
       var spec = ACTION_SPECS[i];
       if (cfg.actions[spec.key] !== true) continue;
-      var actionEl = findActionElement(root || document, spec);
+      var actionEl = findActionElement(root, spec);
       if (actionEl && click(actionEl, spec.label, 'click')) {
         lastActionAt = now;
         lastProgressAt = now;

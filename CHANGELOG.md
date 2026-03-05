@@ -7,6 +7,7 @@ All notable changes to the Antigravity Autopilot extension will be documented in
 * **Single Submit Per Bump Cycle**: Runtime submit flow now uses one deterministic submit path per fork (VS Code: Enter once; Antigravity/Cursor: Send once), eliminating multi-submit fallback bursts.
 * **Behavior Source-of-Truth Drift**: CDP fallback now trusts injected runtime state for stop readiness instead of duplicating separate DOM signal logic.
 * **Session Context Blind Spot**: Stop-readiness evaluation now checks both main target context and attached CDP sessions/webviews, restoring bump dispatch when runtime state is hosted in a nested session.
+* **Missed `Keep` Button in Some Layouts**: Action detection now scans chat-root first and then falls back to full-document search so `Keep` (and other required actions) are found even when rendered outside the composer-root container.
 
 ## [6.2.10] - 2026-03-04
 ### Fixed
