@@ -127,18 +127,47 @@ export class CDPStrategy implements IStrategy {
             return { ready: false, reason: 'runtime-not-ready' };
         })()`;
 
-        const result = await (this.cdpHandler as any).sendCommand(pageId, 'Runtime.evaluate', {
-            expression,
-            returnByValue: true,
-            awaitPromise: true
-        }).catch(() => null);
+        const handler = this.cdpHandler as any;
+        const conn = handler?.connections?.get?.(pageId);
 
-        const value = result?.result?.value;
-        if (!value || typeof value.ready !== 'boolean') {
-            return { ready: false, reason: 'signal-eval-failed' };
+        const evaluate = async (sessionId?: string): Promise<{ ready: boolean; reason: string } | null> => {
+            const result = await handler.sendCommand(pageId, 'Runtime.evaluate', {
+                expression,
+                returnByValue: true,
+                awaitPromise: true
+            }, undefined, sessionId).catch(() => null);
+
+            const value = result?.result?.value;
+            if (!value || typeof value.ready !== 'boolean') {
+                return null;
+            }
+
+            return { ready: value.ready === true, reason: String(value.reason || '') || 'unknown' };
+        };
+
+        const main = await evaluate();
+        if (main?.ready) {
+            return { ready: true, reason: `main:${main.reason}` };
         }
 
-        return { ready: value.ready === true, reason: String(value.reason || '') || 'unknown' };
+        const mainReason = main?.reason || 'main-unavailable';
+        const sessionReasons: string[] = [];
+
+        const sessions: string[] = conn?.sessions ? Array.from(conn.sessions) : [];
+        for (const sessionId of sessions) {
+            const sessionResult = await evaluate(sessionId);
+            if (sessionResult?.ready) {
+                return { ready: true, reason: `session:${sessionResult.reason}` };
+            }
+            sessionReasons.push(`${sessionId.substring(0, 8)}:${sessionResult?.reason || 'session-unavailable'}`);
+        }
+
+        return {
+            ready: false,
+            reason: sessionReasons.length > 0
+                ? `${mainReason}|${sessionReasons.join(',')}`
+                : mainReason
+        };
     }
 
     private async getReadyStopSignalTargets(): Promise<{ readyTargets: string[]; skipped: string[] }> {

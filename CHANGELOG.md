@@ -6,6 +6,7 @@ All notable changes to the Antigravity Autopilot extension will be documented in
 * **Strict Stop-Only Bump Dispatch**: Bump typing/submission is now gated by per-window runtime readiness (`completionWaiting.readyToResume`, `stalled`, and `completeStopSignal`) so bump only fires where the conversation is actually stopped and needs it.
 * **Single Submit Per Bump Cycle**: Runtime submit flow now uses one deterministic submit path per fork (VS Code: Enter once; Antigravity/Cursor: Send once), eliminating multi-submit fallback bursts.
 * **Behavior Source-of-Truth Drift**: CDP fallback now trusts injected runtime state for stop readiness instead of duplicating separate DOM signal logic.
+* **Session Context Blind Spot**: Stop-readiness evaluation now checks both main target context and attached CDP sessions/webviews, restoring bump dispatch when runtime state is hosted in a nested session.
 
 ## [6.2.10] - 2026-03-04
 ### Fixed
