@@ -3,16 +3,17 @@ import * as vscode from 'vscode';
 export const CONFIG_SECTION = 'antigravity';
 
 /**
- * v8.2 — Radically simplified config.
+ * Minimal config accessor.
  *
- * Only settings that are ACTUALLY READ by extension.ts / cdp-strategy.ts / status-bar.ts:
- *   - autopilotAutoAcceptEnabled (toggle)
- *   - autoAllEnabled (toggle alias)
- *   - autoAcceptEnabled (toggle alias)
- *   - actions.bump.text (bump text)
- *   - actions.bump.cooldown (bump cooldown seconds)
- *   - actions.bump.stallTimeout (stall detection seconds)
- *   - accessibility.screenReaderOptimized (status bar)
+ * Simplified runtime/dashboard now rely primarily on:
+ *   - autoContinueScriptEnabled
+ *   - actions.bump.enabled
+ *   - actions.bump.text
+ *   - actions.bump.cooldown
+ *   - actions.bump.stallTimeout
+ *   - actions.bump.submitDelayMs
+ *   - automation.timing.pollIntervalMs
+ *   - automation.actions.clickRun/clickExpand/clickAlwaysAllow/clickRetry/clickAcceptAll/clickKeep
  */
 
 class ConfigManager {

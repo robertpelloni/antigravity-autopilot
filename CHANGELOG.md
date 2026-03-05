@@ -1,6 +1,16 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.9] - 2026-03-04
+### Changed
+* **Core Runtime Simplification**: Replaced passive poll-only `auto-continue` script with a minimal active loop that only performs the required core behaviors: fork detection, stall detection, bump typing, bump submission, and action-button detection/clicking.
+* **Required Actions Only**: Runtime action set is now restricted to `Run`, `Expand`, `Always Allow`, `Retry`, `Accept all`, and `Keep`.
+* **Minimal Dashboard Surface**: Replaced the large settings dashboard with a minimal panel exposing only essential controls: enable toggles, bump text, required action toggles, and core timing values.
+
+### Fixed
+* **No-Op Runtime Behavior**: Restored actual bump/type/submit automation path (previous script emitted state only and did not execute active bump flow).
+* **Host-to-Runtime Config Drift**: `CDPHandler` now publishes the minimal runtime config payload used by the simplified script (leader/focus/mode, bump settings, timing, and required action toggles).
+
 ## [5.2.277] - 2026-03-02
 ### Fixed
 * **Dual-Window Active Runtime Contention**: In single-target mode, runtime injection now requires focused host window eligibility, preventing both windows from actively driving automation at the same time.

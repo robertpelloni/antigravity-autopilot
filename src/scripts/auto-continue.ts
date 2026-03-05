@@ -1,147 +1,467 @@
 export const AUTO_CONTINUE_SCRIPT = `
 (function () {
-  if (window.__antigravityAutoContinueRunning) {
-    try { if (typeof window.stopAutoContinue === 'function') window.stopAutoContinue(); } catch (e) {}
+  if (window.__antigravityAutoContinueRunning && typeof window.stopAutoContinue === 'function') {
+    try { window.stopAutoContinue(); } catch (e) {}
   }
-  window.__antigravityAutoContinueRunning = true;
 
-  function emit(payload) {
+  var INSTANCE = Math.random().toString(36).slice(2);
+  window.__antigravityActiveInstance = INSTANCE;
+  window.__antigravityAutoContinueRunning = true;
+  window.__antigravityHeartbeat = Date.now();
+
+  var DEFAULTS = {
+    runtime: { isLeader: false, role: 'follower', windowFocused: true, enforceLeader: true, mode: 'auto' },
+    bump: { enabled: true, text: 'Proceed', requireVisible: true, requireFocused: false, submitDelayMs: 120 },
+    timing: { pollIntervalMs: 800, actionThrottleMs: 300, stalledMs: 7000, bumpCooldownMs: 30000, submitCooldownMs: 3000 },
+    actions: {
+      clickRun: true,
+      clickExpand: true,
+      clickAlwaysAllow: true,
+      clickRetry: true,
+      clickAcceptAll: true,
+      clickKeep: true
+    }
+  };
+
+  var PROFILES = {
+    antigravity: {
+      root: '.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i], .chat-input-container, .monaco-editor',
+      input: 'textarea, .monaco-editor textarea, [contenteditable="true"], [role="textbox"], [aria-label*="chat" i], [placeholder*="message" i], [placeholder*="ask" i], [id*="chat-input" i]',
+      send: '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], [data-testid*="send" i], [data-testid*="submit" i], [class*="send" i], [class*="submit" i], button[type="submit"], .codicon-send',
+      generating: '[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator'
+    },
+    cursor: {
+      root: '.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i], .chat-input-container, .monaco-editor',
+      input: 'textarea, .monaco-editor textarea, [contenteditable="true"], [role="textbox"], [aria-label*="chat" i], [placeholder*="message" i], [placeholder*="ask" i], [id*="chat-input" i]',
+      send: '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], [data-testid*="send" i], [data-testid*="submit" i], [class*="send" i], [class*="submit" i], button[type="submit"], .codicon-send',
+      generating: '[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator'
+    },
+    vscode: {
+      root: '.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i], .chat-input-container, .monaco-editor',
+      input: 'textarea, .monaco-editor textarea, [contenteditable="true"], [role="textbox"], [aria-label*="chat" i], [placeholder*="message" i], [placeholder*="ask" i], [id*="chat-input" i]',
+      send: '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], [data-testid*="send" i], [data-testid*="submit" i], [class*="send" i], [class*="submit" i], button[type="submit"], .codicon-send',
+      generating: '[title*="Stop" i], [aria-label*="Stop" i], .codicon-loading, .typing-indicator'
+    }
+  };
+
+  var ACTION_SPECS = [
+    { key: 'clickRun', label: 'Run', regex: /(^|\\b)(run(\\s+in\\s+terminal|\\s+command)?|execute)(\\b|$)/i },
+    { key: 'clickExpand', label: 'Expand', regex: /(expand|requires\\s*input|step\\s*requires\\s*input)/i },
+    { key: 'clickAlwaysAllow', label: 'Always Allow', regex: /(always\\s*allow|always\\s*approve)/i },
+    { key: 'clickRetry', label: 'Retry', regex: /\\bretry\\b/i },
+    { key: 'clickAcceptAll', label: 'Accept all', regex: /(accept\\s*all|apply\\s*all|accept\\s*all\\s*changes|apply\\s*all\\s*changes)/i },
+    { key: 'clickKeep', label: 'Keep', regex: /\\bkeep\\b/i }
+  ];
+
+  var pollTimer = null;
+  var lastActionAt = 0;
+  var lastBumpAt = 0;
+  var submitInFlightUntil = 0;
+  var lastProgressAt = Date.now();
+  var wasGenerating = false;
+  var didInitialProbe = false;
+
+  function emitBridge(payload) {
     try {
       if (typeof window.__AUTOPILOT_BRIDGE__ === 'function') window.__AUTOPILOT_BRIDGE__(payload);
+      else console.log(payload);
     } catch (e) {}
   }
 
-  // Find the chat panel container — this is the ONLY place we look for buttons.
-  // This prevents matching toolbar items, dropdown menus, settings UI, etc.
-  function findChatContainers() {
-    var containers = [];
-    try {
-      // Search through shadow DOMs for chat containers
-      var queue = [document];
-      while (queue.length > 0) {
-        var root = queue.shift();
-        try {
-          var found = root.querySelectorAll('.interactive-session, .chat-widget, .interactive-input-part, [class*="chat-editor"]');
-          for (var i = 0; i < found.length; i++) containers.push(found[i]);
-          // Also traverse shadow roots
-          var all = root.querySelectorAll('*');
-          for (var j = 0; j < all.length; j++) {
-            try { if (all[j].shadowRoot) queue.push(all[j].shadowRoot); } catch(e) {}
-          }
-        } catch(e) {}
-      }
-    } catch(e) {}
-    return containers;
+  function log(msg) {
+    emitBridge('__AUTOPILOT_LOG__:' + String(msg || ''));
   }
 
-  function isGenerating() {
+  function emitAction(group, detail) {
+    emitBridge('__AUTOPILOT_ACTION__:' + String(group || 'click') + '|' + String(detail || ''));
+  }
+
+  function getConfig() {
+    var cfg = window.__antigravityConfig || {};
+    return {
+      runtime: Object.assign({}, DEFAULTS.runtime, cfg.runtime || {}),
+      bump: Object.assign({}, DEFAULTS.bump, cfg.bump || {}),
+      timing: Object.assign({}, DEFAULTS.timing, cfg.timing || {}),
+      actions: Object.assign({}, DEFAULTS.actions, cfg.actions || {})
+    };
+  }
+
+  function detectFork(cfg) {
+    var mode = String((cfg.runtime && cfg.runtime.mode) || '').toLowerCase();
+    if (mode === 'antigravity' || mode === 'cursor' || mode === 'vscode') return mode;
+    var title = String(document.title || '').toLowerCase();
+    var href = String(location.href || '').toLowerCase();
+    if (title.indexOf('antigravity') >= 0 || href.indexOf('antigravity') >= 0) return 'antigravity';
+    if (title.indexOf('cursor') >= 0 || href.indexOf('cursor') >= 0) return 'cursor';
+    return 'vscode';
+  }
+
+  function queryAllDeep(selector, root) {
+    var out = [];
+    var seen = new Set();
+    function visit(node) {
+      if (!node || !node.querySelectorAll) return;
+      var list = [];
+      try { list = node.querySelectorAll(selector); } catch (e) { list = []; }
+      for (var i = 0; i < list.length; i++) {
+        var el = list[i];
+        if (!seen.has(el)) {
+          seen.add(el);
+          out.push(el);
+        }
+      }
+      var all = [];
+      try { all = node.querySelectorAll('*'); } catch (e) { all = []; }
+      for (var j = 0; j < all.length; j++) {
+        try {
+          if (all[j] && all[j].shadowRoot) visit(all[j].shadowRoot);
+        } catch (e) {}
+      }
+    }
+    visit(root || document);
+    return out;
+  }
+
+  function isVisible(el) {
+    if (!el || !el.isConnected || el.disabled) return false;
+    var r = el.getBoundingClientRect();
+    if (!r || r.width <= 0 || r.height <= 0) return false;
+    var s = window.getComputedStyle(el);
+    return !(s.display === 'none' || s.visibility === 'hidden' || s.pointerEvents === 'none');
+  }
+
+  function isBlockedSurface(el) {
+    if (!el || !el.closest) return true;
+    var blockedChrome = '.part.titlebar, .part.activitybar, .part.statusbar, .menubar, .monaco-menu, [role="menu"], [role="menuitem"], [role="menubar"], .settings-editor, .extensions-viewlet';
+    var terminal = '.terminal-instance, .terminal-wrapper, .xterm, [data-testid*="terminal" i], [class*="terminal" i]';
     try {
-      var containers = findChatContainers();
-      for (var c = 0; c < containers.length; c++) {
-        try {
-          var spinners = containers[c].querySelectorAll('.codicon-loading, [class*="typing-indicator"], [class*="progress-indicator"]');
-          if (spinners.length > 0) return true;
-        } catch(e) {}
-      }
-      // Also check for Stop button anywhere in chat
-      var queue = [document];
-      while (queue.length > 0) {
-        var root = queue.shift();
-        try {
-          var btns = root.querySelectorAll('[role="button"][title*="Stop" i], button[aria-label*="Stop" i]');
-          if (btns.length > 0) return true;
-          var all = root.querySelectorAll('*');
-          for (var j = 0; j < all.length; j++) {
-            try { if (all[j].shadowRoot) queue.push(all[j].shadowRoot); } catch(e) {}
-          }
-        } catch(e) {}
-      }
+      return !!(el.closest(blockedChrome) || el.closest(terminal));
+    } catch (e) {
+      return true;
+    }
+  }
+
+  function normalizeText(el) {
+    var text = String(el.textContent || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+    var aria = String(el.getAttribute('aria-label') || '').toLowerCase();
+    var title = String(el.getAttribute('title') || '').toLowerCase();
+    var testid = String(el.getAttribute('data-testid') || '').toLowerCase();
+    return [text, aria, title, testid].join(' | ');
+  }
+
+  function isLikelyChatInput(input, root) {
+    if (!input) return false;
+    try {
+      if (root && typeof root.contains === 'function' && root.contains(input)) return true;
+    } catch (e) {}
+    var signature = [
+      String(input.getAttribute && input.getAttribute('aria-label') || ''),
+      String(input.getAttribute && input.getAttribute('placeholder') || ''),
+      String(input.getAttribute && input.getAttribute('id') || ''),
+      String(input.className || ''),
+      String(input.getAttribute && input.getAttribute('data-testid') || '')
+    ].join(' ').toLowerCase();
+    if (/(chat|message|ask|prompt|composer|copilot|assistant)/i.test(signature)) return true;
+    try {
+      var chatContainer = input.closest('.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i], .chat-input-container');
+      if (chatContainer) return true;
     } catch (e) {}
     return false;
   }
 
-  // Exact button text matching — prevents "Always Run" false positive
-  function getCleanText(el) {
-    try {
-      return (el.textContent || '').replace(/\\s+/g, ' ').trim().toLowerCase();
-    } catch(e) { return ''; }
+  function isValidInput(input, root) {
+    if (!input || !isVisible(input) || isBlockedSurface(input)) return false;
+    var tag = String(input.tagName || '').toLowerCase();
+    var editable = tag === 'textarea' || input.isContentEditable || input.getAttribute('contenteditable') === 'true' || input.getAttribute('role') === 'textbox';
+    if (!editable) return false;
+    if (!isLikelyChatInput(input, root)) return false;
+    return true;
   }
 
-  function detectButtons() {
-    var buttons = [];
-    try {
-      var containers = findChatContainers();
-      if (containers.length === 0) return buttons;
+  function findRoot(profile) {
+    var roots = queryAllDeep(profile.root, document);
+    for (var i = 0; i < roots.length; i++) {
+      if (isVisible(roots[i]) && !isBlockedSurface(roots[i])) return roots[i];
+    }
+    return null;
+  }
 
-      for (var c = 0; c < containers.length; c++) {
-        try {
-          var elems = containers[c].querySelectorAll('button, [role="button"], .monaco-button');
-          for (var i = 0; i < elems.length; i++) {
-            try {
-              var el = elems[i];
-              if (!el.isConnected || el.disabled || el.classList.contains('disabled')) continue;
-              if (el.clientWidth === 0 && el.clientHeight === 0) continue;
+  function findInput(profile, root) {
+    var local = root ? queryAllDeep(profile.input, root) : [];
+    for (var i = 0; i < local.length; i++) {
+      if (isValidInput(local[i], root)) return local[i];
+    }
+    var global = queryAllDeep(profile.input, document);
+    for (var j = 0; j < global.length; j++) {
+      if (isValidInput(global[j], root)) return global[j];
+    }
+    return null;
+  }
 
-              var text = getCleanText(el);
-              var title = (el.getAttribute('title') || '').toLowerCase().trim();
-              var ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase().trim();
-
-              // EXACT matches only — no substring indexOf that matches "Always Run"
-              // "run" must be the WHOLE text or title, not a substring of something else
-              if ((text === 'run' || title === 'run' || ariaLabel === 'run' ||
-                   text === 'run tool' || title === 'run tool') && buttons.indexOf('run') < 0) {
-                buttons.push('run');
-              }
-              if ((text === 'expand' || title === 'expand' || ariaLabel === 'expand' ||
-                   text.indexOf('requires input') >= 0 || title.indexOf('requires input') >= 0) && buttons.indexOf('expand') < 0) {
-                buttons.push('expand');
-              }
-              if ((text === 'accept all' || title === 'accept all' || ariaLabel === 'accept all' ||
-                   text === 'apply all' || title === 'apply all') && buttons.indexOf('accept_all') < 0) {
-                buttons.push('accept_all');
-              }
-              if ((text === 'keep' || title === 'keep' || ariaLabel === 'keep') && buttons.indexOf('keep') < 0) {
-                buttons.push('keep');
-              }
-              if ((text === 'retry' || title === 'retry' || ariaLabel === 'retry') && buttons.indexOf('retry') < 0) {
-                buttons.push('retry');
-              }
-              if ((text === 'allow' || title === 'allow' || ariaLabel === 'allow' ||
-                   text === 'always allow' || title === 'always allow') && buttons.indexOf('allow') < 0) {
-                buttons.push('allow');
-              }
-              if ((text === 'continue' || title === 'continue' || ariaLabel === 'continue') && buttons.indexOf('continue') < 0) {
-                buttons.push('continue');
-              }
-            } catch(e) {}
-          }
-        } catch(e) {}
+  function findSend(profile, input, root) {
+    var scopes = [
+      input && input.closest && input.closest('form'),
+      input && input.parentElement,
+      root,
+      document
+    ];
+    for (var s = 0; s < scopes.length; s++) {
+      var scope = scopes[s];
+      if (!scope) continue;
+      var nodes = queryAllDeep(profile.send, scope);
+      for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        var el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
+        if (!isVisible(el) || isBlockedSurface(el)) continue;
+        return el;
       }
-    } catch (e) {}
-    return buttons;
+    }
+    return null;
   }
 
-  var pollTimer = null;
-
-  function poll() {
+  function readInputText(input) {
+    if (!input) return '';
     try {
-      emit(JSON.stringify({
-        type: 'state',
-        isGenerating: isGenerating(),
-        buttons: detectButtons()
-      }));
+      if (input.isContentEditable || input.getAttribute('contenteditable') === 'true') return String(input.textContent || '').trim();
+      return String(input.value || '').trim();
     } catch (e) {
-      try { emit(JSON.stringify({type:'state',isGenerating:false,buttons:[]})); } catch(x) {}
+      return '';
     }
   }
 
-  pollTimer = setInterval(poll, 1500);
+  function setInputText(input, text) {
+    if (!input) return false;
+    try {
+      if (typeof input.focus === 'function') input.focus();
+      if (input.isContentEditable || input.getAttribute('contenteditable') === 'true') {
+        try { document.execCommand('selectAll', false, null); } catch (e) {}
+        try { document.execCommand('insertText', false, text); } catch (e) { input.textContent = text; }
+      } else {
+        var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
+        var tag = String(input.tagName || '').toLowerCase();
+        if (setter && setter.set && tag === 'textarea') setter.set.call(input, text);
+        else input.value = text;
+      }
+      input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
 
-  window.stopAutoContinue = function() {
-    if (pollTimer) clearInterval(pollTimer);
+      var normalizedReadBack = String(readInputText(input) || '').replace(/\\s+/g, ' ').trim();
+      var normalizedText = String(text || '').replace(/\\s+/g, ' ').trim();
+      if (!normalizedReadBack || normalizedReadBack !== normalizedText) return false;
+
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function click(el, label, group, opts) {
+    var options = opts || {};
+    if (!el) return false;
+    try {
+      try { if (typeof el.focus === 'function') el.focus({ preventScroll: true }); } catch (e) {}
+      try { el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true })); } catch (e) {}
+      try { el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true })); } catch (e) {}
+      try { el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); } catch (e) {}
+      try { el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true })); } catch (e) {}
+      try { el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); } catch (e) {}
+      try { if (typeof el.click === 'function') el.click(); } catch (e) {}
+
+      if (!options.silentLog) log('clicked ' + label);
+      if (!options.silentAction) emitAction(group || 'click', String(label || 'clicked').toLowerCase());
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function isGenerating(profile, root) {
+    var scope = root || document;
+    var nodes = queryAllDeep(profile.generating, scope);
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      var el = node.closest ? (node.closest('button, [role="button"], .monaco-button') || node) : node;
+      if (isVisible(el) && !isBlockedSurface(el)) return true;
+    }
+    return false;
+  }
+
+  function submitText(profile, input, root) {
+    var before = readInputText(input);
+    if (!before) return false;
+
+    var send = findSend(profile, input, root);
+    if (send && click(send, 'Submit bump text', 'submit', { silentLog: true, silentAction: true })) {
+      var afterSend = readInputText(input);
+      if (!afterSend || afterSend !== before || isGenerating(profile, root)) {
+        emitAction('submit', 'submit bump text');
+        return true;
+      }
+    }
+
+    try {
+      var form = input.closest && input.closest('form');
+      if (form && typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+        if (readInputText(input) !== before || isGenerating(profile, root)) {
+          emitAction('submit', 'submit bump text');
+          return true;
+        }
+      }
+    } catch (e) {}
+
+    try {
+      if (typeof input.focus === 'function') input.focus();
+      var combos = [{ ctrlKey: true }, { metaKey: true }, { altKey: true }, {}];
+      for (var i = 0; i < combos.length; i++) {
+        var mods = combos[i];
+        input.dispatchEvent(new KeyboardEvent('keydown', Object.assign({ key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }, mods)));
+        input.dispatchEvent(new KeyboardEvent('keyup', Object.assign({ key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }, mods)));
+      }
+      if (readInputText(input) !== before || isGenerating(profile, root)) {
+        emitAction('submit', 'submit bump text');
+        return true;
+      }
+    } catch (e) {}
+
+    return false;
+  }
+
+  function findActionElement(root, spec) {
+    var nodes = queryAllDeep('button, [role="button"], a, .monaco-button, [aria-label], [title], [data-testid]', root || document);
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      var el = node.closest ? (node.closest('button, a, [role="button"], .monaco-button') || node) : node;
+      if (!isVisible(el) || isBlockedSurface(el)) continue;
+      if (spec.regex.test(normalizeText(el))) return el;
+    }
+    return null;
+  }
+
+  function shouldAct(cfg) {
+    if (cfg.bump.requireVisible !== false && document.visibilityState !== 'visible') return false;
+    if (cfg.runtime.enforceLeader === true && cfg.runtime.isLeader !== true) return false;
+    if (cfg.bump.requireFocused === true) {
+      var docFocused = (typeof document.hasFocus !== 'function') || document.hasFocus();
+      var hostFocused = cfg.runtime.windowFocused === true;
+      if (!docFocused && !hostFocused) return false;
+    }
+    return true;
+  }
+
+  function runLoop() {
+    if (window.__antigravityActiveInstance !== INSTANCE) return;
+    window.__antigravityHeartbeat = Date.now();
+
+    var cfg = getConfig();
+    var fork = detectFork(cfg);
+    var profile = PROFILES[fork] || PROFILES.vscode;
+
+    if (!shouldAct(cfg)) return;
+
+    var now = Date.now();
+    if ((now - lastActionAt) < Math.max(50, Number(cfg.timing.actionThrottleMs || 300))) return;
+
+    var root = findRoot(profile);
+    var input = findInput(profile, root);
+    var send = findSend(profile, input, root);
+
+    var generating = isGenerating(profile, root);
+    if (generating || wasGenerating) {
+      lastProgressAt = now;
+    }
+    wasGenerating = generating;
+
+    var stalledMs = Math.max(1000, Number(cfg.timing.stalledMs || 7000));
+    var stalled = !generating && (now - lastProgressAt) >= stalledMs;
+
+    if (!didInitialProbe) {
+      didInitialProbe = true;
+      log('probe fork=' + fork + ' root=' + (!!root) + ' input=' + (!!input) + ' send=' + (!!send) + ' generating=' + generating + ' role=' + String(cfg.runtime.role || 'unknown'));
+    }
+
+    window.__antigravityRuntimeState = {
+      fork: fork,
+      mode: fork,
+      status: generating ? 'processing' : (stalled ? 'waiting_for_chat_message' : 'idle'),
+      waitingForChatMessage: stalled,
+      completionWaiting: {
+        readyToResume: stalled,
+        confidence: stalled ? 85 : 40,
+        confidenceLabel: stalled ? 'high' : 'low',
+        reasons: stalled ? ['not generating', 'stall timeout reached'] : ['generation active or recently active']
+      },
+      hasRoot: !!root,
+      hasInput: !!input,
+      hasSend: !!send,
+      isGenerating: generating,
+      stalled: stalled,
+      timestamp: now
+    };
+
+    for (var i = 0; i < ACTION_SPECS.length; i++) {
+      var spec = ACTION_SPECS[i];
+      if (cfg.actions[spec.key] !== true) continue;
+      var actionEl = findActionElement(root || document, spec);
+      if (actionEl && click(actionEl, spec.label, 'click')) {
+        lastActionAt = now;
+        lastProgressAt = now;
+        return;
+      }
+    }
+
+    if (!cfg.bump.enabled || generating || !stalled) return;
+
+    var bumpCooldownMs = Math.max(1000, Number(cfg.timing.bumpCooldownMs || 30000));
+    var submitCooldownMs = Math.max(500, Number(cfg.timing.submitCooldownMs || 3000));
+    if ((now - lastBumpAt) < bumpCooldownMs) return;
+    if (now < submitInFlightUntil) return;
+
+    var bumpText = String(cfg.bump.text || 'Proceed').trim();
+    if (!bumpText || !input) return;
+
+    if (!setInputText(input, bumpText)) {
+      log('type verify failed');
+      lastActionAt = now;
+      return;
+    }
+
+    log('typed bump text');
+    submitInFlightUntil = now + submitCooldownMs;
+    var submitDelay = Math.max(40, Number(cfg.bump.submitDelayMs || 120));
+    setTimeout(function () {
+      if (window.__antigravityActiveInstance !== INSTANCE) return;
+      var ok = submitText(profile, input, root);
+      if (ok) log('submitted bump text');
+      else log('submit attempt failed');
+    }, submitDelay);
+
+    lastBumpAt = now;
+    lastActionAt = now;
+    lastProgressAt = now;
+  }
+
+  function schedule() {
+    if (window.__antigravityActiveInstance !== INSTANCE) return;
+    var cfg = getConfig();
+    var pollMs = Math.max(150, Number(cfg.timing.pollIntervalMs || 800));
+    pollTimer = setTimeout(function () {
+      try { runLoop(); } catch (e) { log('loop error: ' + String((e && e.message) || e || 'unknown')); }
+      schedule();
+    }, pollMs);
+  }
+
+  window.__antigravityGetState = function () {
+    return window.__antigravityRuntimeState || null;
+  };
+
+  window.stopAutoContinue = function () {
+    if (pollTimer) clearTimeout(pollTimer);
     window.__antigravityAutoContinueRunning = false;
   };
 
-  poll(); // Initial heartbeat
+  log('auto-continue minimal core started');
+  try { runLoop(); } catch (e) { log('loop error: ' + String((e && e.message) || e || 'unknown')); }
+  schedule();
 })();
 `;

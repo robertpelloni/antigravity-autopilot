@@ -623,12 +623,47 @@ export class CDPHandler extends EventEmitter {
     }
 
     private getAutomationConfigExpression(): string {
-        // v6.0.0: Minimal config — probe no longer reads most of this.
-        // Strategy handles all logic directly.
-        return `window.__antigravityConfig = ${JSON.stringify({
-            isLeader: this.controllerRoleIsLeader,
-            windowFocused: this.hostWindowFocused
-        })};`;
+        const pollIntervalMs = config.get<number>('automation.timing.pollIntervalMs')
+            || config.get<number>('autoAcceptPollIntervalMs')
+            || config.get<number>('pollFrequency')
+            || 800;
+        const stallTimeoutSec = config.get<number>('actions.bump.stallTimeout') ?? 7;
+        const bumpCooldownSec = config.get<number>('actions.bump.cooldown') ?? 30;
+        const submitDelayMs = config.get<number>('actions.bump.submitDelayMs') ?? 120;
+
+        const payload = {
+            runtime: {
+                isLeader: this.controllerRoleIsLeader,
+                role: this.controllerRoleIsLeader ? 'leader' : 'follower',
+                windowFocused: this.hostWindowFocused,
+                enforceLeader: true,
+                mode: this.resolveRuntimeUiMode()
+            },
+            bump: {
+                enabled: config.get<boolean>('actions.bump.enabled') !== false,
+                text: config.get<string>('actions.bump.text') || 'Proceed',
+                requireVisible: config.get<boolean>('automation.bump.requireVisible') !== false,
+                requireFocused: config.get<boolean>('automation.bump.requireFocused') === true,
+                submitDelayMs: Math.max(40, submitDelayMs)
+            },
+            timing: {
+                pollIntervalMs: Math.max(150, pollIntervalMs),
+                actionThrottleMs: Math.max(50, config.get<number>('automation.timing.actionThrottleMs') || 300),
+                stalledMs: Math.max(1000, stallTimeoutSec * 1000),
+                bumpCooldownMs: Math.max(1000, bumpCooldownSec * 1000),
+                submitCooldownMs: Math.max(500, submitDelayMs * 10)
+            },
+            actions: {
+                clickRun: config.get<boolean>('automation.actions.clickRun') !== false,
+                clickExpand: config.get<boolean>('automation.actions.clickExpand') !== false,
+                clickAlwaysAllow: config.get<boolean>('automation.actions.clickAlwaysAllow') !== false,
+                clickRetry: config.get<boolean>('automation.actions.clickRetry') !== false,
+                clickAcceptAll: config.get<boolean>('automation.actions.clickAcceptAll') !== false,
+                clickKeep: config.get<boolean>('automation.actions.clickKeep') !== false
+            }
+        };
+
+        return `window.__antigravityConfig = ${JSON.stringify(payload)};`;
     }
 
     async connectToPage(page: any): Promise<boolean> {

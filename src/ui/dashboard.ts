@@ -4,145 +4,60 @@ import { config } from '../utils/config';
 export class DashboardPanel {
     public static currentPanel: DashboardPanel | undefined;
     private static runtimeStateProvider: (() => Promise<any | null>) | null = null;
-    private readonly _panel: vscode.WebviewPanel;
-    private readonly _extensionUri: vscode.Uri;
-    private _disposables: vscode.Disposable[] = [];
+    private readonly panel: vscode.WebviewPanel;
+    private readonly disposables: vscode.Disposable[] = [];
 
-    public static setRuntimeStateProvider(provider: (() => Promise<any | null>) | null) {
+    public static setRuntimeStateProvider(provider: (() => Promise<any | null>) | null): void {
         DashboardPanel.runtimeStateProvider = provider;
     }
 
-    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
-        this._panel = panel;
-        this._extensionUri = extensionUri;
+    private constructor(panel: vscode.WebviewPanel) {
+        this.panel = panel;
+        this.update();
 
-        this._update();
-
-        // Listen for messages from the webview
-        this._panel.webview.onDidReceiveMessage(
-            async message => {
-                switch (message.command) {
-                    case 'updateConfig':
-                        await config.update(message.key, message.value);
-                        vscode.window.showInformationMessage(`Updated ${message.key} to ${message.value}`);
-                        return;
-                    case 'toggleMethod': {
-                        const current: string[] = config.get(message.configKey) || [];
-                        let updated: string[];
-                        if (message.enabled) {
-                            updated = current.includes(message.methodId) ? current : [...current, message.methodId];
-                        } else {
-                            updated = current.filter((m: string) => m !== message.methodId);
-                        }
-                        await config.update(message.configKey, updated);
-                        vscode.window.showInformationMessage(`${message.enabled ? 'Enabled' : 'Disabled'} ${message.methodId}`);
-                        return;
-                    }
-                    case 'applyInteractionPreset': {
-                        const profile = String(message.profile || 'vscode') as 'vscode' | 'antigravity' | 'cursor';
-                        const preset = String(message.preset || 'balanced') as 'conservative' | 'balanced' | 'aggressive';
-                        await this._applyInteractionPreset(profile, preset);
-                        vscode.window.showInformationMessage(`Applied ${preset} preset to ${profile} profile`);
-                        return;
-                    }
-                    case 'requestRuntimeState': {
-                        const provider = DashboardPanel.runtimeStateProvider;
-                        if (!provider) {
-                            this._panel.webview.postMessage({
-                                command: 'runtimeStateUpdate',
-                                state: null
-                            });
-                            return;
-                        }
-
-                        const state = await provider();
-                        this._panel.webview.postMessage({
-                            command: 'runtimeStateUpdate',
-                            state: state || null
-                        });
-                        return;
-                    }
-                    case 'runCommand': {
-                        if (typeof message.id === 'string' && message.id.trim().length > 0) {
-                            await vscode.commands.executeCommand(message.id);
-                        }
-                        return;
-                    }
-                    case 'testInteractionMethod': {
-                        const { methodId, text } = message;
-                        vscode.window.withProgress({
-                            location: vscode.ProgressLocation.Notification,
-                            title: `Testing Method: ${methodId}`,
-                            cancellable: false
-                        }, async (progress) => {
-                            progress.report({ message: 'Waiting 3s for you to focus target...' });
-                            await new Promise(r => setTimeout(r, 3000));
-                            progress.report({ message: 'Executing...' });
-
-                            const success = await vscode.commands.executeCommand('antigravity.testMethod', methodId, text);
-
-                            if (success) {
-                                vscode.window.showInformationMessage(`✅ Method '${methodId}' executed successfully.`);
-                            } else {
-                                vscode.window.showErrorMessage(`❌ Method '${methodId}' failed or returned false.`);
-                            }
-                        });
-                        return;
-                    }
-                    case 'runTest': {
-                        const methodId = String(message.testId || '').trim();
-                        const text = String(message.label || message.text || 'Test Input String');
-                        if (!methodId) {
-                            vscode.window.showErrorMessage('No test method id provided.');
-                            return;
-                        }
-                        vscode.window.withProgress({
-                            location: vscode.ProgressLocation.Notification,
-                            title: `Testing Method: ${methodId}`,
-                            cancellable: false
-                        }, async (progress) => {
-                            progress.report({ message: 'Waiting 3s for you to focus target...' });
-                            await new Promise(r => setTimeout(r, 3000));
-                            progress.report({ message: 'Executing...' });
-
-                            const success = await vscode.commands.executeCommand('antigravity.testMethod', methodId, text);
-                            if (success) {
-                                vscode.window.showInformationMessage(`✅ Method '${methodId}' executed successfully.`);
-                            } else {
-                                vscode.window.showErrorMessage(`❌ Method '${methodId}' failed or returned false.`);
-                            }
-                        });
-                        return;
-                    }
+        this.panel.webview.onDidReceiveMessage(async (message) => {
+            switch (message.command) {
+                case 'updateConfig': {
+                    await config.update(message.key, message.value);
+                    this.update();
+                    return;
                 }
-            },
-            null,
-            this._disposables
-        );
-
-        // Listen for configuration changes to update the webview
-        vscode.workspace.onDidChangeConfiguration(e => {
-            if (e.affectsConfiguration('antigravity') && this._panel.visible) {
-                this._update();
+                case 'requestRuntimeState': {
+                    const provider = DashboardPanel.runtimeStateProvider;
+                    const state = provider ? await provider() : null;
+                    this.panel.webview.postMessage({ command: 'runtimeStateUpdate', state: state || null });
+                    return;
+                }
+                case 'runCommand': {
+                    const commandId = String(message.id || '').trim();
+                    if (commandId) {
+                        await vscode.commands.executeCommand(commandId);
+                    }
+                    return;
+                }
             }
-        }, null, this._disposables);
+        }, null, this.disposables);
 
-        this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
+        vscode.workspace.onDidChangeConfiguration((e) => {
+            if (e.affectsConfiguration('antigravity') && this.panel.visible) {
+                this.update();
+            }
+        }, null, this.disposables);
+
+        this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     }
 
-    public static createOrShow(extensionUri: vscode.Uri) {
-        const column = vscode.window.activeTextEditor
-            ? vscode.window.activeTextEditor.viewColumn
-            : undefined;
+    public static createOrShow(extensionUri: vscode.Uri): void {
+        const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : undefined;
 
         if (DashboardPanel.currentPanel) {
-            DashboardPanel.currentPanel._panel.reveal(column);
+            DashboardPanel.currentPanel.panel.reveal(column);
             return;
         }
 
         const panel = vscode.window.createWebviewPanel(
             'antigravityDashboard',
-            'Antigravity Dashboard',
+            'Antigravity Settings',
             column || vscode.ViewColumn.One,
             {
                 enableScripts: true,
@@ -150,1588 +65,137 @@ export class DashboardPanel {
             }
         );
 
-        DashboardPanel.currentPanel = new DashboardPanel(panel, extensionUri);
+        DashboardPanel.currentPanel = new DashboardPanel(panel);
     }
 
-    public dispose() {
+    public dispose(): void {
         DashboardPanel.currentPanel = undefined;
-        this._panel.dispose();
-        while (this._disposables.length) {
-            const x = this._disposables.pop();
-            if (x) {
-                x.dispose();
+        this.panel.dispose();
+        while (this.disposables.length) {
+            const disposable = this.disposables.pop();
+            if (disposable) {
+                disposable.dispose();
             }
         }
     }
 
-    private _update() {
-        const webview = this._panel.webview;
-        this._panel.title = 'Antigravity Settings';
-        this._panel.webview.html = this._getHtmlForWebview(webview);
+    private update(): void {
+        this.panel.title = 'Antigravity Settings';
+        this.panel.webview.html = this.getHtml();
     }
 
-    private async _applyInteractionPreset(
-        profile: 'vscode' | 'antigravity' | 'cursor',
-        preset: 'conservative' | 'balanced' | 'aggressive'
-    ) {
-        const mapping = this._getPreset(profile, preset);
-
-        const methodKey = profile === 'vscode'
-            ? 'interactionClickMethodsVSCode'
-            : profile === 'antigravity'
-                ? 'interactionClickMethodsAntigravity'
-                : 'interactionClickMethodsCursor';
-
-        const selectorKey = profile === 'vscode'
-            ? 'interactionClickSelectorsVSCode'
-            : profile === 'antigravity'
-                ? 'interactionClickSelectorsAntigravity'
-                : 'interactionClickSelectorsCursor';
-
-        await config.update(methodKey as any, mapping.methods);
-        await config.update(selectorKey as any, mapping.selectors);
-        await config.update('interactionParallel', mapping.parallel);
-        await config.update('interactionRetryCount', mapping.retryCount);
-    }
-
-    private _getPreset(
-        profile: 'vscode' | 'antigravity' | 'cursor',
-        preset: 'conservative' | 'balanced' | 'aggressive'
-    ): { methods: string[]; selectors: string[]; parallel: boolean; retryCount: number } {
-        const vscodeSelectors = [
-            'button[aria-label*="Accept"]',
-            'button[title*="Accept"]',
-            'button[aria-label*="Apply"]',
-            'button[title*="Apply"]',
-            '.monaco-dialog-box button',
-            '.monaco-notification-list button',
-            '.monaco-button'
-        ];
-
-        const antigravitySelectors = [
-            '[data-testid="accept-all"]',
-            '[data-testid*="accept"]',
-            'button[aria-label*="Accept"]',
-            'button[title*="Accept"]',
-            'button[aria-label*="Allow"]',
-            'button[title*="Allow"]',
-            'button[aria-label*="Continue"]',
-            'button[title*="Continue"]'
-        ];
-
-        const cursorSelectors = [
-            '#workbench\\.parts\\.auxiliarybar button',
-            '[class*="anysphere"]',
-            '.monaco-list-row.collapsed',
-            '.codicon-chevron-right'
-        ];
-        const cursorSend = [
-            '#workbench\\.parts\\.auxiliarybar button[aria-label*="Send"]',
-            '#workbench\\.parts\\.auxiliarybar button[aria-label*="Submit"]',
-            '.interactive-editor button[aria-label*="Send"]',
-            '.interactive-editor button[aria-label*="Submit"]',
-            '[class*="anysphere"] button[aria-label*="Submit"]'
-        ];
-        const cursorInputs = [
-            '#workbench\\.parts\\.auxiliarybar textarea',
-            '.interactive-editor textarea',
-            '.interactive-editor [contenteditable="true"]',
-            '[class*="anysphere"] textarea'
-        ];
-
-        const selectors = profile === 'vscode'
-            ? vscodeSelectors
-            : profile === 'antigravity'
-                ? antigravitySelectors
-                : cursorSelectors;
-
-        if (preset === 'conservative') {
-            return {
-                methods: ['native-accept', 'vscode-cmd', 'dom-scan-click'],
-                selectors,
-                parallel: false,
-                retryCount: 2
-            };
-        }
-
-        if (preset === 'aggressive') {
-            return {
-                methods: ['dom-scan-click', 'vscode-cmd'],
-                selectors,
-                parallel: true,
-                retryCount: 8
-            };
-        }
-
-        return {
-            methods: ['dom-scan-click', 'vscode-cmd'],
-            selectors,
-            parallel: false,
-            retryCount: 4
+    private getHtml(): string {
+        const getBool = (key: string, fallback: boolean): boolean => {
+            const value = config.get<boolean>(key);
+            return typeof value === 'boolean' ? value : fallback;
         };
-    }
 
-    private _getHtmlForWebview(webview: vscode.Webview) {
-        const settings = config.getAll();
+        const autoContinueEnabled = getBool('autoContinueScriptEnabled', true);
+        const bumpEnabled = getBool('actions.bump.enabled', true);
+        const clickRun = getBool('automation.actions.clickRun', true);
+        const clickExpand = getBool('automation.actions.clickExpand', true);
+        const clickAlwaysAllow = getBool('automation.actions.clickAlwaysAllow', true);
+        const clickRetry = getBool('automation.actions.clickRetry', true);
+        const clickAcceptAll = getBool('automation.actions.clickAcceptAll', true);
+        const clickKeep = getBool('automation.actions.clickKeep', true);
+
+        const bumpText = config.get<string>('actions.bump.text') || 'Proceed';
+        const pollIntervalMs = config.get<number>('automation.timing.pollIntervalMs') || 800;
+        const stallTimeoutSec = config.get<number>('actions.bump.stallTimeout') || 7;
+        const bumpCooldownSec = config.get<number>('actions.bump.cooldown') || 30;
+        const submitDelayMs = config.get<number>('actions.bump.submitDelayMs') || 120;
 
         return `<!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Antigravity Dashboard</title>
-            <style>
-                body { font-family: var(--vscode-font-family, sans-serif); padding: 20px; color: var(--vscode-editor-foreground); background-color: var(--vscode-editor-background); }
-                h1 { color: var(--vscode-editor-foreground); border-bottom: 1px solid var(--vscode-widget-border); padding-bottom: 8px; }
-                h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 0; color: var(--vscode-descriptionForeground); }
-                .card { background: var(--vscode-editor-widget-background); border: 1px solid var(--vscode-widget-border); padding: 15px; margin-bottom: 12px; border-radius: 6px; }
-                .setting { margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-                .setting.vertical { flex-direction: column; align-items: flex-start; }
-                label { font-weight: 600; flex-shrink: 0; }
-                select, input[type="text"], input[type="number"] { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); padding: 4px 8px; border-radius: 3px; min-width: 120px; }
-                input[type="number"] { width: 80px; }
-                input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--vscode-button-background); cursor: pointer; }
-                textarea { width: 100%; height: 60px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 3px; resize: vertical; margin-top: 5px; font-family: monospace; }
-                button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 6px 12px; cursor: pointer; border-radius: 3px; }
-                button:hover { background: var(--vscode-button-hoverBackground); }
-                .version { color: var(--vscode-descriptionForeground); font-size: 12px; margin-top: 16px; text-align: center; }
-                .runtime-grid { display:grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-top: 8px; }
-                .runtime-chip { display:inline-block; padding: 2px 8px; border-radius: 999px; font-weight: 700; font-size: 12px; }
-                .runtime-chip.active { background: rgba(59,130,246,0.25); color: #93c5fd; }
-                .runtime-chip.pending { background: rgba(245,158,11,0.25); color: #fcd34d; }
-                .runtime-chip.complete { background: rgba(34,197,94,0.25); color: #86efac; }
-                .runtime-chip.waiting { background: rgba(168,85,247,0.25); color: #d8b4fe; }
-                .runtime-chip.idle { background: rgba(107,114,128,0.25); color: #d1d5db; }
-                .runtime-chip.unknown { background: rgba(75,85,99,0.25); color: #e5e7eb; }
-                .runtime-chip.escalation-armed { background: rgba(245,158,11,0.28); color: #fde68a; }
-                .runtime-chip.escalation-idle { background: rgba(107,114,128,0.25); color: #d1d5db; }
-                .runtime-chip.watchdog-running { background: rgba(59,130,246,0.28); color: #bfdbfe; }
-                .runtime-chip.watchdog-idle { background: rgba(107,114,128,0.25); color: #d1d5db; }
-                .runtime-chip.event-armed { background: rgba(245,158,11,0.28); color: #fde68a; }
-                .runtime-chip.event-suppressed { background: rgba(239,68,68,0.25); color: #fecaca; }
-                .runtime-chip.event-reset { background: rgba(107,114,128,0.25); color: #d1d5db; }
-                .runtime-chip.event-consumed { background: rgba(34,197,94,0.25); color: #86efac; }
-                .runtime-chip.event-none { background: rgba(75,85,99,0.25); color: #e5e7eb; }
-                .runtime-chip.telemetry-fresh { background: rgba(34,197,94,0.25); color: #86efac; }
-                .runtime-chip.telemetry-stale { background: rgba(239,68,68,0.25); color: #fecaca; }
-                .runtime-chip.safety-quiet { background: rgba(34,197,94,0.25); color: #86efac; }
-                .runtime-chip.safety-warn { background: rgba(245,158,11,0.28); color: #fde68a; }
-                .runtime-chip.safety-hot { background: rgba(239,68,68,0.25); color: #fecaca; }
-                .runtime-legend { margin-top: 8px; display:flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-                .runtime-legend .runtime-chip { font-size: 11px; }
-                .muted { color: var(--vscode-descriptionForeground); font-size: 12px; }
-                .runtime-history { margin-top: 10px; max-height: 120px; overflow-y: auto; border: 1px solid var(--vscode-widget-border); border-radius: 4px; padding: 6px; }
-                .runtime-history-item { font-size: 12px; padding: 2px 0; color: var(--vscode-descriptionForeground); border-bottom: 1px dashed var(--vscode-widget-border); }
-                .runtime-history-item:last-child { border-bottom: none; }
-                .top-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
-                .top-actions button { font-weight: 700; }
-                .btn-danger { background: var(--vscode-errorForeground, #dc2626); color: #fff; }
-                .btn-danger:hover { filter: brightness(1.1); }
-            </style>
-        </head>
-        <body>
-            <h1>⚡ Antigravity Autopilot</h1>
-            <div class="top-actions">
-                <button class="btn-danger" title="Emergency stop: disable Auto-All and stop strategy runtime" onclick="runCommand('antigravity.clearAutoAll')">🛑 Panic Stop</button>
-                <button title="Toggle extension strategy on/off" onclick="runCommand('antigravity.toggleExtension')">⏻ Toggle</button>
-                <button title="Enable Auto-All (CDP mode)" onclick="runCommand('antigravity.toggleAutoAll')">🚀 Max Out</button>
-            </div>
-
-            <div class="card">
-                <h2>Master Control</h2>
-                <div class="setting" title="Universal ON/OFF for core autonomy (CDP strategy, auto actions, autonomous loop, and injected automation script). Hotkey: Ctrl+Alt+Shift+M.">
-                    <label>Universal Master Toggle:</label>
-                    <input type="checkbox" ${(settings.autonomousEnabled || settings.autopilotAutoAcceptEnabled || settings.autoAllEnabled || settings.autoContinueScriptEnabled) ? 'checked' : ''} onchange="runCommand('antigravity.toggleMasterControl')">
-                </div>
-                <div class="setting" title="One-click preset that enables CDP, injected automation, run/expand/accept/continue/submit/bump, and autonomous loop defaults for maximum autopilot coverage.">
-                    <label>Maximum Autopilot:</label>
-                    <button onclick="runCommand('antigravity.enableMaximumAutopilot')">Enable Maximum Mode</button>
-                </div>
-                <div class="setting" title="Immediate hard stop for all autonomy systems. Hotkey: Ctrl+Alt+Shift+Backspace.">
-                    <label>Emergency Stop:</label>
-                    <button onclick="runCommand('antigravity.panicStop')">Disable Everything Now</button>
-                </div>
-                <div class="setting" title="Open this extension in the host native Settings UI (filtered by extension id). Useful fallback if dashboard rendering is blocked.">
-                    <label>Native Settings:</label>
-                    <button onclick="runCommand('antigravity.openExtensionSettings')">Open Extension Settings</button>
-                </div>
-                <div class="setting" title="Runs a one-click diagnostics report for settings entrypoints (dashboard + native settings + required commands).">
-                    <label>Settings Health:</label>
-                    <button onclick="runCommand('antigravity.checkSettingsSurfacesHealth')">Run Health Check</button>
-                </div>
-            </div>
-
-            <div class="card">
-                <h2>Runtime State</h2>
-                <div class="setting">
-                    <label>Status:</label>
-                    <span id="runtimeStatusChip" class="runtime-chip unknown">UNKNOWN</span>
-                </div>
-                <div class="runtime-grid">
-                    <div><strong>Mode:</strong> <span id="runtimeMode" class="muted">-</span></div>
-                    <div><strong>Idle:</strong> <span id="runtimeIdle" class="muted">-</span></div>
-                    <div><strong>Telemetry:</strong> <span id="runtimeTelemetryFreshness" class="runtime-chip telemetry-fresh" title="Freshness is computed from current time minus runtime state timestamp">FRESH</span></div>
-                    <div><strong>Tabs:</strong> <span id="runtimeTabs" class="muted">-</span></div>
-                    <div><strong>Pending Accept:</strong> <span id="runtimePending" class="muted">-</span></div>
-                    <div><strong>Waiting Chat:</strong> <span id="runtimeWaiting" class="muted">-</span></div>
-                    <div><strong>Updated:</strong> <span id="runtimeUpdated" class="muted">-</span></div>
-                    <div><strong>Telemetry Age:</strong> <span id="runtimeTelemetryAge" class="muted">-</span></div>
-                    <div><strong>Safety Blocks:</strong> <span id="runtimeBlockedUnsafeTotal" class="muted">-</span></div>
-                    <div><strong>Safety Signal:</strong> <span id="runtimeSafetySignal" class="runtime-chip safety-quiet">QUIET</span></div>
-                    <div><strong>Safety Trend:</strong> <span id="runtimeSafetyTrend" class="muted">-</span></div>
-                    <div><strong>Safety Rate:</strong> <span id="runtimeSafetyRate" class="muted">-</span></div>
-                    <div><strong>State Duration:</strong> <span id="runtimeStateDuration" class="muted">-</span></div>
-                    <div><strong>Waiting Since:</strong> <span id="runtimeWaitingSince" class="muted">-</span></div>
-                    <div><strong>Blocked Run/Expand:</strong> <span id="runtimeSafetyBlockedRunExpand" class="muted">-</span></div>
-                    <div><strong>Blocked Non-Chat Targets:</strong> <span id="runtimeSafetyBlockedNonChat" class="muted">-</span></div>
-                    <div><strong>Blocked Submit Keys:</strong> <span id="runtimeSafetyBlockedSubmitKeys" class="muted">-</span></div>
-                    <div><strong>Blocked Focus-Loss Keys:</strong> <span id="runtimeSafetyBlockedFocusLoss" class="muted">-</span></div>
-                    <div><strong>Active Coverage:</strong> <span id="runtimeCoverageActive" class="muted">-</span></div>
-                    <div><strong>VS Code Coverage:</strong> <span id="runtimeCoverageVSCode" class="muted">-</span></div>
-                    <div><strong>Antigravity Coverage:</strong> <span id="runtimeCoverageAntigravity" class="muted">-</span></div>
-                    <div><strong>Cursor Coverage:</strong> <span id="runtimeCoverageCursor" class="muted">-</span></div>
-                    <div><strong>Guard Score:</strong> <span id="runtimeGuardScore" class="muted">-</span></div>
-                    <div><strong>Strict Primary:</strong> <span id="runtimeGuardStrict" class="muted">-</span></div>
-                    <div><strong>Auto-Resume Gate:</strong> <span id="runtimeGuardAllowed" class="muted">-</span></div>
-                    <div><strong>Gate Reason:</strong> <span id="runtimeGuardReason" class="muted">-</span></div>
-                    <div><strong>Next Eligible:</strong> <span id="runtimeNextEligible" class="muted">-</span></div>
-                    <div><strong>Cooldown Left:</strong> <span id="runtimeCooldownLeft" class="muted">-</span></div>
-                    <div><strong>Delay Left:</strong> <span id="runtimeDelayLeft" class="muted">-</span></div>
-                    <div><strong>Last Resume Outcome:</strong> <span id="runtimeLastResumeOutcome" class="muted">-</span></div>
-                    <div><strong>Recommended Next:</strong> <span id="runtimeRecommendedNext" class="muted">-</span></div>
-                    <div><strong>Ready To Resume:</strong> <span id="runtimeReadyToResume" class="muted">-</span></div>
-                    <div><strong>Completion Confidence:</strong> <span id="runtimeCompletionConfidence" class="muted">-</span></div>
-                    <div><strong>Completion Reasoning:</strong> <span id="runtimeCompletionReasoning" class="muted">-</span></div>
-                    <div><strong>Ready Streak:</strong> <span id="runtimeReadyStreak" class="muted">-</span></div>
-                    <div><strong>Last Message Kind:</strong> <span id="runtimeLastMessageKind" class="muted">-</span></div>
-                    <div><strong>Last Message Profile:</strong> <span id="runtimeLastMessageProfile" class="muted">-</span></div>
-                    <div><strong>Last Message Preview:</strong> <span id="runtimeLastMessagePreview" class="muted">-</span></div>
-                    <div><strong>Watchdog State:</strong> <span id="runtimeWatchdogState" class="runtime-chip watchdog-idle">IDLE</span></div>
-                    <div><strong>Watchdog Last Run:</strong> <span id="runtimeWatchdogLastRun" class="muted">-</span></div>
-                    <div><strong>Watchdog Outcome:</strong> <span id="runtimeWatchdogOutcome" class="muted">-</span></div>
-                    <div><strong>Escalation State:</strong> <span id="runtimeWatchdogEscalationArmed" class="runtime-chip escalation-idle">IDLE</span></div>
-                    <div><strong>Escalation Fail Streak:</strong> <span id="runtimeWatchdogEscalationStreak" class="muted">-</span></div>
-                    <div><strong>Escalation Cooldown Left:</strong> <span id="runtimeWatchdogEscalationCooldownLeft" class="muted">-</span></div>
-                    <div><strong>Escalation Next Eligible:</strong> <span id="runtimeWatchdogEscalationNextEligible" class="muted">-</span></div>
-                    <div><strong>Last Escalation Event:</strong> <span id="runtimeWatchdogEscalationLastEvent" class="runtime-chip event-none">NONE</span></div>
-                    <div><strong>Escalation Last Trigger:</strong> <span id="runtimeWatchdogEscalationLast" class="muted">-</span></div>
-                    <div><strong>Escalation Reason:</strong> <span id="runtimeWatchdogEscalationReason" class="muted">-</span></div>
-                    <div><strong>Escalation Events:</strong> <span id="runtimeWatchdogEscalationEvents" class="muted">-</span></div>
-                </div>
-                <div style="margin-top:10px;display:flex;gap:8px;">
-                    <button onclick="requestRuntimeState()">Refresh Runtime State</button>
-                    <button onclick="runCommand('antigravity.detectCompletionWaitingState')">Detect Completion + Waiting</button>
-                    <button onclick="runCommand('antigravity.runCrossUiSelfTest')">Run Cross-UI Self-Test</button>
-                    <button onclick="runCommand('antigravity.autoFixAutoResumeReadiness')">Auto-Fix Resume Readiness</button>
-                    <button onclick="runCommand('antigravity.copyLastResumePayloadReport')">Copy Last Resume Payload</button>
-                    <button onclick="runCommand('antigravity.copyEscalationDiagnosticsReport')">Copy Escalation Diagnostics</button>
-                    <button onclick="runCommand('antigravity.copyEscalationHealthSummary')">Copy Escalation Health</button>
-                    <button onclick="runCommand('antigravity.clearEscalationTimeline')">Clear Escalation Timeline</button>
-                </div>
-                <div class="runtime-legend">
-                    <span class="muted">Legend:</span>
-                    <span class="runtime-chip escalation-armed">Escalation ARMED</span>
-                    <span class="runtime-chip escalation-idle">Escalation IDLE</span>
-                    <span class="runtime-chip watchdog-running">Watchdog RUNNING</span>
-                    <span class="runtime-chip watchdog-idle">Watchdog IDLE</span>
-                    <span class="runtime-chip event-armed">Event ARMED</span>
-                    <span class="runtime-chip event-suppressed">Event SUPPRESSED</span>
-                    <span class="runtime-chip event-consumed">Event CONSUMED</span>
-                    <span class="runtime-chip event-reset">Event RESET</span>
-                    <span class="runtime-chip telemetry-fresh">Telemetry FRESH</span>
-                    <span class="runtime-chip telemetry-stale">Telemetry STALE</span>
-                </div>
-                <p class="muted" title="Computed from Date.now() - runtime timestamp">Telemetry is marked <strong>STALE</strong> when telemetry age exceeds the configured stale threshold.</p>
-                <div class="runtime-history" id="runtimeHistory"></div>
-            </div>
-            
-            <!-- STRATEGIES -->
-            <!-- STRATEGIES -->
-            <div class="card">
-                <h2>Unified Autopilot Controls</h2>
-                <div class="setting" title="Select the core operating mode for the autopilot. 'Simple' uses basic VS Code commands. 'CDP' uses the Chrome DevTools Protocol for advanced browser automation and deeper integration.">
-                    <label>Current Strategy:</label>
-                    <select onchange="updateConfig('strategy', this.value)">
-                        <option value="simple" ${settings.strategy === 'simple' ? 'selected' : ''}>Simple (Commands)</option>
-                        <option value="cdp" ${settings.strategy === 'cdp' ? 'selected' : ''}>CDP (Browser Protocol)</option>
-                    </select>
-                </div>
-                <div class="setting" title="Master switch for the Auto-Accept loop. When enabled, Antigravity will continuously poll for suggestions and attempt to accept them based on the active strategy.">
-                    <label>Auto Accept:</label>
-                    <input type="checkbox" ${settings.autopilotAutoAcceptEnabled ? 'checked' : ''} onchange="updateUnifiedAutoAccept(this.checked)">
-                </div>
-                <div class="setting" title="When enabled, if the AI stops generating without completing the task (e.g. network error, lazy response), Antigravity will automatically send a 'continue' message to prompt it to finish.">
-                    <label>Auto Bump:</label>
-                    <input type="checkbox" ${settings.autopilotAutoBumpEnabled ? 'checked' : ''} onchange="updateConfig('autopilotAutoBumpEnabled', this.checked)">
-                </div>
-                <div class="setting" title="Enables strict 'Run', 'Expand', and 'Continue' button clicking logic in the browser. This ensures that code blocks are run, expanded, and the conversation is kept alive.">
-                    <label>Run / Expand / Continue:</label>
-                    <input type="checkbox" ${settings.autopilotRunExpandContinueEnabled ? 'checked' : ''} onchange="updateConfig('autopilotRunExpandContinueEnabled', this.checked)">
-                </div>
-                <div class="setting" title="EXPERIMENTAL: Allows Antigravity to attach to and control multiple browser tabs simultaneously. Useful for complex, multi-step workflows involving multiple windows.">
-                    <label>Multi-Tab Mode:</label>
-                    <input type="checkbox" ${settings.multiTabEnabled ? 'checked' : ''} onchange="updateConfig('multiTabEnabled', this.checked)">
-                </div>
-            </div>
-
-            <!-- BROWSER AUTOMATION (INJECTED SCRIPT) -->
-            <!-- BROWSER AUTOMATION (INJECTED SCRIPT) -->
-            <div class="card">
-                <h2>Browser Automation (Injected Script)</h2>
-                <div class="setting" title="Global toggle for the injected JavaScript automation script. If disabled, no in-browser automation (clicking, scrolling, typing) will occur, regardless of other settings.">
-                    <label>Master Switch:</label>
-                    <input type="checkbox" ${settings.autoContinueScriptEnabled !== false ? 'checked' : ''} onchange="updateConfig('autoContinueScriptEnabled', this.checked)">
-                </div>
-                <div class="setting" title="Require visible completion/feedback signals before bump logic is allowed to trigger.">
-                    <label>Bump Requires Visible Signals:</label>
-                    <input type="checkbox" ${config.get<boolean>('automation.bump.requireVisible') !== false ? 'checked' : ''} onchange="updateConfig('automation.bump.requireVisible', this.checked)">
-                </div>
-                 <div class="setting" title="Automatically click 'Run' buttons in code blocks (e.g., in Jupyter notebooks or interactive terminals).">
-                    <label>Click Run (Play):</label>
-                    <input type="checkbox" ${config.get<string[]>('automation.actions.clickRun') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickRun', this.checked)">
-                </div>
-                <div class="setting" title="Automatically click to expand truncated code blocks or long output sections.">
-                    <label>Click Expand:</label>
-                    <input type="checkbox" ${config.get<string[]>('automation.actions.clickExpand') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickExpand', this.checked)">
-                </div>
-                <div class="setting" title="Automatically click 'Accept' or checkmark buttons to apply code suggestions.">
-                    <label>Click Accept (Check):</label>
-                    <input type="checkbox" ${config.get<string[]>('automation.actions.clickAccept') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickAccept', this.checked)">
-                </div>
-                <div class="setting" title="Automatically click 'Accept All' buttons to apply bulk changes or multiple suggestions at once.">
-                    <label>Click Accept All:</label>
-                    <input type="checkbox" ${config.get<string[]>('automation.actions.clickAcceptAll') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickAcceptAll', this.checked)">
-                </div>
-                <div class="setting" title="Automatically click 'Continue', 'Keep', or 'Next' buttons to proceed through multi-step generation flows.">
-                    <label>Click Continue/Keep:</label>
-                    <input type="checkbox" ${config.get<string[]>('automation.actions.clickContinue') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickContinue', this.checked)">
-                </div>
-                <div class="setting" title="Automatically click the submit/send button in the chat input area to send your message.">
-                    <label>Click Submit (Send):</label>
-                    <input type="checkbox" ${config.get<string[]>('automation.actions.clickSubmit') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickSubmit', this.checked)">
-                </div>
-                <div class="setting" title="Automatically scroll the chat view to keep the latest content visible.">
-                    <label>Auto Scroll:</label>
-                    <input type="checkbox" ${config.get<string[]>('automation.actions.autoScroll') ? 'checked' : ''} onchange="updateConfig('automation.actions.autoScroll', this.checked)">
-                </div>
-                <div class="setting" title="Automatically click positive feedback / thumbs up buttons to reinforce good AI responses.">
-                    <label>Auto Feedback:</label>
-                    <input type="checkbox" ${config.get<string[]>('automation.actions.clickFeedback') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickFeedback', this.checked)">
-                </div>
-                <!-- Auto-Reply Options -->
-                <div class="setting" title="Enable the 'Smart Resume' feature. The script will analyze if the AI has stopped generating and automatically send a bump message to keep it going.">
-                    <label>Auto Reply (Bump):</label>
-                    <input type="checkbox" ${config.get<string[]>('automation.actions.autoReply') ? 'checked' : ''} onchange="updateConfig('automation.actions.autoReply', this.checked)">
-                </div>
-                <div class="setting" title="The specific text message to send when bumping the AI (e.g., 'continue', 'next', 'go on'). This is the unified bump text used by all systems.">
-                    <label>Bump Text:</label>
-                    <input type="text" value="${config.get<string[]>('actions.bump.text') ?? 'Proceed'}" onchange="updateConfig('actions.bump.text', this.value)">
-                </div>
-                <div class="setting" title="The delay in milliseconds to wait after the AI stops generating before sending the auto-reply bump. Prevents spamming the chat.">
-                    <label>Auto Reply Delay (ms):</label>
-                    <input type="number" value="${config.get<string[]>('automation.timing.autoReplyDelayMs') ?? 7000}" onchange="updateConfig('automation.timing.autoReplyDelayMs', parseInt(this.value))">
-                </div>
-                 <div class="setting" title="How frequently (in milliseconds) the script checks the page state for buttons, generation status, and new elements. Lower values are more responsive but use more CPU.">
-                    <label>Poll Interval (ms):</label>
-                    <input type="number" value="${config.get<string[]>('automation.timing.pollIntervalMs') ?? 800}" min="100" onchange="updateConfig('automation.timing.pollIntervalMs', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Minimum delay between automation actions. Increase if actions feel too aggressive; decrease for faster response.">
-                    <label>Action Throttle (ms):</label>
-                    <input type="number" value="${config.get<string[]>('automation.timing.actionThrottleMs') ?? 1000}" min="0" onchange="updateConfig('automation.timing.actionThrottleMs', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Global settle cooldown applied after heavier actions (like bump/submit) before the next cycle can execute.">
-                    <label>Global Cooldown (ms):</label>
-                    <input type="number" value="${config.get<string[]>('automation.timing.cooldownMs') ?? 2500}" min="0" onchange="updateConfig('automation.timing.cooldownMs', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Random jitter added to action scheduling to reduce deterministic cadence. Set 0 for strict machine timing.">
-                    <label>Timing Randomness (ms):</label>
-                    <input type="number" value="${config.get<string[]>('automation.timing.randomness') ?? 100}" min="0" onchange="updateConfig('automation.timing.randomness', parseInt(this.value))">
-                </div>
-                 <div class="setting" title="Draws a visual border or highlight around elements that the automation script is interacting with. Useful for debugging and verifying behavior.">
-                    <label>Debug Highlight:</label>
-                    <input type="checkbox" ${config.get<string[]>('automation.debug.highlightClicks') ? 'checked' : ''} onchange="updateConfig('automation.debug.highlightClicks', this.checked)">
-                </div>
-                <div class="setting" title="Enable verbose browser-side runtime logging. Recommended ON while troubleshooting detection/click decisions.">
-                    <label>Verbose Runtime Logs:</label>
-                    <input type="checkbox" ${config.get<string[]>('automation.debug.verboseLogging') ? 'checked' : ''} onchange="updateConfig('automation.debug.verboseLogging', this.checked)">
-                </div>
-                <div class="setting" title="Log every noteworthy detection/action transition from the injected script.">
-                    <label>Log All Actions:</label>
-                    <input type="checkbox" ${config.get<boolean>('automation.debug.logAllActions') !== false ? 'checked' : ''} onchange="updateConfig('automation.debug.logAllActions', this.checked)">
-                </div>
-                <div class="setting" title="Forward browser automation logs into the Antigravity Debug output channel.">
-                    <label>Forward Logs To Debug:</label>
-                    <input type="checkbox" ${config.get<boolean>('automation.debug.logToExtension') !== false ? 'checked' : ''} onchange="updateConfig('automation.debug.logToExtension', this.checked)">
-                </div>
-            </div>
-
-            <div class="card">
-                <h2>Control Group: Bump</h2>
-                <p class="muted">Bump fires only when selected detection components match, then selected typing + submit components run.</p>
-
-                <div class="setting" title="Global gate for bump automation. When OFF, no idle-resume bump is sent regardless of other bump settings.">
-                    <label>Bump Enabled:</label>
-                    <input type="checkbox" ${settings.actions.bump.enabled ? 'checked' : ''} onchange="updateConfig('actions.bump.enabled', this.checked); updateConfig('autopilotAutoBumpEnabled', this.checked)">
-                </div>
-
-                <div class="setting vertical" title="Exact text payload sent during bump. This is the same Bump Text from the Browser Automation section above. Changing it here updates the same setting.">
-                    <label>Bump Text:</label>
-                    <input type="text" list="bump-texts" value="${settings.actions.bump.text || 'Proceed'}" onchange="updateConfig('actions.bump.text', this.value)">
-                    <datalist id="bump-texts">
-                        <option value="Proceed">
-                        <option value="continue">
-                        <option value="bump">
-                    </datalist>
-                </div>
-
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components (checkboxes)</summary>
-                    <div class="setting" title="Triggers bump when rating/feedback affordances appear, indicating assistant output likely completed."><label>Feedback Visible (Good/Bad/Helpful):</label><input type="checkbox" ${(config.get<string[]>('automation.bump.detectMethods') || []).includes('feedback-visible') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'feedback-visible', this.checked)"></div>
-                    <div class="setting" title="Requires generation to be idle before bump, preventing overlap with in-flight model output."><label>Not Generating Signal:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'not-generating', this.checked)"></div>
-                    <div class="setting" title="Prioritizes bump when the latest visible sender appears to be the user and no assistant follow-up arrived yet."><label>Last Sender = User:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.detectMethods') || []).includes('last-sender-user') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'last-sender-user', this.checked)"></div>
-                    <div class="setting" title="Looks for transient network failure wording and issues a retry-style bump sooner."><label>Network Error Retry Detection:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.detectMethods') || []).includes('network-error-retry') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'network-error-retry', this.checked)"></div>
-                    <div class="setting" title="Suppresses bump when assistant ends with a direct question, reducing accidental interruptions."><label>Skip if AI Ends with Question:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.detectMethods') || []).includes('skip-ai-question') ? 'checked' : ''} onchange="toggleMethod('automation.bump.detectMethods', 'skip-ai-question', this.checked)"></div>
-                </details>
-
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Typing Components (checkboxes)</summary>
-                    <div class="setting" title="Uses document.execCommand('insertText'). Works in some editors but may be ignored in hardened contexts."><label>execCommand insertText:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.typeMethods') || []).includes('exec-command') ? 'checked' : ''} onchange="toggleMethod('automation.bump.typeMethods', 'exec-command', this.checked)"></div>
-                    <div class="setting" title="Sets textarea value via native setter to align with framework-controlled inputs."><label>Native Value Setter:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.typeMethods') || []).includes('native-setter') ? 'checked' : ''} onchange="toggleMethod('automation.bump.typeMethods', 'native-setter', this.checked)"></div>
-                    <div class="setting" title="Dispatches input/change events after text injection so UI listeners detect the new message."><label>Dispatch Input/Change Events:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.typeMethods') || []).includes('dispatch-events') ? 'checked' : ''} onchange="toggleMethod('automation.bump.typeMethods', 'dispatch-events', this.checked)"></div>
-                </details>
-
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Submit Components (checkboxes)</summary>
-                    <div class="setting" title="Attempts explicit click on send/submit affordance after typing bump text."><label>Click Send Button:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.submitMethods') || []).includes('click-send') ? 'checked' : ''} onchange="toggleMethod('automation.bump.submitMethods', 'click-send', this.checked)"></div>
-                    <div class="setting" title="Fallback submit path using keyboard Enter event when button click is unavailable."><label>Enter Key Submit:</label><input type="checkbox" ${(config.get<string[]>('automation.bump.submitMethods') || []).includes('enter-key') ? 'checked' : ''} onchange="toggleMethod('automation.bump.submitMethods', 'enter-key', this.checked)"></div>
-                </details>
-
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Timing</summary>
-                    <div class="setting" title="Default idle wait before auto-bump executes when no specialized path is selected."><label>Base Idle Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.timing.autoReplyDelayMs') ?? 7000}" min="250" onchange="updateConfig('automation.timing.autoReplyDelayMs', parseInt(this.value))"></div>
-                    <div class="setting" title="Accelerated delay used for user-waiting conditions (faster than base idle delay)."><label>User-Wait Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.bump.userDelayMs') ?? 3000}" min="250" onchange="updateConfig('automation.bump.userDelayMs', parseInt(this.value))"></div>
-                    <div class="setting" title="Retry path delay for recoverable network-error scenarios."><label>Retry Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.bump.retryDelayMs') ?? 2000}" min="250" onchange="updateConfig('automation.bump.retryDelayMs', parseInt(this.value))"></div>
-                    <div class="setting" title="Per-character or method pacing used by host-side bump send helper."><label>Typing Delay (ms):</label><input type="number" value="${settings.actions.bump.typingDelayMs ?? 50}" min="0" onchange="updateConfig('actions.bump.typingDelayMs', parseInt(this.value))"></div>
-                    <div class="setting" title="Delay between typing and submit action to allow UI state to settle."><label>Submit Delay (ms):</label><input type="number" value="${settings.actions.bump.submitDelayMs ?? 100}" min="0" onchange="updateConfig('actions.bump.submitDelayMs', parseInt(this.value))"></div>
-                </details>
-            </div>
-
-            <div class="card">
-                <h2>Control Group: Accept</h2>
-                <div class="setting" title="Enables single-item acceptance actions (check/apply buttons)."><label>Accept Enabled:</label><input type="checkbox" ${config.get<string[]>('automation.actions.clickAccept') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickAccept', this.checked)"></div>
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components</summary>
-                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.accept.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.detectMethods', 'enabled-flag', this.checked)"></div>
-                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.accept.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.detectMethods', 'not-generating', this.checked)"></div>
-                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.accept.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.detectMethods', 'action-cooldown', this.checked)"></div>
-                </details>
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
-                    <div class="setting" title="Attempts bulk acceptance first when both bulk and single options are present."><label>Accept All First:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.accept.actionMethods') || []).includes('accept-all-first') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.actionMethods', 'accept-all-first', this.checked)"></div>
-                    <div class="setting" title="Targets single accept/apply controls for per-change confirmation flows."><label>Accept Single:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.accept.actionMethods') || []).includes('accept-single') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.actionMethods', 'accept-single', this.checked)"></div>
-                    <div class="setting" title="Generic selector-based click fallback for accept actions."><label>DOM Click:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.accept.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.accept.actionMethods', 'dom-click', this.checked)"></div>
-                </details>
-                <div class="setting"><label>Accept Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.controls.accept.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.accept.delayMs', parseInt(this.value))"></div>
-            </div>
-
-            <div class="card">
-                <h2>Control Group: Accept All / Keep</h2>
-                <div class="setting" title="Enables bulk-apply acceptance behavior, including VS Code flows that expose Keep instead of Accept All."><label>Accept All Enabled:</label><input type="checkbox" ${config.get<string[]>('automation.actions.clickAcceptAll') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickAcceptAll', this.checked)"></div>
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components</summary>
-                    <div class="setting" title="Master gate for this group. If OFF, Accept All/Keep clicks are blocked even if matching buttons are visible."><label>Enabled Flag:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.acceptAll.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.detectMethods', 'enabled-flag', this.checked)"></div>
-                    <div class="setting" title="Only allow clicks after model generation has stopped. Prevents interfering while assistant is still streaming."><label>Not Generating:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.acceptAll.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.detectMethods', 'not-generating', this.checked)"></div>
-                    <div class="setting" title="Enforces delayMs spacing between clicks to avoid double-click storms and accidental repeated acceptance."><label>Action Cooldown:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.acceptAll.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.detectMethods', 'action-cooldown', this.checked)"></div>
-                </details>
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
-                    <div class="setting" title="Targets explicit Accept All controls (title/aria-label/codicon-check-all) for bulk acceptance flows."><label>Accept-All Button:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.acceptAll.actionMethods') || []).includes('accept-all-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'accept-all-button', this.checked)"></div>
-                    <div class="setting" title="Treats VS Code 'Keep' button as semantic equivalent of Accept All. Enable this to capture Keep-first UX variants."><label>Keep Button (VS Code):</label><input type="checkbox" ${(config.get<string[]>('automation.controls.acceptAll.actionMethods') || []).includes('keep-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'keep-button', this.checked)"></div>
-                    <div class="setting" title="Targets 'Allow/Allow All' style approvals that appear in some flows instead of Accept All."><label>Allow-All Button:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.acceptAll.actionMethods') || []).includes('allow-all-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'allow-all-button', this.checked)"></div>
-                    <div class="setting" title="Generic fallback click mode. Useful when labels/icons drift, but keep it ON with safety filters enabled."><label>DOM Click:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.acceptAll.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.acceptAll.actionMethods', 'dom-click', this.checked)"></div>
-                </details>
-                <div class="setting" title="Per-action cooldown window for Accept All/Keep. Higher values reduce misfires; lower values improve responsiveness."><label>Accept All Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.controls.acceptAll.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.acceptAll.delayMs', parseInt(this.value))"></div>
-            </div>
-
-            <div class="card">
-                <h2>Control Group: Continue / Keep</h2>
-                <div class="setting" title="Enables continuation controls (Continue/Keep) used to advance paused assistant flows."><label>Continue Enabled:</label><input type="checkbox" ${config.get<string[]>('automation.actions.clickContinue') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickContinue', this.checked)"></div>
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components</summary>
-                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.continue.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.detectMethods', 'enabled-flag', this.checked)"></div>
-                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.continue.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.detectMethods', 'not-generating', this.checked)"></div>
-                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.continue.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.detectMethods', 'action-cooldown', this.checked)"></div>
-                </details>
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
-                    <div class="setting" title="Targets controls labeled Continue."><label>Continue Button:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.continue.actionMethods') || []).includes('continue-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.actionMethods', 'continue-button', this.checked)"></div>
-                    <div class="setting" title="Targets VS Code Keep button in continuation contexts."><label>Keep Button:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.continue.actionMethods') || []).includes('keep-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.actionMethods', 'keep-button', this.checked)"></div>
-                    <div class="setting" title="Fallback selector click when explicit Continue/Keep labels vary by UI build."><label>DOM Click:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.continue.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.continue.actionMethods', 'dom-click', this.checked)"></div>
-                </details>
-                <div class="setting"><label>Continue Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.controls.continue.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.continue.delayMs', parseInt(this.value))"></div>
-            </div>
-
-            <div class="card">
-                <h2>Control Group: Feedback</h2>
-                <div class="setting" title="Enables automatic positive feedback interactions when matching UI elements are detected."><label>Feedback Enabled:</label><input type="checkbox" ${config.get<string[]>('automation.actions.clickFeedback') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickFeedback', this.checked)"></div>
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components</summary>
-                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.feedback.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.detectMethods', 'enabled-flag', this.checked)"></div>
-                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.feedback.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.detectMethods', 'not-generating', this.checked)"></div>
-                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.feedback.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.detectMethods', 'action-cooldown', this.checked)"></div>
-                </details>
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
-                    <div class="setting" title="Targets icon-based thumbs-up controls."><label>Thumbs Up Icon:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.feedback.actionMethods') || []).includes('thumbs-up') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.actionMethods', 'thumbs-up', this.checked)"></div>
-                    <div class="setting" title="Targets textual Helpful feedback buttons."><label>Helpful Button:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.feedback.actionMethods') || []).includes('helpful-button') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.actionMethods', 'helpful-button', this.checked)"></div>
-                    <div class="setting" title="Fallback selector click for feedback controls."><label>DOM Click:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.feedback.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.feedback.actionMethods', 'dom-click', this.checked)"></div>
-                </details>
-                <div class="setting"><label>Feedback Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.controls.feedback.delayMs') ?? 150}" min="0" onchange="updateConfig('automation.controls.feedback.delayMs', parseInt(this.value))"></div>
-            </div>
-
-            <div class="card">
-                <h2>Control Group: Run</h2>
-                <div class="setting" title="Enables automatic execution of Run-in-Terminal or equivalent run affordances."><label>Run Enabled:</label><input type="checkbox" ${config.get<string[]>('automation.actions.clickRun') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickRun', this.checked)"></div>
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components</summary>
-                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.run.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.detectMethods', 'enabled-flag', this.checked)"></div>
-                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.run.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.detectMethods', 'not-generating', this.checked)"></div>
-                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.run.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.detectMethods', 'action-cooldown', this.checked)"></div>
-                </details>
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
-                    <div class="setting" title="Primary selector-driven click strategy for run controls."><label>DOM Click:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.run.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.actionMethods', 'dom-click', this.checked)"></div>
-                    <div class="setting" title="Direct click path on resolved candidate element when DOM strategy needs a fallback."><label>Native Click:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.run.actionMethods') || []).includes('native-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.actionMethods', 'native-click', this.checked)"></div>
-                    <div class="setting" title="Keyboard fallback for Run flows that bind execution to Alt+Enter."><label>Alt+Enter:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.run.actionMethods') || []).includes('alt-enter') ? 'checked' : ''} onchange="toggleMethod('automation.controls.run.actionMethods', 'alt-enter', this.checked)"></div>
-                </details>
-                <div class="setting"><label>Run Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.controls.run.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.run.delayMs', parseInt(this.value))"></div>
-            </div>
-
-            <div class="card">
-                <h2>Control Group: Expand</h2>
-                <div class="setting" title="Enables automatic expansion of collapsed output/steps/code panes."><label>Expand Enabled:</label><input type="checkbox" ${config.get<string[]>('automation.actions.clickExpand') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickExpand', this.checked)"></div>
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components</summary>
-                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.expand.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.detectMethods', 'enabled-flag', this.checked)"></div>
-                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.expand.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.detectMethods', 'not-generating', this.checked)"></div>
-                    <div class="setting"><label>Action Cooldown:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.expand.detectMethods') || []).includes('action-cooldown') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.detectMethods', 'action-cooldown', this.checked)"></div>
-                </details>
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
-                    <div class="setting" title="Primary selector-based click strategy for expansion toggles."><label>DOM Click:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.expand.actionMethods') || []).includes('dom-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.actionMethods', 'dom-click', this.checked)"></div>
-                    <div class="setting" title="Element-level fallback click when DOM strategy cannot settle a stable selector path."><label>Native Click:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.expand.actionMethods') || []).includes('native-click') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.actionMethods', 'native-click', this.checked)"></div>
-                    <div class="setting" title="Keyboard fallback for expansion flows that are bound to Alt+Enter in chat/editor contexts."><label>Alt+Enter:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.expand.actionMethods') || []).includes('alt-enter') ? 'checked' : ''} onchange="toggleMethod('automation.controls.expand.actionMethods', 'alt-enter', this.checked)"></div>
-                </details>
-                <div class="setting"><label>Expand Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.controls.expand.delayMs') ?? 50}" min="0" onchange="updateConfig('automation.controls.expand.delayMs', parseInt(this.value))"></div>
-            </div>
-
-            <div class="card">
-                <h2>Control Group: Submit</h2>
-                <div class="setting" title="Enables auto-submit behavior after input is present or response continuation is needed."><label>Submit Enabled:</label><input type="checkbox" ${config.get<string[]>('automation.actions.clickSubmit') ? 'checked' : ''} onchange="updateConfig('automation.actions.clickSubmit', this.checked)"></div>
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Detection Components</summary>
-                    <div class="setting"><label>Enabled Flag:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.submit.detectMethods') || []).includes('enabled-flag') ? 'checked' : ''} onchange="toggleMethod('automation.controls.submit.detectMethods', 'enabled-flag', this.checked)"></div>
-                    <div class="setting"><label>Not Generating:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.submit.detectMethods') || []).includes('not-generating') ? 'checked' : ''} onchange="toggleMethod('automation.controls.submit.detectMethods', 'not-generating', this.checked)"></div>
-                </details>
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Action Components</summary>
-                    <div class="setting" title="Clicks explicit send/submit controls when available."><label>Click Send:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.submit.actionMethods') || []).includes('click-send') ? 'checked' : ''} onchange="toggleMethod('automation.controls.submit.actionMethods', 'click-send', this.checked)"></div>
-                    <div class="setting" title="Keyboard fallback path for submit when buttons are hidden/disabled/unresolved."><label>Enter Key:</label><input type="checkbox" ${(config.get<string[]>('automation.controls.submit.actionMethods') || []).includes('enter-key') ? 'checked' : ''} onchange="toggleMethod('automation.controls.submit.actionMethods', 'enter-key', this.checked)"></div>
-                </details>
-                <div class="setting"><label>Submit Delay (ms):</label><input type="number" value="${config.get<string[]>('automation.controls.submit.delayMs') ?? 100}" min="0" onchange="updateConfig('automation.controls.submit.delayMs', parseInt(this.value))"></div>
-            </div>
-
-            <!-- MODULES -->
-            <!-- MODULES -->
-             <div class="card">
-                <h2>Modules</h2>
-                <div class="setting" title="Main enable/disable switch for the autonomous loop. When checked, the system actively processes the queue, runs checks, and executes actions.">
-                    <label>Autonomous Mode (Yoke):</label>
-                    <input type="checkbox" ${settings.autonomousEnabled ? 'checked' : ''} onchange="updateConfig('autonomousEnabled', this.checked)">
-                </div>
-                </div>
-                <div class="setting" title="Master toggle for sound effects.">
-                    <label>Audio Enabled:</label>
-                    <input type="checkbox" ${settings.audio?.enabled ? 'checked' : ''} onchange="updateConfig('audio.enabled', this.checked)">
-                </div>
-                <div class="setting" title="Master volume (0.0 - 1.0).">
-                    <label>Volume:</label>
-                    <input type="number" step="0.1" min="0" max="1" value="${settings.audio?.volume ?? 1.0}" onchange="updateConfig('audio.volume', parseFloat(this.value))">
-                </div>
-                
-                <details>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">Audio Actions (checkboxes)</summary>
-                    <div class="setting"><label>Click:</label><input type="checkbox" ${config.get('audio.actions.click') !== false ? 'checked' : ''} onchange="updateConfig('audio.actions.click', this.checked)"></div>
-                    <div class="setting"><label>Run:</label><input type="checkbox" ${config.get('audio.actions.run') !== false ? 'checked' : ''} onchange="updateConfig('audio.actions.run', this.checked)"></div>
-                    <div class="setting"><label>Expand:</label><input type="checkbox" ${config.get('audio.actions.expand') !== false ? 'checked' : ''} onchange="updateConfig('audio.actions.expand', this.checked)"></div>
-                    <div class="setting"><label>Accept:</label><input type="checkbox" ${config.get('audio.actions.accept') !== false ? 'checked' : ''} onchange="updateConfig('audio.actions.accept', this.checked)"></div>
-                    <div class="setting"><label>Submit:</label><input type="checkbox" ${config.get('audio.actions.submit') !== false ? 'checked' : ''} onchange="updateConfig('audio.actions.submit', this.checked)"></div>
-                    <div class="setting"><label>Bump:</label><input type="checkbox" ${config.get('audio.actions.bump') !== false ? 'checked' : ''} onchange="updateConfig('audio.actions.bump', this.checked)"></div>
-                </details>
-
-                <div class="setting vertical" title="JSON map from action group -> sound effect id. Example: {\"run\":\"run\",\"accept\":\"click\"}.">
-                    <label>Action Sound Map (JSON):</label>
-                    <textarea onchange="updateConfig('soundEffectsActionMap', parseInteractionTimings(this.value))">${JSON.stringify(settings.soundEffectsActionMap || {
-            submit: 'submit',
-            bump: 'bump',
-            resume: 'bump',
-            type: 'type',
-            run: 'run',
-            expand: 'expand',
-            'alt-enter': 'alt-enter',
-            accept: 'click',
-            'accept-all': 'success',
-            allow: 'click',
-            continue: 'submit',
-            click: 'click',
-            success: 'success',
-            error: 'error'
-        }, null, 2)}</textarea>
-                </div>
-                 <div class="setting" title="When enabled, Antigravity will automatically stage, commit, and push changes to the repository after significant autonomous milestones.">
-                    <label>Auto Git Commit:</label>
-                    <input type="checkbox" ${settings.autoGitCommit ? 'checked' : ''} onchange="updateConfig('autoGitCommit', this.checked)">
-                </div>
-                <div class="setting" title="Safety limit for the number of tool calls or API requests allowed per hour. Prevents runaway loops or excessive API usage.">
-                    <label>Max Calls/Hour:</label>
-                    <input type="number" value="${settings.maxCallsPerHour}" min="1" onchange="updateConfig('maxCallsPerHour', parseInt(this.value))">
-                </div>
-            </div>
-
-            <!-- DIAGNOSTICS & TEST HARNESS -->
-            <div class="card">
-                <h2>Diagnostics & Test Harness</h2>
-                <div class="info-box">
-                    <strong>Instructions:</strong> Click a button below to test a specific interaction method. 
-                    Has a <b>3-second delay</b> so you can focus the target input/button.
-                </div>
-                
-                <h3>Text Input Methods</h3>
-                <div class="test-controls">
-                    <button class="secondary" onclick="runTest('cdp-keys', 'Test Input Strings')">Test CDP Keys</button>
-                    <button class="secondary" onclick="runTest('cdp-insert-text', 'Test Input Strings')">Test CDP Insert</button>
-                    <button class="secondary" onclick="runTest('clipboard-paste', 'Test Input Strings')">Test Clipboard Paste</button>
-                    <button class="secondary" onclick="runTest('dom-inject', 'Test Input Strings')">Test DOM Inject</button>
-                </div>
-
-                <h3>Click Methods</h3>
-                <div class="test-controls">
-                    <button class="secondary" onclick="runTest('native-accept')">Test Native Accept</button>
-                    <button class="secondary" onclick="runTest('dom-scan-click')">Test DOM Scan Click</button>
-                    <button class="secondary" onclick="runTest('bridge-click')">Test Bridge Click</button>
-
-                </div>
-
-                <h3>Submit Methods</h3>
-                <div class="test-controls">
-                    <button class="secondary" onclick="runTest('vscode-submit')">Test VS Code Submit</button>
-                    <button class="secondary" onclick="runTest('cdp-enter')">Test CDP Enter</button>
-                    <button class="secondary" onclick="runTest('ctrl-enter')">Test Ctrl+Enter</button>
-                </div>
-                
-                <h3>Live Diagnostics</h3>
-                <div class="setting" title="Frequency (in ms) to poll for buttons. Lower is more responsive.">
-                    <label>Poll Interval (ms):</label>
-                    <input type="number" value="${settings.autoAcceptPollIntervalMs}" min="100" max="10000" onchange="updateUnifiedPollInterval(parseInt(this.value))">
-                </div>
-                <div class="info-box status-box">
-                    <strong>Button Status:</strong> <span id="btn-status">Waiting...</span>
-                    <div>Matches: <span id="btn-matches">-</span></div>
-                </div>
-            </div>
-
-            <!-- CDP & TIMING -->
-            <div class="card">
-                <h2>CDP & Automation</h2>
-                <div class="setting" title="Play audible sound effects for automation events like clicks, typing, and submitting.">
-                    <label>Audio Feedback:</label>
-                    <input type="checkbox" ${settings.audio?.enabled ? 'checked' : ''} onchange="updateConfig('audio.enabled', this.checked)">
-                    <button onclick="runCommand('antigravity.testAudio')" title="Play a test sound">Test Audio</button>
-                </div>
-                <div class="setting" title="Output verbose debug logs from the browser automation script to the extension host.">
-                    <label>Verbose Debug Logging:</label>
-                    <input type="checkbox" ${config.get<string[]>('automation.debug.verboseLogging') ? 'checked' : ''} onchange="updateConfig('automation.debug.verboseLogging', this.checked)">
-                </div>
-                <div class="setting" title="Maximum time (in ms) to wait for a CDP command (like DOM query or click) to complete before throwing a timeout error.">
-                    <label>CDP Timeout (ms):</label>
-                    <input type="number" value="${settings.cdpTimeout}" onchange="updateConfig('cdpTimeout', parseInt(this.value))">
-                </div>
-                <div class="setting" title="The localhost port to connect to the Chrome DevTools Protocol. Must match the port Chrome was started with.">
-                    <label>CDP Port:</label>
-                    <input type="number" value="${settings.cdpPort}" onchange="updateConfig('cdpPort', parseInt(this.value))">
-                </div>
-                <div class="setting" title="The default message sent when bumping the AI. This is the same as Bump Text above — changing either updates the same setting.">
-                    <label>Bump Message:</label>
-                    <input type="text" value="${config.get<string>('actions.bump.text') ?? settings.bumpMessage ?? 'Proceed'}" onchange="updateConfig('actions.bump.text', this.value)">
-                </div>
-                <div class="setting" title="Frequency (in ms) for checking if the 'Accept' button is available and visible in the UI.">
-                    <label>Auto-Accept Poll (ms):</label>
-                    <input type="number" value="${settings.autoAcceptPollIntervalMs}" min="100" max="10000" onchange="updateUnifiedPollInterval(parseInt(this.value))">
-                </div>
-                <div class="setting" title="Minimum time (in seconds) that must pass between consecutive auto-bump messages. prevents spamming the context window.">
-                    <label>Auto-Bump Cooldown (s):</label>
-                    <input type="number" value="${settings.autoBumpCooldownSec}" min="1" max="3600" onchange="updateUnifiedBumpCooldown(parseInt(this.value))">
-                </div>
-                <div class="setting" title="The interval (in seconds) at which the main autonomous loop runs its cycle of checks and actions.">
-                    <label>Loop Interval (s):</label>
-                    <input type="number" value="${settings.loopInterval}" onchange="updateConfig('loopInterval', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Time (in seconds) to pause execution when a thread or process explicitly requests a wait (e.g., after issuing a long-running terminal command).">
-                    <label>Thread Wait (s):</label>
-                    <input type="number" value="${settings.threadWaitInterval}" onchange="updateConfig('threadWaitInterval', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Backwards compatibility: Frequency (in ms) for legacy poll-based triggers.">
-                    <label>Legacy Poll Frequency (ms):</label>
-                    <input type="number" value="${settings.pollFrequency}" onchange="updateConfig('pollFrequency', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Backwards compatibility: Delay (in seconds) before auto-approving a legacy action.">
-                    <label>Legacy Auto-Approve Delay (s):</label>
-                    <input type="number" value="${settings.autoApproveDelay}" onchange="updateConfig('autoApproveDelay', parseInt(this.value))">
-                </div>
-                <div class="setting" title="If enabled, shows a VS Code notification when the extension detects the AI is waiting for user input for an extended period.">
-                    <label>Waiting Reminder:</label>
-                    <input type="checkbox" ${settings.runtimeWaitingReminderEnabled ? 'checked' : ''} onchange="updateConfig('runtimeWaitingReminderEnabled', this.checked)">
-                </div>
-                <div class="setting" title="How long the AI must be waiting (in seconds) before the first reminder is shown.">
-                    <label>Reminder Delay (s):</label>
-                    <input type="number" value="${settings.runtimeWaitingReminderDelaySec}" min="5" max="3600" onchange="updateConfig('runtimeWaitingReminderDelaySec', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Minimum time (in seconds) between consecutive waiting reminders.">
-                    <label>Reminder Cooldown (s):</label>
-                    <input type="number" value="${settings.runtimeWaitingReminderCooldownSec}" min="5" max="7200" onchange="updateConfig('runtimeWaitingReminderCooldownSec', parseInt(this.value))">
-                </div>
-                <div class="setting" title="If enabled, automatically sends a resume message when the AI is waiting for input, provided safety checks (guards) pass.">
-                    <label>Auto Resume:</label>
-                    <input type="checkbox" ${settings.runtimeAutoResumeEnabled ? 'checked' : ''} onchange="updateConfig('runtimeAutoResumeEnabled', this.checked)">
-                </div>
-                <div class="setting" title="If enabled, sends a shorter/minimal message for auto-resume instead of the full prompt, to save tokens and reduce noise.">
-                    <label>Use Minimal Continue:</label>
-                    <input type="checkbox" ${settings.runtimeAutoResumeUseMinimalContinue ? 'checked' : ''} onchange="updateConfig('runtimeAutoResumeUseMinimalContinue', this.checked)">
-                </div>
-                <div class="setting" title="Minimum time (in seconds) between auto-resume actions.">
-                    <label>Auto Resume Cooldown (s):</label>
-                    <input type="number" value="${settings.runtimeAutoResumeCooldownSec}" min="5" max="7200" onchange="updateConfig('runtimeAutoResumeCooldownSec', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Number of consecutive stable polling checks required confirming the 'waiting' state before auto-resume triggers.">
-                    <label>Auto Resume Stability Polls:</label>
-                    <input type="number" value="${settings.runtimeAutoResumeStabilityPolls}" min="1" max="10" onchange="updateConfig('runtimeAutoResumeStabilityPolls', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Enable the self-healing watchdog. If the system stays in 'waiting' state too long despite checks, it attempts to fix the UI state or re-trigger checks.">
-                    <label>Waiting Watchdog:</label>
-                    <input type="checkbox" ${settings.runtimeAutoFixWaitingEnabled ? 'checked' : ''} onchange="updateConfig('runtimeAutoFixWaitingEnabled', this.checked)">
-                </div>
-                <div class="setting" title="How long (in seconds) to wait before the watchdog attempts a fix.">
-                    <label>Watchdog Delay (s):</label>
-                    <input type="number" value="${settings.runtimeAutoFixWaitingDelaySec}" min="5" max="7200" onchange="updateConfig('runtimeAutoFixWaitingDelaySec', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Cooldown (in seconds) between watchdog interventions.">
-                    <label>Watchdog Cooldown (s):</label>
-                    <input type="number" value="${settings.runtimeAutoFixWaitingCooldownSec}" min="5" max="7200" onchange="updateConfig('runtimeAutoFixWaitingCooldownSec', parseInt(this.value))">
-                </div>
-                <div class="setting" title="If the watchdog fails repeatedly, enable escalation (e.g., forcing a full prompt instead of minimal, or doing a deeper UI refresh).">
-                    <label>Watchdog Escalation:</label>
-                    <input type="checkbox" ${settings.runtimeAutoFixWaitingEscalationEnabled ? 'checked' : ''} onchange="updateConfig('runtimeAutoFixWaitingEscalationEnabled', this.checked)">
-                </div>
-                <div class="setting" title="Number of consecutive failures before escalation triggers.">
-                    <label>Escalation Threshold:</label>
-                    <input type="number" value="${settings.runtimeAutoFixWaitingEscalationThreshold}" min="1" max="10" onchange="updateConfig('runtimeAutoFixWaitingEscalationThreshold', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Cooldown (in seconds) for the escalation state.">
-                    <label>Escalation Cooldown (s):</label>
-                    <input type="number" value="${settings.runtimeAutoFixWaitingEscalationCooldownSec}" min="5" max="14400" onchange="updateConfig('runtimeAutoFixWaitingEscalationCooldownSec', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Maximum number of escalation events to keep in the history log.">
-                    <label>Escalation Max Events:</label>
-                    <input type="number" value="${settings.runtimeAutoFixWaitingEscalationMaxEvents}" min="3" max="100" onchange="updateConfig('runtimeAutoFixWaitingEscalationMaxEvents', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Require user confirmation before manually clearing the escalation timeline/history.">
-                    <label>Confirm Timeline Clear:</label>
-                    <input type="checkbox" ${settings.runtimeEscalationClearRequireConfirm ? 'checked' : ''} onchange="updateConfig('runtimeEscalationClearRequireConfirm', this.checked)">
-                </div>
-                <div class="setting" title="Time (in seconds) before telemetry data is considered 'stale' and potentially unreliable.">
-                    <label>Telemetry Stale Threshold (s):</label>
-                    <input type="number" value="${settings.runtimeTelemetryStaleSec}" min="3" max="300" onchange="updateConfig('runtimeTelemetryStaleSec', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Debounce time (in ms) for refreshing the status menu to avoid flickering or excessive updates.">
-                    <label>Status Refresh Debounce (ms):</label>
-                    <input type="number" value="${settings.runtimeStatusMenuRefreshDebounceMs}" min="100" max="5000" onchange="updateConfig('runtimeStatusMenuRefreshDebounceMs', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Enable detailed debug logs for status menu refresh operations.">
-                    <label>Status Refresh Debug Logs:</label>
-                    <input type="checkbox" ${settings.runtimeStatusMenuRefreshDebugLogs ? 'checked' : ''} onchange="updateConfig('runtimeStatusMenuRefreshDebugLogs', this.checked)">
-                </div>
-                <p class="muted" style="margin-top:-6px;">Stale logic: <code>telemetryAgeSec &gt; runtimeTelemetryStaleSec</code> using runtime state <code>timestamp</code>.</p>
-                <div class="setting" title="Minimum health score (0-100) required for the auto-resume guard to allow an action.">
-                    <label>Auto Resume Min Score:</label>
-                    <input type="number" value="${settings.runtimeAutoResumeMinScore}" min="0" max="100" onchange="updateConfig('runtimeAutoResumeMinScore', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Are primary indicators (like specific button presence) strictly required? If checked, heuristic scores alone are not enough.">
-                    <label>Require Strict Primary:</label>
-                    <input type="checkbox" ${settings.runtimeAutoResumeRequireStrictPrimary ? 'checked' : ''} onchange="updateConfig('runtimeAutoResumeRequireStrictPrimary', this.checked)">
-                </div>
-                <div class="setting vertical" title="The full message text to send for auto-resume or auto-bump actions.">
-                    <label>Auto Resume Message:</label>
-                    <textarea onchange="updateConfig('runtimeAutoResumeMessage', this.value)">${settings.runtimeAutoResumeMessage || ''}</textarea>
-                </div>
-                <div class="setting vertical" title="The shorter backup message to use for 'Minimal Continue' logic.">
-                    <label>Minimal Continue Message:</label>
-                    <textarea onchange="updateConfig('runtimeAutoResumeMinimalMessage', this.value)">${settings.runtimeAutoResumeMinimalMessage || ''}</textarea>
-                </div>
-                <div class="setting vertical" title="Minimal continue message override specifically for VS Code profile.">
-                    <label>Minimal Continue (VS Code):</label>
-                    <textarea onchange="updateConfig('runtimeAutoResumeMinimalMessageVSCode', this.value)">${settings.runtimeAutoResumeMinimalMessageVSCode || ''}</textarea>
-                </div>
-                <div class="setting vertical" title="Minimal continue message override specifically for Antigravity profile.">
-                    <label>Minimal Continue (Antigravity):</label>
-                    <textarea onchange="updateConfig('runtimeAutoResumeMinimalMessageAntigravity', this.value)">${settings.runtimeAutoResumeMinimalMessageAntigravity || ''}</textarea>
-                </div>
-                <div class="setting vertical" title="Minimal continue message override specifically for Cursor profile.">
-                    <label>Minimal Continue (Cursor):</label>
-                    <textarea onchange="updateConfig('runtimeAutoResumeMinimalMessageCursor', this.value)">${settings.runtimeAutoResumeMinimalMessageCursor || ''}</textarea>
-                </div>
-                 <div class="setting" title="Maximum number of loop iterations allowed per session. Safety stop for the autonomous loop.">
-                     <label>Max Loops/Session:</label>
-                     <input type="number" value="${settings.maxLoopsPerSession}" onchange="updateConfig('maxLoopsPerSession', parseInt(this.value))">
-                </div>
-                 <div class="setting" title="Global timeout (in minutes) for the entire execution session.">
-                     <label>Execution Timeout (min):</label>
-                     <input type="number" value="${settings.executionTimeout}" onchange="updateConfig('executionTimeout', parseInt(this.value))">
-                </div>
-                <div class="setting" title="Maximum number of consecutive loops allowed in 'Test Validation' mode without user intervention.">
-                    <label>Max Consecutive Test Loops:</label>
-                    <input type="number" value="${settings.maxConsecutiveTestLoops}" min="1" max="10" onchange="updateConfig('maxConsecutiveTestLoops', parseInt(this.value))">
-                </div>
-            </div>
-
-            <!-- ACTIVE SESSIONS -->
-            <div class="card">
-                <h2>Active CDP Sessions</h2>
-                <div id="cdpSessionsList" class="runtime-history" style="max-height:200px;">
-                    <div class="runtime-history-item">Loading...</div>
-                </div>
-                <!-- <div style="margin-top:10px;">
-                     <button onclick="runCommand('antigravity.reconnectCDP')">Force Reconnect</button>
-                </div> -->
-            </div>
-
-
-
-            <!-- INTERACTION METHODS -->
-            <div class="card">
-                <h2>🔧 Interaction Methods</h2>
-                <p style="font-size:12px;color:var(--vscode-descriptionForeground);margin:0 0 10px;">Select which methods to use for text input, clicking, and submission. Higher priority methods are tried first.</p>
-
-                <div class="setting">
-                    <label>UI Profile:</label>
-                    <select onchange="updateConfig('interactionUiProfile', this.value)">
-                        <option value="auto" ${settings.interactionUiProfile === 'auto' ? 'selected' : ''}>Auto Detect</option>
-                        <option value="vscode" ${settings.interactionUiProfile === 'vscode' ? 'selected' : ''}>VS Code</option>
-                        <option value="antigravity" ${settings.interactionUiProfile === 'antigravity' ? 'selected' : ''}>Antigravity</option>
-                        <option value="cursor" ${settings.interactionUiProfile === 'cursor' ? 'selected' : ''}>Cursor</option>
-                    </select>
-                </div>
-
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">🎛️ Quick Presets</summary>
-                    <div class="setting">
-                        <label>Preset Profile:</label>
-                        <select id="presetProfileSelect">
-                            <option value="vscode">VS Code</option>
-                            <option value="antigravity">Antigravity</option>
-                            <option value="cursor">Cursor</option>
-                        </select>
-                    </div>
-                    <div class="setting" style="justify-content:flex-start;gap:8px;">
-                        <button onclick="applyInteractionPreset('conservative')">Apply Conservative</button>
-                        <button onclick="applyInteractionPreset('balanced')">Apply Balanced</button>
-                        <button onclick="applyInteractionPreset('aggressive')">Apply Aggressive</button>
-                    </div>
-                    <p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-top:6px;">
-                        Conservative = safer command-first; Balanced = mixed defaults; Aggressive = broad methods + parallel.
-                    </p>
-                </details>
-
-                <details>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">🧭 Profile Selector Bundles</summary>
-                    <div class="setting vertical">
-                        <label>VS Code Click Methods (one per line):</label>
-                        <textarea onchange="updateConfig('interactionClickMethodsVSCode', this.value.split('\n').map(v=>v.trim()).filter(Boolean))">${(settings.interactionClickMethodsVSCode || []).join('\n')}</textarea>
-                    </div>
-                    <div class="setting vertical">
-                        <label>Antigravity Click Methods (one per line):</label>
-                        <textarea onchange="updateConfig('interactionClickMethodsAntigravity', this.value.split('\n').map(v=>v.trim()).filter(Boolean))">${(settings.interactionClickMethodsAntigravity || []).join('\n')}</textarea>
-                    </div>
-                    <div class="setting vertical">
-                        <label>Cursor Click Methods (one per line):</label>
-                        <textarea onchange="updateConfig('interactionClickMethodsCursor', this.value.split('\n').map(v=>v.trim()).filter(Boolean))">${(settings.interactionClickMethodsCursor || []).join('\n')}</textarea>
-                    </div>
-                </details>
-
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin-bottom:8px;">📝 Text Input Methods</summary>
-                    <div class="setting">
-                        <label>CDP Key Dispatch (cdp-keys):</label>
-                        <input type="checkbox" ${(settings.interactionTextMethods || []).includes('cdp-keys') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'cdp-keys', this.checked)">
-                    </div>
-                    <div class="setting">
-                        <label>CDP Insert Text (cdp-insert-text):</label>
-                        <input type="checkbox" ${(settings.interactionTextMethods || []).includes('cdp-insert-text') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'cdp-insert-text', this.checked)">
-                    </div>
-                    <div class="setting">
-                        <label>Clipboard Paste (clipboard-paste):</label>
-                        <input type="checkbox" ${(settings.interactionTextMethods || []).includes('clipboard-paste') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'clipboard-paste', this.checked)">
-                    </div>
-                    <div class="setting">
-                        <label>DOM Value Injection (dom-inject):</label>
-                        <input type="checkbox" ${(settings.interactionTextMethods || []).includes('dom-inject') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'dom-inject', this.checked)">
-                    </div>
-                    <div class="setting">
-                        <label>Bridge Type Injection (bridge-type):</label>
-                        <input type="checkbox" ${(settings.interactionTextMethods || []).includes('bridge-type') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'bridge-type', this.checked)">
-                    </div>
-                    <div class="setting">
-                        <label>VS Code Type Command (vscode-type):</label>
-                        <input type="checkbox" ${(settings.interactionTextMethods || []).includes('vscode-type') ? 'checked' : ''} onchange="toggleMethod('interactionTextMethods', 'vscode-type', this.checked)">
-                    </div>
-                </details>
-
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">🖱️ Click Methods</summary>
-                    <div class="setting">
-                        <label>DOM Scan + Click (dom-scan-click):</label>
-                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('dom-scan-click') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'dom-scan-click', this.checked)">
-                    </div>
-
-                    <div class="setting">
-                        <label>VS Code Command (vscode-cmd):</label>
-                        <input type="checkbox" ${(settings.interactionClickMethods || []).includes('vscode-cmd') ? 'checked' : ''} onchange="toggleMethod('interactionClickMethods', 'vscode-cmd', this.checked)">
-                    </div>
-
-                </details>
-
-                <details open>
-                    <summary style="cursor:pointer;font-weight:600;margin:8px 0;">🚀 Submit Methods</summary>
-                    <div class="setting">
-                        <label>VS Code Submit Commands (vscode-submit):</label>
-                        <input type="checkbox" ${(settings.interactionSubmitMethods || []).includes('vscode-submit') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'vscode-submit', this.checked)">
-                    </div>
-                    <div class="setting">
-                        <label>CDP Enter Key (cdp-enter):</label>
-                        <input type="checkbox" ${(settings.interactionSubmitMethods || []).includes('cdp-enter') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'cdp-enter', this.checked)">
-                    </div>
-                    <div class="setting">
-                        <label>Script Force Submit (script-submit):</label>
-                        <input type="checkbox" ${(settings.interactionSubmitMethods || []).includes('script-submit') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'script-submit', this.checked)">
-                    </div>
-                    <div class="setting">
-                        <label>Alt+Enter Shortcut (alt-enter):</label>
-                        <input type="checkbox" ${(settings.interactionSubmitMethods || []).includes('alt-enter') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'alt-enter', this.checked)">
-                    </div>
-                    <div class="setting">
-                        <label>Ctrl+Enter Shortcut (ctrl-enter):</label>
-                        <input type="checkbox" ${(settings.interactionSubmitMethods || []).includes('ctrl-enter') ? 'checked' : ''} onchange="toggleMethod('interactionSubmitMethods', 'ctrl-enter', this.checked)">
-                    </div>
-                </details>
-
-                <hr style="border-color:var(--vscode-widget-border);margin:12px 0;">
-                <div class="setting">
-                    <label>Parallel Execution:</label>
-                    <input type="checkbox" ${settings.interactionParallel ? 'checked' : ''} onchange="updateConfig('interactionParallel', this.checked)">
-                </div>
-                <div class="setting">
-                    <label>Retry Count:</label>
-                    <input type="number" value="${settings.interactionRetryCount}" min="1" max="13" onchange="updateConfig('interactionRetryCount', parseInt(this.value))">
-                </div>
-                <div class="setting">
-                    <label>Visual Diff Threshold:</label>
-                    <input type="number" value="${settings.interactionVisualDiffThreshold}" min="0" max="1" step="0.001" onchange="updateConfig('interactionVisualDiffThreshold', parseFloat(this.value))">
-                </div>
-                <div class="setting vertical">
-                    <label>Interaction Timings (JSON):</label>
-                    <textarea onchange="updateConfig('interactionTimings', parseInteractionTimings(this.value))">${JSON.stringify(settings.interactionTimings || {}, null, 2)}</textarea>
-                </div>
-            </div>
-
-            <div class="card">
-                <h2>Models</h2>
-                <div class="setting">
-                    <label>Auto-Switch Models:</label>
-                    <input type="checkbox" ${settings.autoSwitchModels ? 'checked' : ''} onchange="updateConfig('autoSwitchModels', this.checked)">
-                </div>
-                 <div class="setting">
-                    <label>Reasoning Model:</label>
-                    <select onchange="updateConfig('preferredModelForReasoning', this.value)">
-                         <option value="gemini-3.1-pro-high" ${settings.preferredModelForReasoning === 'gemini-3.1-pro-high' ? 'selected' : ''}>Gemini 3.1 Pro (High)</option>
-                         <option value="claude-opus-4.6" ${settings.preferredModelForReasoning === 'claude-opus-4.6' ? 'selected' : ''}>Claude Opus 4.6</option>
-                         <option value="claude-sonnet-4.6" ${settings.preferredModelForReasoning === 'claude-sonnet-4.6' ? 'selected' : ''}>Claude Sonnet 4.6</option>
-                         <option value="claude-opus-4.5-thinking" ${settings.preferredModelForReasoning === 'claude-opus-4.5-thinking' ? 'selected' : ''}>Claude Opus 4.5 (Thinking)</option>
-                         <option value="claude-sonnet-4.5-thinking" ${settings.preferredModelForReasoning === 'claude-sonnet-4.5-thinking' ? 'selected' : ''}>Claude Sonnet 4.5 (Thinking)</option>
-                         <option value="claude-sonnet-3.5" ${settings.preferredModelForReasoning === 'claude-sonnet-3.5' ? 'selected' : ''}>Claude Sonnet 3.5</option>
-                    </select>
-                </div>
-                <div class="setting">
-                    <label>Frontend Model:</label>
-                    <select onchange="updateConfig('preferredModelForFrontend', this.value)">
-                         <option value="gemini-3.1-pro-high" ${settings.preferredModelForFrontend === 'gemini-3.1-pro-high' ? 'selected' : ''}>Gemini 3.1 Pro (High)</option>
-                         <option value="claude-opus-4.6" ${settings.preferredModelForFrontend === 'claude-opus-4.6' ? 'selected' : ''}>Claude Opus 4.6</option>
-                         <option value="claude-sonnet-4.6" ${settings.preferredModelForFrontend === 'claude-sonnet-4.6' ? 'selected' : ''}>Claude Sonnet 4.6</option>
-                         <option value="gemini-3-pro-high" ${settings.preferredModelForFrontend === 'gemini-3-pro-high' ? 'selected' : ''}>Gemini 3 Pro (High)</option>
-                         <option value="gemini-3-pro-low" ${settings.preferredModelForFrontend === 'gemini-3-pro-low' ? 'selected' : ''}>Gemini 3 Pro (Low)</option>
-                         <option value="gpt-4o" ${settings.preferredModelForFrontend === 'gpt-4o' ? 'selected' : ''}>GPT-4o</option>
-                    </select>
-                </div>
-                <div class="setting">
-                    <label>Quick Model:</label>
-                    <select onchange="updateConfig('preferredModelForQuick', this.value)">
-                         <option value="gemini-3-flash" ${settings.preferredModelForQuick === 'gemini-3-flash' ? 'selected' : ''}>Gemini 3 Flash</option>
-                         <option value="gemini-3-pro-low" ${settings.preferredModelForQuick === 'gemini-3-pro-low' ? 'selected' : ''}>Gemini 3 Pro (Low)</option>
-                         <option value="gpt-4o-mini" ${settings.preferredModelForQuick === 'gpt-4o-mini' ? 'selected' : ''}>GPT-4o Mini</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- SAFETY & PATTERNS -->
-             <div class="card">
-                <h2>Safety & Patterns</h2>
-                <div class="setting vertical">
-                    <label>Banned Commands (one per line):</label>
-                    <textarea onchange="updateConfig('bannedCommands', this.value.split('\n'))">${(settings.bannedCommands || []).join('\n')}</textarea>
-                </div>
-                <div class="setting vertical">
-                    <label>Accept Patterns (one per line):</label>
-                    <textarea onchange="updateConfig('acceptPatterns', this.value.split('\n'))">${(settings.acceptPatterns || []).join('\n')}</textarea>
-                </div>
-                 <div class="setting vertical">
-                    <label>Reject Patterns (one per line):</label>
-                    <textarea onchange="updateConfig('rejectPatterns', this.value.split('\n'))">${(settings.rejectPatterns || []).join('\n')}</textarea>
-                </div>
-            </div>
-
-            <script>
-                const vscode = acquireVsCodeApi();
-                function updateConfig(key, value) {
-                    vscode.postMessage({
-                        command: 'updateConfig',
-                        key: key,
-                        value: value
-                    });
-                }
-
-                function updateUnifiedAutoAccept(enabled) {
-                    updateConfig('autopilotAutoAcceptEnabled', enabled);
-                    updateConfig('autoAcceptEnabled', enabled);
-                    updateConfig('autoAllEnabled', enabled);
-                    updateConfig('actions.autoAccept.enabled', enabled);
-                    updateConfig('actions.run.enabled', enabled);
-                    updateConfig('actions.expand.enabled', enabled);
-                    updateConfig('actions.bump.enabled', enabled);
-                    updateConfig('autoContinueScriptEnabled', enabled);
-                }
-
-                function updateUnifiedPollInterval(value) {
-                    const sanitized = Number.isFinite(value) ? Math.max(100, Math.min(10000, value)) : 1000;
-                    updateConfig('autoAcceptPollIntervalMs', sanitized);
-                    updateConfig('pollFrequency', sanitized);
-                    updateConfig('automation.timing.pollIntervalMs', sanitized);
-                }
-
-                function updateUnifiedBumpCooldown(value) {
-                    const sanitized = Number.isFinite(value) ? Math.max(1, Math.min(3600, value)) : 30;
-                    updateConfig('autoBumpCooldownSec', sanitized);
-                    updateConfig('autoApproveDelay', sanitized);
-                }
-
-                function toggleMethod(configKey, methodId, enabled) {
-                    vscode.postMessage({
-                        command: 'toggleMethod',
-                        configKey: configKey,
-                        methodId: methodId,
-                        enabled: enabled
-                    });
-                }
-                function applyInteractionPreset(preset) {
-                    const profileEl = document.getElementById('presetProfileSelect');
-                    const profile = profileEl ? profileEl.value : 'vscode';
-                    vscode.postMessage({
-                        command: 'applyInteractionPreset',
-                        profile: profile,
-                        preset: preset
-                    });
-                }
-
-                function parseInteractionTimings(raw) {
-                    try {
-                        if (!raw || !raw.trim()) return {};
-                        const parsed = JSON.parse(raw);
-                        return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
-                    } catch {
-                        return {};
-                    }
-                }
-
-                function runtimeClassForStatus(status) {
-                    if (status === 'processing') return 'active';
-                    if (status === 'pending_accept_actions') return 'pending';
-                    if (status === 'all_tasks_complete') return 'complete';
-                    if (status === 'waiting_for_chat_message') return 'waiting';
-                    if (status === 'idle') return 'idle';
-                    return 'unknown';
-                }
-
-                const runtimeHistory = [];
-                const MAX_RUNTIME_HISTORY = 20;
-                let currentStatus = null;
-                let currentStatusSince = null;
-                let waitingSince = null;
-                let previousBlockedUnsafeTotal = null;
-                let previousBlockedUnsafeTs = null;
-                const telemetryStaleSec = Number(${settings.runtimeTelemetryStaleSec ?? 12});
-                const autoResumeMinScore = Number(${settings.runtimeAutoResumeMinScore ?? 70});
-                const autoResumeRequireStrict = ${settings.runtimeAutoResumeRequireStrictPrimary ? 'true' : 'false'};
-
-                function formatDurationMs(ms) {
-                    if (ms === null || ms === undefined || ms < 0) return '-';
-                    const totalSec = Math.floor(ms / 1000);
-                    const mins = Math.floor(totalSec / 60);
-                    const secs = totalSec % 60;
-                    return mins > 0 ? (mins + 'm ' + secs + 's') : (secs + 's');
-                }
-
-                function pushRuntimeHistory(status, timestamp) {
-                    const at = new Date(timestamp || Date.now()).toLocaleTimeString();
-                    runtimeHistory.unshift({ status, at });
-                    if (runtimeHistory.length > MAX_RUNTIME_HISTORY) {
-                        runtimeHistory.length = MAX_RUNTIME_HISTORY;
-                    }
-                }
-
-                function renderRuntimeHistory() {
-                    const root = document.getElementById('runtimeHistory');
-                    if (!root) return;
-
-                    if (runtimeHistory.length === 0) {
-                        root.innerHTML = '<div class="runtime-history-item">No runtime transitions yet.</div>';
-                        return;
-                    }
-
-                    root.innerHTML = runtimeHistory
-                        .map(item => '<div class="runtime-history-item">' + item.at + ' → ' + item.status.toUpperCase() + '</div>')
-                        .join('');
-                }
-
-                function yesNo(value) {
-                    return value ? 'yes' : 'no';
-                }
-
-                function escalationEventChipClass(eventName) {
-                    const normalized = String(eventName || '').toLowerCase();
-                    if (normalized === 'armed') return 'event-armed';
-                    if (normalized === 'suppressed') return 'event-suppressed';
-                    if (normalized === 'consumed') return 'event-consumed';
-                    if (normalized === 'reset') return 'event-reset';
-                    return 'event-none';
-                }
-
-                function evaluateCrossUiHealth(state) {
-                    const coverage = state && state.profileCoverage ? state.profileCoverage : {};
-                    const mode = String((state && state.mode) || '').toLowerCase();
-                    const strictTarget = mode.includes('vscode') ? 'vscode'
-                        : mode.includes('antigravity') ? 'antigravity'
-                        : mode.includes('cursor') ? 'cursor'
-                        : 'unknown';
-                    const evaluate = (cov) => {
-                        const hasInput = !!(cov && cov.hasVisibleInput);
-                        const hasSend = !!(cov && cov.hasVisibleSendButton);
-                        const pending = Number((cov && cov.pendingAcceptButtons) || 0);
-                        const ready = hasInput || hasSend || pending > 0;
-                        return { ready, hasInput, hasSend, pending };
-                    };
-
-                    const profiles = {
-                        vscode: evaluate(coverage.vscode),
-                        antigravity: evaluate(coverage.antigravity),
-                        cursor: evaluate(coverage.cursor)
-                    };
-
-                    const strict = {
-                        vscodeTextReady: !!profiles.vscode.hasInput,
-                        vscodeButtonReady: !!profiles.vscode.hasSend || profiles.vscode.pending > 0,
-                        antigravityTextReady: !!profiles.antigravity.hasInput,
-                        antigravityButtonReady: !!profiles.antigravity.hasSend || profiles.antigravity.pending > 0
-                    };
-
-                    const scoreParts = {
-                        vscodeCoverage: profiles.vscode.ready ? 30 : 0,
-                        antigravityCoverage: profiles.antigravity.ready ? 30 : 0,
-                        activeRuntimeSignal: (state && state.status && state.status !== 'unknown' && state.status !== 'stopped') ? 20 : 0,
-                        waitingDetection: (state && typeof state.waitingForChatMessage === 'boolean') ? 10 : 0,
-                        cursorBonus: profiles.cursor.ready ? 10 : 0
-                    };
-
-                    const score = Object.values(scoreParts).reduce((a, b) => a + b, 0);
-                    const vscodeStrictReady = strict.vscodeTextReady && strict.vscodeButtonReady;
-                    const antigravityStrictReady = strict.antigravityTextReady && strict.antigravityButtonReady;
-                    const cursorStrictReady = profiles.cursor.hasInput && (profiles.cursor.hasSend || profiles.cursor.pending > 0);
-                    const strictPass = strictTarget === 'vscode'
-                        ? vscodeStrictReady
-                        : strictTarget === 'antigravity'
-                            ? antigravityStrictReady
-                            : strictTarget === 'cursor'
-                                ? cursorStrictReady
-                                : (vscodeStrictReady || antigravityStrictReady || cursorStrictReady);
-                    const scorePass = score >= autoResumeMinScore;
-                    const allowed = scorePass && (!autoResumeRequireStrict || strictPass);
-                    const reasons = [];
-                    if (!scorePass) reasons.push('score below min');
-                    if (autoResumeRequireStrict && !strictPass) {
-                        reasons.push('strict primary not ready (' + strictTarget + ')');
-                    }
-
-                    return {
-                        score,
-                        strictPass,
-                        allowed,
-                        reason: reasons.length ? reasons.join('; ') : 'ready',
-                        minScore: autoResumeMinScore,
-                        requireStrict: autoResumeRequireStrict
-                    };
-                }
-
-                function updateRuntimeUi(state) {
-                    function toCounter(value) {
-                        const n = Number(value ?? 0);
-                        if (!Number.isFinite(n) || n < 0) return 0;
-                        return Math.floor(n);
-                    }
-
-                    const chip = document.getElementById('runtimeStatusChip');
-                    const mode = document.getElementById('runtimeMode');
-                    const idle = document.getElementById('runtimeIdle');
-                    const telemetryFreshness = document.getElementById('runtimeTelemetryFreshness');
-                    const tabs = document.getElementById('runtimeTabs');
-                    const pending = document.getElementById('runtimePending');
-                    const waiting = document.getElementById('runtimeWaiting');
-                    const updated = document.getElementById('runtimeUpdated');
-                    const telemetryAge = document.getElementById('runtimeTelemetryAge');
-                    const blockedUnsafeTotalEl = document.getElementById('runtimeBlockedUnsafeTotal');
-                    const safetySignal = document.getElementById('runtimeSafetySignal');
-                    const safetyTrend = document.getElementById('runtimeSafetyTrend');
-                    const safetyRate = document.getElementById('runtimeSafetyRate');
-                    const stateDuration = document.getElementById('runtimeStateDuration');
-                    const waitingSinceEl = document.getElementById('runtimeWaitingSince');
-                    const safetyBlockedRunExpand = document.getElementById('runtimeSafetyBlockedRunExpand');
-                    const safetyBlockedNonChat = document.getElementById('runtimeSafetyBlockedNonChat');
-                    const safetyBlockedSubmitKeys = document.getElementById('runtimeSafetyBlockedSubmitKeys');
-                    const safetyBlockedFocusLoss = document.getElementById('runtimeSafetyBlockedFocusLoss');
-                    const coverageActive = document.getElementById('runtimeCoverageActive');
-                    const coverageVSCode = document.getElementById('runtimeCoverageVSCode');
-                    const coverageAntigravity = document.getElementById('runtimeCoverageAntigravity');
-                    const coverageCursor = document.getElementById('runtimeCoverageCursor');
-                    const guardScore = document.getElementById('runtimeGuardScore');
-                    const guardStrict = document.getElementById('runtimeGuardStrict');
-                    const guardAllowed = document.getElementById('runtimeGuardAllowed');
-                    const guardReason = document.getElementById('runtimeGuardReason');
-                    const nextEligible = document.getElementById('runtimeNextEligible');
-                    const cooldownLeft = document.getElementById('runtimeCooldownLeft');
-                    const delayLeft = document.getElementById('runtimeDelayLeft');
-                    const lastResumeOutcome = document.getElementById('runtimeLastResumeOutcome');
-                    const recommendedNext = document.getElementById('runtimeRecommendedNext');
-                    const readyToResume = document.getElementById('runtimeReadyToResume');
-                    const completionConfidence = document.getElementById('runtimeCompletionConfidence');
-                    const completionReasoning = document.getElementById('runtimeCompletionReasoning');
-                    const readyStreak = document.getElementById('runtimeReadyStreak');
-                    const lastMessageKind = document.getElementById('runtimeLastMessageKind');
-                    const lastMessageProfile = document.getElementById('runtimeLastMessageProfile');
-                    const lastMessagePreview = document.getElementById('runtimeLastMessagePreview');
-                    const watchdogState = document.getElementById('runtimeWatchdogState');
-                    const watchdogLastRun = document.getElementById('runtimeWatchdogLastRun');
-                    const watchdogOutcome = document.getElementById('runtimeWatchdogOutcome');
-                    const watchdogEscalationArmed = document.getElementById('runtimeWatchdogEscalationArmed');
-                    const watchdogEscalationStreak = document.getElementById('runtimeWatchdogEscalationStreak');
-                    const watchdogEscalationCooldownLeft = document.getElementById('runtimeWatchdogEscalationCooldownLeft');
-                    const watchdogEscalationNextEligible = document.getElementById('runtimeWatchdogEscalationNextEligible');
-                    const watchdogEscalationLastEvent = document.getElementById('runtimeWatchdogEscalationLastEvent');
-                    const watchdogEscalationLast = document.getElementById('runtimeWatchdogEscalationLast');
-                    const watchdogEscalationReason = document.getElementById('runtimeWatchdogEscalationReason');
-                    const watchdogEscalationEvents = document.getElementById('runtimeWatchdogEscalationEvents');
-                    const btnStatus = document.getElementById('btn-status');
-                    const btnMatches = document.getElementById('btn-matches');
-
-                    function coverageText(cov) {
-                        if (!cov) return '-';
-                        return 'input:' + yesNo(!!cov.hasVisibleInput) + ', send:' + yesNo(!!cov.hasVisibleSendButton) + ', pending:' + (cov.pendingAcceptButtons ?? 0);
-                    }
-
-                    if (!state) {
-                        chip.className = 'runtime-chip unknown';
-                        chip.textContent = 'UNAVAILABLE';
-                        mode.textContent = '-';
-                        idle.textContent = '-';
-                        telemetryFreshness.textContent = 'STALE';
-                        telemetryFreshness.className = 'runtime-chip telemetry-stale';
-                        tabs.textContent = '-';
-                        pending.textContent = '-';
-                        waiting.textContent = '-';
-                        updated.textContent = new Date().toLocaleTimeString();
-                        telemetryAge.textContent = '-';
-                        blockedUnsafeTotalEl.textContent = '-';
-                        safetySignal.textContent = 'QUIET';
-                        safetySignal.className = 'runtime-chip safety-quiet';
-                        safetyTrend.textContent = '-';
-                        safetyRate.textContent = '-';
-                        stateDuration.textContent = '-';
-                        waitingSinceEl.textContent = '-';
-                        safetyBlockedRunExpand.textContent = '-';
-                        safetyBlockedNonChat.textContent = '-';
-                        safetyBlockedSubmitKeys.textContent = '-';
-                        safetyBlockedFocusLoss.textContent = '-';
-                        coverageActive.textContent = '-';
-                        coverageVSCode.textContent = '-';
-                        coverageAntigravity.textContent = '-';
-                        coverageCursor.textContent = '-';
-                        guardScore.textContent = '-';
-                        guardStrict.textContent = '-';
-                        guardAllowed.textContent = '-';
-                        guardReason.textContent = '-';
-                        nextEligible.textContent = '-';
-                        cooldownLeft.textContent = '-';
-                        delayLeft.textContent = '-';
-                        lastResumeOutcome.textContent = '-';
-                        recommendedNext.textContent = '-';
-                        readyToResume.textContent = '-';
-                        completionConfidence.textContent = '-';
-                        completionReasoning.textContent = '-';
-                        readyStreak.textContent = '-';
-                        lastMessageKind.textContent = '-';
-                        lastMessageProfile.textContent = '-';
-                        lastMessagePreview.textContent = '-';
-                        watchdogState.textContent = 'IDLE';
-                        watchdogState.className = 'runtime-chip watchdog-idle';
-                        watchdogLastRun.textContent = '-';
-                        watchdogOutcome.textContent = '-';
-                        watchdogEscalationArmed.textContent = '-';
-                        watchdogEscalationArmed.className = 'runtime-chip escalation-idle';
-                        watchdogEscalationStreak.textContent = '-';
-                        watchdogEscalationCooldownLeft.textContent = '-';
-                        watchdogEscalationNextEligible.textContent = '-';
-                        watchdogEscalationLastEvent.textContent = 'NONE';
-                        watchdogEscalationLastEvent.className = 'runtime-chip event-none';
-                        watchdogEscalationLast.textContent = '-';
-                        watchdogEscalationReason.textContent = '-';
-                        watchdogEscalationEvents.textContent = '-';
-                        if (btnStatus) btnStatus.textContent = 'Runtime unavailable';
-                        if (btnMatches) btnMatches.textContent = '-';
-                        watchdogEscalationEvents.textContent = '-';
-                        
-                        const sessionsList = document.getElementById('cdpSessionsList');
-                        if (sessionsList) {
-                            if (state && state.trackedSessions && state.trackedSessions.length > 0) {
-                                sessionsList.innerHTML = state.trackedSessions.map(s => 
-                                    '<div class="runtime-history-item" title="' + (s.url || '') + '">' +
-                                    '<strong>' + (s.type || 'page') + '</strong>: ' + (s.title || 'Untitled') + '<br/>' +
-                                    '<span class="muted">' + (s.url ? s.url.substring(0, 80) + (s.url.length > 80 ? '...' : '') : 'No URL') + '</span>' +
-                                    '</div>'
-                                ).join('');
-                            } else {
-                                sessionsList.innerHTML = '<div class="runtime-history-item">No active sessions tracked.</div>';
-                            }
-                        }
-
-                        renderRuntimeHistory();
-                        return;
-                    }
-
-                    const status = String(state.status || 'unknown');
-                    const ts = state.timestamp || Date.now();
-                    const telemetryAgeMs = Math.max(0, Date.now() - ts);
-                    const isTelemetryStale = telemetryAgeMs > (Math.max(3, telemetryStaleSec) * 1000);
-
-                    if (currentStatus !== status) {
-                        currentStatus = status;
-                        currentStatusSince = ts;
-                        pushRuntimeHistory(status, ts);
-                    }
-
-                    if (status === 'waiting_for_chat_message') {
-                        if (!waitingSince) waitingSince = ts;
-                    } else {
-                        waitingSince = null;
-                    }
-
-                    chip.className = 'runtime-chip ' + runtimeClassForStatus(status);
-                    chip.textContent = status.toUpperCase();
-                    mode.textContent = state.mode || '-';
-                    idle.textContent = yesNo(!!state.isIdle);
-                    telemetryFreshness.textContent = isTelemetryStale ? 'STALE' : 'FRESH';
-                    telemetryFreshness.className = 'runtime-chip ' + (isTelemetryStale ? 'telemetry-stale' : 'telemetry-fresh');
-                    tabs.textContent = (state.doneTabs ?? 0) + ' / ' + (state.totalTabs ?? 0);
-                    pending.textContent = String(state.pendingAcceptButtons ?? 0);
-                    waiting.textContent = yesNo(!!state.waitingForChatMessage);
-                    updated.textContent = new Date(ts).toLocaleTimeString();
-                    telemetryAge.textContent = formatDurationMs(telemetryAgeMs);
-                    const host = state.hostTelemetry || null;
-                    const safetyCounters = (state.safetyCounters && typeof state.safetyCounters === 'object') ? state.safetyCounters : {};
-                    const safetyStats = (state.safetyStats && typeof state.safetyStats === 'object')
-                        ? state.safetyStats
-                        : (host?.safetyStats && typeof host.safetyStats === 'object' ? host.safetyStats : {});
-                    const blockedRunExpand = toCounter(safetyCounters.blockedForceActionRunExpand) + toCounter(safetyStats.blockedRunExpandInAgRuntime);
-                    const blockedNonChat = toCounter(safetyCounters.blockedNonChatActionSurfaceTargets) + toCounter(safetyStats.blockedNonChatTargets);
-                    const blockedSubmit = toCounter(safetyCounters.blockedStuckSubmitKeypressFallbacks) + toCounter(safetyStats.blockedSubmitKeyDispatches);
-                    const blockedFocusLoss = toCounter(safetyStats.blockedFocusLossKeyDispatches);
-                    const blockedUnsafeTotalComputed = blockedRunExpand + blockedNonChat + blockedSubmit + blockedFocusLoss;
-                    const blockedUnsafeTotal = Math.max(toCounter(state.blockedUnsafeActionsTotal), blockedUnsafeTotalComputed);
-                    blockedUnsafeTotalEl.textContent = String(blockedUnsafeTotal);
-                    safetyBlockedRunExpand.textContent = String(blockedRunExpand);
-                    safetyBlockedNonChat.textContent = String(blockedNonChat);
-                    safetyBlockedSubmitKeys.textContent = String(blockedSubmit);
-                    safetyBlockedFocusLoss.textContent = String(blockedFocusLoss);
-                    const delta = previousBlockedUnsafeTotal === null ? 0 : (blockedUnsafeTotal - previousBlockedUnsafeTotal);
-                    const elapsedMs = previousBlockedUnsafeTs === null ? 0 : Math.max(1, ts - previousBlockedUnsafeTs);
-                    const perMin = delta > 0 ? Math.round((delta * 60000) / elapsedMs) : 0;
-                    if (previousBlockedUnsafeTotal === null) {
-                        safetyTrend.textContent = 'baseline';
-                        safetyRate.textContent = '-';
-                    } else if (delta > 0) {
-                        safetyTrend.textContent = '+' + delta;
-                        safetyRate.textContent = perMin + '/min';
-                    } else if (delta < 0) {
-                        safetyTrend.textContent = String(delta);
-                        safetyRate.textContent = 'reset';
-                    } else {
-                        safetyTrend.textContent = '0';
-                        safetyRate.textContent = 'steady';
-                    }
-                    previousBlockedUnsafeTotal = blockedUnsafeTotal;
-                    previousBlockedUnsafeTs = ts;
-                    if (blockedUnsafeTotal >= 10) {
-                        safetySignal.textContent = 'HOT';
-                        safetySignal.className = 'runtime-chip safety-hot';
-                    } else if (blockedUnsafeTotal > 0) {
-                        safetySignal.textContent = 'ACTIVE';
-                        safetySignal.className = 'runtime-chip safety-warn';
-                    } else {
-                        safetySignal.textContent = 'QUIET';
-                        safetySignal.className = 'runtime-chip safety-quiet';
-                    }
-                    stateDuration.textContent = formatDurationMs(ts - (currentStatusSince || ts));
-                    waitingSinceEl.textContent = waitingSince ? new Date(waitingSince).toLocaleTimeString() : '-';
-                    const profileCoverage = state.profileCoverage || {};
-                    coverageActive.textContent = coverageText(profileCoverage[state.mode || ''] || null);
-                    coverageVSCode.textContent = coverageText(profileCoverage.vscode || null);
-                    coverageAntigravity.textContent = coverageText(profileCoverage.antigravity || null);
-                    coverageCursor.textContent = coverageText(profileCoverage.cursor || null);
-                    const guard = evaluateCrossUiHealth(state);
-                    guardScore.textContent = guard.score + ' / 100 (min ' + guard.minScore + ')';
-                    guardStrict.textContent = yesNo(guard.strictPass) + (guard.requireStrict ? ' (required)' : ' (optional)');
-                    guardAllowed.textContent = guard.allowed ? 'allow' : 'block';
-                    guardReason.textContent = guard.reason;
-                    const timing = host && host.timing ? host.timing : null;
-                    nextEligible.textContent = timing && timing.nextEligibleAt ? new Date(timing.nextEligibleAt).toLocaleTimeString() : '-';
-                    cooldownLeft.textContent = timing ? formatDurationMs(timing.cooldownRemainingMs || 0) : '-';
-                    delayLeft.textContent = timing ? formatDurationMs(timing.waitingDelayRemainingMs || 0) : '-';
-                    lastResumeOutcome.textContent = host ? ((host.lastAutoResumeOutcome || 'none') + (host.lastAutoResumeBlockedReason && host.lastAutoResumeBlockedReason !== 'none' ? ' (' + host.lastAutoResumeBlockedReason + ')' : '')) : '-';
-                    recommendedNext.textContent = (host && host.guard && host.guard.recommendedNextAction)
-                        ? ('(' + (host.guard.recommendedNextActionConfidence || 'n/a') + ') ' + host.guard.recommendedNextAction)
-                        : '-';
-
-                    const completion = state.completionWaiting || null;
-                    readyToResume.textContent = completion ? yesNo(!!completion.readyToResume) : '-';
-                    completionConfidence.textContent = completion
-                        ? ((completion.confidence ?? '-') + ' (' + (completion.confidenceLabel || 'n/a') + ')')
-                        : '-';
-                    completionReasoning.textContent = completion && Array.isArray(completion.reasons)
-                        ? completion.reasons.slice(0, 2).join('; ')
-                        : '-';
-                    readyStreak.textContent = host
-                        ? ((host.readyToResumeStreak ?? 0) + ' / ' + (host.stablePollsRequired ?? '-'))
-                        : '-';
-                    lastMessageKind.textContent = host?.lastAutoResumeMessageKind || '-';
-                    lastMessageProfile.textContent = host?.lastAutoResumeMessageProfile || '-';
-                    lastMessagePreview.textContent = host?.lastAutoResumeMessagePreview || '-';
-                    const watchdogRunning = !!host?.autoFixWatchdogInProgress;
-                    watchdogState.textContent = watchdogRunning ? 'RUNNING' : 'IDLE';
-                    watchdogState.className = 'runtime-chip ' + (watchdogRunning ? 'watchdog-running' : 'watchdog-idle');
-                    watchdogLastRun.textContent = host?.lastAutoFixWatchdogAt ? new Date(host.lastAutoFixWatchdogAt).toLocaleTimeString() : '-';
-                    watchdogOutcome.textContent = host?.lastAutoFixWatchdogOutcome || '-';
-                    const escalationArmed = !!host?.watchdogEscalationForceFullNext;
-                    watchdogEscalationArmed.textContent = escalationArmed ? 'ARMED' : 'IDLE';
-                    watchdogEscalationArmed.className = 'runtime-chip ' + (escalationArmed ? 'escalation-armed' : 'escalation-idle');
-                    watchdogEscalationStreak.textContent = host ? String(host.watchdogEscalationConsecutiveFailures ?? 0) : '-';
-                    watchdogEscalationCooldownLeft.textContent = host ? formatDurationMs(host.escalationCooldownRemainingMs || 0) : '-';
-                    watchdogEscalationNextEligible.textContent = host?.escalationNextEligibleAt ? new Date(host.escalationNextEligibleAt).toLocaleTimeString() : '-';
-                    const lastEscalationEventName = Array.isArray(host?.watchdogEscalationEvents) && host.watchdogEscalationEvents.length > 0
-                        ? String(host.watchdogEscalationEvents[0].event || 'none').toUpperCase()
-                        : 'NONE';
-                    watchdogEscalationLastEvent.textContent = lastEscalationEventName;
-                    watchdogEscalationLastEvent.className = 'runtime-chip ' + escalationEventChipClass(lastEscalationEventName);
-                    watchdogEscalationLast.textContent = host?.lastWatchdogEscalationAt ? new Date(host.lastWatchdogEscalationAt).toLocaleTimeString() : '-';
-                    watchdogEscalationReason.textContent = host?.lastWatchdogEscalationReason || '-';
-                    watchdogEscalationEvents.textContent = Array.isArray(host?.watchdogEscalationEvents) && host.watchdogEscalationEvents.length > 0
-                        ? host.watchdogEscalationEvents
-                            .slice(0, 4)
-                            .map(e => (new Date(e.at).toLocaleTimeString() + ' ' + String(e.event || 'event') + ': ' + String(e.detail || '')))
-                            .join(' | ')
-                        : '-';
-
-                    const buttonSignals = state.buttonSignals || null;
-                    if (btnStatus) {
-                        if (!buttonSignals) {
-                            btnStatus.textContent = 'No button signal telemetry';
-                        } else {
-                            const active = Object.entries(buttonSignals).filter(([_, v]) => Number(v) > 0).map(([k, v]) => k + ':' + v);
-                            btnStatus.textContent = active.length > 0 ? ('Detected: ' + active.join(', ')) : 'No target buttons detected';
-                        }
-                    }
-                    if (btnMatches) {
-                        const pollMs = Number(state.hostTelemetry?.timing?.pollIntervalMs || state.pollIntervalMs || ${config.get<string[]>('automation.timing.pollIntervalMs') ?? 800});
-                        btnMatches.textContent = buttonSignals
-                            ? (JSON.stringify(buttonSignals) + ' | poll=' + pollMs + 'ms')
-                            : ('poll=' + pollMs + 'ms');
-                    }
-                    
-                    const sessionsList = document.getElementById('cdpSessionsList');
-                    if (sessionsList) {
-                        if (state.trackedSessions && state.trackedSessions.length > 0) {
-                            sessionsList.innerHTML = state.trackedSessions.map(s => 
-                                '<div class="runtime-history-item" title="' + (s.url || '') + '">' +
-                                '<strong>' + (s.type || 'page') + '</strong>: ' + (s.title || 'Untitled') + '<br/>' +
-                                '<span class="muted">' + (s.url ? s.url.substring(0, 80) + (s.url.length > 80 ? '...' : '') : 'No URL') + '</span>' +
-                                '</div>'
-                            ).join('');
-                        } else {
-                            sessionsList.innerHTML = '<div class="runtime-history-item">No active sessions tracked.</div>';
-                        }
-                    }
-
-                    renderRuntimeHistory();
-                }
-
-                function requestRuntimeState() {
-                    vscode.postMessage({ command: 'requestRuntimeState' });
-                }
-
-                function runCommand(id) {
-                    vscode.postMessage({ command: 'runCommand', id });
-                }
-
-                function runTest(testId, label) {
-                    vscode.postMessage({
-                        command: 'runTest',
-                        testId: testId,
-                        label: label
-                    });
-                }
-
-                window.addEventListener('message', event => {
-                    const message = event.data;
-                    if (!message || message.command !== 'runtimeStateUpdate') return;
-                    updateRuntimeUi(message.state || null);
-                });
-
-                requestRuntimeState();
-                setInterval(requestRuntimeState, 3000);
-            </script>
-        </body>
-        </html>`;
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Antigravity Settings</title>
+  <style>
+    body { font-family: var(--vscode-font-family, sans-serif); padding: 20px; color: var(--vscode-editor-foreground); background: var(--vscode-editor-background); }
+    h1 { margin-top: 0; }
+    h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--vscode-descriptionForeground); }
+    .card { border: 1px solid var(--vscode-widget-border); border-radius: 8px; padding: 14px; margin-bottom: 12px; background: var(--vscode-editorWidget-background); }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+    label { font-weight: 600; }
+    input[type="text"], input[type="number"] { min-width: 170px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 4px; padding: 4px 8px; }
+    input[type="checkbox"] { width: 18px; height: 18px; }
+    button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 4px; padding: 6px 10px; cursor: pointer; }
+    button:hover { background: var(--vscode-button-hoverBackground); }
+    .muted { color: var(--vscode-descriptionForeground); font-size: 12px; }
+    .runtime { font-family: var(--vscode-editor-font-family, monospace); font-size: 12px; white-space: pre-wrap; border: 1px dashed var(--vscode-widget-border); padding: 8px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Antigravity Minimal Settings</h1>
+
+  <div class="card">
+    <h2>Core</h2>
+    <div class="row"><label>Automation Enabled</label><input type="checkbox" ${autoContinueEnabled ? 'checked' : ''} onchange="setCfg('autoContinueScriptEnabled', this.checked)" /></div>
+    <div class="row"><label>Bump Enabled</label><input type="checkbox" ${bumpEnabled ? 'checked' : ''} onchange="setCfg('actions.bump.enabled', this.checked)" /></div>
+    <div class="row"><label>Bump Text</label><input type="text" value="${escapeHtml(bumpText)}" onchange="setCfg('actions.bump.text', this.value)" /></div>
+  </div>
+
+  <div class="card">
+    <h2>Required Action Clicks</h2>
+    <div class="row"><label>Run</label><input type="checkbox" ${clickRun ? 'checked' : ''} onchange="setCfg('automation.actions.clickRun', this.checked)" /></div>
+    <div class="row"><label>Expand</label><input type="checkbox" ${clickExpand ? 'checked' : ''} onchange="setCfg('automation.actions.clickExpand', this.checked)" /></div>
+    <div class="row"><label>Always Allow</label><input type="checkbox" ${clickAlwaysAllow ? 'checked' : ''} onchange="setCfg('automation.actions.clickAlwaysAllow', this.checked)" /></div>
+    <div class="row"><label>Retry</label><input type="checkbox" ${clickRetry ? 'checked' : ''} onchange="setCfg('automation.actions.clickRetry', this.checked)" /></div>
+    <div class="row"><label>Accept all</label><input type="checkbox" ${clickAcceptAll ? 'checked' : ''} onchange="setCfg('automation.actions.clickAcceptAll', this.checked)" /></div>
+    <div class="row"><label>Keep</label><input type="checkbox" ${clickKeep ? 'checked' : ''} onchange="setCfg('automation.actions.clickKeep', this.checked)" /></div>
+  </div>
+
+  <div class="card">
+    <h2>Timing</h2>
+    <div class="row"><label>Poll Interval (ms)</label><input type="number" min="150" value="${pollIntervalMs}" onchange="setCfg('automation.timing.pollIntervalMs', Number(this.value) || 800)" /></div>
+    <div class="row"><label>Stall Timeout (sec)</label><input type="number" min="1" value="${stallTimeoutSec}" onchange="setCfg('actions.bump.stallTimeout', Number(this.value) || 7)" /></div>
+    <div class="row"><label>Bump Cooldown (sec)</label><input type="number" min="1" value="${bumpCooldownSec}" onchange="setCfg('actions.bump.cooldown', Number(this.value) || 30)" /></div>
+    <div class="row"><label>Submit Delay (ms)</label><input type="number" min="40" value="${submitDelayMs}" onchange="setCfg('actions.bump.submitDelayMs', Number(this.value) || 120)" /></div>
+  </div>
+
+  <div class="card">
+    <h2>Diagnostics</h2>
+    <div class="row"><button onclick="runCommand('antigravity.checkRuntimeState')">Check Runtime State</button><button onclick="requestRuntimeState()">Refresh Snapshot</button></div>
+    <div id="runtime" class="runtime">Loading...</div>
+    <p class="muted">This panel only exposes the minimal settings required for fork detect, stall detect, bump type/submit, and required action clicks.</p>
+  </div>
+
+  <script>
+    const vscode = acquireVsCodeApi();
+
+    function setCfg(key, value) {
+      vscode.postMessage({ command: 'updateConfig', key, value });
     }
+
+    function runCommand(id) {
+      vscode.postMessage({ command: 'runCommand', id });
+    }
+
+    function requestRuntimeState() {
+      vscode.postMessage({ command: 'requestRuntimeState' });
+    }
+
+    window.addEventListener('message', (event) => {
+      const message = event.data;
+      if (!message || message.command !== 'runtimeStateUpdate') return;
+      const target = document.getElementById('runtime');
+      if (!target) return;
+      target.textContent = message.state ? JSON.stringify(message.state, null, 2) : 'Runtime unavailable';
+    });
+
+    requestRuntimeState();
+  </script>
+</body>
+</html>`;
+    }
+}
+
+function escapeHtml(value: string): string {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
