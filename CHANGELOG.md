@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.26] - 2026-03-05
+### Fixed
+* **Dashboard Webview Parse Crash**: Fixed generated inline script tokenization by escaping newline join separator in runtime diagnostics renderer (`join('\\n')`), preventing `Uncaught SyntaxError: Invalid or unexpected token` during webview bootstrap.
+* **`runTest` Fallback-Only Mode**: Restored full dashboard script initialization path so test buttons no longer stay stuck on early shim no-op handlers.
+
 ## [6.2.25] - 2026-03-05
 ### Fixed
 * **Dashboard Inline Handler Bootstrap Hardening**: Added an early independent global shim in the dashboard HTML so inline handlers (`runTest`, `runCommand`, `setCfg`, etc.) are always defined before the main script executes.

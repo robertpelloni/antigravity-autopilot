@@ -579,7 +579,7 @@ export class DashboardPanel {
           'Connected: ' + (cdp.connected ? 'YES' : 'NO') + ' (' + (cdp.connectionCount ?? 0) + ')',
           'Primary Window: ' + primaryLabel,
           'Current Window Automation: ' + (wc.enabled === false ? 'OFF' : 'ON')
-        ].join('\n');
+        ].join('\\n');
       }
 
       const runtimePayload = message.state.runtime ?? null;
