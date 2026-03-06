@@ -1,6 +1,16 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.16] - 2026-03-05
+### Added
+* **Expanded Method Test Matrix**: Dashboard now exposes an exhaustive button set for historical and current bump typing/submit method IDs (including alias IDs) for regression trials.
+* **Submit-Method Coverage**: Added dedicated submit-method test controls (`auto-sequence`, CDP enter/mouse, keyboard variants, VS Code command path, and script-hook path).
+* **Method Command Telemetry**: Added explicit command-layer logs (`[TestMethodCmd]`) and richer strategy-layer logs (`[TestMethod]`) to make PASS/MISS diagnosis deterministic.
+
+### Fixed
+* **Monaco Proxy Input Visibility False-Negatives**: Method test focus/read/submit probes now treat Monaco proxy textareas as valid even when rendered with hidden/0x0 bounds, improving VS Code Insiders + Antigravity reliability.
+* **Typing Test No-Op Cases**: Test runner now attempts reconnect when no targets are attached, performs explicit focus/readback checks, and reports per-method outcomes with detailed context.
+
 ## [6.2.15] - 2026-03-05
 ### Fixed
 * **CDP Port Not Persisting Across Restart**: Dashboard `cdpPort` save flow now avoids blur-only write behavior and performs deterministic update acknowledgements back to the panel.

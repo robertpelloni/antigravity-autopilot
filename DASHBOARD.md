@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 6.2.15  
+**Version**: 6.2.16  
 **Last Updated**: 2026-03-05  
-**Status**: Production stabilization + persistent CDP-port settings hardening shipped (scope-aware save + effective-value confirmation)
+**Status**: Production stabilization + Monaco-aware typing/submit test hardening shipped for VS Code Insiders + Antigravity
 
 ## Project Structure at a Glance
 

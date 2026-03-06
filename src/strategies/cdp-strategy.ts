@@ -223,10 +223,20 @@ export class CDPStrategy implements IStrategy {
         const expression = `(() => {
             const expected = ${JSON.stringify(String(expectedText || ''))};
             const normalize = (v) => String(v || '').replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+            const isMonacoProxyInput = (el) => {
+                if (!el || !el.isConnected) return false;
+                const tag = String(el.tagName || '').toLowerCase();
+                if (tag !== 'textarea') return false;
+                const cls = String(el.className || '').toLowerCase();
+                if (cls.includes('inputarea') || cls.includes('monaco')) return true;
+                return !!el.closest?.('.monaco-editor');
+            };
             const isVisible = (el) => {
                 if (!el || !el.isConnected || el.disabled) return false;
                 const r = el.getBoundingClientRect();
-                if (!r || r.width <= 0 || r.height <= 0) return false;
+                if (!r || r.width <= 0 || r.height <= 0) {
+                    return isMonacoProxyInput(el);
+                }
                 const s = window.getComputedStyle(el);
                 return !(s.display === 'none' || s.visibility === 'hidden' || s.pointerEvents === 'none');
             };
@@ -292,6 +302,178 @@ export class CDPStrategy implements IStrategy {
         }
 
         return false;
+    }
+
+    private async focusChatInputOnPage(pageId: string): Promise<{ ok: boolean; details: string }> {
+        const expression = `(() => {
+            const isMonacoProxyInput = (el) => {
+                if (!el || !el.isConnected) return false;
+                const tag = String(el.tagName || '').toLowerCase();
+                if (tag !== 'textarea') return false;
+                const cls = String(el.className || '').toLowerCase();
+                if (cls.includes('inputarea') || cls.includes('monaco')) return true;
+                return !!el.closest?.('.monaco-editor');
+            };
+            const isVisible = (el) => {
+                if (!el || !el.isConnected || el.disabled) return false;
+                const r = el.getBoundingClientRect();
+                if (!r || r.width <= 0 || r.height <= 0) {
+                    return isMonacoProxyInput(el);
+                }
+                const s = window.getComputedStyle(el);
+                return !(s.display === 'none' || s.visibility === 'hidden' || s.pointerEvents === 'none');
+            };
+
+            const selectors = [
+                'textarea',
+                '.monaco-editor textarea',
+                '[contenteditable="true"]',
+                '[role="textbox"]'
+            ];
+
+            for (const sel of selectors) {
+                const nodes = Array.from(document.querySelectorAll(sel));
+                for (const n of nodes) {
+                    if (!isVisible(n)) continue;
+                    try { if (typeof n.focus === 'function') n.focus(); } catch {}
+                    const active = document.activeElement === n;
+                    return { ok: true, selector: sel, active, tag: String(n.tagName || '').toLowerCase() };
+                }
+            }
+
+            return { ok: false, selector: 'none', active: false, tag: 'none' };
+        })()`;
+
+        const handler = this.cdpHandler as any;
+        const result = await handler.sendCommand(pageId, 'Runtime.evaluate', {
+            expression,
+            returnByValue: true,
+            awaitPromise: true
+        }).catch(() => null);
+
+        const value = result?.result?.value;
+        if (!value) {
+            return { ok: false, details: 'focus-eval-failed' };
+        }
+
+        return {
+            ok: value.ok === true,
+            details: `selector=${String(value.selector || 'none')} active=${value.active === true} tag=${String(value.tag || 'unknown')}`
+        };
+    }
+
+    private async readComposerTextOnPage(pageId: string): Promise<string> {
+        const expression = `(() => {
+            const isMonacoProxyInput = (el) => {
+                if (!el || !el.isConnected) return false;
+                const tag = String(el.tagName || '').toLowerCase();
+                if (tag !== 'textarea') return false;
+                const cls = String(el.className || '').toLowerCase();
+                if (cls.includes('inputarea') || cls.includes('monaco')) return true;
+                return !!el.closest?.('.monaco-editor');
+            };
+            const isVisible = (el) => {
+                if (!el || !el.isConnected || el.disabled) return false;
+                const r = el.getBoundingClientRect();
+                if (!r || r.width <= 0 || r.height <= 0) {
+                    return isMonacoProxyInput(el);
+                }
+                const s = window.getComputedStyle(el);
+                return !(s.display === 'none' || s.visibility === 'hidden' || s.pointerEvents === 'none');
+            };
+            const candidates = Array.from(document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"], .monaco-editor textarea'));
+            for (const c of candidates) {
+                if (!isVisible(c)) continue;
+                const raw = (c && (c.value ?? c.textContent)) || '';
+                const txt = String(raw || '').replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim();
+                if (txt) return txt;
+            }
+            return '';
+        })()`;
+
+        const handler = this.cdpHandler as any;
+        const result = await handler.sendCommand(pageId, 'Runtime.evaluate', {
+            expression,
+            returnByValue: true,
+            awaitPromise: true
+        }).catch(() => null);
+
+        return String(result?.result?.value || '');
+    }
+
+    private async dispatchEnterOnPage(pageId: string): Promise<boolean> {
+        const down = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
+            type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
+        }, [pageId]);
+        const up = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
+            type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
+        }, [pageId]);
+        logToOutput(`[TestMethod] submit:enter-key => down=${JSON.stringify(down)} up=${JSON.stringify(up)}`);
+        return down.some((r) => r.startsWith('ok:')) || up.some((r) => r.startsWith('ok:'));
+    }
+
+    private async dispatchModifiedEnterOnPage(pageId: string, modifiers?: { ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean; metaKey?: boolean }, label?: string): Promise<boolean> {
+        const down = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
+            type: 'keyDown',
+            key: 'Enter',
+            code: 'Enter',
+            windowsVirtualKeyCode: 13,
+            nativeVirtualKeyCode: 13,
+            ctrlKey: modifiers?.ctrlKey === true,
+            altKey: modifiers?.altKey === true,
+            shiftKey: modifiers?.shiftKey === true,
+            metaKey: modifiers?.metaKey === true
+        }, [pageId]);
+        const up = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
+            type: 'keyUp',
+            key: 'Enter',
+            code: 'Enter',
+            windowsVirtualKeyCode: 13,
+            nativeVirtualKeyCode: 13,
+            ctrlKey: modifiers?.ctrlKey === true,
+            altKey: modifiers?.altKey === true,
+            shiftKey: modifiers?.shiftKey === true,
+            metaKey: modifiers?.metaKey === true
+        }, [pageId]);
+        logToOutput(`[TestMethod] ${String(label || 'submit:modified-enter')} => down=${JSON.stringify(down)} up=${JSON.stringify(up)}`);
+        return down.some((r) => r.startsWith('ok:')) || up.some((r) => r.startsWith('ok:'));
+    }
+
+    private async clickSendByCdpMouseOnPage(pageId: string): Promise<boolean> {
+        const expression = `(() => {
+            const selectors = [
+                '[title*="Send" i]','[aria-label*="Send" i]','[title*="Submit" i]','[aria-label*="Submit" i]',
+                '[data-testid*="send" i]','[data-testid*="submit" i]','button[type="submit"]','.codicon-send'
+            ];
+            for (const sel of selectors) {
+                const node = document.querySelector(sel);
+                const el = node?.closest?.('button, [role="button"], a, .monaco-button') || node;
+                if (!el) continue;
+                const r = el.getBoundingClientRect();
+                if (!r || r.width <= 0 || r.height <= 0) continue;
+                return { x: Math.floor(r.left + r.width / 2), y: Math.floor(r.top + r.height / 2), selector: sel };
+            }
+            return null;
+        })()`;
+
+        const handler = this.cdpHandler as any;
+        const coordsResult = await handler.sendCommand(pageId, 'Runtime.evaluate', {
+            expression,
+            returnByValue: true,
+            awaitPromise: true
+        }).catch(() => null);
+        const coords = coordsResult?.result?.value;
+        if (!coords || typeof coords.x !== 'number' || typeof coords.y !== 'number') {
+            logToOutput('[TestMethod] submit:send-cdp-mouse => no-send-coordinates');
+            return false;
+        }
+
+        logToOutput(`[TestMethod] submit:send-cdp-mouse => selector=${String(coords.selector || 'unknown')} x=${coords.x} y=${coords.y}`);
+        const moved = await this.sendBumpInputCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', x: coords.x, y: coords.y, button: 'left', clickCount: 0 }, [pageId]);
+        const pressed = await this.sendBumpInputCommand('Input.dispatchMouseEvent', { type: 'mousePressed', x: coords.x, y: coords.y, button: 'left', clickCount: 1 }, [pageId]);
+        const released = await this.sendBumpInputCommand('Input.dispatchMouseEvent', { type: 'mouseReleased', x: coords.x, y: coords.y, button: 'left', clickCount: 1 }, [pageId]);
+        logToOutput(`[TestMethod] submit:send-cdp-mouse => move=${JSON.stringify(moved)} down=${JSON.stringify(pressed)} up=${JSON.stringify(released)}`);
+        return pressed.some((r) => r.startsWith('ok:')) || released.some((r) => r.startsWith('ok:'));
     }
 
     async start(): Promise<void> {
@@ -507,7 +689,23 @@ export class CDPStrategy implements IStrategy {
     async testMethod(methodName: string, text?: string): Promise<boolean> {
         const method = String(methodName || '').trim().toLowerCase();
         const bumpText = String((text || config.get<string>('actions.bump.text') || 'Proceed')).trim();
-        const targetPageIds = this.getConfiguredBumpTargetPageIds();
+        let targetPageIds = this.getConfiguredBumpTargetPageIds();
+        const evaluateOnTarget = async (expression: string): Promise<any> => {
+            const result = await (this.cdpHandler as any).sendCommand(firstTarget, 'Runtime.evaluate', {
+                expression,
+                returnByValue: true,
+                awaitPromise: true
+            }).catch(() => null);
+            return result?.result?.value;
+        };
+
+        logToOutput(`[TestMethod] START method=${method} text="${bumpText}" connected=${this.cdpHandler.isConnected()} targets=${targetPageIds.length}`);
+
+        if (targetPageIds.length === 0) {
+            const connected = await this.cdpHandler.connect().catch(() => false);
+            targetPageIds = this.getConfiguredBumpTargetPageIds();
+            logToOutput(`[TestMethod] connect-attempt => ${connected ? 'connected' : 'no-targets'} targetsNow=${targetPageIds.length}`);
+        }
 
         if (!method || targetPageIds.length === 0) {
             logToOutput(`[TestMethod] skipped method=${method || 'empty'} reason=no-targets`);
@@ -515,14 +713,52 @@ export class CDPStrategy implements IStrategy {
         }
 
         const firstTarget = targetPageIds[0];
+        logToOutput(`[TestMethod] target=${firstTarget.substring(0, 8)}`);
+
+        const focusInfo = await this.focusChatInputOnPage(firstTarget);
+        logToOutput(`[TestMethod] focus => ok=${focusInfo.ok} details=${focusInfo.details}`);
 
         if (method === 'typing:cdp-insert-text') {
             const results = await this.sendBumpInputCommand('Input.insertText', { text: bumpText }, [firstTarget]);
-            logToOutput(`[TestMethod] typing:cdp-insert-text => ${JSON.stringify(results)}`);
-            return results.some((r) => r.startsWith('ok:'));
+            const readback = await this.readComposerTextOnPage(firstTarget);
+            const ok = results.some((r) => r.startsWith('ok:')) && readback.toLowerCase().includes(bumpText.toLowerCase());
+            logToOutput(`[TestMethod] typing:cdp-insert-text => command=${JSON.stringify(results)} readback="${readback}" ok=${ok}`);
+            return ok;
         }
 
-        if (method === 'typing:dom-set-input') {
+        if (method === 'typing:cdp-keys' || method === 'cdp-keys') {
+            let okAny = false;
+            for (const char of bumpText) {
+                const vkCode = char.toUpperCase().charCodeAt(0);
+                const down = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
+                    type: 'keyDown',
+                    text: char,
+                    unmodifiedText: char,
+                    key: char,
+                    code: /^[a-z]$/i.test(char) ? ('Key' + char.toUpperCase()) : undefined,
+                    windowsVirtualKeyCode: Number.isFinite(vkCode) ? vkCode : undefined,
+                    nativeVirtualKeyCode: Number.isFinite(vkCode) ? vkCode : undefined
+                }, [firstTarget]);
+                const up = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
+                    type: 'keyUp',
+                    text: char,
+                    unmodifiedText: char,
+                    key: char,
+                    code: /^[a-z]$/i.test(char) ? ('Key' + char.toUpperCase()) : undefined,
+                    windowsVirtualKeyCode: Number.isFinite(vkCode) ? vkCode : undefined,
+                    nativeVirtualKeyCode: Number.isFinite(vkCode) ? vkCode : undefined
+                }, [firstTarget]);
+                if (down.some((r) => r.startsWith('ok:')) || up.some((r) => r.startsWith('ok:'))) {
+                    okAny = true;
+                }
+            }
+            const readback = await this.readComposerTextOnPage(firstTarget);
+            const ok = okAny && readback.toLowerCase().includes(bumpText.toLowerCase());
+            logToOutput(`[TestMethod] typing:cdp-keys => okAny=${okAny} readback="${readback}" ok=${ok}`);
+            return ok;
+        }
+
+        if (method === 'typing:dom-set-input' || method === 'typing:dom-inject' || method === 'dom-inject') {
             const expression = `(() => {
                 const text = ${JSON.stringify(bumpText)};
                 const isVisible = (el) => {
@@ -548,10 +784,170 @@ export class CDPStrategy implements IStrategy {
                 }
                 return false;
             })()`;
-            const result = await (this.cdpHandler as any).sendCommand(firstTarget, 'Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }).catch(() => null);
-            const ok = result?.result?.value === true;
-            logToOutput(`[TestMethod] typing:dom-set-input => ${ok}`);
-            return ok;
+            const ok = evaluateOnTarget(expression);
+            const readback = await this.readComposerTextOnPage(firstTarget);
+            const pass = (await ok) === true;
+            logToOutput(`[TestMethod] ${method} => ok=${pass} readback="${readback}"`);
+            return pass;
+        }
+
+        if (method === 'typing:exec-command' || method === 'exec-command') {
+            const expression = `(() => {
+                const text = ${JSON.stringify(bumpText)};
+                const targets = Array.from(document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"], .monaco-editor textarea'));
+                for (const t of targets) {
+                    if (!t || !t.isConnected) continue;
+                    const r = t.getBoundingClientRect();
+                    if (!r || r.width <= 0 || r.height <= 0) continue;
+                    try { if (typeof t.focus === 'function') t.focus(); } catch {}
+                    try {
+                        if (t.isContentEditable || t.getAttribute('contenteditable') === 'true') {
+                            document.execCommand('selectAll', false, null);
+                        }
+                        const ok = !!document.execCommand('insertText', false, text);
+                        t.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                        t.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                        return ok;
+                    } catch {
+                        return false;
+                    }
+                }
+                return false;
+            })()`;
+            const ok = (await evaluateOnTarget(expression)) === true;
+            const readback = await this.readComposerTextOnPage(firstTarget);
+            const pass = ok && readback.toLowerCase().includes(bumpText.toLowerCase());
+            logToOutput(`[TestMethod] typing:exec-command => ok=${ok} readback="${readback}" pass=${pass}`);
+            return pass;
+        }
+
+        if (method === 'typing:native-setter' || method === 'native-setter') {
+            const expression = `(() => {
+                const text = ${JSON.stringify(bumpText)};
+                const targets = Array.from(document.querySelectorAll('textarea, input[type="text"], [role="textbox"], .monaco-editor textarea'));
+                for (const t of targets) {
+                    if (!t || !t.isConnected) continue;
+                    const r = t.getBoundingClientRect();
+                    if (!r || r.width <= 0 || r.height <= 0) continue;
+                    try { if (typeof t.focus === 'function') t.focus(); } catch {}
+                    try {
+                        const tag = String(t.tagName || '').toLowerCase();
+                        if (tag === 'textarea') {
+                            const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+                            if (setter) setter.call(t, text); else t.value = text;
+                        } else if (tag === 'input') {
+                            const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                            if (setter) setter.call(t, text); else t.value = text;
+                        } else {
+                            t.value = text;
+                        }
+                        t.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                        t.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                        return true;
+                    } catch {
+                        return false;
+                    }
+                }
+                return false;
+            })()`;
+            const ok = (await evaluateOnTarget(expression)) === true;
+            const readback = await this.readComposerTextOnPage(firstTarget);
+            const pass = ok && readback.toLowerCase().includes(bumpText.toLowerCase());
+            logToOutput(`[TestMethod] typing:native-setter => ok=${ok} readback="${readback}" pass=${pass}`);
+            return pass;
+        }
+
+        if (method === 'typing:dispatch-events' || method === 'dispatch-events') {
+            const expression = `(() => {
+                const text = ${JSON.stringify(bumpText)};
+                const targets = Array.from(document.querySelectorAll('textarea, .monaco-editor textarea, [role="textbox"], [contenteditable="true"]'));
+                for (const t of targets) {
+                    if (!t || !t.isConnected) continue;
+                    const r = t.getBoundingClientRect();
+                    if (!r || r.width <= 0 || r.height <= 0) continue;
+                    try { if (typeof t.focus === 'function') t.focus(); } catch {}
+                    if (t.isContentEditable || t.getAttribute('contenteditable') === 'true') {
+                        t.textContent = text;
+                    } else {
+                        t.value = text;
+                    }
+                    t.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }));
+                    t.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }));
+                    t.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                    return true;
+                }
+                return false;
+            })()`;
+            const ok = (await evaluateOnTarget(expression)) === true;
+            const readback = await this.readComposerTextOnPage(firstTarget);
+            const pass = ok && readback.toLowerCase().includes(bumpText.toLowerCase());
+            logToOutput(`[TestMethod] typing:dispatch-events => ok=${ok} readback="${readback}" pass=${pass}`);
+            return pass;
+        }
+
+        if (method === 'typing:set-range-text') {
+            const expression = `(() => {
+                const text = ${JSON.stringify(bumpText)};
+                const targets = Array.from(document.querySelectorAll('textarea, input[type="text"], .monaco-editor textarea'));
+                for (const t of targets) {
+                    if (!t || !t.isConnected || t.disabled) continue;
+                    const r = t.getBoundingClientRect();
+                    if (!r || r.width <= 0 || r.height <= 0) continue;
+                    try { if (typeof t.focus === 'function') t.focus(); } catch {}
+                    try {
+                        if (typeof t.setSelectionRange === 'function') {
+                            t.setSelectionRange(0, String(t.value || '').length);
+                        }
+                    } catch {}
+                    try {
+                        t.setRangeText(String(text || ''), 0, String(t.value || '').length, 'end');
+                        t.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                        t.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                        return true;
+                    } catch {}
+                }
+                return false;
+            })()`;
+            const ok = (await evaluateOnTarget(expression)) === true;
+            const readback = await this.readComposerTextOnPage(firstTarget);
+            const pass = ok && readback.toLowerCase().includes(bumpText.toLowerCase());
+            logToOutput(`[TestMethod] typing:set-range-text => ok=${ok} readback="${readback}" pass=${pass}`);
+            return pass;
+        }
+
+        if (method === 'typing:contenteditable-innerhtml') {
+            const expression = `(() => {
+                const text = ${JSON.stringify(bumpText)};
+                const editables = Array.from(document.querySelectorAll('[contenteditable="true"]'));
+                const escapeHtml = (v) => String(v || '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;');
+                for (const e of editables) {
+                    if (!e || !e.isConnected) continue;
+                    const r = e.getBoundingClientRect();
+                    if (!r || r.width <= 0 || r.height <= 0) continue;
+                    try { if (typeof e.focus === 'function') e.focus(); } catch {}
+                    const lines = String(text || '').split('\n');
+                    if (lines.length > 1) {
+                        e.innerHTML = lines.map((line) => '<p>' + (escapeHtml(line) || '<br>') + '</p>').join('');
+                    } else {
+                        e.textContent = text;
+                    }
+                    try { e.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: text })); } catch {
+                        e.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                    }
+                    e.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                    return true;
+                }
+                return false;
+            })()`;
+            const ok = (await evaluateOnTarget(expression)) === true;
+            const readback = await this.readComposerTextOnPage(firstTarget);
+            const pass = ok && readback.toLowerCase().includes(bumpText.toLowerCase());
+            logToOutput(`[TestMethod] typing:contenteditable-innerhtml => ok=${ok} readback="${readback}" pass=${pass}`);
+            return pass;
         }
 
         if (method === 'typing:vscode-fallback') {
@@ -570,9 +966,53 @@ export class CDPStrategy implements IStrategy {
                 }
                 return false;
             })()`;
-            const result = await (this.cdpHandler as any).sendCommand(firstTarget, 'Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }).catch(() => null);
-            const ok = result?.result?.value === true;
-            logToOutput(`[TestMethod] typing:vscode-fallback => ${ok}`);
+            const ok = (await evaluateOnTarget(expression)) === true;
+            const readback = await this.readComposerTextOnPage(firstTarget);
+            logToOutput(`[TestMethod] typing:vscode-fallback => ok=${ok} readback="${readback}"`);
+            return ok;
+        }
+
+        if (method === 'typing:clipboard-paste' || method === 'clipboard-paste') {
+            try {
+                await vscode.env.clipboard.writeText(bumpText);
+                await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
+            } catch (e: any) {
+                logToOutput(`[TestMethod] typing:clipboard-paste command-error=${String(e?.message || e || 'unknown')}`);
+            }
+            const readback = await this.readComposerTextOnPage(firstTarget);
+            const ok = readback.toLowerCase().includes(bumpText.toLowerCase());
+            logToOutput(`[TestMethod] typing:clipboard-paste => readback="${readback}" ok=${ok}`);
+            return ok;
+        }
+
+        if (method === 'typing:vscode-type' || method === 'vscode-type') {
+            let commandOk = false;
+            try {
+                await vscode.commands.executeCommand('type', { text: bumpText });
+                commandOk = true;
+            } catch (e: any) {
+                logToOutput(`[TestMethod] typing:vscode-type command-error=${String(e?.message || e || 'unknown')}`);
+            }
+            const readback = await this.readComposerTextOnPage(firstTarget);
+            const ok = commandOk || readback.toLowerCase().includes(bumpText.toLowerCase());
+            logToOutput(`[TestMethod] typing:vscode-type => commandOk=${commandOk} readback="${readback}" ok=${ok}`);
+            return ok;
+        }
+
+        if (method === 'typing:bridge-type' || method === 'bridge-type') {
+            const expression = `(() => {
+                const payload = '__AUTOPILOT_TYPE__:' + ${JSON.stringify(bumpText)};
+                if (typeof window.__AUTOPILOT_BRIDGE__ === 'function') {
+                    try { window.__AUTOPILOT_BRIDGE__(payload); } catch {}
+                    return { ok: true, bridge: true, payload };
+                }
+                try { console.log(payload); } catch {}
+                return { ok: true, bridge: false, payload };
+            })()`;
+            const value = await evaluateOnTarget(expression);
+            const readback = await this.readComposerTextOnPage(firstTarget);
+            const ok = readback.toLowerCase().includes(bumpText.toLowerCase());
+            logToOutput(`[TestMethod] typing:bridge-type => value=${JSON.stringify(value)} readback="${readback}" ok=${ok}`);
             return ok;
         }
 
@@ -627,51 +1067,109 @@ export class CDPStrategy implements IStrategy {
             return Number(value.visible || 0) > 0;
         }
 
-        if (method === 'click:send-dom') {
+        if (method === 'click:send-dom' || method === 'submit:send-button-click' || method === 'submit:click-send' || method === 'click-send') {
             const ok = await this.clickSubmitButtonOnPage(firstTarget, bumpText);
-            logToOutput(`[TestMethod] click:send-dom => ${ok}`);
+            logToOutput(`[TestMethod] ${method} => ${ok}`);
             return ok;
         }
 
-        if (method === 'click:enter-key') {
-            const down = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
-                type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
-            }, [firstTarget]);
-            const up = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
-                type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
-            }, [firstTarget]);
-            logToOutput(`[TestMethod] click:enter-key => down=${JSON.stringify(down)} up=${JSON.stringify(up)}`);
-            return down.some((r) => r.startsWith('ok:')) || up.some((r) => r.startsWith('ok:'));
+        if (method === 'click:enter-key' || method === 'submit:enter-key' || method === 'submit:cdp-enter' || method === 'enter-key' || method === 'cdp-enter') {
+            return this.dispatchEnterOnPage(firstTarget);
         }
 
-        if (method === 'click:send-cdp-mouse') {
-            const expression = `(() => {
-                const selectors = [
-                    '[title*="Send" i]','[aria-label*="Send" i]','[title*="Submit" i]','[aria-label*="Submit" i]',
-                    '[data-testid*="send" i]','[data-testid*="submit" i]','button[type="submit"]','.codicon-send'
-                ];
-                for (const sel of selectors) {
-                    const node = document.querySelector(sel);
-                    const el = node?.closest?.('button, [role="button"], a, .monaco-button') || node;
-                    if (!el) continue;
-                    const r = el.getBoundingClientRect();
-                    if (!r || r.width <= 0 || r.height <= 0) continue;
-                    return { x: Math.floor(r.left + r.width / 2), y: Math.floor(r.top + r.height / 2) };
-                }
-                return null;
-            })()`;
-            const coordsResult = await (this.cdpHandler as any).sendCommand(firstTarget, 'Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }).catch(() => null);
-            const coords = coordsResult?.result?.value;
-            if (!coords || typeof coords.x !== 'number' || typeof coords.y !== 'number') {
-                logToOutput('[TestMethod] click:send-cdp-mouse => no-send-coordinates');
-                return false;
-            }
+        if (method === 'submit:ctrl-enter' || method === 'ctrl-enter') {
+            return this.dispatchModifiedEnterOnPage(firstTarget, { ctrlKey: true }, 'submit:ctrl-enter');
+        }
 
-            const moved = await this.sendBumpInputCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', x: coords.x, y: coords.y, button: 'left', clickCount: 0 }, [firstTarget]);
-            const pressed = await this.sendBumpInputCommand('Input.dispatchMouseEvent', { type: 'mousePressed', x: coords.x, y: coords.y, button: 'left', clickCount: 1 }, [firstTarget]);
-            const released = await this.sendBumpInputCommand('Input.dispatchMouseEvent', { type: 'mouseReleased', x: coords.x, y: coords.y, button: 'left', clickCount: 1 }, [firstTarget]);
-            logToOutput(`[TestMethod] click:send-cdp-mouse => move=${JSON.stringify(moved)} down=${JSON.stringify(pressed)} up=${JSON.stringify(released)}`);
-            return pressed.some((r) => r.startsWith('ok:')) || released.some((r) => r.startsWith('ok:'));
+        if (method === 'submit:alt-enter' || method === 'alt-enter') {
+            return this.dispatchModifiedEnterOnPage(firstTarget, { altKey: true }, 'submit:alt-enter');
+        }
+
+        if (method === 'submit:keyboard-sequence') {
+            const expression = `(() => {
+                const input = document.activeElement || document.querySelector('textarea, [contenteditable="true"], [role="textbox"], .monaco-editor textarea');
+                if (!input) return false;
+                try { if (typeof input.focus === 'function') input.focus(); } catch {}
+                const eventBase = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
+                try { input.dispatchEvent(new KeyboardEvent('keydown', eventBase)); } catch {}
+                try { input.dispatchEvent(new KeyboardEvent('keypress', eventBase)); } catch {}
+                try { input.dispatchEvent(new KeyboardEvent('keyup', eventBase)); } catch {}
+                return true;
+            })()`;
+            const ok = (await evaluateOnTarget(expression)) === true;
+            logToOutput(`[TestMethod] submit:keyboard-sequence => ok=${ok}`);
+            return ok;
+        }
+
+        if (method === 'submit:form-request-submit') {
+            const expression = `(() => {
+                const input = document.activeElement || document.querySelector('textarea, [contenteditable="true"], [role="textbox"], .monaco-editor textarea');
+                if (!input) return false;
+                const form = input.closest?.('form') || document.querySelector('form');
+                if (!form || typeof form.requestSubmit !== 'function') return false;
+                try { form.requestSubmit(); return true; } catch { return false; }
+            })()`;
+            const ok = (await evaluateOnTarget(expression)) === true;
+            logToOutput(`[TestMethod] submit:form-request-submit => ok=${ok}`);
+            return ok;
+        }
+
+        if (method === 'submit:vscode-submit' || method === 'vscode-submit') {
+            const commands = [
+                'workbench.action.chat.submit',
+                'workbench.action.terminal.chat.submit',
+                'workbench.action.terminal.chat.send',
+                'antigravity.sendTextToChat'
+            ];
+            let anySuccess = false;
+            for (const cmd of commands) {
+                try {
+                    await vscode.commands.executeCommand(cmd);
+                    anySuccess = true;
+                    logToOutput(`[TestMethod] submit:vscode-submit command-ok=${cmd}`);
+                } catch (e: any) {
+                    logToOutput(`[TestMethod] submit:vscode-submit command-fail=${cmd} err=${String(e?.message || e || 'unknown')}`);
+                }
+            }
+            return anySuccess;
+        }
+
+        if (method === 'submit:script-submit' || method === 'script-submit') {
+            const expression = `(() => {
+                const text = ${JSON.stringify(bumpText)};
+                try {
+                    if (window.__autopilotState && typeof window.__autopilotState.forceSubmit === 'function') {
+                        return !!window.__autopilotState.forceSubmit();
+                    }
+                } catch {}
+                try {
+                    if (typeof window.__antigravityTypeAndSubmit === 'function') {
+                        return !!window.__antigravityTypeAndSubmit(text);
+                    }
+                } catch {}
+                return false;
+            })()`;
+            const ok = (await evaluateOnTarget(expression)) === true;
+            logToOutput(`[TestMethod] submit:script-submit => ok=${ok}`);
+            return ok;
+        }
+
+        if (method === 'click:send-cdp-mouse' || method === 'submit:send-cdp-mouse') {
+            return this.clickSendByCdpMouseOnPage(firstTarget);
+        }
+
+        if (method === 'submit:auto-sequence') {
+            const byButton = await this.clickSubmitButtonOnPage(firstTarget, bumpText);
+            logToOutput(`[TestMethod] submit:auto-sequence buttonAttempt=${byButton}`);
+            if (byButton) return true;
+
+            const byMouse = await this.clickSendByCdpMouseOnPage(firstTarget);
+            logToOutput(`[TestMethod] submit:auto-sequence mouseAttempt=${byMouse}`);
+            if (byMouse) return true;
+
+            const byEnter = await this.dispatchEnterOnPage(firstTarget);
+            logToOutput(`[TestMethod] submit:auto-sequence enterAttempt=${byEnter}`);
+            return byEnter;
         }
 
         logToOutput(`[TestMethod] unknown method=${method}`);

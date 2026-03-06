@@ -237,7 +237,14 @@ export class DashboardPanel {
     <div class="row"><label>Test Bump Text</label><input id="testBumpText" type="text" value="${escapeHtml(testBumpText)}" /></div>
 
     <h2>Test: Bump Typing Methods</h2>
+    <p class="muted">VS Code Insiders + Antigravity (Monaco) priority: <strong>CDP InsertText</strong>, <strong>CDP Key Dispatch</strong>, <strong>VSCode type Command</strong>, <strong>Bridge Type Payload</strong>. DOM setters are still included for legacy experiments.</p>
     <div class="row"><button onclick="runTest('typing:cdp-insert-text')">CDP InsertText</button><button onclick="runTest('typing:dom-set-input')">DOM Set Input</button><button onclick="runTest('typing:vscode-fallback')">VSCode Fallback InputEvent</button></div>
+    <div class="row"><button onclick="runTest('typing:cdp-keys')">CDP Key Dispatch</button><button onclick="runTest('typing:exec-command')">ExecCommand InsertText</button><button onclick="runTest('typing:native-setter')">Native Value Setter</button></div>
+    <div class="row"><button onclick="runTest('typing:dispatch-events')">Dispatch Events</button><button onclick="runTest('typing:set-range-text')">setRangeText</button><button onclick="runTest('typing:contenteditable-innerhtml')">ContentEditable innerHTML</button></div>
+    <div class="row"><button onclick="runTest('typing:clipboard-paste')">Clipboard Paste</button><button onclick="runTest('typing:bridge-type')">Bridge Type Payload</button><button onclick="runTest('typing:vscode-type')">VSCode type Command</button></div>
+    <div class="row"><button onclick="runTest('exec-command')">ID: exec-command</button><button onclick="runTest('native-setter')">ID: native-setter</button><button onclick="runTest('dispatch-events')">ID: dispatch-events</button></div>
+    <div class="row"><button onclick="runTest('cdp-keys')">ID: cdp-keys</button><button onclick="runTest('dom-inject')">ID: dom-inject</button><button onclick="runTest('clipboard-paste')">ID: clipboard-paste</button></div>
+    <div class="row"><button onclick="runTest('bridge-type')">ID: bridge-type</button><button onclick="runTest('vscode-type')">ID: vscode-type</button></div>
 
     <h2>Test: Stalled Detection Methods</h2>
     <div class="row"><button onclick="runTest('stalled:runtime-stalled')">Runtime Stalled</button><button onclick="runTest('stalled:waiting-for-chat-message')">Waiting For Chat Message</button><button onclick="runTest('stalled:ready-to-resume')">Ready To Resume</button></div>
@@ -248,6 +255,17 @@ export class DashboardPanel {
 
     <h2>Test: Button Clicking Methods</h2>
     <div class="row"><button onclick="runTest('click:send-dom')">DOM Click Send</button><button onclick="runTest('click:send-cdp-mouse')">CDP Mouse Click Send</button><button onclick="runTest('click:enter-key')">CDP Enter Key</button></div>
+
+    <h2>Test: Bump Text Submit Methods</h2>
+    <p class="muted">VS Code Insiders + Antigravity (Monaco) priority: <strong>Submit Auto Sequence</strong>, <strong>Submit via Enter Key</strong>, <strong>Submit via CDP Mouse</strong>, <strong>Submit VSCode Commands</strong>.</p>
+    <div class="row"><button onclick="runTest('submit:send-button-click')">Submit via Send Button Click</button><button onclick="runTest('submit:send-cdp-mouse')">Submit via CDP Mouse</button></div>
+    <div class="row"><button onclick="runTest('submit:enter-key')">Submit via Enter Key</button><button onclick="runTest('submit:auto-sequence')">Submit Auto Sequence</button></div>
+    <div class="row"><button onclick="runTest('submit:click-send')">Submit click-send</button><button onclick="runTest('submit:form-request-submit')">Submit form.requestSubmit()</button><button onclick="runTest('submit:keyboard-sequence')">Submit keydown/keypress/keyup</button></div>
+    <div class="row"><button onclick="runTest('submit:ctrl-enter')">Submit Ctrl+Enter</button><button onclick="runTest('submit:alt-enter')">Submit Alt+Enter</button><button onclick="runTest('submit:cdp-enter')">Submit cdp-enter Alias</button></div>
+    <div class="row"><button onclick="runTest('submit:vscode-submit')">Submit VSCode Commands</button><button onclick="runTest('submit:script-submit')">Submit Script Hook</button></div>
+    <div class="row"><button onclick="runTest('click-send')">ID: click-send</button><button onclick="runTest('enter-key')">ID: enter-key</button><button onclick="runTest('cdp-enter')">ID: cdp-enter</button></div>
+    <div class="row"><button onclick="runTest('ctrl-enter')">ID: ctrl-enter</button><button onclick="runTest('alt-enter')">ID: alt-enter</button><button onclick="runTest('vscode-submit')">ID: vscode-submit</button></div>
+    <div class="row"><button onclick="runTest('script-submit')">ID: script-submit</button></div>
 
     <h2>Test History</h2>
     <div class="row"><button onclick="clearTestHistory()">Clear History</button></div>

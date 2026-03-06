@@ -9,6 +9,7 @@ import { StatusBarManager } from './ui/status-bar';
 import { CDPStrategy } from './strategies/cdp-strategy';
 import { ControllerLease } from './core/controller-lease';
 import { diagnoseCdp } from './commands/diagnose-cdp';
+import { logToOutput } from './utils/output-channel';
 
 /**
  * v8.0.0 — Radically simplified extension entry point.
@@ -162,12 +163,15 @@ export function activate(context: vscode.ExtensionContext) {
                 ? payload
                 : String(payload?.method || payload?.id || '').trim();
             const text = typeof payload === 'object' ? String(payload?.text || '') : '';
+            logToOutput(`[TestMethodCmd] request method=${methodName || 'missing'} text="${text}"`);
             if (!methodName) {
                 vscode.window.showWarningMessage('Antigravity: Missing test method id.');
+                logToOutput('[TestMethodCmd] rejected: missing method id');
                 return false;
             }
 
             const ok = await cdpStrategy.testMethod(methodName, text || undefined);
+            logToOutput(`[TestMethodCmd] result method=${methodName} ok=${ok}`);
             vscode.window.showInformationMessage(`Antigravity test ${methodName}: ${ok ? 'OK' : 'MISS'}`);
             return ok;
         }));
