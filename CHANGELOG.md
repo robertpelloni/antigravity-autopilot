@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.33] - 2026-03-06
+### Changed
+* **Silent Manual Test Runs**: Removed VS Code popup notifications from `antigravity.testMethod` command handling so dashboard/manual method tests no longer spawn per-test toast popups.
+* **Reduced Test UI Noise**: Missing-method validation for `antigravity.testMethod` now logs to output without warning toasts, keeping rapid test passes interruption-free.
+
 ## [6.2.32] - 2026-03-06
 ### Fixed
 * **Terminal Input Drift in Manual Typing Tests**: Hardened terminal-surface exclusion across all DOM/manual typing fallback methods in `CDPStrategy` (`dom-set-input`, `exec-command`, `native-setter`, `dispatch-events`, `set-range-text`, `contenteditable-innerhtml`, `vscode-fallback`) so test typing no longer targets terminal/xterm controls.
