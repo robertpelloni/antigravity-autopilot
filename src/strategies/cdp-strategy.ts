@@ -522,6 +522,7 @@ export class CDPStrategy implements IStrategy {
             const actAge = now - this.lastActivityAt;
             const bumpAge = now - this.lastBumpAt;
             const connected = this.cdpHandler.isConnected();
+            this.updateStatusBar();
 
             logToOutput(`[TICK] active=${this.isActive} leader=${this.controllerRoleIsLeader} connected=${connected} actAge=${actAge}ms bumpAge=${bumpAge}ms`);
 
@@ -646,12 +647,21 @@ export class CDPStrategy implements IStrategy {
 
     private updateStatusBar() {
         if (this.isActive) {
-            const windowFlag = this.automationEnabledForWindow ? 'ON' : 'OFF';
-            this.statusBarItem.text = `$(check) CDP: ${windowFlag}`;
-            this.statusBarItem.tooltip = this.automationEnabledForWindow
-                ? 'CDP Strategy Active (current window enabled)'
-                : 'CDP Strategy Active (current window automation disabled)';
-            this.statusBarItem.backgroundColor = undefined;
+            const windowEnabled = this.automationEnabledForWindow;
+            const connected = this.cdpHandler.isConnected();
+            if (!windowEnabled) {
+                this.statusBarItem.text = '$(circle-slash) CDP: OFF(win)';
+                this.statusBarItem.tooltip = 'CDP Strategy Active, but current window automation is disabled';
+                this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+            } else if (connected) {
+                this.statusBarItem.text = '$(plug) CDP: ON (LINK)';
+                this.statusBarItem.tooltip = 'CDP Strategy Active and connected to at least one target';
+                this.statusBarItem.backgroundColor = undefined;
+            } else {
+                this.statusBarItem.text = '$(sync~spin) CDP: ON (NO LINK)';
+                this.statusBarItem.tooltip = 'CDP Strategy Active but not currently connected to any target';
+                this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+            }
         } else {
             this.statusBarItem.text = '$(circle-slash) CDP: OFF';
             this.statusBarItem.tooltip = 'CDP Strategy Inactive';

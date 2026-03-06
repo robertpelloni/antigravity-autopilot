@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '6.2.17';
+        const ANTIGRAVITY_VERSION = '6.2.18';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;

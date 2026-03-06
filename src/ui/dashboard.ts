@@ -22,39 +22,66 @@ export class DashboardPanel {
                     const key = String(message.key || '');
                     const value = message.value;
                     const targetRaw = String(message.target || '').toLowerCase();
-                    let target = vscode.ConfigurationTarget.Global;
+                    let target = vscode.ConfigurationTarget.Workspace;
                     if (targetRaw === 'workspace') {
                       target = vscode.ConfigurationTarget.Workspace;
                     } else if (targetRaw === 'workspacefolder') {
                       target = vscode.ConfigurationTarget.WorkspaceFolder;
+                    } else if (targetRaw === 'global') {
+                      target = vscode.ConfigurationTarget.Global;
                     }
 
                     if (key === 'cdpPort') {
-                        const writes: Promise<void>[] = [];
-
                         const firstFolder = vscode.workspace.workspaceFolders?.[0];
-                        if (firstFolder) {
+                        const writeValue = Math.min(65535, Math.max(1, Number(value) || 9222));
+
+                        if (target === vscode.ConfigurationTarget.WorkspaceFolder) {
+                            if (!firstFolder) {
+                                throw new Error('No workspace folder is open; cannot write workspace-folder setting.');
+                            }
                             const folderCfg = vscode.workspace.getConfiguration('antigravity', firstFolder.uri);
-                            writes.push(folderCfg.update('cdpPort', value, vscode.ConfigurationTarget.WorkspaceFolder));
+                            await folderCfg.update('cdpPort', writeValue, vscode.ConfigurationTarget.WorkspaceFolder);
+                        } else {
+                            const workspaceCfg = vscode.workspace.getConfiguration('antigravity');
+                            await workspaceCfg.update('cdpPort', writeValue, target);
                         }
 
-                        const workspaceCfg = vscode.workspace.getConfiguration('antigravity');
-                        writes.push(workspaceCfg.update('cdpPort', value, vscode.ConfigurationTarget.Workspace));
-                        writes.push(workspaceCfg.update('cdpPort', value, vscode.ConfigurationTarget.Global));
+                        const inspectCfg = vscode.workspace.getConfiguration('antigravity', firstFolder?.uri);
+                        const inspected = inspectCfg.inspect<number>('cdpPort');
+                        const workspaceFolderValue = inspected?.workspaceFolderValue;
+                        const workspaceValue = inspected?.workspaceValue;
+                        const globalValue = inspected?.globalValue;
+                        const defaultValue = inspected?.defaultValue;
+                        const effective = inspectCfg.get<number>('cdpPort') ?? defaultValue ?? 9222;
+                        const source = workspaceFolderValue !== undefined
+                            ? 'workspaceFolder'
+                            : (workspaceValue !== undefined
+                                ? 'workspace'
+                                : (globalValue !== undefined ? 'global' : 'default'));
 
-                        await Promise.all(writes);
+                        this.panel.webview.postMessage({
+                          command: 'updateConfigResult',
+                          key,
+                          ok: true,
+                          value: writeValue,
+                          effective,
+                          source,
+                          scopeValues: {
+                            workspaceFolder: workspaceFolderValue,
+                            workspace: workspaceValue,
+                            global: globalValue,
+                            default: defaultValue
+                          }
+                        });
                     } else {
                         await config.update(key, value, target);
+                        this.panel.webview.postMessage({
+                          command: 'updateConfigResult',
+                          key,
+                          ok: true,
+                          value
+                        });
                     }
-
-                    const effective = vscode.workspace.getConfiguration('antigravity').get('cdpPort');
-                    this.panel.webview.postMessage({
-                      command: 'updateConfigResult',
-                      key,
-                      ok: true,
-                      value,
-                      effective
-                    });
                     this.update();
                   } catch (error: any) {
                     this.panel.webview.postMessage({
@@ -413,7 +440,13 @@ export class DashboardPanel {
         const key = String(message.key || '');
         if (key === 'cdpPort') {
           if (message.ok === true) {
-            setSaveStatus('CDP port saved: ' + String(message.value) + ' (effective: ' + String(message.effective) + ')');
+            const src = String(message.source || 'unknown');
+            const scopes = message.scopeValues || {};
+            const details = 'src=' + src
+              + ' wf=' + String(scopes.workspaceFolder)
+              + ' ws=' + String(scopes.workspace)
+              + ' g=' + String(scopes.global);
+            setSaveStatus('CDP port saved: ' + String(message.value) + ' (effective: ' + String(message.effective) + '; ' + details + ')');
           } else {
             setSaveStatus('Failed to save CDP port: ' + String(message.error || 'unknown error'));
           }

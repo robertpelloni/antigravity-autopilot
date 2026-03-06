@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 6.2.17  
+**Version**: 6.2.18  
 **Last Updated**: 2026-03-05  
-**Status**: Production stabilization + Antigravity stalled fallback gating hardening shipped for VS Code Insiders + Antigravity
+**Status**: Production stabilization + cdpPort scope-write fix and CDP link-state status clarity shipped for VS Code Insiders + Antigravity
 
 ## Project Structure at a Glance
 

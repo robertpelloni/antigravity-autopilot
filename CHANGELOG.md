@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.18] - 2026-03-05
+### Fixed
+* **cdpPort Cross-Scope Overwrite**: Dashboard `cdpPort` saves now honor the selected target scope instead of force-writing workspace-folder/workspace/global simultaneously.
+* **cdpPort Source Transparency**: Save acknowledgements now include effective source and per-scope values (`workspaceFolder` / `workspace` / `global`) to make override precedence explicit.
+* **Misleading CDP Status Bar Signal**: Status bar now distinguishes strategy-enabled vs transport state (`ON (LINK)` vs `ON (NO LINK)`), reducing confusion when automation is active but no CDP targets are connected.
+
 ## [6.2.17] - 2026-03-05
 ### Fixed
 * **Antigravity Stalled-But-Signalless Starvation**: `CDPStrategy` stop-signal readiness now includes a guarded Antigravity/Cursor fallback (`runtime-stalled-fallback`) when runtime is stalled and waiting but explicit `completeStopSignal` is missing.
