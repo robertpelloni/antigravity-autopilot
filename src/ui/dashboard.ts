@@ -243,20 +243,73 @@ export class DashboardPanel {
     // Early bootstrap shim: guarantees inline handler symbols exist globally
     // even if the main dashboard script fails during initialization.
     (function () {
-      function __agNoop(name) {
-        return function () {
-          try { console.warn('[Antigravity Dashboard] early handler shim:', name); } catch {}
-          return undefined;
+      function __agPost(payload) {
+        try {
+          const api = (typeof acquireVsCodeApi === 'function') ? acquireVsCodeApi() : null;
+          if (api && typeof api.postMessage === 'function') {
+            api.postMessage(payload);
+            return true;
+          }
+        } catch {}
+        return false;
+      }
+
+      if (typeof window.setCfg !== 'function') {
+        window.setCfg = function (key, value, target) {
+          __agPost({ command: 'updateConfig', key: String(key || ''), value, target: target || 'global' });
         };
       }
 
-      if (typeof window.setCfg !== 'function') window.setCfg = __agNoop('setCfg');
-      if (typeof window.setCdpPortImmediate !== 'function') window.setCdpPortImmediate = __agNoop('setCdpPortImmediate');
-      if (typeof window.saveCdpPortNow !== 'function') window.saveCdpPortNow = __agNoop('saveCdpPortNow');
-      if (typeof window.runCommand !== 'function') window.runCommand = __agNoop('runCommand');
-      if (typeof window.runTest !== 'function') window.runTest = __agNoop('runTest');
-      if (typeof window.clearTestHistory !== 'function') window.clearTestHistory = __agNoop('clearTestHistory');
-      if (typeof window.requestRuntimeState !== 'function') window.requestRuntimeState = __agNoop('requestRuntimeState');
+      if (typeof window.setCdpPortImmediate !== 'function') {
+        window.setCdpPortImmediate = function () {
+          try {
+            const input = document.getElementById('cdpPortInput');
+            const raw = String((input && input.value) || '').trim();
+            const port = Number(raw);
+            if (!Number.isFinite(port) || port < 1 || port > 65535) return;
+            window.setCfg('cdpPort', Math.trunc(port), 'workspace');
+          } catch {}
+        };
+      }
+
+      if (typeof window.saveCdpPortNow !== 'function') {
+        window.saveCdpPortNow = function () {
+          try { window.setCdpPortImmediate(); } catch {}
+        };
+      }
+
+      if (typeof window.runCommand !== 'function') {
+        window.runCommand = function (id, args) {
+          __agPost({
+            command: 'runCommand',
+            id: String(id || ''),
+            args: Array.isArray(args) ? args : [],
+            requestId: 'early-' + String(Date.now())
+          });
+          return Promise.resolve({ ok: true, earlyShim: true });
+        };
+      }
+
+      if (typeof window.runTest !== 'function') {
+        window.runTest = function (method) {
+          let text = '';
+          try {
+            const textEl = document.getElementById('testBumpText');
+            text = textEl && typeof textEl.value === 'string' ? textEl.value : '';
+          } catch {}
+          return window.runCommand('antigravity.testMethod', [{ method, text }]);
+        };
+      }
+
+      if (typeof window.clearTestHistory !== 'function') {
+        window.clearTestHistory = function () { return undefined; };
+      }
+
+      if (typeof window.requestRuntimeState !== 'function') {
+        window.requestRuntimeState = function () {
+          __agPost({ command: 'requestRuntimeState' });
+        };
+      }
 
       // Ensure identifier lookups used by inline onclick resolve reliably.
       if (typeof globalThis.setCfg !== 'function') globalThis.setCfg = window.setCfg;
@@ -367,13 +420,13 @@ export class DashboardPanel {
       try { console.warn('[Antigravity Dashboard] handler not ready:', name, args); } catch {}
       return undefined;
     };
-    window.setCfg = __agNoop('setCfg');
-    window.setCdpPortImmediate = __agNoop('setCdpPortImmediate');
-    window.saveCdpPortNow = __agNoop('saveCdpPortNow');
-    window.runCommand = __agNoop('runCommand');
-    window.runTest = __agNoop('runTest');
-    window.clearTestHistory = __agNoop('clearTestHistory');
-    window.requestRuntimeState = __agNoop('requestRuntimeState');
+    if (typeof window.setCfg !== 'function') window.setCfg = __agNoop('setCfg');
+    if (typeof window.setCdpPortImmediate !== 'function') window.setCdpPortImmediate = __agNoop('setCdpPortImmediate');
+    if (typeof window.saveCdpPortNow !== 'function') window.saveCdpPortNow = __agNoop('saveCdpPortNow');
+    if (typeof window.runCommand !== 'function') window.runCommand = __agNoop('runCommand');
+    if (typeof window.runTest !== 'function') window.runTest = __agNoop('runTest');
+    if (typeof window.clearTestHistory !== 'function') window.clearTestHistory = __agNoop('clearTestHistory');
+    if (typeof window.requestRuntimeState !== 'function') window.requestRuntimeState = __agNoop('requestRuntimeState');
 
     const pendingCommandResolvers = new Map();
     const testHistory = [];

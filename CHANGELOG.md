@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.27] - 2026-03-05
+### Fixed
+* **Dashboard Handler Fallback Mode Upgraded**: Early bootstrap handlers are now functional (message-posting) instead of no-op, so `runTest`, `runCommand`, config updates, and runtime refresh still work when the main dashboard script is partially interrupted.
+* **No-Op Overwrite Regression**: Main dashboard bootstrap no longer clobbers pre-existing global handlers with placeholder no-op functions, preventing persistent `handler not ready` button behavior.
+
 ## [6.2.26] - 2026-03-05
 ### Fixed
 * **Dashboard Webview Parse Crash**: Fixed generated inline script tokenization by escaping newline join separator in runtime diagnostics renderer (`join('\\n')`), preventing `Uncaught SyntaxError: Invalid or unexpected token` during webview bootstrap.
