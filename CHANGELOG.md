@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.15] - 2026-03-05
+### Fixed
+* **CDP Port Not Persisting Across Restart**: Dashboard `cdpPort` save flow now avoids blur-only write behavior and performs deterministic update acknowledgements back to the panel.
+* **Config Scope Override Drift**: `cdpPort` persistence now writes across workspace-folder/workspace/global scopes and reports effective resolved value, preventing silent fallback to stale `9222` workspace settings.
+* **Save Transparency**: Dashboard now shows explicit save-state feedback for `cdpPort` writes (success/failure with effective value) to make persistence status immediately visible.
+
 ## [6.2.14] - 2026-03-05
 ### Added
 * **Method Test Control Surface**: Dashboard now exposes one-click test buttons for bump typing methods, stalled-conversation detection methods, button detection methods, and button-clicking methods for manual cross-fork verification.

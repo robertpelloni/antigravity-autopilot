@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 6.2.14  
+**Version**: 6.2.15  
 **Last Updated**: 2026-03-05  
-**Status**: Production stabilization + dashboard method-test controls shipped (CDP/window diagnostics, per-window automation toggle, and test-result history)
+**Status**: Production stabilization + persistent CDP-port settings hardening shipped (scope-aware save + effective-value confirmation)
 
 ## Project Structure at a Glance
 

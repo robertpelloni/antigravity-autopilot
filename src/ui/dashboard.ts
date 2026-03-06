@@ -18,8 +18,52 @@ export class DashboardPanel {
         this.panel.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
                 case 'updateConfig': {
-                    await config.update(message.key, message.value);
+                  try {
+                    const key = String(message.key || '');
+                    const value = message.value;
+                    const targetRaw = String(message.target || '').toLowerCase();
+                    let target = vscode.ConfigurationTarget.Global;
+                    if (targetRaw === 'workspace') {
+                      target = vscode.ConfigurationTarget.Workspace;
+                    } else if (targetRaw === 'workspacefolder') {
+                      target = vscode.ConfigurationTarget.WorkspaceFolder;
+                    }
+
+                    if (key === 'cdpPort') {
+                        const writes: Promise<void>[] = [];
+
+                        const firstFolder = vscode.workspace.workspaceFolders?.[0];
+                        if (firstFolder) {
+                            const folderCfg = vscode.workspace.getConfiguration('antigravity', firstFolder.uri);
+                            writes.push(folderCfg.update('cdpPort', value, vscode.ConfigurationTarget.WorkspaceFolder));
+                        }
+
+                        const workspaceCfg = vscode.workspace.getConfiguration('antigravity');
+                        writes.push(workspaceCfg.update('cdpPort', value, vscode.ConfigurationTarget.Workspace));
+                        writes.push(workspaceCfg.update('cdpPort', value, vscode.ConfigurationTarget.Global));
+
+                        await Promise.all(writes);
+                    } else {
+                        await config.update(key, value, target);
+                    }
+
+                    const effective = vscode.workspace.getConfiguration('antigravity').get('cdpPort');
+                    this.panel.webview.postMessage({
+                      command: 'updateConfigResult',
+                      key,
+                      ok: true,
+                      value,
+                      effective
+                    });
                     this.update();
+                  } catch (error: any) {
+                    this.panel.webview.postMessage({
+                      command: 'updateConfigResult',
+                      key: String(message.key || ''),
+                      ok: false,
+                      error: String(error?.message || error || 'unknown-error')
+                    });
+                  }
                     return;
                 }
                 case 'requestRuntimeState': {
@@ -163,7 +207,8 @@ export class DashboardPanel {
     <div class="row"><label>Automation Enabled</label><input type="checkbox" ${autoContinueEnabled ? 'checked' : ''} onchange="setCfg('autoContinueScriptEnabled', this.checked)" /></div>
     <div class="row"><label>Bump Enabled</label><input type="checkbox" ${bumpEnabled ? 'checked' : ''} onchange="setCfg('actions.bump.enabled', this.checked)" /></div>
     <div class="row"><label>Bump Text</label><input type="text" value="${escapeHtml(bumpText)}" onchange="setCfg('actions.bump.text', this.value)" /></div>
-    <div class="row"><label>CDP Port</label><input type="number" min="1" max="65535" value="${cdpPort}" onchange="setCfg('cdpPort', Math.min(65535, Math.max(1, Number(this.value) || 9222)))" /></div>
+    <div class="row"><label>CDP Port</label><input id="cdpPortInput" type="number" min="1" max="65535" value="${cdpPort}" oninput="setCdpPortImmediate()" /><button onclick="saveCdpPortNow()">Save Port</button></div>
+    <div id="saveStatus" class="muted">CDP port saves immediately while typing. Save Port forces write now.</div>
   </div>
 
   <div class="card">
@@ -230,8 +275,36 @@ export class DashboardPanel {
     const testHistory = [];
     let commandCounter = 0;
 
-    function setCfg(key, value) {
-      vscode.postMessage({ command: 'updateConfig', key, value });
+    function setCfg(key, value, target) {
+      vscode.postMessage({ command: 'updateConfig', key, value, target: target || 'global' });
+    }
+
+    function normalizePort(value) {
+      return Math.min(65535, Math.max(1, Number(value) || 9222));
+    }
+
+    function setSaveStatus(text) {
+      const el = document.getElementById('saveStatus');
+      if (!el) return;
+      el.textContent = text;
+    }
+
+    function getCdpPortInputValue() {
+      const input = document.getElementById('cdpPortInput');
+      if (!input) return 9222;
+      return normalizePort(input.value);
+    }
+
+    function setCdpPortImmediate() {
+      const port = getCdpPortInputValue();
+      setCfg('cdpPort', port, 'workspace');
+      setSaveStatus('Saving CDP port...');
+    }
+
+    function saveCdpPortNow() {
+      const port = getCdpPortInputValue();
+      setCfg('cdpPort', port, 'workspace');
+      setSaveStatus('Saving CDP port (manual save)...');
     }
 
     function runCommand(id, args) {
@@ -317,6 +390,18 @@ export class DashboardPanel {
     window.addEventListener('message', (event) => {
       const message = event.data;
       if (!message) return;
+
+      if (message.command === 'updateConfigResult') {
+        const key = String(message.key || '');
+        if (key === 'cdpPort') {
+          if (message.ok === true) {
+            setSaveStatus('CDP port saved: ' + String(message.value) + ' (effective: ' + String(message.effective) + ')');
+          } else {
+            setSaveStatus('Failed to save CDP port: ' + String(message.error || 'unknown error'));
+          }
+        }
+        return;
+      }
 
       if (message.command === 'runCommandResult') {
         const requestId = String(message.requestId || '');
