@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { config } from '../utils/config';
+import { logToOutput } from '../utils/output-channel';
 
 export class DashboardPanel {
     public static currentPanel: DashboardPanel | undefined;
@@ -104,8 +105,10 @@ export class DashboardPanel {
                   const requestId = String(message.requestId || '').trim();
                     if (commandId) {
                     const args = Array.isArray(message.args) ? message.args : [];
+                    logToOutput(`[Dashboard] runCommand request id=${requestId || 'none'} command=${commandId} args=${args.length}`);
                     try {
                       const result = await vscode.commands.executeCommand(commandId, ...args);
+                      logToOutput(`[Dashboard] runCommand result id=${requestId || 'none'} command=${commandId} ok=true`);
                       if (requestId) {
                         this.panel.webview.postMessage({
                           command: 'runCommandResult',
@@ -115,6 +118,7 @@ export class DashboardPanel {
                         });
                       }
                     } catch (error: any) {
+                      logToOutput(`[Dashboard] runCommand result id=${requestId || 'none'} command=${commandId} ok=false err=${String(error?.message || error || 'unknown-error')}`);
                       if (requestId) {
                         this.panel.webview.postMessage({
                           command: 'runCommandResult',
@@ -319,6 +323,7 @@ export class DashboardPanel {
     const pendingCommandResolvers = new Map();
     const testHistory = [];
     let commandCounter = 0;
+    const COMMAND_TIMEOUT_MS = 12000;
 
     function setCfg(key, value, target) {
       vscode.postMessage({ command: 'updateConfig', key, value, target: target || 'global' });
@@ -357,7 +362,16 @@ export class DashboardPanel {
       const requestId = 'req-' + String(Date.now()) + '-' + String(commandCounter);
       vscode.postMessage({ command: 'runCommand', id, args: Array.isArray(args) ? args : [], requestId });
       return new Promise((resolve) => {
-        pendingCommandResolvers.set(requestId, resolve);
+        const timeout = setTimeout(() => {
+          if (!pendingCommandResolvers.has(requestId)) return;
+          pendingCommandResolvers.delete(requestId);
+          resolve({ ok: false, error: 'timeout waiting for command response' });
+        }, COMMAND_TIMEOUT_MS);
+
+        pendingCommandResolvers.set(requestId, {
+          resolve,
+          timeout
+        });
       });
     }
 
@@ -456,10 +470,11 @@ export class DashboardPanel {
 
       if (message.command === 'runCommandResult') {
         const requestId = String(message.requestId || '');
-        const resolver = pendingCommandResolvers.get(requestId);
-        if (resolver) {
+        const pending = pendingCommandResolvers.get(requestId);
+        if (pending && typeof pending.resolve === 'function') {
           pendingCommandResolvers.delete(requestId);
-          resolver({ ok: message.ok === true, result: message.result, error: message.error });
+          try { clearTimeout(pending.timeout); } catch {}
+          pending.resolve({ ok: message.ok === true, result: message.result, error: message.error });
         }
         return;
       }

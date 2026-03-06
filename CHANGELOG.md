@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.20] - 2026-03-05
+### Fixed
+* **Dashboard Button Dead-Click Visibility**: Dashboard command bridge now emits explicit request/result telemetry for webview-issued command invocations, making button-action paths observable under host churn.
+* **Silent Command Waits**: Added timeout handling for dashboard command requests so stalled responses now surface deterministic errors instead of appearing as no-op button clicks.
+* **Host Command-Not-Found Chatter**: Registered compatibility no-op handlers for `antigravity.updateTerminalLastCommand` and `antigravity.isFileGitIgnored` to reduce extension-host error spam and command-path disruption.
+
 ## [6.2.19] - 2026-03-05
 ### Fixed
 * **Dashboard Test Method No-Op Targeting**: Manual `antigravity.testMethod` executions now score connected pages (visibility, focus, composer presence, runtime signals) and select the best target instead of always using the first connected page.

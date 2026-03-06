@@ -240,6 +240,7 @@ export function activate(context: vscode.ExtensionContext) {
             'antigravity.clickRun', 'antigravity.clickExpand', 'antigravity.clickAccept',
             'antigravity.resetConnection', 'antigravity.agent.acceptAgentStep',
             'antigravity.terminal.accept',
+            'antigravity.updateTerminalLastCommand', 'antigravity.isFileGitIgnored',
             'antigravity.checkSettingsSurfacesHealth', 'antigravity.generateTests',
             'antigravity.runCodeReview', 'antigravity.startMultiAgent',
             'antigravity.showMemory', 'antigravity.syncProjectTasks',
