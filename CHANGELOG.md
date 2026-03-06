@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.24] - 2026-03-05
+### Fixed
+* **Workspace-Pinned CDP Port Reversion**: Removed repository workspace override (`.vscode/settings.json`) that hard-pinned `antigravity.cdpPort` to `9222`, allowing user-configured ports to persist correctly.
+* **CDP Config Scope Drift in Handler Fallback**: `CDPHandler` now resolves `cdpPort` with workspace-folder-aware configuration lookup (matching startup client behavior), preventing mismatched scope reads during scan fallback.
+
 ## [6.2.23] - 2026-03-05
 ### Fixed
 * **`cdpPort` Save Coercion Regression**: Dashboard `cdpPort` writes now strictly validate numeric input and no longer coerce invalid/empty values back to `9222`.

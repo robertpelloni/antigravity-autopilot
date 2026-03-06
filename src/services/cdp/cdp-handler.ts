@@ -353,6 +353,19 @@ export class CDPHandler extends EventEmitter {
         return 'vscode';
     }
 
+    private getConfiguredCdpPort(): number | null {
+        const firstFolder = vscode.workspace.workspaceFolders?.[0];
+        const cfg = firstFolder
+            ? vscode.workspace.getConfiguration('antigravity', firstFolder.uri)
+            : vscode.workspace.getConfiguration('antigravity');
+        const configuredPortRaw = cfg.get<number | string>('cdpPort');
+        const configuredPort = typeof configuredPortRaw === 'string' ? parseInt(configuredPortRaw, 10) : configuredPortRaw;
+        if (typeof configuredPort === 'number' && Number.isFinite(configuredPort) && configuredPort > 0 && configuredPort <= 65535) {
+            return configuredPort;
+        }
+        return null;
+    }
+
     constructor(startPort?: number, endPort?: number) {
         super();
         const explicitStart = (typeof startPort === 'number' && Number.isFinite(startPort) && startPort > 0) ? startPort : 0;
@@ -507,9 +520,8 @@ export class CDPHandler extends EventEmitter {
         // Recovery fallback: use explicit configured cdpPort across all hosts when discovery is absent.
         // This is user-controlled config and critical for VS Code/Cursor where Antigravity-only discovery does not apply.
         if (portsToCheck.size === 0) {
-            const configuredPortRaw = config.get<number | string>('cdpPort');
-            const configuredPort = typeof configuredPortRaw === 'string' ? parseInt(configuredPortRaw, 10) : configuredPortRaw;
-            if (typeof configuredPort === 'number' && Number.isFinite(configuredPort) && configuredPort > 0) {
+            const configuredPort = this.getConfiguredCdpPort();
+            if (configuredPort !== null) {
                 portsToCheck.add(configuredPort);
                 logToOutput(`[CDPHandler] Auto-discovery unavailable; using configured cdpPort=${configuredPort}.`);
             }
