@@ -8,7 +8,7 @@
 
         const TERMINAL_KEYWORDS = ['run', 'execute', 'command', 'terminal'];
         // ============================================================================
-        const ANTIGRAVITY_VERSION = '6.2.33';
+        const ANTIGRAVITY_VERSION = '6.2.34';
         // ============================================================================
         const SECONDS_PER_CLICK = 5;
         const TIME_VARIANCE = 0.2;
@@ -661,7 +661,7 @@
         if (!el) return false;
 
         const blockedShell = '.title-actions, .tabs-and-actions-container, .part.titlebar, .part.activitybar, .part.statusbar, .menubar, .menubar-menu-button, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"]';
-        const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i], .monaco-list-row';
+        const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i]';
 
         let hasBlockedAncestor = false;
         let current = el;
@@ -2073,7 +2073,7 @@
         proceed: [/^proceed$/i, /^continue$/i],
         retry: [/^retry$/i],
         expand: [/^expand$/i, /expand\s*(section|response|steps?)?/i],
-        run: [/run\s*in\s*terminal/i, /run\s*command/i, /execute\s*command/i, /^run$/i]
+        run: [/run\s*in\s*terminal/i, /run\s*command/i, /execute\s*command/i]
     };
 
     function normalizeButtonLabel(el) {
@@ -2177,6 +2177,7 @@
     }
 
     function detectIntentButtons() {
+        const mode = resolveForkMode();
         const result = {
             always_allow: [],
             accept_all: [],
@@ -2197,8 +2198,21 @@
             const label = normalizeButtonLabel(el);
             if (!label) continue;
 
+            const isTaskOrQuickList = !!el.closest?.('.quick-input-widget, .quick-input-list, .quick-input-list-row, .monaco-quick-input-container, .quick-open-widget, .monaco-list-row, [data-view-id*="tasks" i], [id*="workbench.panel.tasks" i], [aria-label*="tasks" i], [aria-label*="task" i], [class*="task-list" i], [class*="tasks-view" i]');
+            const isTaskLikeLabel = /\brun\s+task\b|\btask\b/.test(label);
+
             for (const intent of MINIMAL_INTENT_ORDER) {
                 const patterns = MINIMAL_INTENTS[intent] || [];
+                if (intent === 'run') {
+                    if (isTaskOrQuickList || isTaskLikeLabel) {
+                        continue;
+                    }
+                    // In VS Code/Cursor, plain "Run" labels from non-chat list surfaces are too risky.
+                    // Keep explicit run-command/terminal labels only.
+                    if (mode !== 'antigravity' && /^run$/i.test(label)) {
+                        continue;
+                    }
+                }
                 if (patterns.some((re) => re.test(label))) {
                     result[intent].push(el);
                     break;

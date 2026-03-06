@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.34] - 2026-03-06
+### Fixed
+* **VS Code Insiders Task-List Focus Theft**: Hardened minimal runtime intent detection to ignore task/quick-list `Run` targets so autopilot no longer clicks non-chat `Run` items every poll cycle.
+* **Over-Broad Chat Surface Detection**: Removed `.monaco-list-row` from chat action-surface classification to prevent list-row controls from being treated as chat actions.
+* **Unsafe Generic Run Matching**: Removed plain `^run$` intent matching outside explicit command/terminal run labels, reducing accidental focus steals from generic workbench controls.
+
 ## [6.2.33] - 2026-03-06
 ### Changed
 * **Silent Manual Test Runs**: Removed VS Code popup notifications from `antigravity.testMethod` command handling so dashboard/manual method tests no longer spawn per-test toast popups.
