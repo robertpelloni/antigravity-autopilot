@@ -64,6 +64,7 @@ Notes:
 - `submit:script-submit` currently succeeds through the script-hook submit path.
 - `submit:vscode-submit` currently succeeds through host command dispatch.
 - Dashboard label confirmation: **"Submit VSCode Commands"** works (maps to `submit:vscode-submit`).
+- Dashboard label confirmation: **"Submit click-send"** works (maps to `submit:click-send` / `click-send`).
 - Keep these as preferred submit candidates for Insiders while DOM-only submit paths continue to vary by host build.
 
 ### Method order (configured)
