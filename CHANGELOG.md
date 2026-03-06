@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.32] - 2026-03-06
+### Fixed
+* **Terminal Input Drift in Manual Typing Tests**: Hardened terminal-surface exclusion across all DOM/manual typing fallback methods in `CDPStrategy` (`dom-set-input`, `exec-command`, `native-setter`, `dispatch-events`, `set-range-text`, `contenteditable-innerhtml`, `vscode-fallback`) so test typing no longer targets terminal/xterm controls.
+* **Terminal-Adjacent Submit Leakage**: Added terminal guards to keyboard/form submit fallback methods (`submit:keyboard-sequence`, `submit:form-request-submit`) so Enter and requestSubmit dispatch avoid terminal-focused inputs.
+* **Terminal Command Cross-Talk in VS Code Submit Test**: Removed terminal chat submit commands from `submit:vscode-submit` method path to keep manual submit tests aligned with chat composer targets only.
+
 ## [6.2.30] - 2026-03-06
 ### Fixed
 * **Focus-Lock Guard for `typing:vscode-type`**: Added host chat-focus command attempts plus target composer re-focus/active checks before dispatching `vscode.commands.executeCommand('type')` in manual method tests.

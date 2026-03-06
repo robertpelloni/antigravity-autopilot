@@ -254,10 +254,37 @@ export class CDPStrategy implements IStrategy {
                 return !(s.display === 'none' || s.visibility === 'hidden' || s.pointerEvents === 'none');
             };
 
+            const getContextHint = (el) => {
+                const own = [el?.id, el?.className, el?.getAttribute?.('data-testid'), el?.getAttribute?.('aria-label'), el?.getAttribute?.('title'), el?.getAttribute?.('placeholder')]
+                    .map((v) => String(v || '').toLowerCase())
+                    .join(' ');
+                const parent = String(el?.closest?.('[id], [class], [data-testid], [aria-label], [title]')?.outerHTML || '').toLowerCase();
+                return own + ' ' + parent;
+            };
+
+            const isTerminalLike = (el) => {
+                if (!el || !el.isConnected) return false;
+                if (el.closest?.('.terminal, .xterm, .xterm-screen, .xterm-helper-textarea, [data-testid*="terminal" i], [class*="terminal" i], [id*="terminal" i], [aria-label*="terminal" i], [class*="xterm-helper" i], [id*="xterm" i]')) return true;
+                const hint = getContextHint(el);
+                return /\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(hint);
+            };
+
+            const isLikelyChatComposer = (el) => {
+                if (!el || !el.isConnected) return false;
+                if (isTerminalLike(el)) return false;
+                if (el.closest?.('.interactive-session, .interactive-input, .chat-input-container, .chat-editor, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [id*="chat" i]')) {
+                    return true;
+                }
+                const hint = getContextHint(el);
+                return /\bchat\b|composer|ask|message|prompt/.test(hint);
+            };
+
             const readComposerText = () => {
                 const candidates = Array.from(document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"], .monaco-editor textarea'));
-                for (const c of candidates) {
-                    if (!isVisible(c)) continue;
+                const preferred = candidates.filter((c) => isVisible(c) && isLikelyChatComposer(c));
+                const fallback = candidates.filter((c) => isVisible(c) && !isTerminalLike(c));
+                const ordered = preferred.length > 0 ? preferred : fallback;
+                for (const c of ordered) {
                     const raw = (c && (c.value ?? c.textContent)) || '';
                     const txt = normalize(raw);
                     if (txt) return txt;
@@ -337,6 +364,31 @@ export class CDPStrategy implements IStrategy {
                 return !(s.display === 'none' || s.visibility === 'hidden' || s.pointerEvents === 'none');
             };
 
+            const getContextHint = (el) => {
+                const own = [el?.id, el?.className, el?.getAttribute?.('data-testid'), el?.getAttribute?.('aria-label'), el?.getAttribute?.('title'), el?.getAttribute?.('placeholder')]
+                    .map((v) => String(v || '').toLowerCase())
+                    .join(' ');
+                const parent = String(el?.closest?.('[id], [class], [data-testid], [aria-label], [title]')?.outerHTML || '').toLowerCase();
+                return own + ' ' + parent;
+            };
+
+            const isTerminalLike = (el) => {
+                if (!el || !el.isConnected) return false;
+                if (el.closest?.('.terminal, .xterm, .xterm-screen, .xterm-helper-textarea, [data-testid*="terminal" i], [class*="terminal" i], [id*="terminal" i], [aria-label*="terminal" i], [class*="xterm-helper" i], [id*="xterm" i]')) return true;
+                const hint = getContextHint(el);
+                return /\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(hint);
+            };
+
+            const isLikelyChatComposer = (el) => {
+                if (!el || !el.isConnected) return false;
+                if (isTerminalLike(el)) return false;
+                if (el.closest?.('.interactive-session, .interactive-input, .chat-input-container, .chat-editor, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [id*="chat" i]')) {
+                    return true;
+                }
+                const hint = getContextHint(el);
+                return /\bchat\b|composer|ask|message|prompt/.test(hint);
+            };
+
             const selectors = [
                 'textarea',
                 '.monaco-editor textarea',
@@ -344,13 +396,20 @@ export class CDPStrategy implements IStrategy {
                 '[role="textbox"]'
             ];
 
-            for (const sel of selectors) {
-                const nodes = Array.from(document.querySelectorAll(sel));
-                for (const n of nodes) {
-                    if (!isVisible(n)) continue;
-                    try { if (typeof n.focus === 'function') n.focus(); } catch {}
-                    const active = document.activeElement === n;
-                    return { ok: true, selector: sel, active, tag: String(n.tagName || '').toLowerCase() };
+            const collectCandidates = () => {
+                const all = selectors.flatMap((sel) => Array.from(document.querySelectorAll(sel)));
+                const visible = all.filter((n) => isVisible(n));
+                const preferred = visible.filter((n) => isLikelyChatComposer(n));
+                const fallback = visible.filter((n) => !isTerminalLike(n));
+                return preferred.length > 0 ? preferred : fallback;
+            };
+
+            const candidates = collectCandidates();
+            for (const n of candidates) {
+                try { if (typeof n.focus === 'function') n.focus(); } catch {}
+                const active = document.activeElement === n;
+                if (active) {
+                    return { ok: true, selector: String(n.tagName || 'candidate').toLowerCase(), active, tag: String(n.tagName || '').toLowerCase() };
                 }
             }
 
@@ -415,9 +474,37 @@ export class CDPStrategy implements IStrategy {
                 const s = window.getComputedStyle(el);
                 return !(s.display === 'none' || s.visibility === 'hidden' || s.pointerEvents === 'none');
             };
+
+            const getContextHint = (el) => {
+                const own = [el?.id, el?.className, el?.getAttribute?.('data-testid'), el?.getAttribute?.('aria-label'), el?.getAttribute?.('title'), el?.getAttribute?.('placeholder')]
+                    .map((v) => String(v || '').toLowerCase())
+                    .join(' ');
+                const parent = String(el?.closest?.('[id], [class], [data-testid], [aria-label], [title]')?.outerHTML || '').toLowerCase();
+                return own + ' ' + parent;
+            };
+
+            const isTerminalLike = (el) => {
+                if (!el || !el.isConnected) return false;
+                if (el.closest?.('.terminal, .xterm, .xterm-screen, .xterm-helper-textarea, [data-testid*="terminal" i], [class*="terminal" i], [id*="terminal" i], [aria-label*="terminal" i], [class*="xterm-helper" i], [id*="xterm" i]')) return true;
+                const hint = getContextHint(el);
+                return /\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(hint);
+            };
+
+            const isLikelyChatComposer = (el) => {
+                if (!el || !el.isConnected) return false;
+                if (isTerminalLike(el)) return false;
+                if (el.closest?.('.interactive-session, .interactive-input, .chat-input-container, .chat-editor, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [id*="chat" i]')) {
+                    return true;
+                }
+                const hint = getContextHint(el);
+                return /\bchat\b|composer|ask|message|prompt/.test(hint);
+            };
+
             const candidates = Array.from(document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"], .monaco-editor textarea'));
-            for (const c of candidates) {
-                if (!isVisible(c)) continue;
+            const preferred = candidates.filter((c) => isVisible(c) && isLikelyChatComposer(c));
+            const fallback = candidates.filter((c) => isVisible(c) && !isTerminalLike(c));
+            const ordered = preferred.length > 0 ? preferred : fallback;
+            for (const c of ordered) {
                 const raw = (c && (c.value ?? c.textContent)) || '';
                 const txt = String(raw || '').replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim();
                 if (txt) return txt;
@@ -489,7 +576,24 @@ export class CDPStrategy implements IStrategy {
                     const focused = (typeof document.hasFocus === 'function') ? document.hasFocus() : true;
                     const runtime = window.__antigravityRuntimeState || null;
                     const hasRuntime = !!runtime;
-                    const hasComposer = !!document.querySelector('textarea, .monaco-editor textarea, [contenteditable="true"], [role="textbox"]');
+                    const composerCandidates = Array.from(document.querySelectorAll('textarea, .monaco-editor textarea, [contenteditable="true"], [role="textbox"]'));
+                    const hasComposer = composerCandidates.some((el) => {
+                        if (!el || !el.isConnected) return false;
+                        if (el.closest?.('.terminal, .xterm, .xterm-screen, .xterm-helper-textarea, [data-testid*="terminal" i], [class*="terminal" i], [id*="terminal" i], [aria-label*="terminal" i], [class*="xterm-helper" i], [id*="xterm" i]')) return false;
+                        const ownHint = [el?.id, el?.className, el?.getAttribute?.('data-testid'), el?.getAttribute?.('aria-label'), el?.getAttribute?.('title'), el?.getAttribute?.('placeholder')]
+                            .map((v) => String(v || '').toLowerCase())
+                            .join(' ');
+                        if (/\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(ownHint)) return false;
+                        const r = el.getBoundingClientRect();
+                        if (!r || r.width <= 0 || r.height <= 0) {
+                            const tag = String(el.tagName || '').toLowerCase();
+                            const cls = String(el.className || '').toLowerCase();
+                            if (!(tag === 'textarea' && (cls.includes('inputarea') || cls.includes('monaco') || !!el.closest?.('.monaco-editor')))) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    });
                     const isGenerating = runtime?.isGenerating === true;
                     const isStalled = runtime?.stalled === true;
                     return { visible, focused, hasRuntime, hasComposer, isGenerating, isStalled };
@@ -849,6 +953,14 @@ export class CDPStrategy implements IStrategy {
         if (method === 'typing:dom-set-input' || method === 'typing:dom-inject' || method === 'dom-inject') {
             const expression = `(() => {
                 const text = ${JSON.stringify(bumpText)};
+                const isTerminalLike = (el) => {
+                    if (!el || !el.isConnected) return false;
+                    if (el.closest?.('.terminal, .xterm, .xterm-screen, .xterm-helper-textarea, [data-testid*="terminal" i], [class*="terminal" i], [id*="terminal" i], [aria-label*="terminal" i], [class*="xterm-helper" i], [id*="xterm" i]')) return true;
+                    const hint = [el?.id, el?.className, el?.getAttribute?.('data-testid'), el?.getAttribute?.('aria-label'), el?.getAttribute?.('title'), el?.getAttribute?.('placeholder')]
+                        .map((v) => String(v || '').toLowerCase())
+                        .join(' ');
+                    return /\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(hint);
+                };
                 const isVisible = (el) => {
                     if (!el || !el.isConnected || el.disabled) return false;
                     const r = el.getBoundingClientRect();
@@ -859,6 +971,7 @@ export class CDPStrategy implements IStrategy {
                 const candidates = Array.from(document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"], .monaco-editor textarea'));
                 for (const c of candidates) {
                     if (!isVisible(c)) continue;
+                    if (isTerminalLike(c)) continue;
                     try { if (typeof c.focus === 'function') c.focus(); } catch {}
                     if (c.isContentEditable || c.getAttribute('contenteditable') === 'true') {
                         try { document.execCommand('selectAll', false, null); } catch {}
@@ -882,9 +995,18 @@ export class CDPStrategy implements IStrategy {
         if (method === 'typing:exec-command' || method === 'exec-command') {
             const expression = `(() => {
                 const text = ${JSON.stringify(bumpText)};
+                const isTerminalLike = (el) => {
+                    if (!el || !el.isConnected) return false;
+                    if (el.closest?.('.terminal, .xterm, .xterm-screen, .xterm-helper-textarea, [data-testid*="terminal" i], [class*="terminal" i], [id*="terminal" i], [aria-label*="terminal" i], [class*="xterm-helper" i], [id*="xterm" i]')) return true;
+                    const hint = [el?.id, el?.className, el?.getAttribute?.('data-testid'), el?.getAttribute?.('aria-label'), el?.getAttribute?.('title'), el?.getAttribute?.('placeholder')]
+                        .map((v) => String(v || '').toLowerCase())
+                        .join(' ');
+                    return /\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(hint);
+                };
                 const targets = Array.from(document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"], .monaco-editor textarea'));
                 for (const t of targets) {
                     if (!t || !t.isConnected) continue;
+                    if (isTerminalLike(t)) continue;
                     const r = t.getBoundingClientRect();
                     if (!r || r.width <= 0 || r.height <= 0) continue;
                     try { if (typeof t.focus === 'function') t.focus(); } catch {}
@@ -912,9 +1034,18 @@ export class CDPStrategy implements IStrategy {
         if (method === 'typing:native-setter' || method === 'native-setter') {
             const expression = `(() => {
                 const text = ${JSON.stringify(bumpText)};
+                const isTerminalLike = (el) => {
+                    if (!el || !el.isConnected) return false;
+                    if (el.closest?.('.terminal, .xterm, .xterm-screen, .xterm-helper-textarea, [data-testid*="terminal" i], [class*="terminal" i], [id*="terminal" i], [aria-label*="terminal" i], [class*="xterm-helper" i], [id*="xterm" i]')) return true;
+                    const hint = [el?.id, el?.className, el?.getAttribute?.('data-testid'), el?.getAttribute?.('aria-label'), el?.getAttribute?.('title'), el?.getAttribute?.('placeholder')]
+                        .map((v) => String(v || '').toLowerCase())
+                        .join(' ');
+                    return /\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(hint);
+                };
                 const targets = Array.from(document.querySelectorAll('textarea, input[type="text"], [role="textbox"], .monaco-editor textarea'));
                 for (const t of targets) {
                     if (!t || !t.isConnected) continue;
+                    if (isTerminalLike(t)) continue;
                     const r = t.getBoundingClientRect();
                     if (!r || r.width <= 0 || r.height <= 0) continue;
                     try { if (typeof t.focus === 'function') t.focus(); } catch {}
@@ -948,9 +1079,18 @@ export class CDPStrategy implements IStrategy {
         if (method === 'typing:dispatch-events' || method === 'dispatch-events') {
             const expression = `(() => {
                 const text = ${JSON.stringify(bumpText)};
+                const isTerminalLike = (el) => {
+                    if (!el || !el.isConnected) return false;
+                    if (el.closest?.('.terminal, .xterm, .xterm-screen, .xterm-helper-textarea, [data-testid*="terminal" i], [class*="terminal" i], [id*="terminal" i], [aria-label*="terminal" i], [class*="xterm-helper" i], [id*="xterm" i]')) return true;
+                    const hint = [el?.id, el?.className, el?.getAttribute?.('data-testid'), el?.getAttribute?.('aria-label'), el?.getAttribute?.('title'), el?.getAttribute?.('placeholder')]
+                        .map((v) => String(v || '').toLowerCase())
+                        .join(' ');
+                    return /\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(hint);
+                };
                 const targets = Array.from(document.querySelectorAll('textarea, .monaco-editor textarea, [role="textbox"], [contenteditable="true"]'));
                 for (const t of targets) {
                     if (!t || !t.isConnected) continue;
+                    if (isTerminalLike(t)) continue;
                     const r = t.getBoundingClientRect();
                     if (!r || r.width <= 0 || r.height <= 0) continue;
                     try { if (typeof t.focus === 'function') t.focus(); } catch {}
@@ -976,9 +1116,18 @@ export class CDPStrategy implements IStrategy {
         if (method === 'typing:set-range-text') {
             const expression = `(() => {
                 const text = ${JSON.stringify(bumpText)};
+                const isTerminalLike = (el) => {
+                    if (!el || !el.isConnected) return false;
+                    if (el.closest?.('.terminal, .xterm, .xterm-screen, .xterm-helper-textarea, [data-testid*="terminal" i], [class*="terminal" i], [id*="terminal" i], [aria-label*="terminal" i], [class*="xterm-helper" i], [id*="xterm" i]')) return true;
+                    const hint = [el?.id, el?.className, el?.getAttribute?.('data-testid'), el?.getAttribute?.('aria-label'), el?.getAttribute?.('title'), el?.getAttribute?.('placeholder')]
+                        .map((v) => String(v || '').toLowerCase())
+                        .join(' ');
+                    return /\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(hint);
+                };
                 const targets = Array.from(document.querySelectorAll('textarea, input[type="text"], .monaco-editor textarea'));
                 for (const t of targets) {
                     if (!t || !t.isConnected || t.disabled) continue;
+                    if (isTerminalLike(t)) continue;
                     const r = t.getBoundingClientRect();
                     if (!r || r.width <= 0 || r.height <= 0) continue;
                     try { if (typeof t.focus === 'function') t.focus(); } catch {}
@@ -1006,6 +1155,14 @@ export class CDPStrategy implements IStrategy {
         if (method === 'typing:contenteditable-innerhtml') {
             const expression = `(() => {
                 const text = ${JSON.stringify(bumpText)};
+                const isTerminalLike = (el) => {
+                    if (!el || !el.isConnected) return false;
+                    if (el.closest?.('.terminal, .xterm, .xterm-screen, .xterm-helper-textarea, [data-testid*="terminal" i], [class*="terminal" i], [id*="terminal" i], [aria-label*="terminal" i], [class*="xterm-helper" i], [id*="xterm" i]')) return true;
+                    const hint = [el?.id, el?.className, el?.getAttribute?.('data-testid'), el?.getAttribute?.('aria-label'), el?.getAttribute?.('title'), el?.getAttribute?.('placeholder')]
+                        .map((v) => String(v || '').toLowerCase())
+                        .join(' ');
+                    return /\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(hint);
+                };
                 const editables = Array.from(document.querySelectorAll('[contenteditable="true"]'));
                 const escapeHtml = (v) => String(v || '')
                     .replace(/&/g, '&amp;')
@@ -1014,6 +1171,7 @@ export class CDPStrategy implements IStrategy {
                     .replace(/"/g, '&quot;');
                 for (const e of editables) {
                     if (!e || !e.isConnected) continue;
+                    if (isTerminalLike(e)) continue;
                     const r = e.getBoundingClientRect();
                     if (!r || r.width <= 0 || r.height <= 0) continue;
                     try { if (typeof e.focus === 'function') e.focus(); } catch {}
@@ -1041,9 +1199,18 @@ export class CDPStrategy implements IStrategy {
         if (method === 'typing:vscode-fallback') {
             const expression = `(() => {
                 const text = ${JSON.stringify(bumpText)};
+                const isTerminalLike = (el) => {
+                    if (!el || !el.isConnected) return false;
+                    if (el.closest?.('.terminal, .xterm, .xterm-screen, .xterm-helper-textarea, [data-testid*="terminal" i], [class*="terminal" i], [id*="terminal" i], [aria-label*="terminal" i], [class*="xterm-helper" i], [id*="xterm" i]')) return true;
+                    const hint = [el?.id, el?.className, el?.getAttribute?.('data-testid'), el?.getAttribute?.('aria-label'), el?.getAttribute?.('title'), el?.getAttribute?.('placeholder')]
+                        .map((v) => String(v || '').toLowerCase())
+                        .join(' ');
+                    return /\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(hint);
+                };
                 const candidates = Array.from(document.querySelectorAll('textarea, .monaco-editor textarea'));
                 for (const c of candidates) {
                     if (!c || c.disabled) continue;
+                    if (isTerminalLike(c)) continue;
                     try { if (typeof c.focus === 'function') c.focus(); } catch {}
                     c.value = '';
                     try { c.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text })); } catch {}
@@ -1190,7 +1357,18 @@ export class CDPStrategy implements IStrategy {
 
         if (method === 'submit:keyboard-sequence') {
             const expression = `(() => {
-                const input = document.activeElement || document.querySelector('textarea, [contenteditable="true"], [role="textbox"], .monaco-editor textarea');
+                const isTerminalLike = (el) => {
+                    if (!el || !el.isConnected) return false;
+                    if (el.closest?.('.terminal, .xterm, .xterm-screen, .xterm-helper-textarea, [data-testid*="terminal" i], [class*="terminal" i], [id*="terminal" i], [aria-label*="terminal" i], [class*="xterm-helper" i], [id*="xterm" i]')) return true;
+                    const hint = [el?.id, el?.className, el?.getAttribute?.('data-testid'), el?.getAttribute?.('aria-label'), el?.getAttribute?.('title'), el?.getAttribute?.('placeholder')]
+                        .map((v) => String(v || '').toLowerCase())
+                        .join(' ');
+                    return /\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(hint);
+                };
+                const candidates = [document.activeElement, ...Array.from(document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"], .monaco-editor textarea'))]
+                    .filter(Boolean)
+                    .filter((el) => !isTerminalLike(el));
+                const input = candidates[0];
                 if (!input) return false;
                 try { if (typeof input.focus === 'function') input.focus(); } catch {}
                 const eventBase = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
@@ -1206,7 +1384,18 @@ export class CDPStrategy implements IStrategy {
 
         if (method === 'submit:form-request-submit') {
             const expression = `(() => {
-                const input = document.activeElement || document.querySelector('textarea, [contenteditable="true"], [role="textbox"], .monaco-editor textarea');
+                const isTerminalLike = (el) => {
+                    if (!el || !el.isConnected) return false;
+                    if (el.closest?.('.terminal, .xterm, .xterm-screen, .xterm-helper-textarea, [data-testid*="terminal" i], [class*="terminal" i], [id*="terminal" i], [aria-label*="terminal" i], [class*="xterm-helper" i], [id*="xterm" i]')) return true;
+                    const hint = [el?.id, el?.className, el?.getAttribute?.('data-testid'), el?.getAttribute?.('aria-label'), el?.getAttribute?.('title'), el?.getAttribute?.('placeholder')]
+                        .map((v) => String(v || '').toLowerCase())
+                        .join(' ');
+                    return /\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(hint);
+                };
+                const candidates = [document.activeElement, ...Array.from(document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"], .monaco-editor textarea'))]
+                    .filter(Boolean)
+                    .filter((el) => !isTerminalLike(el));
+                const input = candidates[0];
                 if (!input) return false;
                 const form = input.closest?.('form') || document.querySelector('form');
                 if (!form || typeof form.requestSubmit !== 'function') return false;
@@ -1220,8 +1409,6 @@ export class CDPStrategy implements IStrategy {
         if (method === 'submit:vscode-submit' || method === 'vscode-submit') {
             const commands = [
                 'workbench.action.chat.submit',
-                'workbench.action.terminal.chat.submit',
-                'workbench.action.terminal.chat.send',
                 'antigravity.sendTextToChat'
             ];
             let anySuccess = false;
