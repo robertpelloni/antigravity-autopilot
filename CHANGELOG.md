@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.38] - 2026-03-06
+### Fixed
+* **Antigravity Typing Methods in Nested Sessions**: Manual typing test dispatch (`Input.insertText` / key events) now targets both the page and attached CDP sessions, restoring typing delivery when chat composers live in nested webviews.
+* **Session-Aware Composer Focus and Readback**: `focusChatInputOnPage` and `readComposerTextOnPage` now probe attached sessions when main-page context has no active composer, preventing false fail/no-op behavior in Antigravity-hosted chat surfaces.
+
 ## [6.2.37] - 2026-03-06
 ### Fixed
 * **Bridge Typing Regression in Antigravity Sessions**: Restored legacy bridge string payload handling in `CDPHandler` so `__AUTOPILOT_TYPE__` messages relay text insertion again via origin-session CDP input.

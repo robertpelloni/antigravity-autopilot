@@ -83,11 +83,33 @@ export class CDPStrategy implements IStrategy {
         if (resolvedTargets.length === 0) return ['no-connections'];
 
         for (const pageId of resolvedTargets) {
+            const conn = handler.connections.get(pageId);
+            const sessions: string[] = conn?.sessions ? Array.from(conn.sessions) : [];
+            let pageSucceeded = false;
+            let lastError: string | null = null;
+
             try {
                 await handler.sendCommand(pageId, method, params);
-                results.push('ok:' + pageId.substring(0, 8));
+                pageSucceeded = true;
             } catch (e: any) {
-                results.push('err:' + (e?.message || e));
+                lastError = String(e?.message || e || 'unknown');
+            }
+
+            for (const sessionId of sessions) {
+                try {
+                    await handler.sendCommand(pageId, method, params, undefined, sessionId);
+                    pageSucceeded = true;
+                } catch (e: any) {
+                    if (!lastError) {
+                        lastError = String(e?.message || e || 'unknown');
+                    }
+                }
+            }
+
+            if (pageSucceeded) {
+                results.push('ok:' + pageId.substring(0, 8));
+            } else {
+                results.push('err:' + String(lastError || 'dispatch-failed'));
             }
         }
         return results;
@@ -417,21 +439,46 @@ export class CDPStrategy implements IStrategy {
         })()`;
 
         const handler = this.cdpHandler as any;
-        const result = await handler.sendCommand(pageId, 'Runtime.evaluate', {
-            expression,
-            returnByValue: true,
-            awaitPromise: true
-        }).catch(() => null);
+        const evaluateFocus = async (sessionId?: string): Promise<any | null> => {
+            const result = await handler.sendCommand(pageId, 'Runtime.evaluate', {
+                expression,
+                returnByValue: true,
+                awaitPromise: true
+            }, undefined, sessionId).catch(() => null);
+            return result?.result?.value || null;
+        };
 
-        const value = result?.result?.value;
-        if (!value) {
+        const mainValue = await evaluateFocus();
+        if (mainValue?.ok === true && mainValue?.active === true) {
+            return {
+                ok: true,
+                active: true,
+                details: `selector=${String(mainValue.selector || 'none')} active=true tag=${String(mainValue.tag || 'unknown')}`
+            };
+        }
+
+        const conn = handler.connections?.get(pageId);
+        const sessions: string[] = conn?.sessions ? Array.from(conn.sessions) : [];
+        for (const sessionId of sessions) {
+            const value = await evaluateFocus(sessionId);
+            if (value?.ok === true && value?.active === true) {
+                return {
+                    ok: true,
+                    active: true,
+                    details: `selector=${String(value.selector || 'none')} active=true tag=${String(value.tag || 'unknown')} session=${String(sessionId).substring(0, 8)}`
+                };
+            }
+        }
+
+        const fallback = mainValue || null;
+        if (!fallback) {
             return { ok: false, active: false, details: 'focus-eval-failed' };
         }
 
         return {
-            ok: value.ok === true,
-            active: value.active === true,
-            details: `selector=${String(value.selector || 'none')} active=${value.active === true} tag=${String(value.tag || 'unknown')}`
+            ok: fallback.ok === true,
+            active: fallback.active === true,
+            details: `selector=${String(fallback.selector || 'none')} active=${fallback.active === true} tag=${String(fallback.tag || 'unknown')}`
         };
     }
 
@@ -513,13 +560,30 @@ export class CDPStrategy implements IStrategy {
         })()`;
 
         const handler = this.cdpHandler as any;
-        const result = await handler.sendCommand(pageId, 'Runtime.evaluate', {
-            expression,
-            returnByValue: true,
-            awaitPromise: true
-        }).catch(() => null);
+        const evaluateReadback = async (sessionId?: string): Promise<string> => {
+            const result = await handler.sendCommand(pageId, 'Runtime.evaluate', {
+                expression,
+                returnByValue: true,
+                awaitPromise: true
+            }, undefined, sessionId).catch(() => null);
+            return String(result?.result?.value || '');
+        };
 
-        return String(result?.result?.value || '');
+        const mainText = await evaluateReadback();
+        if (mainText) {
+            return mainText;
+        }
+
+        const conn = handler.connections?.get(pageId);
+        const sessions: string[] = conn?.sessions ? Array.from(conn.sessions) : [];
+        for (const sessionId of sessions) {
+            const text = await evaluateReadback(sessionId);
+            if (text) {
+                return text;
+            }
+        }
+
+        return '';
     }
 
     private async dispatchEnterOnPage(pageId: string): Promise<boolean> {
