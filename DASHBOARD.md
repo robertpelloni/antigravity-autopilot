@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 6.2.18  
+**Version**: 6.2.19  
 **Last Updated**: 2026-03-05  
-**Status**: Production stabilization + cdpPort scope-write fix and CDP link-state status clarity shipped for VS Code Insiders + Antigravity
+**Status**: Production stabilization + manual test-target selection hardening and command registration resiliency shipped for VS Code Insiders + Antigravity
 
 ## Project Structure at a Glance
 

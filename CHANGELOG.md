@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.19] - 2026-03-05
+### Fixed
+* **Dashboard Test Method No-Op Targeting**: Manual `antigravity.testMethod` executions now score connected pages (visibility, focus, composer presence, runtime signals) and select the best target instead of always using the first connected page.
+* **Silent Command Registration Collisions**: Command registration now disposes/replaces existing handlers and emits explicit registration-failure telemetry, improving reliability across extension-host reloads.
+* **Duplicate Command Contribution Noise**: Removed duplicate `antigravity.testMethod` command contribution entry to reduce command-surface ambiguity.
+
 ## [6.2.18] - 2026-03-05
 ### Fixed
 * **cdpPort Cross-Scope Overwrite**: Dashboard `cdpPort` saves now honor the selected target scope instead of force-writing workspace-folder/workspace/global simultaneously.

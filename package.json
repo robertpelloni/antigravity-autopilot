@@ -2,7 +2,7 @@
   "name": "antigravity-autopilot",
   "displayName": "Antigravity Autopilot (Unified)",
   "description": " The ultimate AI coding assistant. Merges Auto-Accept, Auto-All, and Yoke Autonomous Mode into one powerful, configurable extension.",
-  "version": "6.2.18",
+  "version": "6.2.19",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyper/antigravity-autopilot.git"
@@ -196,10 +196,6 @@
       {
         "command": "antigravity.diagnoseCdp",
         "title": "Antigravity: Diagnose CDP Connection"
-      },
-      {
-        "command": "antigravity.testMethod",
-        "title": "Antigravity: Test Method (Internal)"
       },
       {
         "command": "antigravity.testAudio",

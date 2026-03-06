@@ -26,11 +26,28 @@ const log = createLogger('Extension');
 let statusBar: StatusBarManager;
 let controllerLease: ControllerLease | null = null;
 let currentWindowAutomationDisabled = false;
+const commandRegistry = new Map<string, vscode.Disposable>();
 
 function safeRegisterCommand(commandId: string, callback: (...args: any[]) => any): vscode.Disposable {
     try {
-        return vscode.commands.registerCommand(commandId, callback);
-    } catch {
+        const existing = commandRegistry.get(commandId);
+        if (existing) {
+            try { existing.dispose(); } catch { }
+            commandRegistry.delete(commandId);
+        }
+
+        const disposable = vscode.commands.registerCommand(commandId, callback);
+        commandRegistry.set(commandId, disposable);
+        return {
+            dispose: () => {
+                try { disposable.dispose(); } catch { }
+                if (commandRegistry.get(commandId) === disposable) {
+                    commandRegistry.delete(commandId);
+                }
+            }
+        };
+    } catch (error: any) {
+        logToOutput(`[CommandRegistry] Failed to register ${commandId}: ${String(error?.message || error || 'unknown-error')}`);
         return { dispose: () => { } };
     }
 }

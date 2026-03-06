@@ -453,6 +453,50 @@ export class CDPStrategy implements IStrategy {
         return down.some((r) => r.startsWith('ok:')) || up.some((r) => r.startsWith('ok:'));
     }
 
+    private async pickBestManualTestTarget(method: string, targetPageIds: string[]): Promise<string | null> {
+        if (!Array.isArray(targetPageIds) || targetPageIds.length === 0) {
+            return null;
+        }
+
+        const handler = this.cdpHandler as any;
+        const scores: Array<{ pageId: string; score: number; details: string }> = [];
+
+        for (const pageId of targetPageIds) {
+            const signal = await this.hasCompleteStopSignalOnPage(pageId).catch(() => ({ ready: false, reason: 'signal-eval-failed' }));
+            const evalResult = await handler.sendCommand(pageId, 'Runtime.evaluate', {
+                expression: `(() => {
+                    const visible = document.visibilityState === 'visible';
+                    const focused = (typeof document.hasFocus === 'function') ? document.hasFocus() : true;
+                    const runtime = window.__antigravityRuntimeState || null;
+                    const hasRuntime = !!runtime;
+                    const hasComposer = !!document.querySelector('textarea, .monaco-editor textarea, [contenteditable="true"], [role="textbox"]');
+                    const isGenerating = runtime?.isGenerating === true;
+                    const isStalled = runtime?.stalled === true;
+                    return { visible, focused, hasRuntime, hasComposer, isGenerating, isStalled };
+                })()`,
+                returnByValue: true,
+                awaitPromise: true
+            }).catch(() => null);
+
+            const value = evalResult?.result?.value || {};
+            let score = 0;
+            if (value.visible === true) score += 8;
+            if (value.focused === true) score += 7;
+            if (value.hasComposer === true) score += 6;
+            if (value.hasRuntime === true) score += 3;
+            if (signal.ready === true) score += 4;
+            if (value.isGenerating !== true) score += 1;
+
+            const details = `visible=${value.visible === true} focused=${value.focused === true} hasComposer=${value.hasComposer === true} hasRuntime=${value.hasRuntime === true} stalled=${value.isStalled === true} ready=${signal.ready === true}:${signal.reason}`;
+            scores.push({ pageId, score, details });
+        }
+
+        scores.sort((a, b) => b.score - a.score);
+        const best = scores[0] || null;
+        logToOutput(`[TestMethod] target-scores method=${method} => ${scores.map((s) => `${s.pageId.substring(0, 8)}=${s.score}(${s.details})`).join(' | ')}`);
+        return best ? best.pageId : null;
+    }
+
     private async clickSendByCdpMouseOnPage(pageId: string): Promise<boolean> {
         const expression = `(() => {
             const selectors = [
@@ -736,7 +780,7 @@ export class CDPStrategy implements IStrategy {
             return false;
         }
 
-        const firstTarget = targetPageIds[0];
+        const firstTarget = (await this.pickBestManualTestTarget(method, targetPageIds)) || targetPageIds[0];
         logToOutput(`[TestMethod] target=${firstTarget.substring(0, 8)}`);
 
         const focusInfo = await this.focusChatInputOnPage(firstTarget);
