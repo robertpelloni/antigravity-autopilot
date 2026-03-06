@@ -140,18 +140,17 @@ export class CDPStrategy implements IStrategy {
             const mode = String(state?.mode || '').toLowerCase();
             const fork = String(state?.fork || '').toLowerCase();
             const status = String(state?.status || '').toLowerCase();
-            const antigravityLike = mode === 'antigravity' || fork === 'antigravity' || mode === 'cursor' || fork === 'cursor';
 
             const ready = readyToResume && stopped && completeSignal;
             if (ready) {
                 return { ready: true, reason: 'runtime-ready-to-resume' };
             }
 
-            // Antigravity/Cursor can occasionally miss the explicit complete-stop marker
-            // while still clearly in a stalled waiting state. Allow a guarded fallback so
-            // bump typing can proceed instead of permanently starving on signal drift.
+            // Explicit complete-stop markers can occasionally drift out-of-sync while runtime
+            // is clearly stalled and waiting. Allow a guarded fallback across forks so bump
+            // typing can proceed instead of permanently starving on signal drift.
             const waitingState = waitingForChatMessage || status === 'waiting_for_chat_message' || status === 'idle';
-            if (antigravityLike && stopped && !generating && waitingState) {
+            if (stopped && !generating && waitingState) {
                 return { ready: true, reason: 'runtime-stalled-fallback' };
             }
 

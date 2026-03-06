@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.28] - 2026-03-05
+### Fixed
+* **Cross-Fork Stop-Signal Drift Starvation**: Expanded guarded `runtime-stalled-fallback` readiness in `CDPStrategy` to apply across forks (including VS Code profile) when runtime is stalled, not generating, and in waiting/idle state.
+* **Repeated `runtime-missing-stop-signal` Skip Loops**: Prevented prolonged no-bump starvation in sessions where explicit complete-stop markers are missing but runtime state indicates stalled waiting behavior.
+
 ## [6.2.27] - 2026-03-05
 ### Fixed
 * **Dashboard Handler Fallback Mode Upgraded**: Early bootstrap handlers are now functional (message-posting) instead of no-op, so `runTest`, `runCommand`, config updates, and runtime refresh still work when the main dashboard script is partially interrupted.
