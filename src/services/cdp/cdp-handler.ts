@@ -697,7 +697,7 @@ export class CDPHandler extends EventEmitter {
                 submitCooldownMs: Math.max(500, submitDelayMs * 10)
             },
             actions: {
-                clickRun: config.get<boolean>('automation.actions.clickRun') !== false,
+                clickRun: config.get<boolean>('automation.actions.clickRun') === true,
                 clickExpand: config.get<boolean>('automation.actions.clickExpand') !== false,
                 clickAlwaysAllow: config.get<boolean>('automation.actions.clickAlwaysAllow') !== false,
                 clickRetry: config.get<boolean>('automation.actions.clickRetry') !== false,

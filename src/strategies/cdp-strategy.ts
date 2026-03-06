@@ -129,8 +129,10 @@ export class CDPStrategy implements IStrategy {
             const sessions: string[] = conn?.sessions ? Array.from(conn.sessions) : [];
             let pageSucceeded = false;
             let lastError: string | null = null;
+            const attemptedContexts: Array<{ sessionId?: string; eligible: boolean }> = [];
 
             const mainEligible = await isContextEligibleForInput(pageId);
+            attemptedContexts.push({ sessionId: undefined, eligible: mainEligible });
             if (mainEligible) {
                 try {
                     await handler.sendCommand(pageId, method, params);
@@ -142,6 +144,7 @@ export class CDPStrategy implements IStrategy {
 
             for (const sessionId of sessions) {
                 const sessionEligible = await isContextEligibleForInput(pageId, sessionId);
+                attemptedContexts.push({ sessionId, eligible: sessionEligible });
                 if (!sessionEligible) {
                     continue;
                 }
@@ -151,6 +154,31 @@ export class CDPStrategy implements IStrategy {
                 } catch (e: any) {
                     if (!lastError) {
                         lastError = String(e?.message || e || 'unknown');
+                    }
+                }
+            }
+
+            // Guard fallback: if chat-eligibility heuristics produced zero eligible contexts,
+            // attempt raw dispatch to all contexts to avoid false-negative hard failures.
+            if (!pageSucceeded && requiresChatFocusedInput) {
+                const hadEligibleContext = attemptedContexts.some((ctx) => ctx.eligible === true);
+                if (!hadEligibleContext) {
+                    try {
+                        await handler.sendCommand(pageId, method, params);
+                        pageSucceeded = true;
+                    } catch (e: any) {
+                        lastError = String(e?.message || e || 'unknown');
+                    }
+
+                    for (const sessionId of sessions) {
+                        try {
+                            await handler.sendCommand(pageId, method, params, undefined, sessionId);
+                            pageSucceeded = true;
+                        } catch (e: any) {
+                            if (!lastError) {
+                                lastError = String(e?.message || e || 'unknown');
+                            }
+                        }
                     }
                 }
             }
@@ -340,9 +368,17 @@ export class CDPStrategy implements IStrategy {
                 return /\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(hint);
             };
 
+            const isExcludedWorkbenchSurface = (el) => {
+                if (!el || !el.isConnected) return false;
+                if (el.closest?.('.extensions-viewlet, .search-view, .search-widget, .settings-editor, .explorer-viewlet, .scm-viewlet, .debug-viewlet')) return true;
+                const hint = getContextHint(el);
+                return /extensions?-viewlet|marketplace|extension search|search extensions|extensions search|search for extensions|search view|search panel/.test(hint);
+            };
+
             const isLikelyChatComposer = (el) => {
                 if (!el || !el.isConnected) return false;
                 if (isTerminalLike(el)) return false;
+                if (isExcludedWorkbenchSurface(el)) return false;
                 if (el.closest?.('.interactive-session, .interactive-input, .chat-input-container, .chat-editor, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [id*="chat" i]')) {
                     return true;
                 }
@@ -384,7 +420,6 @@ export class CDPStrategy implements IStrategy {
                 for (const node of nodes) {
                     const el = node.closest?.('button, [role="button"], a, .monaco-button') || node;
                     if (!isVisible(el)) continue;
-                    try { if (typeof el.focus === 'function') el.focus({ preventScroll: true }); } catch {}
                     try { el.click(); } catch {}
                     return true;
                 }
@@ -450,9 +485,17 @@ export class CDPStrategy implements IStrategy {
                 return /\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(hint);
             };
 
+            const isExcludedWorkbenchSurface = (el) => {
+                if (!el || !el.isConnected) return false;
+                if (el.closest?.('.extensions-viewlet, .search-view, .search-widget, .settings-editor, .explorer-viewlet, .scm-viewlet, .debug-viewlet')) return true;
+                const hint = getContextHint(el);
+                return /extensions?-viewlet|marketplace|extension search|search extensions|extensions search|search for extensions|search view|search panel/.test(hint);
+            };
+
             const isLikelyChatComposer = (el) => {
                 if (!el || !el.isConnected) return false;
                 if (isTerminalLike(el)) return false;
+                if (isExcludedWorkbenchSurface(el)) return false;
                 if (el.closest?.('.interactive-session, .interactive-input, .chat-input-container, .chat-editor, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [id*="chat" i]')) {
                     return true;
                 }
@@ -471,8 +514,7 @@ export class CDPStrategy implements IStrategy {
                 const all = selectors.flatMap((sel) => Array.from(document.querySelectorAll(sel)));
                 const visible = all.filter((n) => isVisible(n));
                 const preferred = visible.filter((n) => isLikelyChatComposer(n));
-                const fallback = visible.filter((n) => !isTerminalLike(n));
-                return preferred.length > 0 ? preferred : fallback;
+                return preferred;
             };
 
             const candidates = collectCandidates();
@@ -586,9 +628,17 @@ export class CDPStrategy implements IStrategy {
                 return /\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(hint);
             };
 
+            const isExcludedWorkbenchSurface = (el) => {
+                if (!el || !el.isConnected) return false;
+                if (el.closest?.('.extensions-viewlet, .search-view, .search-widget, .settings-editor, .explorer-viewlet, .scm-viewlet, .debug-viewlet')) return true;
+                const hint = getContextHint(el);
+                return /extensions?-viewlet|marketplace|extension search|search extensions|extensions search|search for extensions|search view|search panel/.test(hint);
+            };
+
             const isLikelyChatComposer = (el) => {
                 if (!el || !el.isConnected) return false;
                 if (isTerminalLike(el)) return false;
+                if (isExcludedWorkbenchSurface(el)) return false;
                 if (el.closest?.('.interactive-session, .interactive-input, .chat-input-container, .chat-editor, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [id*="chat" i]')) {
                     return true;
                 }
@@ -598,8 +648,7 @@ export class CDPStrategy implements IStrategy {
 
             const candidates = Array.from(document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"], .monaco-editor textarea'));
             const preferred = candidates.filter((c) => isVisible(c) && isLikelyChatComposer(c));
-            const fallback = candidates.filter((c) => isVisible(c) && !isTerminalLike(c));
-            const ordered = preferred.length > 0 ? preferred : fallback;
+            const ordered = preferred;
             for (const c of ordered) {
                 const raw = (c && (c.value ?? c.textContent)) || '';
                 const txt = String(raw || '').replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim();

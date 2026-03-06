@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.40] - 2026-03-06
+### Fixed
+* **CDP Typing `dispatch-failed` Regression**: Restored fail-open fallback for CDP input dispatch when strict chat-eligibility heuristics yield no eligible context, preventing false no-op failures for `typing:cdp-insert-text` and key-based CDP methods.
+* **Repeated Runtime `Run` Auto-Clicks**: Runtime loop now suppresses `clickRun` action attempts when complete-stop signal is missing, preventing recurring unsolicited `clicked Run` behavior.
+* **Focus-Theft Default Hardening**: `clickRun` now defaults to disabled unless explicitly enabled via `antigravity.automation.actions.clickRun`, reducing out-of-box focus hijacks in Antigravity sessions.
+
 ## [6.2.39] - 2026-03-06
 ### Fixed
 * **Misleading Dashboard Primary Window**: Primary window selection now uses runtime visibility/focus/composer scoring instead of raw first-connected target ordering, avoiding stale `Launchpad`-only assumptions.

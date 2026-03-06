@@ -330,7 +330,6 @@ export const AUTO_CONTINUE_SCRIPT = `
     var options = opts || {};
     if (!el) return false;
     try {
-      try { if (typeof el.focus === 'function') el.focus({ preventScroll: true }); } catch (e) {}
       try { el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true })); } catch (e) {}
       try { el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true })); } catch (e) {}
       try { el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); } catch (e) {}
@@ -450,7 +449,6 @@ export const AUTO_CONTINUE_SCRIPT = `
     }
 
     try {
-      if (typeof input.focus === 'function') input.focus();
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
       input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
       if (readInputText(input) !== before || isGenerating(profile, root)) {
@@ -610,6 +608,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       if (cfg.actions[spec.key] !== true) continue;
       if (spec.key === 'clickKeep') continue;
       if (spec.key === 'clickRetry' && fork === 'vscode') continue;
+      if (spec.key === 'clickRun' && !completeStopSignal) continue;
       var actionEl = findActionElement(root, spec);
       if (actionEl && click(actionEl, spec.label, 'click')) {
         lastActionAt = now;
