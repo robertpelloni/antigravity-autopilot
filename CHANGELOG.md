@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.30] - 2026-03-06
+### Fixed
+* **Focus-Lock Guard for `typing:vscode-type`**: Added host chat-focus command attempts plus target composer re-focus/active checks before dispatching `vscode.commands.executeCommand('type')` in manual method tests.
+* **Button-Click Focus Theft During Tests**: `typing:vscode-type` now aborts when chat focus lock cannot be verified, preventing accidental typing into non-chat controls such as extension search inputs.
+
 ## [6.2.29] - 2026-03-06
 ### Fixed
 * **`vscode-type` False Positives**: Manual test method `typing:vscode-type` now requires chat composer readback verification; command dispatch success alone no longer counts as pass.

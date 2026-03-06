@@ -317,7 +317,7 @@ export class CDPStrategy implements IStrategy {
         return false;
     }
 
-    private async focusChatInputOnPage(pageId: string): Promise<{ ok: boolean; details: string }> {
+    private async focusChatInputOnPage(pageId: string): Promise<{ ok: boolean; active: boolean; details: string }> {
         const expression = `(() => {
             const isMonacoProxyInput = (el) => {
                 if (!el || !el.isConnected) return false;
@@ -366,13 +366,34 @@ export class CDPStrategy implements IStrategy {
 
         const value = result?.result?.value;
         if (!value) {
-            return { ok: false, details: 'focus-eval-failed' };
+            return { ok: false, active: false, details: 'focus-eval-failed' };
         }
 
         return {
             ok: value.ok === true,
+            active: value.active === true,
             details: `selector=${String(value.selector || 'none')} active=${value.active === true} tag=${String(value.tag || 'unknown')}`
         };
+    }
+
+    private async focusHostChatComposerBestEffort(): Promise<boolean> {
+        const commands = [
+            'workbench.action.chat.focus',
+            'workbench.action.chat.open'
+        ];
+
+        let anySuccess = false;
+        for (const cmd of commands) {
+            try {
+                await vscode.commands.executeCommand(cmd);
+                anySuccess = true;
+                logToOutput(`[TestMethod] focus-host-chat command-ok=${cmd}`);
+            } catch (e: any) {
+                logToOutput(`[TestMethod] focus-host-chat command-fail=${cmd} err=${String(e?.message || e || 'unknown')}`);
+            }
+        }
+
+        return anySuccess;
     }
 
     private async readComposerTextOnPage(pageId: string): Promise<string> {
@@ -782,7 +803,7 @@ export class CDPStrategy implements IStrategy {
         const firstTarget = (await this.pickBestManualTestTarget(method, targetPageIds)) || targetPageIds[0];
         logToOutput(`[TestMethod] target=${firstTarget.substring(0, 8)}`);
 
-        const focusInfo = await this.focusChatInputOnPage(firstTarget);
+        let focusInfo = await this.focusChatInputOnPage(firstTarget);
         logToOutput(`[TestMethod] focus => ok=${focusInfo.ok} details=${focusInfo.details}`);
 
         if (method === 'typing:cdp-insert-text') {
@@ -1053,6 +1074,17 @@ export class CDPStrategy implements IStrategy {
         }
 
         if (method === 'typing:vscode-type' || method === 'vscode-type') {
+            const hostFocusOk = await this.focusHostChatComposerBestEffort();
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            focusInfo = await this.focusChatInputOnPage(firstTarget);
+            const focusLockOk = hostFocusOk && focusInfo.ok && focusInfo.active;
+            logToOutput(`[TestMethod] typing:vscode-type focus-lock => hostFocusOk=${hostFocusOk} targetFocusOk=${focusInfo.ok} targetActive=${focusInfo.active} details=${focusInfo.details}`);
+
+            if (!focusLockOk) {
+                logToOutput('[TestMethod] typing:vscode-type => aborted: chat focus lock failed, refusing host type dispatch.');
+                return false;
+            }
+
             let commandOk = false;
             try {
                 await vscode.commands.executeCommand('type', { text: bumpText });
