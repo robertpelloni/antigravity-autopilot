@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.37] - 2026-03-06
+### Fixed
+* **Bridge Typing Regression in Antigravity Sessions**: Restored legacy bridge string payload handling in `CDPHandler` so `__AUTOPILOT_TYPE__` messages relay text insertion again via origin-session CDP input.
+* **Hybrid Bridge Relay Path**: Re-enabled `__AUTOPILOT_HYBRID_BUMP__` handling with explicit type-then-submit flow on the origin session, preserving type-only vs type+submit behavior separation.
+* **Bridge Telemetry & Action Relay Recovery**: Restored handling for `__AUTOPILOT_LOG__` and `__AUTOPILOT_ACTION__` payloads and wired automation-signal updates for bridge-origin events.
+
 ## [6.2.36] - 2026-03-06
 ### Added
 * **Run/Keep Click Test Controls**: Added dashboard one-click test buttons for `click:run-dom` and `click:keep-dom` under Button Clicking Methods.

@@ -1093,13 +1093,60 @@ export class CDPHandler extends EventEmitter {
     private async handleBridgeMessage(pageId: string, text: string, sessionId?: string) {
         if (typeof text !== 'string') return;
 
+        const payload = String(text || '');
+        if (!payload) return;
+
+        if (payload.startsWith('__AUTOPILOT_LOG__:')) {
+            this.noteAutomationSignal(pageId, sessionId);
+            const msg = payload.slice('__AUTOPILOT_LOG__:'.length).trim();
+            if (msg) {
+                logToOutput(`[Bridge] ${msg}`);
+            }
+            return;
+        }
+
+        if (payload.startsWith('__AUTOPILOT_ACTION__:')) {
+            this.noteAutomationSignal(pageId, sessionId);
+            const body = payload.slice('__AUTOPILOT_ACTION__:'.length);
+            const [groupRaw, ...detailParts] = body.split('|');
+            const group = String(groupRaw || 'click').trim().toLowerCase();
+            const detail = String(detailParts.join('|') || '').trim();
+
+            if (!this.shouldDispatchAction(pageId, sessionId, group, detail)) {
+                return;
+            }
+
+            this.emit('action', { pageId, sessionId, group, detail });
+            return;
+        }
+
+        if (payload.startsWith('__AUTOPILOT_TYPE__:')) {
+            this.noteAutomationSignal(pageId, sessionId);
+            const typeText = payload.slice('__AUTOPILOT_TYPE__:'.length);
+            if (typeText) {
+                await this.insertTextToOriginSession(pageId, sessionId, typeText);
+            }
+            return;
+        }
+
+        if (payload.startsWith('__AUTOPILOT_HYBRID_BUMP__:')) {
+            this.noteAutomationSignal(pageId, sessionId);
+            const bumpText = payload.slice('__AUTOPILOT_HYBRID_BUMP__:'.length);
+            if (bumpText) {
+                await this.insertTextToOriginSession(pageId, sessionId, bumpText);
+                await this.submitOriginSession(pageId, sessionId);
+            }
+            return;
+        }
+
         try {
-            const data = JSON.parse(text);
+            const data = JSON.parse(payload);
             if (data.type === 'state') {
+                this.noteAutomationSignal(pageId, sessionId);
                 this.emit('state', { pageId, sessionId, state: data });
             }
         } catch (e) {
-            // Ignore format errors or legacy string-based bridge messages
+            // Ignore format errors.
         }
     }
 
@@ -1163,6 +1210,53 @@ export class CDPHandler extends EventEmitter {
             this.sendCommand(pageId, 'Input.insertText', { text }, undefined, sessionId).catch(() => { });
         } else {
             logToOutput('[Bridge] Blocked __AUTOPILOT_TYPE__ relay for non-eligible origin session');
+        }
+    }
+
+    private async submitOriginSession(pageId: string, sessionId: string | undefined): Promise<void> {
+        if (!pageId) {
+            return;
+        }
+
+        const submitWithEnter = async (targetSessionId?: string): Promise<void> => {
+            await this.sendCommand(pageId, 'Input.dispatchKeyEvent', {
+                type: 'rawKeyDown',
+                key: 'Enter',
+                code: 'Enter',
+                windowsVirtualKeyCode: 13,
+                nativeVirtualKeyCode: 13,
+                unmodifiedText: '\r',
+                text: '\r'
+            }, undefined, targetSessionId).catch(() => { });
+
+            await this.sendCommand(pageId, 'Input.dispatchKeyEvent', {
+                type: 'keyUp',
+                key: 'Enter',
+                code: 'Enter',
+                windowsVirtualKeyCode: 13,
+                nativeVirtualKeyCode: 13
+            }, undefined, targetSessionId).catch(() => { });
+        };
+
+        if (!sessionId) {
+            await submitWithEnter(undefined);
+            return;
+        }
+
+        const gateResult = await this.sendCommand(pageId, 'Runtime.evaluate', {
+            expression: `(() => {
+                const isLeader = window.__antigravityConfig?.runtime?.isLeader === true;
+                const visible = document.visibilityState === 'visible';
+                return isLeader && visible;
+            })()`,
+            returnByValue: true,
+            awaitPromise: true
+        }, undefined, sessionId).catch(() => null);
+
+        if (gateResult?.result?.value === true) {
+            await submitWithEnter(sessionId);
+        } else {
+            logToOutput('[Bridge] Blocked __AUTOPILOT_HYBRID_BUMP__ submit relay for non-eligible origin session');
         }
     }
 
