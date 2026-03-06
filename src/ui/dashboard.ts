@@ -239,6 +239,36 @@ export class DashboardPanel {
   </style>
 </head>
 <body>
+  <script>
+    // Early bootstrap shim: guarantees inline handler symbols exist globally
+    // even if the main dashboard script fails during initialization.
+    (function () {
+      function __agNoop(name) {
+        return function () {
+          try { console.warn('[Antigravity Dashboard] early handler shim:', name); } catch {}
+          return undefined;
+        };
+      }
+
+      if (typeof window.setCfg !== 'function') window.setCfg = __agNoop('setCfg');
+      if (typeof window.setCdpPortImmediate !== 'function') window.setCdpPortImmediate = __agNoop('setCdpPortImmediate');
+      if (typeof window.saveCdpPortNow !== 'function') window.saveCdpPortNow = __agNoop('saveCdpPortNow');
+      if (typeof window.runCommand !== 'function') window.runCommand = __agNoop('runCommand');
+      if (typeof window.runTest !== 'function') window.runTest = __agNoop('runTest');
+      if (typeof window.clearTestHistory !== 'function') window.clearTestHistory = __agNoop('clearTestHistory');
+      if (typeof window.requestRuntimeState !== 'function') window.requestRuntimeState = __agNoop('requestRuntimeState');
+
+      // Ensure identifier lookups used by inline onclick resolve reliably.
+      if (typeof globalThis.setCfg !== 'function') globalThis.setCfg = window.setCfg;
+      if (typeof globalThis.setCdpPortImmediate !== 'function') globalThis.setCdpPortImmediate = window.setCdpPortImmediate;
+      if (typeof globalThis.saveCdpPortNow !== 'function') globalThis.saveCdpPortNow = window.saveCdpPortNow;
+      if (typeof globalThis.runCommand !== 'function') globalThis.runCommand = window.runCommand;
+      if (typeof globalThis.runTest !== 'function') globalThis.runTest = window.runTest;
+      if (typeof globalThis.clearTestHistory !== 'function') globalThis.clearTestHistory = window.clearTestHistory;
+      if (typeof globalThis.requestRuntimeState !== 'function') globalThis.requestRuntimeState = window.requestRuntimeState;
+    })();
+  </script>
+
   <h1>Antigravity Minimal Settings</h1>
 
   <div class="card">

@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.25] - 2026-03-05
+### Fixed
+* **Dashboard Inline Handler Bootstrap Hardening**: Added an early independent global shim in the dashboard HTML so inline handlers (`runTest`, `runCommand`, `setCfg`, etc.) are always defined before the main script executes.
+* **`runTest is not defined` Recurrence**: Prevented `ReferenceError` from inline test buttons when partial webview initialization or script interruption occurs.
+
 ## [6.2.24] - 2026-03-05
 ### Fixed
 * **Workspace-Pinned CDP Port Reversion**: Removed repository workspace override (`.vscode/settings.json`) that hard-pinned `antigravity.cdpPort` to `9222`, allowing user-configured ports to persist correctly.
