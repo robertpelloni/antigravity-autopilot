@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.17] - 2026-03-05
+### Fixed
+* **Antigravity Stalled-But-Signalless Starvation**: `CDPStrategy` stop-signal readiness now includes a guarded Antigravity/Cursor fallback (`runtime-stalled-fallback`) when runtime is stalled and waiting but explicit `completeStopSignal` is missing.
+* **Bump Dispatch Dead Gate**: Prevented indefinite `runtime-missing-stop-signal` skip loops from blocking bump typing/submission in valid waiting states.
+
 ## [6.2.16] - 2026-03-05
 ### Added
 * **Expanded Method Test Matrix**: Dashboard now exposes an exhaustive button set for historical and current bump typing/submit method IDs (including alias IDs) for regression trials.
