@@ -82,20 +82,69 @@ export class CDPStrategy implements IStrategy {
 
         if (resolvedTargets.length === 0) return ['no-connections'];
 
+        const requiresChatFocusedInput = method === 'Input.insertText' || method === 'Input.dispatchKeyEvent';
+        const isContextEligibleForInput = async (pageId: string, sessionId?: string): Promise<boolean> => {
+            if (!requiresChatFocusedInput) {
+                return true;
+            }
+
+            const guardExpression = `(() => {
+                const active = document.activeElement;
+                if (!active || !active.isConnected) return false;
+
+                const getHint = (el) => {
+                    const own = [el?.id, el?.className, el?.getAttribute?.('data-testid'), el?.getAttribute?.('aria-label'), el?.getAttribute?.('title'), el?.getAttribute?.('placeholder')]
+                        .map((v) => String(v || '').toLowerCase())
+                        .join(' ');
+                    const parent = String(el?.closest?.('[id], [class], [data-testid], [aria-label], [title]')?.outerHTML || '').toLowerCase();
+                    return own + ' ' + parent;
+                };
+
+                const hint = getHint(active);
+                if (/\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(hint)) return false;
+                if (/extensions?-viewlet|marketplace|extension search|search extensions|extensions search/.test(hint)) return false;
+
+                const tag = String(active.tagName || '').toLowerCase();
+                const role = String(active.getAttribute?.('role') || '').toLowerCase();
+                const editable = tag === 'textarea' || tag === 'input' || active.isContentEditable || role === 'textbox';
+                if (!editable) return false;
+
+                const inChat = !!active.closest?.('.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i], .chat-input-container');
+                if (inChat) return true;
+
+                return /\bchat\b|composer|ask|message|prompt|copilot/.test(hint);
+            })()`;
+
+            const result = await handler.sendCommand(pageId, 'Runtime.evaluate', {
+                expression: guardExpression,
+                returnByValue: true,
+                awaitPromise: true
+            }, undefined, sessionId).catch(() => null);
+
+            return result?.result?.value === true;
+        };
+
         for (const pageId of resolvedTargets) {
             const conn = handler.connections.get(pageId);
             const sessions: string[] = conn?.sessions ? Array.from(conn.sessions) : [];
             let pageSucceeded = false;
             let lastError: string | null = null;
 
-            try {
-                await handler.sendCommand(pageId, method, params);
-                pageSucceeded = true;
-            } catch (e: any) {
-                lastError = String(e?.message || e || 'unknown');
+            const mainEligible = await isContextEligibleForInput(pageId);
+            if (mainEligible) {
+                try {
+                    await handler.sendCommand(pageId, method, params);
+                    pageSucceeded = true;
+                } catch (e: any) {
+                    lastError = String(e?.message || e || 'unknown');
+                }
             }
 
             for (const sessionId of sessions) {
+                const sessionEligible = await isContextEligibleForInput(pageId, sessionId);
+                if (!sessionEligible) {
+                    continue;
+                }
                 try {
                     await handler.sendCommand(pageId, method, params, undefined, sessionId);
                     pageSucceeded = true;
@@ -912,7 +961,43 @@ export class CDPStrategy implements IStrategy {
     }
     async getDashboardSnapshot(): Promise<any> {
         const tracked = this.cdpHandler.getTrackedSessions();
-        const primary = tracked.length > 0 ? tracked[0] : null;
+        let primary = tracked.length > 0 ? tracked[0] : null;
+        const handler = this.cdpHandler as any;
+        let bestScore = -1;
+        for (const candidate of tracked) {
+            const pageId = String(candidate?.id || '');
+            if (!pageId) continue;
+
+            const scored = await handler.sendCommand(pageId, 'Runtime.evaluate', {
+                expression: `(() => {
+                    const visible = document.visibilityState === 'visible';
+                    const focused = (typeof document.hasFocus === 'function') ? document.hasFocus() : true;
+                    const hasComposer = Array.from(document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"], .monaco-editor textarea')).some((el) => {
+                        if (!el || !el.isConnected) return false;
+                        if (el.closest?.('.terminal, .xterm, .xterm-screen, .xterm-helper-textarea, [data-testid*="terminal" i], [class*="terminal" i], [id*="terminal" i], [aria-label*="terminal" i], [class*="xterm-helper" i], [id*="xterm" i]')) return false;
+                        const hint = [el?.id, el?.className, el?.getAttribute?.('data-testid'), el?.getAttribute?.('aria-label'), el?.getAttribute?.('title'), el?.getAttribute?.('placeholder')]
+                            .map((v) => String(v || '').toLowerCase())
+                            .join(' ');
+                        if (/extensions?-viewlet|marketplace|extension search|search extensions|extensions search/.test(hint)) return false;
+                        return /\bchat\b|composer|ask|message|prompt|copilot/.test(hint) || !!el.closest?.('.interactive-input-part, .chat-input-widget, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [class*="interactive" i], .chat-input-container');
+                    });
+                    return { visible, focused, hasComposer };
+                })()`,
+                returnByValue: true,
+                awaitPromise: true
+            }).catch(() => null);
+
+            const value = scored?.result?.value || {};
+            let score = 0;
+            if (value.visible === true) score += 8;
+            if (value.focused === true) score += 8;
+            if (value.hasComposer === true) score += 6;
+
+            if (score > bestScore) {
+                bestScore = score;
+                primary = candidate;
+            }
+        }
         const runtime = await this.cdpHandler.executeInFirstTruthySession('window.__antigravityGetState ? window.__antigravityGetState() : null', true).catch(() => null);
 
         return {

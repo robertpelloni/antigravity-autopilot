@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.39] - 2026-03-06
+### Fixed
+* **Misleading Dashboard Primary Window**: Primary window selection now uses runtime visibility/focus/composer scoring instead of raw first-connected target ordering, avoiding stale `Launchpad`-only assumptions.
+* **Typing Drift to Extension Search**: CDP typing/key dispatch now hard-gates to chat-eligible focused editables and explicitly excludes extension/search/marketplace surfaces.
+* **Non-Chat Focus Theft Side Effects**: Added stricter context eligibility checks before dispatching input events to page/session contexts, reducing periodic focus churn and off-target typing.
+
 ## [6.2.38] - 2026-03-06
 ### Fixed
 * **Antigravity Typing Methods in Nested Sessions**: Manual typing test dispatch (`Input.insertText` / key events) now targets both the page and attached CDP sessions, restoring typing delivery when chat composers live in nested webviews.
