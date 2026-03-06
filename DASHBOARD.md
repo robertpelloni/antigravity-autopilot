@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 6.2.21  
+**Version**: 6.2.22  
 **Last Updated**: 2026-03-05  
-**Status**: Production stabilization + dashboard global handler binding fix shipped for VS Code Insiders + Antigravity
+**Status**: Production stabilization + dashboard global fail-safe handler bootstrap shipped for VS Code Insiders + Antigravity
 
 ## Project Structure at a Glance
 

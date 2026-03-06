@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.22] - 2026-03-05
+### Fixed
+* **Persistent `runTest is not defined` Click Failures**: Dashboard now installs immediate global no-op handler stubs during script bootstrap, guaranteeing inline button handlers resolve even under partial initialization and host reload churn.
+* **Dashboard Bootstrap Resilience**: Inline action handlers now degrade to deterministic warning behavior instead of throwing hard `ReferenceError` exceptions.
+
 ## [6.2.21] - 2026-03-05
 ### Fixed
 * **Dashboard `runTest` ReferenceError**: Webview test handlers are now explicitly bound to `window` (`runTest`, `runCommand`, and related helpers), preventing inline button `onclick` failures in Antigravity webview scope.

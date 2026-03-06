@@ -322,6 +322,21 @@ export class DashboardPanel {
     const vscode = (typeof acquireVsCodeApi === 'function')
       ? acquireVsCodeApi()
       : { postMessage: () => {} };
+
+    // Fail-safe: define callable globals immediately so inline onclick handlers
+    // never throw ReferenceError, even if later initialization is interrupted.
+    const __agNoop = (name) => (...args) => {
+      try { console.warn('[Antigravity Dashboard] handler not ready:', name, args); } catch {}
+      return undefined;
+    };
+    window.setCfg = __agNoop('setCfg');
+    window.setCdpPortImmediate = __agNoop('setCdpPortImmediate');
+    window.saveCdpPortNow = __agNoop('saveCdpPortNow');
+    window.runCommand = __agNoop('runCommand');
+    window.runTest = __agNoop('runTest');
+    window.clearTestHistory = __agNoop('clearTestHistory');
+    window.requestRuntimeState = __agNoop('requestRuntimeState');
+
     const pendingCommandResolvers = new Map();
     const testHistory = [];
     let commandCounter = 0;
