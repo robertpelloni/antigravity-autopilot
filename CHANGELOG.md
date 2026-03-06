@@ -1,6 +1,13 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.35] - 2026-03-06
+### Added
+* **Expanded Typing Test Matrix (Dashboard + Strategy)**: Added new manual typing method test IDs and one-click dashboard buttons for `typing:vscode-type-chunked`, `typing:vscode-paste-commands`, `typing:vscode-insert-snippet`, `typing:cdp-key-stream`, `typing:bridge-chat-command`, and `typing:composition-events`.
+
+### Changed
+* **Insiders-Friendly Pass Logic for Host Typing Methods**: New host-command-based typing tests now tolerate Monaco readback blind spots when chat focus remains locked, reducing false negatives during VS Code Insiders method trials.
+
 ## [6.2.34] - 2026-03-06
 ### Fixed
 * **VS Code Insiders Task-List Focus Theft**: Hardened minimal runtime intent detection to ignore task/quick-list `Run` targets so autopilot no longer clicks non-chat `Run` items every poll cycle.
