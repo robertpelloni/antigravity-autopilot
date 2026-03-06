@@ -1548,20 +1548,42 @@ export class CDPStrategy implements IStrategy {
             return value.readyToResume === true;
         }
 
-        if (method === 'detect:send-button' || method === 'detect:keep-button' || method === 'detect:run-button' || method === 'detect:thumbs-signal') {
+        if (method === 'detect:send-button' || method === 'detect:keep-button' || method === 'detect:run-button' || method === 'detect:expand-button' || method === 'detect:thumbs-signal') {
             const selectorMap: Record<string, string> = {
                 'detect:send-button': '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], [data-testid*="send" i], [data-testid*="submit" i], button[type="submit"], .codicon-send',
                 'detect:keep-button': '[title*="Keep" i], [aria-label*="Keep" i], [data-testid*="keep" i], button[title*="Keep" i], button[aria-label*="Keep" i]',
-                'detect:run-button': '[title*="Run" i], [aria-label*="Run" i], [data-testid*="run" i], .codicon-play, button[title*="Run in Terminal" i], button[aria-label*="Run in Terminal" i]',
+                'detect:run-button': 'button[title*="Run in Terminal" i], button[aria-label*="Run in Terminal" i], button[title*="Run command" i], button[aria-label*="Run command" i], button[title*="Execute command" i], button[aria-label*="Execute command" i], [data-testid*="run-in-terminal" i], [data-testid*="run-command" i]',
+                'detect:expand-button': 'button[title*="Expand" i], button[aria-label*="Expand" i], [title*="Expand" i], [aria-label*="Expand" i], [data-testid*="expand" i], .codicon-chevron-right, .monaco-tl-twistie.collapsed',
                 'detect:thumbs-signal': '.codicon-thumbsup, .codicon-thumbsdown, [class*="thumbsup" i], [class*="thumbsdown" i], [title*="thumbs up" i], [title*="thumbs down" i], [aria-label*="thumbs up" i], [aria-label*="thumbs down" i]'
             };
             const selector = selectorMap[method];
             const expression = `(() => {
+                const blockedShell = '.quick-input-widget, .monaco-quick-input-container, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"], .monaco-list-row, [data-view-id*="tasks" i], [class*="tasks-view" i], [class*="task-list" i], [aria-label*="task" i], [aria-label*="tasks" i], .part.titlebar, .part.activitybar, .part.statusbar';
+                const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i]';
+                const isChatActionSurface = (el) => {
+                    if (!el) return false;
+                    let cur = el;
+                    while (cur) {
+                        try {
+                            if (cur.matches && cur.matches(blockedShell)) return false;
+                        } catch {}
+                        cur = cur.parentElement || (cur.getRootNode && cur.getRootNode().host) || null;
+                    }
+                    cur = el;
+                    while (cur) {
+                        try {
+                            if (cur.matches && cur.matches(chatContainers)) return true;
+                        } catch {}
+                        cur = cur.parentElement || (cur.getRootNode && cur.getRootNode().host) || null;
+                    }
+                    return false;
+                };
                 const nodes = Array.from(document.querySelectorAll(${JSON.stringify(selector)}));
                 let visible = 0;
                 for (const n of nodes) {
                     const el = n.closest?.('button, [role="button"], a, span, div') || n;
                     if (!el || !el.isConnected) continue;
+                    if ((${JSON.stringify(method)} === 'detect:run-button' || ${JSON.stringify(method)} === 'detect:expand-button') && !isChatActionSurface(el)) continue;
                     const r = el.getBoundingClientRect();
                     if (!r || r.width <= 0 || r.height <= 0) continue;
                     const s = window.getComputedStyle(el);
@@ -1578,6 +1600,107 @@ export class CDPStrategy implements IStrategy {
 
         if (method === 'click:send-dom' || method === 'submit:send-button-click' || method === 'submit:click-send' || method === 'click-send') {
             const ok = await this.clickSubmitButtonOnPage(firstTarget, bumpText);
+            logToOutput(`[TestMethod] ${method} => ${ok}`);
+            return ok;
+        }
+
+        if (method === 'click:run-dom' || method === 'click-run') {
+            const expression = `(() => {
+                const selectors = [
+                    'button[title*="Run in Terminal" i]',
+                    'button[aria-label*="Run in Terminal" i]',
+                    'button[title*="Run command" i]',
+                    'button[aria-label*="Run command" i]',
+                    'button[title*="Execute command" i]',
+                    'button[aria-label*="Execute command" i]',
+                    '[data-testid*="run-in-terminal" i]',
+                    '[data-testid*="run-command" i]'
+                ];
+                const blockedShell = '.quick-input-widget, .monaco-quick-input-container, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"], .monaco-list-row, [data-view-id*="tasks" i], [class*="tasks-view" i], [class*="task-list" i], [aria-label*="task" i], [aria-label*="tasks" i], .part.titlebar, .part.activitybar, .part.statusbar';
+                const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i]';
+                const isChatActionSurface = (el) => {
+                    if (!el) return false;
+                    let cur = el;
+                    while (cur) {
+                        try { if (cur.matches && cur.matches(blockedShell)) return false; } catch {}
+                        cur = cur.parentElement || (cur.getRootNode && cur.getRootNode().host) || null;
+                    }
+                    cur = el;
+                    while (cur) {
+                        try { if (cur.matches && cur.matches(chatContainers)) return true; } catch {}
+                        cur = cur.parentElement || (cur.getRootNode && cur.getRootNode().host) || null;
+                    }
+                    return false;
+                };
+                const isVisible = (el) => {
+                    if (!el || !el.isConnected || el.disabled) return false;
+                    const r = el.getBoundingClientRect();
+                    if (!r || r.width <= 0 || r.height <= 0) return false;
+                    const s = window.getComputedStyle(el);
+                    return !(s.display === 'none' || s.visibility === 'hidden' || s.pointerEvents === 'none');
+                };
+                for (const sel of selectors) {
+                    const nodes = Array.from(document.querySelectorAll(sel));
+                    for (const node of nodes) {
+                        const el = node.closest?.('button, [role="button"], a, .monaco-button') || node;
+                        if (!isVisible(el) || !isChatActionSurface(el)) continue;
+                        try { if (typeof el.focus === 'function') el.focus({ preventScroll: true }); } catch {}
+                        try { el.click(); } catch {}
+                        return true;
+                    }
+                }
+                return false;
+            })()`;
+            const ok = (await evaluateOnTarget(expression)) === true;
+            logToOutput(`[TestMethod] ${method} => ${ok}`);
+            return ok;
+        }
+
+        if (method === 'click:keep-dom' || method === 'click-keep') {
+            const expression = `(() => {
+                const selectors = [
+                    'button[title*="Keep" i]',
+                    'button[aria-label*="Keep" i]',
+                    '[title*="Keep" i]',
+                    '[aria-label*="Keep" i]',
+                    '[data-testid*="keep" i]'
+                ];
+                const blockedShell = '.quick-input-widget, .monaco-quick-input-container, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"], .monaco-list-row, [data-view-id*="tasks" i], [class*="tasks-view" i], [class*="task-list" i], [aria-label*="task" i], [aria-label*="tasks" i], .part.titlebar, .part.activitybar, .part.statusbar';
+                const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i]';
+                const isChatActionSurface = (el) => {
+                    if (!el) return false;
+                    let cur = el;
+                    while (cur) {
+                        try { if (cur.matches && cur.matches(blockedShell)) return false; } catch {}
+                        cur = cur.parentElement || (cur.getRootNode && cur.getRootNode().host) || null;
+                    }
+                    cur = el;
+                    while (cur) {
+                        try { if (cur.matches && cur.matches(chatContainers)) return true; } catch {}
+                        cur = cur.parentElement || (cur.getRootNode && cur.getRootNode().host) || null;
+                    }
+                    return false;
+                };
+                const isVisible = (el) => {
+                    if (!el || !el.isConnected || el.disabled) return false;
+                    const r = el.getBoundingClientRect();
+                    if (!r || r.width <= 0 || r.height <= 0) return false;
+                    const s = window.getComputedStyle(el);
+                    return !(s.display === 'none' || s.visibility === 'hidden' || s.pointerEvents === 'none');
+                };
+                for (const sel of selectors) {
+                    const nodes = Array.from(document.querySelectorAll(sel));
+                    for (const node of nodes) {
+                        const el = node.closest?.('button, [role="button"], a, .monaco-button') || node;
+                        if (!isVisible(el) || !isChatActionSurface(el)) continue;
+                        try { if (typeof el.focus === 'function') el.focus({ preventScroll: true }); } catch {}
+                        try { el.click(); } catch {}
+                        return true;
+                    }
+                }
+                return false;
+            })()`;
+            const ok = (await evaluateOnTarget(expression)) === true;
             logToOutput(`[TestMethod] ${method} => ${ok}`);
             return ok;
         }
@@ -1688,6 +1811,20 @@ export class CDPStrategy implements IStrategy {
         }
 
         if (method === 'submit:auto-sequence') {
+            const commands = [
+                'workbench.action.chat.submit',
+                'antigravity.sendTextToChat'
+            ];
+            for (const cmd of commands) {
+                try {
+                    await vscode.commands.executeCommand(cmd);
+                    logToOutput(`[TestMethod] submit:auto-sequence vscodeAttempt command-ok=${cmd}`);
+                    return true;
+                } catch (e: any) {
+                    logToOutput(`[TestMethod] submit:auto-sequence vscodeAttempt command-fail=${cmd} err=${String(e?.message || e || 'unknown')}`);
+                }
+            }
+
             const byButton = await this.clickSubmitButtonOnPage(firstTarget, bumpText);
             logToOutput(`[TestMethod] submit:auto-sequence buttonAttempt=${byButton}`);
             if (byButton) return true;

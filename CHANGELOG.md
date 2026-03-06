@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.36] - 2026-03-06
+### Added
+* **Run/Keep Click Test Controls**: Added dashboard one-click test buttons for `click:run-dom` and `click:keep-dom` under Button Clicking Methods.
+* **Run/Keep Click Test Methods**: Added corresponding strategy methods (`click:run-dom` / `click-run`, `click:keep-dom` / `click-keep`) for targeted chat-surface click validation.
+
+### Changed
+* **Run Detection Accuracy Hardening**: Tightened `detect:run-button` to explicit command/terminal run selectors and chat-surface gating, excluding task/quick-list/menu/workbench-shell contexts.
+* **Submit Auto Sequence Prioritization**: `submit:auto-sequence` now attempts VS Code submit commands first (`workbench.action.chat.submit`, `antigravity.sendTextToChat`) before send-click/mouse/enter fallbacks, matching current Insiders reliability observations.
+
 ## [6.2.35] - 2026-03-06
 ### Added
 * **Expanded Typing Test Matrix (Dashboard + Strategy)**: Added new manual typing method test IDs and one-click dashboard buttons for `typing:vscode-type-chunked`, `typing:vscode-paste-commands`, `typing:vscode-insert-snippet`, `typing:cdp-key-stream`, `typing:bridge-chat-command`, and `typing:composition-events`.

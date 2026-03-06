@@ -375,10 +375,11 @@ export class DashboardPanel {
 
     <h2>Test: Button Detection Methods</h2>
     <div class="row"><button onclick="runTest('detect:send-button')">Detect Send Button</button><button onclick="runTest('detect:keep-button')">Detect Keep Button</button><button onclick="runTest('detect:run-button')">Detect Run Button</button></div>
-    <div class="row"><button onclick="runTest('detect:thumbs-signal')">Detect Thumbs Signal</button></div>
+    <div class="row"><button onclick="runTest('detect:expand-button')">Detect Expand Button</button><button onclick="runTest('detect:thumbs-signal')">Detect Thumbs Signal</button></div>
 
     <h2>Test: Button Clicking Methods</h2>
     <div class="row"><button onclick="runTest('click:send-dom')">DOM Click Send</button><button onclick="runTest('click:send-cdp-mouse')">CDP Mouse Click Send</button><button onclick="runTest('click:enter-key')">CDP Enter Key</button></div>
+    <div class="row"><button onclick="runTest('click:run-dom')">DOM Click Run</button><button onclick="runTest('click:keep-dom')">DOM Click Keep</button></div>
 
     <h2>Test: Bump Text Submit Methods</h2>
     <p class="muted">VS Code Insiders + Antigravity (Monaco) priority: <strong>Submit Auto Sequence</strong>, <strong>Submit via Enter Key</strong>, <strong>Submit via CDP Mouse</strong>, <strong>Submit VSCode Commands</strong>.</p>
