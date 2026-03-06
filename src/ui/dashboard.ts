@@ -34,7 +34,15 @@ export class DashboardPanel {
 
                     if (key === 'cdpPort') {
                         const firstFolder = vscode.workspace.workspaceFolders?.[0];
-                        const writeValue = Math.min(65535, Math.max(1, Number(value) || 9222));
+            const parsed = Number(value);
+            if (!Number.isFinite(parsed)) {
+              throw new Error('Invalid CDP port: not a finite number.');
+            }
+            const intPort = Math.trunc(parsed);
+            if (intPort < 1 || intPort > 65535) {
+              throw new Error('Invalid CDP port: must be in range 1-65535.');
+            }
+            const writeValue = intPort;
 
                         if (target === vscode.ConfigurationTarget.WorkspaceFolder) {
                             if (!firstFolder) {
@@ -347,7 +355,13 @@ export class DashboardPanel {
     }
 
     function normalizePort(value) {
-      return Math.min(65535, Math.max(1, Number(value) || 9222));
+      const raw = String(value ?? '').trim();
+      if (!raw) return null;
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed)) return null;
+      const intPort = Math.trunc(parsed);
+      if (intPort < 1 || intPort > 65535) return null;
+      return intPort;
     }
 
     function setSaveStatus(text) {
@@ -358,18 +372,26 @@ export class DashboardPanel {
 
     function getCdpPortInputValue() {
       const input = document.getElementById('cdpPortInput');
-      if (!input) return 9222;
+      if (!input) return null;
       return normalizePort(input.value);
     }
 
     function setCdpPortImmediate() {
       const port = getCdpPortInputValue();
+      if (port == null) {
+        setSaveStatus('CDP port not saved yet: enter a number in range 1-65535.');
+        return;
+      }
       setCfg('cdpPort', port, 'workspace');
       setSaveStatus('Saving CDP port...');
     }
 
     function saveCdpPortNow() {
       const port = getCdpPortInputValue();
+      if (port == null) {
+        setSaveStatus('Cannot save CDP port: enter a valid number in range 1-65535.');
+        return;
+      }
       setCfg('cdpPort', port, 'workspace');
       setSaveStatus('Saving CDP port (manual save)...');
     }

@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.23] - 2026-03-05
+### Fixed
+* **`cdpPort` Save Coercion Regression**: Dashboard `cdpPort` writes now strictly validate numeric input and no longer coerce invalid/empty values back to `9222`.
+* **Startup Port Scope Resolution**: CDP client startup now resolves `antigravity.cdpPort` using workspace-folder-aware configuration lookup so effective workspace values are honored on activation.
+* **Host Command Registration Collision Risk**: Removed legacy no-op registrations for `antigravity.updateTerminalLastCommand` and `antigravity.isFileGitIgnored` to avoid duplicate/not-found command churn in mixed extension-host environments.
+
 ## [6.2.22] - 2026-03-05
 ### Fixed
 * **Persistent `runTest is not defined` Click Failures**: Dashboard now installs immediate global no-op handler stubs during script bootstrap, guaranteeing inline button handlers resolve even under partial initialization and host reload churn.
