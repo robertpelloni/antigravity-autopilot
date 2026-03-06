@@ -1790,10 +1790,42 @@ export class CDPStrategy implements IStrategy {
                 }
                 return { total: nodes.length, visible };
             })()`;
-            const result = await (this.cdpHandler as any).sendCommand(firstTarget, 'Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }).catch(() => null);
-            const value = result?.result?.value || { total: 0, visible: 0 };
-            logToOutput(`[TestMethod] ${method} => ${JSON.stringify(value)}`);
-            return Number(value.visible || 0) > 0;
+            const handler = this.cdpHandler as any;
+            const conn = handler.connections?.get(firstTarget);
+            const sessions: string[] = conn?.sessions ? Array.from(conn.sessions) : [];
+
+            const evaluateCount = async (sessionId?: string): Promise<{ total: number; visible: number } | null> => {
+                const result = await handler.sendCommand(firstTarget, 'Runtime.evaluate', {
+                    expression,
+                    returnByValue: true,
+                    awaitPromise: true
+                }, undefined, sessionId).catch(() => null);
+                const value = result?.result?.value;
+                if (!value || typeof value !== 'object') return null;
+                return {
+                    total: Number((value as any).total || 0),
+                    visible: Number((value as any).visible || 0)
+                };
+            };
+
+            const rollup = { total: 0, visible: 0, contexts: [] as string[] };
+            const mainValue = await evaluateCount();
+            if (mainValue) {
+                rollup.total = Math.max(rollup.total, mainValue.total);
+                rollup.visible = Math.max(rollup.visible, mainValue.visible);
+                if (mainValue.visible > 0) rollup.contexts.push('main');
+            }
+
+            for (const sessionId of sessions) {
+                const value = await evaluateCount(sessionId);
+                if (!value) continue;
+                rollup.total = Math.max(rollup.total, value.total);
+                rollup.visible = Math.max(rollup.visible, value.visible);
+                if (value.visible > 0) rollup.contexts.push(`session:${String(sessionId).substring(0, 8)}`);
+            }
+
+            logToOutput(`[TestMethod] ${method} => ${JSON.stringify({ total: rollup.total, visible: rollup.visible, contexts: rollup.contexts })}`);
+            return rollup.visible > 0;
         }
 
         if (method === 'click:send-dom' || method === 'submit:send-button-click' || method === 'submit:click-send' || method === 'click-send') {
@@ -1854,9 +1886,33 @@ export class CDPStrategy implements IStrategy {
                 }
                 return false;
             })()`;
-            const ok = (await evaluateOnTarget(expression)) === true;
-            logToOutput(`[TestMethod] ${method} => ${ok}`);
-            return ok;
+            const handler = this.cdpHandler as any;
+            const conn = handler.connections?.get(firstTarget);
+            const sessions: string[] = conn?.sessions ? Array.from(conn.sessions) : [];
+
+            const evaluateClick = async (sessionId?: string): Promise<boolean> => {
+                const result = await handler.sendCommand(firstTarget, 'Runtime.evaluate', {
+                    expression,
+                    returnByValue: true,
+                    awaitPromise: true
+                }, undefined, sessionId).catch(() => null);
+                return result?.result?.value === true;
+            };
+
+            if (await evaluateClick()) {
+                logToOutput(`[TestMethod] ${method} => true (main)`);
+                return true;
+            }
+
+            for (const sessionId of sessions) {
+                if (await evaluateClick(sessionId)) {
+                    logToOutput(`[TestMethod] ${method} => true (session:${String(sessionId).substring(0, 8)})`);
+                    return true;
+                }
+            }
+
+            logToOutput(`[TestMethod] ${method} => false`);
+            return false;
         }
 
         if (method === 'click:keep-dom' || method === 'click-keep') {

@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.42] - 2026-03-06
+### Fixed
+* **Run Button Detection in Nested Antigravity Webviews**: `detect:run-button` now evaluates both the page context and attached CDP sessions, then rolls up visible counts across contexts.
+* **Run Click Test in Session Contexts**: `click:run-dom` now attempts click execution in main context and attached sessions, fixing false negatives when Run controls are rendered outside the top frame.
+* **Detection Telemetry Precision**: Added per-context hit reporting for button detection to make session-vs-main visibility differences explicit in logs.
+
 ## [6.2.41] - 2026-03-06
 ### Fixed
 * **Run Button Detection in Antigravity**: Expanded `detect:run-button` selector coverage to include icon/test-id/label variants used in Antigravity surfaces (`Run`, `execute-command`, `.codicon-play`, `.codicon-run`).
