@@ -319,7 +319,9 @@ export class DashboardPanel {
   </div>
 
   <script>
-    const vscode = acquireVsCodeApi();
+    const vscode = (typeof acquireVsCodeApi === 'function')
+      ? acquireVsCodeApi()
+      : { postMessage: () => {} };
     const pendingCommandResolvers = new Map();
     const testHistory = [];
     let commandCounter = 0;
@@ -445,6 +447,15 @@ export class DashboardPanel {
     function requestRuntimeState() {
       vscode.postMessage({ command: 'requestRuntimeState' });
     }
+
+    // Ensure inline onclick handlers always resolve in webview global scope.
+    window.setCfg = setCfg;
+    window.setCdpPortImmediate = setCdpPortImmediate;
+    window.saveCdpPortNow = saveCdpPortNow;
+    window.runCommand = runCommand;
+    window.runTest = runTest;
+    window.clearTestHistory = clearTestHistory;
+    window.requestRuntimeState = requestRuntimeState;
 
     window.addEventListener('message', (event) => {
       const message = event.data;

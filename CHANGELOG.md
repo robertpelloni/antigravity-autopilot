@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.21] - 2026-03-05
+### Fixed
+* **Dashboard `runTest` ReferenceError**: Webview test handlers are now explicitly bound to `window` (`runTest`, `runCommand`, and related helpers), preventing inline button `onclick` failures in Antigravity webview scope.
+* **Webview API Bootstrap Safety**: Added a guarded `acquireVsCodeApi()` fallback to prevent early script bootstrap failures from cascading into undefined dashboard handlers.
+
 ## [6.2.20] - 2026-03-05
 ### Fixed
 * **Dashboard Button Dead-Click Visibility**: Dashboard command bridge now emits explicit request/result telemetry for webview-issued command invocations, making button-action paths observable under host churn.

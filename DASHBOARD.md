@@ -1,8 +1,8 @@
 # Antigravity Autopilot Dashboard
 
-**Version**: 6.2.20  
+**Version**: 6.2.21  
 **Last Updated**: 2026-03-05  
-**Status**: Production stabilization + dashboard command-bridge telemetry/timeout hardening shipped for VS Code Insiders + Antigravity
+**Status**: Production stabilization + dashboard global handler binding fix shipped for VS Code Insiders + Antigravity
 
 ## Project Structure at a Glance
 
