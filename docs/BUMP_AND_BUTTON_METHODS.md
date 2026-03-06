@@ -1,10 +1,27 @@
 # Bump + Button Automation Methods (Antigravity Autopilot)
 
-Last updated: 2026-02-27
+Last updated: 2026-03-06
 
 This document records the **current runtime methods** used by `src/scripts/auto-continue.ts` and their observed reliability intent in Antigravity/VS Code chat surfaces.
 
 ## 1) Bump Typing Methods
+
+### VS Code Insiders (user-validated on 2026-03-06)
+
+The following methods are currently the only ones confirmed to visibly type bump text in VS Code Insiders:
+
+1. `typing:vscode-type` (alias: `vscode-type`)
+2. `typing:vscode-type-chunked`
+3. `typing:vscode-insert-snippet`
+4. `typing:bridge-chat-command`
+
+Additional observed behavior:
+- `typing:bridge-chat-command` types **and submits** in the same action path.
+- `submit:script-submit` (alias: `script-submit`) is user-validated working on VS Code Insiders.
+- `submit:vscode-submit` (alias: `vscode-submit`) is user-validated working on VS Code Insiders.
+
+Operational implication:
+- For VS Code Insiders, prioritize host-command-driven methods above DOM mutation and legacy event-dispatch methods.
 
 ### Method order (configured)
 `automation.bump.typeMethods` default order:
@@ -35,6 +52,19 @@ This prevents multi-window bump spam when multiple IDE windows are open but only
 ---
 
 ## 2) Bump Submit Methods
+
+### VS Code Insiders (user-validated on 2026-03-06)
+
+Known-working submit methods in current user validation:
+
+1. `submit:script-submit` (alias: `script-submit`)
+2. `submit:vscode-submit` (alias: `vscode-submit`)
+
+Notes:
+- `submit:script-submit` currently succeeds through the script-hook submit path.
+- `submit:vscode-submit` currently succeeds through host command dispatch.
+- Dashboard label confirmation: **"Submit VSCode Commands"** works (maps to `submit:vscode-submit`).
+- Keep these as preferred submit candidates for Insiders while DOM-only submit paths continue to vary by host build.
 
 ### Method order (configured)
 `automation.bump.submitMethods` default order:
