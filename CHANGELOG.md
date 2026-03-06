@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.41] - 2026-03-06
+### Fixed
+* **Run Button Detection in Antigravity**: Expanded `detect:run-button` selector coverage to include icon/test-id/label variants used in Antigravity surfaces (`Run`, `execute-command`, `.codicon-play`, `.codicon-run`).
+* **Launchpad Chat Surface Recognition**: Broadened chat-action surface matching for run detection/click tests to include Launchpad/AI chat containers (`interactive-editor`, `chat-editing-session-container`, `aichat-container`, interactive view IDs, and launchpad markers) while preserving task/menu/workbench exclusions.
+* **Run Click Test Parity**: Updated `click:run-dom` candidate selectors to match the same expanded Antigravity run-button variants used by detection.
+
 ## [6.2.40] - 2026-03-06
 ### Fixed
 * **CDP Typing `dispatch-failed` Regression**: Restored fail-open fallback for CDP input dispatch when strict chat-eligibility heuristics yield no eligible context, preventing false no-op failures for `typing:cdp-insert-text` and key-based CDP methods.

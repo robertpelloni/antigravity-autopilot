@@ -1750,14 +1750,14 @@ export class CDPStrategy implements IStrategy {
             const selectorMap: Record<string, string> = {
                 'detect:send-button': '[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], [data-testid*="send" i], [data-testid*="submit" i], button[type="submit"], .codicon-send',
                 'detect:keep-button': '[title*="Keep" i], [aria-label*="Keep" i], [data-testid*="keep" i], button[title*="Keep" i], button[aria-label*="Keep" i]',
-                'detect:run-button': 'button[title*="Run in Terminal" i], button[aria-label*="Run in Terminal" i], button[title*="Run command" i], button[aria-label*="Run command" i], button[title*="Execute command" i], button[aria-label*="Execute command" i], [data-testid*="run-in-terminal" i], [data-testid*="run-command" i]',
+                'detect:run-button': 'button[title*="Run in Terminal" i], button[aria-label*="Run in Terminal" i], button[title*="Run command" i], button[aria-label*="Run command" i], button[title*="Execute command" i], button[aria-label*="Execute command" i], button[title="Run" i], button[aria-label="Run" i], [data-testid*="run-in-terminal" i], [data-testid*="run-command" i], [data-testid*="execute-command" i], .codicon-play, .codicon-run',
                 'detect:expand-button': 'button[title*="Expand" i], button[aria-label*="Expand" i], [title*="Expand" i], [aria-label*="Expand" i], [data-testid*="expand" i], .codicon-chevron-right, .monaco-tl-twistie.collapsed',
                 'detect:thumbs-signal': '.codicon-thumbsup, .codicon-thumbsdown, [class*="thumbsup" i], [class*="thumbsdown" i], [title*="thumbs up" i], [title*="thumbs down" i], [aria-label*="thumbs up" i], [aria-label*="thumbs down" i]'
             };
             const selector = selectorMap[method];
             const expression = `(() => {
                 const blockedShell = '.quick-input-widget, .monaco-quick-input-container, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"], .monaco-list-row, [data-view-id*="tasks" i], [class*="tasks-view" i], [class*="task-list" i], [aria-label*="task" i], [aria-label*="tasks" i], .part.titlebar, .part.activitybar, .part.statusbar';
-                const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i]';
+                const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [data-testid*="aichat" i], [data-view-id*="interactive" i], [class*="chat" i], [class*="interactive" i], [class*="aichat" i], [id*="launchpad" i], [class*="launchpad" i]';
                 const isChatActionSurface = (el) => {
                     if (!el) return false;
                     let cur = el;
@@ -1811,11 +1811,16 @@ export class CDPStrategy implements IStrategy {
                     'button[aria-label*="Run command" i]',
                     'button[title*="Execute command" i]',
                     'button[aria-label*="Execute command" i]',
+                    'button[title="Run" i]',
+                    'button[aria-label="Run" i]',
                     '[data-testid*="run-in-terminal" i]',
-                    '[data-testid*="run-command" i]'
+                    '[data-testid*="run-command" i]',
+                    '[data-testid*="execute-command" i]',
+                    '.codicon-play',
+                    '.codicon-run'
                 ];
                 const blockedShell = '.quick-input-widget, .monaco-quick-input-container, .monaco-menu, .monaco-menu-container, [role="menu"], [role="menuitem"], [role="menubar"], .monaco-list-row, [data-view-id*="tasks" i], [class*="tasks-view" i], [class*="task-list" i], [aria-label*="task" i], [aria-label*="tasks" i], .part.titlebar, .part.activitybar, .part.statusbar';
-                const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, [data-testid*="chat" i], [class*="chat" i], [class*="interactive" i]';
+                const chatContainers = '.interactive-input-part, .chat-input-widget, .chat-row, .chat-list, .interactive-editor, .chat-editing-session-container, .aichat-container, [data-testid*="chat" i], [data-testid*="composer" i], [data-testid*="aichat" i], [data-view-id*="interactive" i], [class*="chat" i], [class*="interactive" i], [class*="aichat" i], [id*="launchpad" i], [class*="launchpad" i]';
                 const isChatActionSurface = (el) => {
                     if (!el) return false;
                     let cur = el;
