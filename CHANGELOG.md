@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.29] - 2026-03-06
+### Fixed
+* **`vscode-type` False Positives**: Manual test method `typing:vscode-type` now requires chat composer readback verification; command dispatch success alone no longer counts as pass.
+* **Focus Leak Diagnostics**: Added explicit telemetry when `vscode.commands.executeCommand('type')` succeeds but composer readback is unchanged, indicating input likely landed in a non-chat focused control (e.g., extension search box).
+
 ## [6.2.28] - 2026-03-05
 ### Fixed
 * **Cross-Fork Stop-Signal Drift Starvation**: Expanded guarded `runtime-stalled-fallback` readiness in `CDPStrategy` to apply across forks (including VS Code profile) when runtime is stalled, not generating, and in waiting/idle state.

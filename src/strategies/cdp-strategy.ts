@@ -1061,8 +1061,12 @@ export class CDPStrategy implements IStrategy {
                 logToOutput(`[TestMethod] typing:vscode-type command-error=${String(e?.message || e || 'unknown')}`);
             }
             const readback = await this.readComposerTextOnPage(firstTarget);
-            const ok = commandOk || readback.toLowerCase().includes(bumpText.toLowerCase());
-            logToOutput(`[TestMethod] typing:vscode-type => commandOk=${commandOk} readback="${readback}" ok=${ok}`);
+            const readbackOk = readback.toLowerCase().includes(bumpText.toLowerCase());
+            const ok = commandOk && readbackOk;
+            if (commandOk && !readbackOk) {
+                logToOutput('[TestMethod] typing:vscode-type => command executed but composer readback did not match; likely typed into non-chat focused control.');
+            }
+            logToOutput(`[TestMethod] typing:vscode-type => commandOk=${commandOk} readback="${readback}" readbackOk=${readbackOk} ok=${ok}`);
             return ok;
         }
 
