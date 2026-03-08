@@ -97,21 +97,39 @@ export const AUTO_CONTINUE_SCRIPT = `
   // -------------------------------------------------------------------------------- //
 
   var ACTION_SPECS = [
-    { key: 'clickRun', label: 'Run', regex: /(^|\\b)(run(\\s+in\\s+terminal|\\s+command)?|execute)(\\b|$)/i },
-    { key: 'clickExpand', label: 'Expand', regex: /(expand|requires\\s*input|step\\s*requires\\s*input)/i },
-    { key: 'clickAlwaysAllow', label: 'Always Allow', regex: /(always\\s*allow|always\\s*approve)/i },
-    { key: 'clickRetry', label: 'Retry', regex: /(\\bretry\\b|\\btry\\s+again\\b)/i },
-    { key: 'clickAcceptAll', label: 'Accept all', regex: /(accept\\s*all|apply\\s*all|accept\\s*all\\s*changes|apply\\s*all\\s*changes)/i },
-    { key: 'clickKeep', label: 'Keep', regex: /\\bkeep\\b/i },
-    { key: 'clickProceed', label: 'Proceed', regex: /\\bproceed\\b/i },
+    { key: 'clickRun', label: 'Run', regex: /(^|\b)(run(\s+in\s+terminal|\s+command)?|execute)(\b|$)/i },
+    { key: 'clickExpand', label: 'Expand', regex: /(expand|requires\s*input|step\s*requires\s*input)/i },
+    { key: 'clickAlwaysAllow', label: 'Always Allow', regex: /(always\s*allow|always\s*approve)/i },
+    { key: 'clickRetry', label: 'Retry', regex: /(\bretry\b|\btry\s+again\b)/i },
+    { key: 'clickAcceptAll', label: 'Accept all', regex: /(accept\s*all|apply\s*all|accept\s*all\s*changes|apply\s*all\s*changes)/i },
+    { key: 'clickKeep', label: 'Keep', regex: /\bkeep\b/i },
+    { key: 'clickProceed', label: 'Proceed', regex: /\bproceed\b/i },
     { key: 'clickAllow', label: 'Allow', regex: /^allow$/i } 
   ];
+
+  function isBlockedSurface(el) {
+    if (!el || !el.closest) return false;
+    var blocked = '.part.titlebar, .part.activitybar, .part.statusbar, .menubar, .monaco-menu, [role="menu"], [role="menuitem"], [role="menubar"], .settings-editor, .extensions-viewlet';
+    var terminal = '.terminal-instance, .terminal-wrapper, .xterm, [class*="terminal" i]';
+    try {
+        if (el.closest(blocked) || el.closest(terminal)) return true;
+        // Strict guard against interacting with main text editors instead of chat
+        if (el.tagName && el.tagName.toLowerCase() === 'textarea') {
+            if (el.closest('.part.editor') && !el.closest('[class*="chat" i], [class*="composer" i], .interactive-input-part')) {
+                return true;
+            }
+        }
+    } catch (e) {
+        return false;
+    }
+    return false;
+  }
 
   function tryClickButtons(cfg) {
     var nodes = queryAllDeep('button, [role="button"], a, .monaco-button, [aria-label], [title], [data-testid]');
     for (var i = 0; i < nodes.length; i++) {
         var el = nodes[i].closest ? (nodes[i].closest('button, a, [role="button"], .monaco-button') || nodes[i]) : nodes[i];
-        if (!isVisible(el)) continue;
+        if (!isVisible(el) || isBlockedSurface(el)) continue;
         
         // Prevent clicking runaway terminal buttons or irrelevant background toolbars
         if (el.closest && el.closest('.terminal-instance, .xterm, [class*="terminal"]')) continue;
@@ -132,7 +150,8 @@ export const AUTO_CONTINUE_SCRIPT = `
   function isGenerating() {
     var loaders = queryAllDeep('.codicon-loading, .typing-indicator, [title*="Stop" i], [aria-label*="Stop" i]');
     for (var i = 0; i < loaders.length; i++) {
-        if (isVisible(loaders[i])) return true;
+        var el = loaders[i].closest ? (loaders[i].closest('button, [role="button"]') || loaders[i]) : loaders[i];
+        if (isVisible(el) && !isBlockedSurface(el)) return true;
     }
     return false;
   }
@@ -141,7 +160,8 @@ export const AUTO_CONTINUE_SCRIPT = `
     // 1. Fast check for thumbs up / down (Roo Code / Cline)
     var fastNodes = queryAllDeep('.codicon-thumbsup, .codicon-thumbsdown, [class*="thumbsup" i], [class*="thumbsdown" i]');
     for(var i = 0; i < fastNodes.length; i++) {
-        if (isVisible(fastNodes[i])) return true;
+        var el = fastNodes[i].closest ? (fastNodes[i].closest('button, [role="button"]') || fastNodes[i]) : fastNodes[i];
+        if (isVisible(el) && !isBlockedSurface(el)) return true;
     }
     
     // 2. Check for completion phrases strictly in likely message containers (not globally on all elements)
@@ -162,7 +182,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     var inputs = queryAllDeep('textarea, [contenteditable="true"], [role="textbox"]');
     for (var i = 0; i < inputs.length; i++) {
         var el = inputs[i];
-        if (!isVisible(el)) continue;
+        if (!isVisible(el) || isBlockedSurface(el)) continue;
         var tag = String(el.tagName || '').toLowerCase();
         var editable = tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true';
         if (!editable) continue;
@@ -205,10 +225,13 @@ export const AUTO_CONTINUE_SCRIPT = `
         log('typed bump text: ' + bumpText);
     } catch(e) {
         log('failed to type text');
-        return false;
+        // Let hybrid bump take over
     }
+    
+    // Always dispatch a hybrid bump just in case DOM typing was blocked by React
+    emitBridge('__AUTOPILOT_HYBRID_BUMP__:' + bumpText);
 
-    // Give it a tiny delay to register the input value before pressing Send
+    // Give it a tiny delay to register the input value before pressing Send in DOM
     setTimeout(function() {
         if (window.__antigravityActiveInstance !== INSTANCE) return;
         
@@ -240,7 +263,7 @@ export const AUTO_CONTINUE_SCRIPT = `
                 log('submitted bump text via Enter key');
             } catch(e) {}
         }
-    }, 120);
+    }, 250);
 
     return true;
   }
