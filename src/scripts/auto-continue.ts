@@ -138,24 +138,20 @@ export const AUTO_CONTINUE_SCRIPT = `
   }
 
   function checkStalledAndWaiting(fork) {
-    // Looks for explicit thumbs up/down icons OR completion text. 
-    // Works reliably across Roo Code, Cline, and Antigravity.
-    var nodes = queryAllDeep('.codicon-thumbsup, .codicon-thumbsdown, [class*="thumbsup" i], [class*="thumbsdown" i], button, [role="button"], p, span, div, [aria-label], [title]');
+    // 1. Fast check for thumbs up / down (Roo Code / Cline)
+    var fastNodes = queryAllDeep('.codicon-thumbsup, .codicon-thumbsdown, [class*="thumbsup" i], [class*="thumbsdown" i]');
+    for(var i = 0; i < fastNodes.length; i++) {
+        if (isVisible(fastNodes[i])) return true;
+    }
     
-    var completionPattern = /(all tasks completed|task completed|completed|done|finished|need anything else|anything else\\?|waiting for input|requires input|thumbs up|thumbs down)/i;
-
-    for (var i = 0; i < nodes.length; i++) {
-        var el = nodes[i];
+    // 2. Check for completion phrases strictly in likely message containers (not globally on all elements)
+    var textNodes = queryAllDeep('.chat-body, .message-body, .chat-message, [data-testid*="message" i], .monaco-list-row, p, span.message');
+    var completionPattern = /(all tasks completed|task completed|tasks completed|completed|done|finished|need anything else|anything else\?|waiting for input|requires input|thumbs up|thumbs down)/i;
+    for (var j = 0; j < textNodes.length; j++) {
+        var el = textNodes[j];
         if (!isVisible(el)) continue;
-        
-        // Filter out headers
-        if (el.closest && el.closest('.part.titlebar, .part.activitybar')) continue;
-
-        if (typeof el.className === 'string' && el.className.indexOf('thumbs') >= 0) return true;
-        if (el.getAttribute && String(el.getAttribute('title') || '').indexOf('thumbs') >= 0) return true;
-
-        var txt = normalizeText(el);
-        if (completionPattern.test(txt)) {
+        var txt = String(el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (txt.length < 300 && completionPattern.test(txt)) {
             return true;
         }
     }
@@ -195,19 +191,17 @@ export const AUTO_CONTINUE_SCRIPT = `
             try { document.execCommand('selectAll', false, null); } catch(e){}
             try { document.execCommand('insertText', false, bumpText); } catch(e) { input.textContent = bumpText; }
         } else {
-            if (fork === 'vscode') {
-                input.value = '';
-                input.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: bumpText }));
-                input.value = bumpText;
-                input.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: bumpText }));
+            var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
+            if (setter && setter.set && String(input.tagName || '').toLowerCase() === 'textarea') {
+                setter.set.call(input, bumpText);
             } else {
-                var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
-                if (setter && setter.set) setter.set.call(input, bumpText);
-                else input.value = bumpText;
-                input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                input.value = bumpText;
             }
+            try { input.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: bumpText })); } catch(e){}
+            try { input.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: bumpText })); } catch(e){}
+            try { input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true })); } catch(e){}
         }
-        input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+        try { input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true })); } catch(e){}
         log('typed bump text: ' + bumpText);
     } catch(e) {
         log('failed to type text');
@@ -236,8 +230,13 @@ export const AUTO_CONTINUE_SCRIPT = `
         // Fallback to Enter Key
         if (!clickedSend) {
             try {
-                input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-                input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+                var modsList = [{}, { ctrlKey: true }, { metaKey: true }];
+                for(var m=0; m<modsList.length; m++) {
+                    var margs = modsList[m];
+                    margs.key = 'Enter'; margs.code = 'Enter'; margs.keyCode = 13; margs.which = 13; margs.bubbles = true; margs.cancelable = true;
+                    input.dispatchEvent(new KeyboardEvent('keydown', margs));
+                    input.dispatchEvent(new KeyboardEvent('keyup', margs));
+                }
                 log('submitted bump text via Enter key');
             } catch(e) {}
         }
@@ -277,13 +276,17 @@ export const AUTO_CONTINUE_SCRIPT = `
     var stalledMs = Math.max(1000, Number(window.__antigravityConfig?.timing?.stalledMs || 7000));
     var stalled = !generating && (now - lastProgressAt) >= stalledMs;
     var isWaiting = checkStalledAndWaiting(fork);
+    
+    // If we have passed 1.5x the stalled time and we have an input available, bump it as a fallback
+    // This handles cases where the LLM stops generating but didn't output specific "completed" text.
+    var effectiveWaiting = isWaiting || (!generating && (now - lastProgressAt) >= (stalledMs * 1.5));
 
     // Update state payload for upstream (used by cdp-strategy.ts)
     window.__antigravityRuntimeState = {
         fork: fork,
         mode: fork,
-        status: generating ? 'processing' : (stalled && isWaiting ? 'waiting_for_chat_message' : 'idle'),
-        waitingForChatMessage: stalled && isWaiting,
+        status: generating ? 'processing' : (stalled && effectiveWaiting ? 'waiting_for_chat_message' : 'idle'),
+        waitingForChatMessage: stalled && effectiveWaiting,
         hasInput: true,
         isGenerating: generating,
         stalled: stalled,
@@ -292,7 +295,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     };
 
     // 3. Automated Bumping (Only if nothing is generating and we are stuck on "Waiting for input")
-    if (!stalled || !isWaiting || generating) return;
+    if (!stalled || !effectiveWaiting || generating) return;
     if (!cfg.bump.enabled || !cfg.bump.text) return;
 
     var bumpCooldownMs = Math.max(1000, Number(window.__antigravityConfig?.timing?.bumpCooldownMs || 30000));
