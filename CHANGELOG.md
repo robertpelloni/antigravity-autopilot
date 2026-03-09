@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.46] - 2026-03-09
+### Fixed
+* **Off-Target Bump Typing Guard**: Removed the generic fallback that selected the first visible `textarea`, so bump text no longer lands in unrelated inputs (for example extension search) when no chat composer is confidently identified.
+* **Run Click Intent Gating**: Runtime button clicking now computes waiting/generation state first and only allows `Run` action clicks when waiting-for-input intent is present.
+* **Safer Runtime Defaults**: Runtime-side default action config now keeps `clickRun` disabled unless explicitly configured on the host side, reinforcing focus-theft prevention.
+
+### Changed
+* **Version Sync**: Synchronized `package.json`, `package-lock.json`, `src/utils/constants.ts`, and `main_scripts/full_cdp_script.js` to `6.2.46`.
+
 ## [6.2.42] - 2026-03-06
 ### Fixed
 * **Run Button Detection in Nested Antigravity Webviews**: `detect:run-button` now evaluates both the page context and attached CDP sessions, then rolls up visible counts across contexts.

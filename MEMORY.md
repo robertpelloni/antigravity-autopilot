@@ -92,3 +92,9 @@ When dealing with "ghost" UI actions (e.g., the window layout mysteriously toggl
 
 - **Submit Single-Flight Across Layers:** Protect submit execution in frontend runtime, backend dispatch routing, and strategy execution path simultaneously; a single guard is insufficient during bursty session updates.
 - **Throttle-Then-Drop for Duplicate Actions:** For bridge actions, short-window dedupe is safer than attempting to execute every duplicate payload under load.
+
+## Recent Hardening Notes (v6.2.46)
+
+- **Never Fallback to Generic Textareas for Bumps:** If a chat composer cannot be confidently identified, skip bump typing; generic first-textarea fallbacks can target extension search and other non-chat UI.
+- **Compute Waiting Intent Before Clicking Run:** Action-click passes must run after generation/wait-state evaluation so `Run` clicks are gated by clear waiting-for-input intent rather than opportunistic label matches.
+- **Keep Run Disabled by Default in Runtime Config:** Runtime defaults should mirror host-side safety posture (`clickRun` opt-in), preventing default focus-theft in mixed IDE surfaces.

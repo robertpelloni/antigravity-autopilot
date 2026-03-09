@@ -21,7 +21,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     var c = window.__antigravityConfig || {};
     return {
       bump: { enabled: c.bump ? c.bump.enabled : true, text: c.bump ? (c.bump.text || 'Proceed') : 'Proceed' },
-      actions: c.actions || { clickRun: true, clickExpand: true, clickAlwaysAllow: true, clickRetry: true, clickAcceptAll: true, clickKeep: true, clickProceed: true, clickAllow: true }
+      actions: c.actions || { clickRun: false, clickExpand: true, clickAlwaysAllow: true, clickRetry: true, clickAcceptAll: true, clickKeep: true, clickProceed: true, clickAllow: true }
     };
   }
 
@@ -125,7 +125,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     return false;
   }
 
-  function tryClickButtons(cfg) {
+  function tryClickButtons(cfg, isWaitingForInput) {
     var nodes = queryAllDeep('button, [role="button"], a, .monaco-button, [aria-label], [title], [data-testid]');
     for (var i = 0; i < nodes.length; i++) {
         var el = nodes[i].closest ? (nodes[i].closest('button, a, [role="button"], .monaco-button') || nodes[i]) : nodes[i];
@@ -139,6 +139,7 @@ export const AUTO_CONTINUE_SCRIPT = `
         for (var j = 0; j < ACTION_SPECS.length; j++) {
             var spec = ACTION_SPECS[j];
             if (cfg.actions[spec.key] === false) continue; // Skip if disabled in config
+          if (spec.key === 'clickRun' && !isWaitingForInput) continue;
             if (spec.regex.test(txt)) {
                 if (click(el, spec.label, 'click')) return true;
             }
@@ -194,10 +195,6 @@ export const AUTO_CONTINUE_SCRIPT = `
         if (el.closest && el.closest('[class*="chat" i], [class*="composer" i], .interactive-input-part, .chat-input-widget')) {
             return el;
         }
-    }
-    // Fallback: first visible textarea (most interfaces only have one active textarea anyway)
-    for (var j = 0; j < inputs.length; j++) {
-        if (isVisible(inputs[j]) && String(inputs[j].tagName || '').toLowerCase() === 'textarea') return inputs[j];
     }
     return null;
   }
@@ -282,14 +279,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     if ((now - lastActionAt) < 300) return; // Action Throttle
 
-    // 1. Always attempt to click pending buttons (Run, Expand, Keep, Accept All) before doing progress checks
-    if (tryClickButtons(cfg)) {
-        lastActionAt = now;
-        lastProgressAt = now;
-        return;
-    }
-
-    // 2. Track AI Generation state
+    // 1. Track AI Generation state
     var generating = isGenerating();
     if (generating || wasGenerating) {
         lastProgressAt = now;
@@ -303,6 +293,14 @@ export const AUTO_CONTINUE_SCRIPT = `
     // If we have passed 1.5x the stalled time and we have an input available, bump it as a fallback
     // This handles cases where the LLM stops generating but didn't output specific "completed" text.
     var effectiveWaiting = isWaiting || (!generating && (now - lastProgressAt) >= (stalledMs * 1.5));
+
+    // 2. Attempt action clicks only after intent/state checks.
+    //    Run clicks are additionally gated to waiting-for-input state.
+    if (tryClickButtons(cfg, effectiveWaiting)) {
+      lastActionAt = now;
+      lastProgressAt = now;
+      return;
+    }
 
     // Update state payload for upstream (used by cdp-strategy.ts)
     window.__antigravityRuntimeState = {
@@ -351,7 +349,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     window.__antigravityAutoContinueRunning = false;
   };
 
-  log('Simplified Core Autopilot Engine started');
+  log('Autopilot Engine started');
   try { runLoop(); } catch (e) { log('init loop error: ' + String(e.message || e)); }
   schedule();
 })();
