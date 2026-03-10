@@ -1,6 +1,13 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.51] - 2026-03-10
+### Fixed
+* **VS Code Label Narrowing**: The passive runtime no longer treats `Retry`, `Expand`, `Proceed`, `Accept all`, or `Run` as VS Code action targets, reducing false matches against non-chat controls and conversation-history UI in VS Code Insiders.
+
+### Changed
+* **Regression Coverage Refresh**: Updated runtime regression tests to match the current passive fork-aware runtime and hybrid bump relay safety checks.
+
 ## [6.2.50] - 2026-03-10
 ### Changed
 * **Fork-Aware Runtime on Load**: `src/scripts/auto-continue.ts` now detects the active fork (`vscode`, `cursor`, `antigravity`) at startup and applies fork-specific chat-surface, waiting-signal, and action-button logic.

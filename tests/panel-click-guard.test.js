@@ -77,24 +77,16 @@ test('Antigravity profile avoids broad selectors that can hit workbench chrome',
     assert.match(script, /\[role="menuitem"\]/, 'isValidInteractionTarget should block menuitem surfaces');
 });
 
-test('Auto-continue submit uses safe chat input helper', () => {
+test('Auto-continue runtime stays passive and chat-surface gated', () => {
     const autoContinuePath = path.join(ROOT, 'src', 'scripts', 'auto-continue.ts');
     const autoContinue = fs.readFileSync(autoContinuePath, 'utf-8');
 
-    assert.match(autoContinue, /function getSafeChatInput\(\)/, 'auto-continue should define getSafeChatInput helper');
-    assert.ok(!/alt-enter/.test(autoContinue.match(/run:\s*\{[^}]+\}/)?.[0] || ''), 'run defaults must not include alt-enter fallback');
-    assert.ok(!/text === 'run'\s*\|\|\s*label === 'run'/.test(autoContinue), 'run matching must not allow bare "run" labels');
     assert.match(autoContinue, /\[role="menuitem"\]/, 'unsafe context guard should block menuitem surfaces');
-    assert.match(autoContinue, /function isChatActionSurface\(el\)/, 'auto-continue should define chat-surface gate helper');
-    assert.match(autoContinue, /let hasBlockedAncestor = false;/, 'chat-surface gate should track blocked shell ancestors');
-    assert.match(autoContinue, /if \(hasBlockedAncestor\) return false;/, 'chat-surface gate should fail-closed when blocked shell ancestor exists');
-    assert.match(autoContinue, /function isAntigravityRuntime\(\)/, 'auto-continue should define antigravity runtime detector');
-    assert.match(autoContinue, /isChatActionSurface\(textMatch\)/, 'run/expand text matches should require chat-surface gating');
-    assert.match(autoContinue, /Scoped Selector Match/, 'run/expand selector clicks should use scoped selector flow');
-    assert.match(autoContinue, /Blocked non-chat click target/, 'tryClick should log blocked non-chat click targets');
-    assert.match(autoContinue, /!isChatActionSurface\(targetToClick\)/, 'tryClick should fail-closed when target is not chat-surface');
-    assert.match(autoContinue, /function getSafetyStats\(\)/, 'auto-continue should define safety stats helper');
-    assert.match(autoContinue, /safetyStats: getSafetyStats\(\)/, 'analyzeChatState should expose safetyStats payload');
+    assert.match(autoContinue, /function chatSurface\(el, fork\)/, 'auto-continue should define chat-surface gate helper');
+    assert.match(autoContinue, /if \(blocked\(el\) \|\| !buttonish\(el\) \|\| !chatSurface\(el, fork\)\) return false;/, 'runtime should fail closed when a control is not a button on a chat surface');
+    assert.match(autoContinue, /hasThumbsStopSignal: thumbsSignal\(fork\)/, 'runtime state should expose thumbs stop signal');
+    assert.ok(!/function getSafeChatInput\(\)/.test(autoContinue), 'runtime should no longer use local chat input helpers');
+    assert.ok(!/emit\('__AUTOPILOT_HYBRID_BUMP__:' \+ bumpText\)/.test(autoContinue), 'runtime should not emit local hybrid bump requests');
 });
 
 test('Auto-continue Keep matching requires exact button-like controls', () => {
@@ -103,7 +95,7 @@ test('Auto-continue Keep matching requires exact button-like controls', () => {
 
     assert.match(autoContinue, /function buttonish\(el\)/, 'auto-continue should define buttonish helper');
     assert.match(autoContinue, /action === 'clickKeep'/, 'auto-continue should special-case Keep matching');
-    assert.match(autoContinue, /!\/^keep\(\?:\\s\*\[!\.\?\]\)\?\$\/\.test\(label\)/, 'Keep matching should require an exact short label');
+    assert.match(autoContinue, /if \(action === 'clickKeep'\) return \/\^keep\(\?:\\s\*\[!\.\?\]\)\?\$\/\.test\(label\);/, 'Keep matching should require an exact short label');
     assert.match(autoContinue, /\.search-view,\.search-widget,\.quick-input-widget,\.extensions-viewlet,\[role="menu"\],\[role="menuitem"\]/, 'Keep matching should reject search, quick input, and menu surfaces');
 });
 
@@ -127,7 +119,8 @@ test('CDP bridge blocks unsafe global Enter relay for submit keys', () => {
     const cdpHandlerPath = path.join(ROOT, 'src', 'services', 'cdp', 'cdp-handler.ts');
     const cdpHandler = fs.readFileSync(cdpHandlerPath, 'utf-8');
 
-    assert.match(cdpHandler, /Blocked unsafe CDP Enter relay for submit\|keys/, 'cdp-handler should explicitly block submit|keys Enter relay');
+    assert.match(cdpHandler, /Blocked __AUTOPILOT_HYBRID_BUMP__ submit relay for non-eligible origin session/, 'cdp-handler should gate hybrid bump relay by eligible origin session');
+    assert.match(cdpHandler, /payload\.startsWith\('__AUTOPILOT_HYBRID_BUMP__:'\)/, 'cdp-handler should still explicitly handle hybrid bump relay payloads');
     assert.ok(!/__ANTIGRAVITY_CLICK__/.test(cdpHandler), 'cdp-handler should not relay coordinate click bridge payloads');
     assert.ok(!/Fallback CDP Enter Key/.test(cdpHandler), 'cdp-handler should not use global Fallback CDP Enter Key');
 });

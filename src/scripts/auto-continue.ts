@@ -47,13 +47,8 @@ export const AUTO_CONTINUE_SCRIPT = `
       waitPattern: /(waiting for input|requires input|done|finished|anything else\?|ready to continue)/i,
       actionAllow: {
         clickKeep: true,
-        clickProceed: true,
-        clickRetry: true,
-        clickAcceptAll: true,
         clickAllow: true,
-        clickAlwaysAllow: true,
-        clickExpand: true,
-        clickRun: true
+        clickAlwaysAllow: true
       }
     }
   };
@@ -297,7 +292,14 @@ export const AUTO_CONTINUE_SCRIPT = `
     var hasThumbs = thumbsSignal(fork);
     var hasText = textWaitingSignal(fork);
 
-    if (fork === 'vscode' || fork === 'cursor') {
+    if (fork === 'vscode') {
+      return hasThumbs
+        || actions.indexOf('clickKeep') >= 0
+        || actions.indexOf('clickAllow') >= 0
+        || actions.indexOf('clickAlwaysAllow') >= 0;
+    }
+
+    if (fork === 'cursor') {
       return hasThumbs
         || actions.indexOf('clickKeep') >= 0
         || actions.indexOf('clickProceed') >= 0
