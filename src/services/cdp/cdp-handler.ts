@@ -691,7 +691,7 @@ export class CDPHandler extends EventEmitter {
             },
             timing: {
                 pollIntervalMs: Math.max(150, pollIntervalMs),
-                actionThrottleMs: Math.max(50, config.get<number>('automation.timing.actionThrottleMs') || 300),
+                actionThrottleMs: Math.max(1500, config.get<number>('automation.timing.actionThrottleMs') || 2500),
                 stalledMs: Math.max(1000, stallTimeoutSec * 1000),
                 bumpCooldownMs: Math.max(1000, bumpCooldownSec * 1000),
                 submitCooldownMs: Math.max(500, submitDelayMs * 10)

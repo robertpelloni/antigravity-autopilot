@@ -1,6 +1,17 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.50] - 2026-03-10
+### Changed
+* **Fork-Aware Runtime on Load**: `src/scripts/auto-continue.ts` now detects the active fork (`vscode`, `cursor`, `antigravity`) at startup and applies fork-specific chat-surface, waiting-signal, and action-button logic.
+* **VS Code Insiders Stop-Signal Preference**: VS Code-like forks now prefer visible thumbs-up/down feedback controls and explicit chat action buttons such as `Keep`, `Proceed`, `Retry`, `Allow`, and `Accept all` when deciding the chat is stopped and ready.
+* **Antigravity-Specific Action Path**: Antigravity runtime mode now keys waiting detection off its chat surfaces and action buttons (`Expand`, `Run`, `Retry`, `Proceed`, `Accept all`) instead of assuming VS Code command behavior.
+* **Calmer Action Click Cadence**: Runtime action clicks now default to a multi-second throttle and remain constrained to chat action surfaces, reducing hammering and off-target UI activity.
+
+### Fixed
+* **No Local Focus-Stealing Bump Typing**: Removed runtime-side DOM bump typing/focus behavior so bump submission relies on the safer host CDP pipeline rather than local element focus or keyboard spoofing.
+* **Corrupted Runtime Recovery**: Replaced the broken `src/scripts/auto-continue.ts` payload with a clean injected script and added regression coverage for fork detection, thumbs-based waiting signals, and no-focus click behavior.
+
 ## [6.2.49] - 2026-03-10
 ### Fixed
 * **CDP Bump Timing Now Respects Settings**: `src/strategies/cdp-strategy.ts` now reads `Poll Interval`, `Stall Timeout`, `Bump Cooldown`, and `Submit Delay` from user configuration instead of using hardcoded timing values.

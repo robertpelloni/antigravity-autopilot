@@ -98,3 +98,11 @@ When dealing with "ghost" UI actions (e.g., the window layout mysteriously toggl
 - **Never Fallback to Generic Textareas for Bumps:** If a chat composer cannot be confidently identified, skip bump typing; generic first-textarea fallbacks can target extension search and other non-chat UI.
 - **Compute Waiting Intent Before Clicking Run:** Action-click passes must run after generation/wait-state evaluation so `Run` clicks are gated by clear waiting-for-input intent rather than opportunistic label matches.
 - **Keep Run Disabled by Default in Runtime Config:** Runtime defaults should mirror host-side safety posture (`clickRun` opt-in), preventing default focus-theft in mixed IDE surfaces.
+
+## Recent Hardening Notes (v6.2.50)
+
+- **Fork-Aware Runtime Beats Generic Heuristics:** Detect the active host fork (`vscode`, `cursor`, `antigravity`) on load and use fork-specific chat surfaces, action labels, and waiting signals instead of one shared heuristic path.
+- **Thumbs Signals Are the Strongest VS Code Stop Cue:** On VS Code-like forks, visible thumbs-up/down feedback controls are a more reliable stopped-chat indicator than generic message-text matching.
+- **Keep Must Stay Exact and Button-Gated:** `Keep` matching must remain restricted to exact short button labels and explicitly reject search, menu, quick-input, and extension surfaces to avoid false positives.
+- **Runtime Should Stay Passive About Bump Typing:** Avoid runtime-side focus stealing, DOM typing, or local hybrid bump emission; host-side CDP submission is safer for Monaco-backed chat inputs.
+- **Default Action Throttle Should Be Multi-Second:** Sub-second click throttles create hammering and mixed-surface risk; keep default action clicks on a calmer seconds-scale cadence.

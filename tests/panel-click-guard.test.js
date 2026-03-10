@@ -97,6 +97,16 @@ test('Auto-continue submit uses safe chat input helper', () => {
     assert.match(autoContinue, /safetyStats: getSafetyStats\(\)/, 'analyzeChatState should expose safetyStats payload');
 });
 
+test('Auto-continue Keep matching requires exact button-like controls', () => {
+    const autoContinuePath = path.join(ROOT, 'src', 'scripts', 'auto-continue.ts');
+    const autoContinue = fs.readFileSync(autoContinuePath, 'utf-8');
+
+    assert.match(autoContinue, /function buttonish\(el\)/, 'auto-continue should define buttonish helper');
+    assert.match(autoContinue, /action === 'clickKeep'/, 'auto-continue should special-case Keep matching');
+    assert.match(autoContinue, /!\/^keep\(\?:\\s\*\[!\.\?\]\)\?\$\/\.test\(label\)/, 'Keep matching should require an exact short label');
+    assert.match(autoContinue, /\.search-view,\.search-widget,\.quick-input-widget,\.extensions-viewlet,\[role="menu"\],\[role="menuitem"\]/, 'Keep matching should reject search, quick input, and menu surfaces');
+});
+
 test('Injected click classifier rejects broad generic run labels', () => {
     const script = readScript();
 
