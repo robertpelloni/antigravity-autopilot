@@ -15,6 +15,17 @@ Current repository history shows a **mixed state**: several companion directorie
 | `AntigravityMobile` | [AvenalJ](https://github.com/AvenalJ/AntigravityMobile) | Mobile companion app concept | Active companion candidate |
 | `antigravity-multi-purpose-agent` | [rodhayl](https://github.com/rodhayl/antigravity-multi-purpose-agent) | Multi-purpose agent variant | Companion reference |
 | `Claude-Autopilot` | [benbasha](https://github.com/benbasha/Claude-Autopilot) | Claude queue processing + auto-resume reference | Companion reference |
+| `antigravity-plus` | [ImL1s](https://github.com/ImL1s/antigravity-plus) | Multi-strategy auto-approve + quota monitor | External ecosystem reference |
+| `antigravity-auto-accept` (Yajusta) | [Yajusta](https://github.com/Yajusta/antigravity-auto-accept) | Blind command-loop auto-accept | External ecosystem reference |
+| `antigravity-autopilot` (guglielmo) | [guglielmo-io](https://github.com/guglielmo-io/antigravity-autopilot) | CDP-injected retry/continue/run autopilot | External ecosystem reference |
+| `auto-accept-agent` (MunKhin upstream) | [MunKhin](https://github.com/MunKhin/auto-accept-agent) | CDP DOM click + background tab cycling | External ecosystem reference |
+| `Antibridge-autoaccep-for-antigravity` | [linhbq82](https://github.com/linhbq82/Antibridge-autoaccep-for-antigravity) | Companion command-loop extension for AntiBridge remote | External ecosystem reference |
+
+## Detection/Clicking Method Audit
+
+For concrete per-repo detection and clicking implementations (selectors, function names, reliability notes), see:
+
+- `docs/AUTOPILOT_ECOSYSTEM_METHOD_AUDIT.md`
 
 ## Maintenance Notes
 

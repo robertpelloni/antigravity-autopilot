@@ -39,8 +39,17 @@ The repository currently contains several sibling projects as tracked directorie
 | `Claude-Autopilot` | Companion implementation/reference | `Claude-Autopilot/` |
 | `antigravity-multi-purpose-agent` | Companion implementation/reference | `antigravity-multi-purpose-agent/` |
 | `free-auto-accept-antigravity` | Community variant reference | `free-auto-accept-antigravity/` |
+| `Munkhin/auto-accept-agent` | Upstream CDP auto-accept reference | External GitHub reference |
+| `ImL1s/antigravity-plus` | Multi-strategy auto-approve/quota ecosystem reference | External GitHub reference |
+| `guglielmo-io/antigravity-autopilot` | CDP retry/continue/run implementation reference | External GitHub reference |
+| `Yajusta/antigravity-auto-accept` | Blind command-loop reference | External GitHub reference |
+| `linhbq82/Antibridge-autoaccep-for-antigravity` | AntiBridge companion command-loop reference | External GitHub reference |
 
 > Operational note: repository history indicates mixed usage of embedded directories and gitlink/submodule-style pointers. Keep `docs/SUBMODULES.md` aligned to avoid drift.
+
+Method implementation audit:
+
+- `docs/AUTOPILOT_ECOSYSTEM_METHOD_AUDIT.md`
 
 ## Quality/Release Gates
 
