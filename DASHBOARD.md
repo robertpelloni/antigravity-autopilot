@@ -50,6 +50,7 @@ The repository currently contains several sibling projects as tracked directorie
 Method implementation audit:
 
 - `docs/AUTOPILOT_ECOSYSTEM_METHOD_AUDIT.md`
+- `docs/AUTOPILOT_COMPATIBILITY_PROFILE.json`
 
 ## Quality/Release Gates
 

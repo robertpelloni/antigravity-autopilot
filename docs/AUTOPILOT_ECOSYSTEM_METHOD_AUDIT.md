@@ -21,6 +21,18 @@ This document catalogs Antigravity/VS Code autopilot-style extensions and summar
 4. **Nested webview/session contexts** are under-handled in many implementations.
 5. **First-match/fallback heuristics** (generic textarea/button fallback) create off-target behavior in VS Code chrome.
 
+## Compatibility profile (machine-readable)
+
+To operationalize this audit in tooling/automation, use:
+
+- `docs/AUTOPILOT_COMPATIBILITY_PROFILE.json`
+
+It contains:
+
+- weighted scorecards per repository (detection/click/safety/session/bump)
+- selector confidence tiers (`highConfidence`, `mediumConfidence`, `lowConfidence`) by host
+- policy defaults for safe runtime behavior
+
 ---
 
 ## Method matrix (detection + click)
@@ -118,6 +130,13 @@ This document catalogs Antigravity/VS Code autopilot-style extensions and summar
 4. **No generic input fallback** (never default to first textarea).
 5. **Bridge + telemetry hooks** for explicit action/state observability.
 6. **Selector registry per host build** (Antigravity/Cursor/VS Code variants) with versioned tests.
+
+## Score interpretation (practical)
+
+- **8.0–10.0**: production baseline candidate
+- **6.0–7.9**: secondary reference (import patterns selectively)
+- **3.0–5.9**: fallback-only for constrained environments
+- **0.0–2.9**: emergency-only / not safe for unattended runs
 
 ---
 

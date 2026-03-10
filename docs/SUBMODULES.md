@@ -26,6 +26,7 @@ Current repository history shows a **mixed state**: several companion directorie
 For concrete per-repo detection and clicking implementations (selectors, function names, reliability notes), see:
 
 - `docs/AUTOPILOT_ECOSYSTEM_METHOD_AUDIT.md`
+- `docs/AUTOPILOT_COMPATIBILITY_PROFILE.json`
 
 ## Maintenance Notes
 

@@ -1,0 +1,298 @@
+{
+  "schemaVersion": "1.0.0",
+  "updatedAt": "2026-03-09",
+  "purpose": "Scored compatibility and selector reliability profile for Antigravity/VS Code autopilot ecosystems.",
+  "scoring": {
+    "scale": "0-10",
+    "weights": {
+      "detectionQuality": 0.25,
+      "clickReliability": 0.2,
+      "safetyGating": 0.2,
+      "sessionAwareness": 0.2,
+      "bumpSubmitRobustness": 0.15
+    },
+    "notes": [
+      "Higher score = better real-world reliability in mixed Antigravity/VS Code fork surfaces.",
+      "Command-only loops are intentionally scored low in detection/safety because they are blind to UI context."
+    ]
+  },
+  "repositories": [
+    {
+      "id": "hyper/antigravity-autopilot",
+      "sourceType": "workspace-primary",
+      "strategy": "session-aware-cdp-runtime",
+      "scores": {
+        "detectionQuality": 8.8,
+        "clickReliability": 8.1,
+        "safetyGating": 9.1,
+        "sessionAwareness": 9.0,
+        "bumpSubmitRobustness": 8.3,
+        "totalWeighted": 8.67
+      },
+      "strengths": [
+        "Fail-closed chat-surface gating",
+        "Run click opt-in + waiting-intent gating",
+        "Session-aware evaluate/click paths",
+        "Bridge telemetry and hybrid bump relay"
+      ],
+      "risks": [
+        "Runtime drift can reintroduce permissive behavior",
+        "Host selector churn still requires maintenance"
+      ],
+      "methodRefs": [
+        "src/scripts/auto-continue.ts",
+        "src/strategies/cdp-strategy.ts",
+        "src/services/cdp/cdp-handler.ts"
+      ],
+      "recommendedRole": "primary-runtime-baseline"
+    },
+    {
+      "id": "Munkhin/auto-accept-agent",
+      "sourceType": "github-external",
+      "strategy": "cdp-dom-click-with-background-tab-cycling",
+      "scores": {
+        "detectionQuality": 7.4,
+        "clickReliability": 7.8,
+        "safetyGating": 6.4,
+        "sessionAwareness": 6.9,
+        "bumpSubmitRobustness": 4.0,
+        "totalWeighted": 6.64
+      },
+      "strengths": [
+        "Recursive iframe traversal",
+        "Banned command context scanning",
+        "Mature background tab flow"
+      ],
+      "risks": [
+        "Broad selectors can over-match",
+        "Less strict chat-surface fail-closed behavior"
+      ],
+      "methodRefs": [
+        "extension/main_scripts/auto_accept.js",
+        "extension/main_scripts/cdp-handler.js"
+      ],
+      "recommendedRole": "secondary-selector-reference"
+    },
+    {
+      "id": "guglielmo-io/antigravity-autopilot",
+      "sourceType": "github-external",
+      "strategy": "single-cdp-injection-engine",
+      "scores": {
+        "detectionQuality": 7.1,
+        "clickReliability": 7.0,
+        "safetyGating": 7.2,
+        "sessionAwareness": 5.8,
+        "bumpSubmitRobustness": 3.2,
+        "totalWeighted": 6.24
+      },
+      "strengths": [
+        "Clear text-list matching",
+        "Run blocklist and opt-in default"
+      ],
+      "risks": [
+        "Simpler panel/target filtering",
+        "Limited multi-session nuance"
+      ],
+      "methodRefs": [
+        "extension/extension.js"
+      ],
+      "recommendedRole": "compact-cdp-reference"
+    },
+    {
+      "id": "ImL1s/antigravity-plus",
+      "sourceType": "github-external",
+      "strategy": "multi-strategy-poller-cdp",
+      "scores": {
+        "detectionQuality": 7.3,
+        "clickReliability": 7.2,
+        "safetyGating": 6.9,
+        "sessionAwareness": 6.7,
+        "bumpSubmitRobustness": 2.8,
+        "totalWeighted": 6.35
+      },
+      "strengths": [
+        "Rich architecture and telemetry",
+        "Multiple fallback strategies",
+        "Rule-engine integration"
+      ],
+      "risks": [
+        "Broad selector candidates in several paths",
+        "Heavier tuning burden per host build"
+      ],
+      "methodRefs": [
+        "src/core/auto-approve/poller.ts",
+        "src/core/auto-approve/scripts/full-cdp-script.ts"
+      ],
+      "recommendedRole": "architecture-pattern-reference"
+    },
+    {
+      "id": "linhbq82/AntiBridge-Antigravity-remote",
+      "sourceType": "github-external",
+      "strategy": "bridge-first-action-queue-with-cdp-fallback",
+      "scores": {
+        "detectionQuality": 7.6,
+        "clickReliability": 7.5,
+        "safetyGating": 6.8,
+        "sessionAwareness": 7.4,
+        "bumpSubmitRobustness": 1.5,
+        "totalWeighted": 6.45
+      },
+      "strengths": [
+        "Explicit pending-action model",
+        "Bridge-first accept/reject orchestration",
+        "Clear remote workflow separation"
+      ],
+      "risks": [
+        "Pattern over-match still possible",
+        "Bridge/backend/page state drift risk"
+      ],
+      "methodRefs": [
+        "scripts/detect_actions.js",
+        "backend/services/accept-detector.js",
+        "backend/services/AntigravityBridge.js"
+      ],
+      "recommendedRole": "remote-control-reference"
+    },
+    {
+      "id": "Yajusta/antigravity-auto-accept",
+      "sourceType": "github-external",
+      "strategy": "blind-command-loop",
+      "scores": {
+        "detectionQuality": 1.0,
+        "clickReliability": 4.6,
+        "safetyGating": 1.2,
+        "sessionAwareness": 1.0,
+        "bumpSubmitRobustness": 0.0,
+        "totalWeighted": 1.58
+      },
+      "strengths": [
+        "Simple implementation",
+        "Low operational complexity"
+      ],
+      "risks": [
+        "Accepts without UI context",
+        "No command-content safety",
+        "Host-command dependency"
+      ],
+      "methodRefs": [
+        "src/extension.ts"
+      ],
+      "recommendedRole": "emergency-fallback-only"
+    },
+    {
+      "id": "linhbq82/Antibridge-autoaccep-for-antigravity",
+      "sourceType": "github-external",
+      "strategy": "blind-command-loop-companion",
+      "scores": {
+        "detectionQuality": 1.0,
+        "clickReliability": 4.8,
+        "safetyGating": 1.2,
+        "sessionAwareness": 1.0,
+        "bumpSubmitRobustness": 0.0,
+        "totalWeighted": 1.62
+      },
+      "strengths": [
+        "Simple manual/auto mode switching",
+        "Useful when integrated with remote companions"
+      ],
+      "risks": [
+        "Blind acceptance semantics",
+        "No DOM/risk-aware detection"
+      ],
+      "methodRefs": [
+        "extension.js"
+      ],
+      "recommendedRole": "companion-fallback-only"
+    }
+  ],
+  "selectorRegistry": {
+    "antigravity": {
+      "highConfidence": {
+        "accept": [
+          "[title*='Accept All' i]",
+          "[aria-label*='Accept All' i]",
+          "[data-testid*='accept-all' i]",
+          ".codicon-check-all"
+        ],
+        "run": [
+          "[title*='Run command' i]",
+          "[aria-label*='Run command' i]",
+          "[title*='Run in Terminal' i]",
+          "[aria-label*='Run in Terminal' i]",
+          "[data-testid*='execute-command' i]"
+        ],
+        "continue": [
+          "[title*='Continue generating' i]",
+          "[aria-label*='Continue generating' i]",
+          "[title*='Proceed' i]",
+          "[aria-label*='Proceed' i]"
+        ],
+        "send": [
+          "[title*='Send' i]",
+          "[aria-label*='Send' i]",
+          "button[type='submit']",
+          "[data-testid*='send' i]"
+        ]
+      },
+      "mediumConfidence": {
+        "accept": [
+          ".bg-ide-button-background",
+          "button.cursor-pointer"
+        ],
+        "run": [
+          ".codicon-play",
+          ".codicon-run"
+        ]
+      },
+      "lowConfidence": {
+        "generic": [
+          "button",
+          "[class*='button' i]"
+        ]
+      }
+    },
+    "vscode": {
+      "highConfidence": {
+        "chatSurfaceContainers": [
+          ".interactive-input-part",
+          ".chat-input-widget",
+          ".interactive-editor",
+          ".chat-editing-session-container",
+          ".aichat-container"
+        ],
+        "send": [
+          "[aria-keyshortcuts*='Enter' i]",
+          "[aria-label*='Send' i]",
+          "button[type='submit']"
+        ]
+      },
+      "lowConfidence": {
+        "generic": [
+          ".monaco-button",
+          "button"
+        ]
+      }
+    },
+    "cursor": {
+      "mediumConfidence": {
+        "actionButtons": [
+          "[class*='anysphere']",
+          "[role='button']"
+        ]
+      },
+      "lowConfidence": {
+        "generic": [
+          "button",
+          "[class*='button' i]"
+        ]
+      }
+    }
+  },
+  "policyDefaults": {
+    "clickRunDefault": false,
+    "requireChatSurface": true,
+    "requireWaitingIntentForRun": true,
+    "allowGenericTextareaFallback": false,
+    "preferDomClickOverKeyboardSubmit": true
+  }
+}
