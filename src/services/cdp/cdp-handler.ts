@@ -1120,11 +1120,31 @@ export class CDPHandler extends EventEmitter {
             return;
         }
 
-        if (payload.startsWith('__AUTOPILOT_TYPE__:')) {
+        if (payload.startsWith('__AUTOPILOT_CLICK__:')) {
             this.noteAutomationSignal(pageId, sessionId);
-            const typeText = payload.slice('__AUTOPILOT_TYPE__:'.length);
-            if (typeText) {
-                await this.insertTextToOriginSession(pageId, sessionId, typeText);
+            const body = payload.slice('__AUTOPILOT_CLICK__:'.length);
+            const [xStr, yStr, ...labelParts] = body.split(',');
+            const x = parseInt(xStr, 10);
+            const y = parseInt(yStr, 10);
+            const label = labelParts.join(',');
+
+            if (!isNaN(x) && !isNaN(y)) {
+                // CDP-level mouse click — bypasses React synthetic event checks
+                const target = sessionId || undefined;
+                try {
+                    await this.sendCommand(pageId, 'Input.dispatchMouseEvent', {
+                        type: 'mousePressed', x, y, button: 'left', clickCount: 1
+                    }, undefined, target).catch(() => { });
+                    await this.sendCommand(pageId, 'Input.dispatchMouseEvent', {
+                        type: 'mouseReleased', x, y, button: 'left', clickCount: 1
+                    }, undefined, target).catch(() => { });
+                    logToOutput(`[CDP-Click] ${label} at (${x},${y})`);
+                    if (label !== 'focusInput') {
+                        this.emit('action', { pageId, sessionId, group: 'click', detail: label });
+                    }
+                } catch (e: any) {
+                    logToOutput(`[CDP-Click] Failed ${label} at (${x},${y}): ${e.message || e}`);
+                }
             }
             return;
         }
@@ -1133,8 +1153,32 @@ export class CDPHandler extends EventEmitter {
             this.noteAutomationSignal(pageId, sessionId);
             const bumpText = payload.slice('__AUTOPILOT_HYBRID_BUMP__:'.length);
             if (bumpText) {
-                await this.insertTextToOriginSession(pageId, sessionId, bumpText);
-                await this.submitOriginSession(pageId, sessionId);
+                // Direct CDP type + submit — NO leader gates, NO DOM events
+                const target = sessionId || undefined;
+                try {
+                    // Type text via native CDP Input
+                    await this.sendCommand(pageId, 'Input.insertText', { text: bumpText }, undefined, target).catch(() => { });
+                    logToOutput(`[CDP-Bump] Typed: "${bumpText}"`);
+
+                    // Brief pause for UI to register
+                    await new Promise(r => setTimeout(r, 200));
+
+                    // Submit with Enter key via native CDP Input
+                    await this.sendCommand(pageId, 'Input.dispatchKeyEvent', {
+                        type: 'rawKeyDown', key: 'Enter', code: 'Enter',
+                        windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+                        unmodifiedText: '\r', text: '\r'
+                    }, undefined, target).catch(() => { });
+                    await this.sendCommand(pageId, 'Input.dispatchKeyEvent', {
+                        type: 'keyUp', key: 'Enter', code: 'Enter',
+                        windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
+                    }, undefined, target).catch(() => { });
+                    logToOutput(`[CDP-Bump] Submitted Enter`);
+
+                    this.emit('action', { pageId, sessionId, group: 'submit', detail: 'bump' });
+                } catch (e: any) {
+                    logToOutput(`[CDP-Bump] Failed: ${e.message || e}`);
+                }
             }
             return;
         }
