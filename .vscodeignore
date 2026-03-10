@@ -29,6 +29,7 @@ __build_marker.txt
 
 # Exclude local automation/session artifacts
 .yoke/**
+.antigravity/**
 
 # Exclude development-only folders
 tests/**

@@ -1,6 +1,16 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.48] - 2026-03-09
+### Changed
+* **Further Runtime Simplification**: Reduced `src/scripts/auto-continue.ts` to a tighter fork-driven core path while preserving only essential behaviors (fork detect, stalled detect, bump type/submit, action detect/click).
+* **Always-On Action Matching**: Removed config-based disable gates from runtime action matching so `Run`, `Expand`, `Always Allow`, `Retry`, `Accept all`, `Keep`, `Proceed`, and `Allow` are always attempted when visible/clickable.
+* **Fork Profile Paths**: Added explicit per-fork profiles (`antigravity`, `cursor`, `vscode`) for input selectors, wait-pattern detection, and send selectors to keep runtime behavior deterministic by host fork.
+* **Submit Fallback Hardening**: Runtime submit path now attempts Send/Submit button click, then keyboard fallbacks including `Alt+Enter` before bridge hybrid fallback.
+
+### Fixed
+* **Runtime State Completeness**: Restored rich state payload fields (`fork`, `mode`, `completeStopSignal`, `hasInput`) after simplification so upstream strategy checks remain compatible.
+
 ## [6.2.47] - 2026-03-09
 ### Changed
 * **Minimal Runtime Core Refactor**: Rewrote `src/scripts/auto-continue.ts` to a simpler explicit loop focused on core functions only: fork detection, stalled/waiting detection, bump typing, bump submit, and button detection/clicking.

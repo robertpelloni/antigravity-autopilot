@@ -15,6 +15,27 @@ export const AUTO_CONTINUE_SCRIPT = `
   var wasGenerating = false;
   var timer = null;
 
+  var FORK_PROFILES = {
+    antigravity: {
+      inputSelectors: 'textarea,[contenteditable="true"],[role="textbox"],.interactive-input-part textarea,.chat-input-widget textarea',
+      inputHint: /(chat|message|ask|prompt|composer|assistant|interactive|agent)/,
+      sendSelectors: '[title*="Send" i],[aria-label*="Send" i],[title*="Submit" i],[aria-label*="Submit" i],.codicon-send,button[type="submit"]',
+      waitPattern: /(waiting for input|requires input|continue generating|all tasks completed|task completed|done|finished|anything else\?)/i
+    },
+    cursor: {
+      inputSelectors: 'textarea,[contenteditable="true"],[role="textbox"]',
+      inputHint: /(chat|message|ask|prompt|composer|assistant|anysphere)/,
+      sendSelectors: '[title*="Send" i],[aria-label*="Send" i],button[type="submit"]',
+      waitPattern: /(waiting for input|requires input|done|finished|anything else\?)/i
+    },
+    vscode: {
+      inputSelectors: 'textarea,[contenteditable="true"],[role="textbox"],.interactive-input-part textarea,.chat-input-widget textarea',
+      inputHint: /(chat|message|ask|prompt|composer|assistant|copilot|interactive)/,
+      sendSelectors: '[title*="Send" i],[aria-label*="Send" i],[aria-keyshortcuts*="Enter" i],button[type="submit"]',
+      waitPattern: /(waiting for input|requires input|done|finished|anything else\?)/i
+    }
+  };
+
   // ── Bridge ──
   function emit(s) {
     try {
@@ -24,6 +45,14 @@ export const AUTO_CONTINUE_SCRIPT = `
   }
   function log(m) { emit('__AUTOPILOT_LOG__:' + m); }
   function emitAction(group, detail) { emit('__AUTOPILOT_ACTION__:' + group + '|' + detail); }
+
+  function detectFork() {
+    var t = String(document.title || '').toLowerCase();
+    var u = String(location.href || '').toLowerCase();
+    if (t.indexOf('antigravity') >= 0 || u.indexOf('antigravity') >= 0) return 'antigravity';
+    if (t.indexOf('cursor') >= 0 || u.indexOf('cursor') >= 0) return 'cursor';
+    return 'vscode';
+  }
 
   // ── Deep Query (traverses shadow DOM) ──
   function q(sel, root) {
@@ -96,10 +125,7 @@ export const AUTO_CONTINUE_SCRIPT = `
   ];
 
   function matchAction(text) {
-    var cfg = window.__antigravityConfig || {};
-    var actions = cfg.actions || {};
     for (var i=0; i<ACTIONS.length; i++) {
-      if (actions[ACTIONS[i][0]] === false) continue;
       var words = ACTIONS[i][1];
       for (var j=0; j<words.length; j++) {
         if (hasWord(text, words[j])) return ACTIONS[i][0];
@@ -119,30 +145,83 @@ export const AUTO_CONTINUE_SCRIPT = `
   }
 
   // ── Stalled signal detector (thumbs up/down = Roo/Cline complete) ──
-  function stalledSignal() {
+  function stalledSignal(fork) {
+    var profile = FORK_PROFILES[fork] || FORK_PROFILES.vscode;
+
     var thumbs = q('.codicon-thumbsup,.codicon-thumbsdown,[class*="thumbsup" i],[class*="thumbsdown" i]');
     for (var i=0; i<thumbs.length; i++) {
       var el = thumbs[i].closest ? (thumbs[i].closest('button,[role="button"]') || thumbs[i]) : thumbs[i];
       if (vis(el) && !blocked(el)) return true;
     }
+
+    var texts = q('.chat-body,.message-body,.chat-message,[data-testid*="message" i],.monaco-list-row,p,span.message');
+    for (var j=0; j<texts.length; j++) {
+      var n = texts[j];
+      if (!vis(n)) continue;
+      var txt = String(n.textContent || '').replace(/\s+/g,' ').trim();
+      if (txt.length > 0 && txt.length < 400 && profile.waitPattern.test(txt)) return true;
+    }
+
     return false;
   }
 
   // ── Find chat input and focus it ──
-  function focusChatInput() {
-    var els = q('textarea,[contenteditable="true"],[role="textbox"]');
+  function focusChatInput(fork) {
+    var profile = FORK_PROFILES[fork] || FORK_PROFILES.vscode;
+    var els = q(profile.inputSelectors);
     for (var i=0; i<els.length; i++) {
       var el = els[i];
       if (!vis(el) || blocked(el)) continue;
       var sig = [el.getAttribute('aria-label')||'',el.getAttribute('placeholder')||'',el.className||'',el.id||''].join(' ').toLowerCase();
-      if (/(chat|message|ask|prompt|composer|copilot|assistant|interactive)/.test(sig)) { try{el.focus();}catch(e){} return el; }
+      if (profile.inputHint.test(sig)) { try{el.focus();}catch(e){} return el; }
       if (el.closest && el.closest('[class*="chat" i],[class*="composer" i],.interactive-input-part,.chat-input-widget')) { try{el.focus();}catch(e){} return el; }
     }
-    // Fallback: first visible textarea
-    for (var j=0; j<els.length; j++) {
-      if (vis(els[j]) && !blocked(els[j]) && (els[j].tagName||'').toLowerCase()==='textarea') { try{els[j].focus();}catch(e){} return els[j]; }
-    }
     return null;
+  }
+
+  function typeBumpDom(input, text) {
+    try {
+      if (!input) return false;
+      if (typeof input.focus === 'function') input.focus();
+      if (input.isContentEditable || input.getAttribute('contenteditable') === 'true') {
+        try { document.execCommand('selectAll', false, null); } catch(e) {}
+        try { document.execCommand('insertText', false, text); } catch(e) { input.textContent = text; }
+      } else {
+        var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
+        if (setter && setter.set && String(input.tagName || '').toLowerCase() === 'textarea') setter.set.call(input, text);
+        else input.value = text;
+        try { input.dispatchEvent(new Event('input', { bubbles:true, cancelable:true })); } catch(e) {}
+      }
+      try { input.dispatchEvent(new Event('change', { bubbles:true, cancelable:true })); } catch(e) {}
+      return true;
+    } catch(e) { return false; }
+  }
+
+  function submitBump(input, fork, bumpText) {
+    var profile = FORK_PROFILES[fork] || FORK_PROFILES.vscode;
+    var scope = (input && input.closest && input.closest('form,.interactive-input-part,[class*="chat-input" i]')) || document;
+    var send = q(profile.sendSelectors, scope);
+
+    for (var i=0; i<send.length; i++) {
+      var el = send[i].closest ? (send[i].closest('button,[role="button"],a') || send[i]) : send[i];
+      if (vis(el) && !blocked(el) && domClick(el, 'submit')) return true;
+    }
+
+    try {
+      if (input && typeof input.focus === 'function') input.focus();
+      var combos = [{altKey:true},{ctrlKey:true},{metaKey:true},{}];
+      for (var j=0; j<combos.length; j++) {
+        var m = combos[j];
+        var args = { key:'Enter', code:'Enter', keyCode:13, which:13, bubbles:true, cancelable:true };
+        for (var k in m) args[k] = m[k];
+        input.dispatchEvent(new KeyboardEvent('keydown', args));
+        input.dispatchEvent(new KeyboardEvent('keyup', args));
+      }
+      emitAction('submit', 'alt-ctrl-meta-enter');
+    } catch(e) {}
+
+    emit('__AUTOPILOT_HYBRID_BUMP__:' + bumpText);
+    return true;
   }
 
   // ── Main Loop ──
@@ -154,8 +233,10 @@ export const AUTO_CONTINUE_SCRIPT = `
     var now = Date.now();
     var cfg = window.__antigravityConfig || {};
     var timing = cfg.timing || {};
+    var fork = detectFork();
+    var actionThrottleMs = Number(timing.actionThrottleMs) || 300;
 
-    if ((now - lastClickAt) < 300) return;
+    if ((now - lastClickAt) < actionThrottleMs) return;
 
     // === PHASE 1: Click actionable buttons via DOM ===
     var btns = q('button,[role="button"],a,.monaco-button');
@@ -163,7 +244,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       var btn = btns[i];
       if (!vis(btn) || blocked(btn)) continue;
       var text = [btn.textContent||'',btn.getAttribute('aria-label')||'',btn.getAttribute('title')||''].join(' ').replace(/\\s+/g,' ').trim().toLowerCase();
-      if (text.length > 80) continue;
+      if (text.length > 120) continue;
       var action = matchAction(text);
       if (action) {
         domClick(btn, action);
@@ -181,12 +262,18 @@ export const AUTO_CONTINUE_SCRIPT = `
     // === PHASE 3: Stalled detection, emit state, request bump ===
     var stalledMs = Number(timing.stalledMs) || 7000;
     var stalled = !gen && (now - lastProgressAt) >= stalledMs;
-    var waiting = stalledSignal() || (!gen && (now - lastProgressAt) >= stalledMs * 1.5);
+    var waiting = stalledSignal(fork) || (!gen && (now - lastProgressAt) >= stalledMs * 1.5);
 
     window.__antigravityRuntimeState = {
+      fork: fork,
+      mode: fork,
       status: gen ? 'processing' : (stalled && waiting ? 'waiting_for_chat_message' : 'idle'),
       waitingForChatMessage: stalled && waiting,
-      isGenerating: gen, stalled: stalled, timestamp: now
+      completeStopSignal: stalled && waiting,
+      hasInput: true,
+      isGenerating: gen,
+      stalled: stalled,
+      timestamp: now
     };
 
     if (!stalled || !waiting || gen) return;
@@ -197,12 +284,12 @@ export const AUTO_CONTINUE_SCRIPT = `
     if ((now - lastBumpAt) < cooldown) return;
 
     // Focus input via DOM (best effort), then request CDP typing
-    var input = focusChatInput();
-    // Short delay so focus settles before CDP types
+    var input = focusChatInput(fork);
     setTimeout(function() {
       if (window.__antigravityActiveInstance !== ID) return;
-      emit('__AUTOPILOT_HYBRID_BUMP__:' + bumpText);
-      log('bump: ' + bumpText);
+      var typed = typeBumpDom(input, bumpText);
+      submitBump(input, fork, bumpText);
+      log('bump: ' + bumpText + ' typed=' + (typed ? 'yes' : 'no'));
     }, 300);
     lastBumpAt = now;
     lastClickAt = now;
