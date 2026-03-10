@@ -11,19 +11,8 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   var lastActionAt = 0;
   var lastBumpAt = 0;
-  var submitInFlightUntil = 0;
   var lastProgressAt = Date.now();
-  var wasGenerating = false;
-  var didInitialProbe = false;
   var pollTimer = null;
-
-  function getConfig() {
-    var c = window.__antigravityConfig || {};
-    return {
-      bump: { enabled: c.bump ? c.bump.enabled : true, text: c.bump ? (c.bump.text || 'Proceed') : 'Proceed' },
-      actions: c.actions || { clickRun: false, clickExpand: true, clickAlwaysAllow: true, clickRetry: true, clickAcceptAll: true, clickKeep: true, clickProceed: true, clickAllow: true }
-    };
-  }
 
   function emitBridge(payload) {
     try {
@@ -31,8 +20,30 @@ export const AUTO_CONTINUE_SCRIPT = `
       else console.log(payload);
     } catch (e) {}
   }
-  function log(msg) { emitBridge('__AUTOPILOT_LOG__:' + String(msg || '')); }
-  function emitAction(group, detail) { emitBridge('__AUTOPILOT_ACTION__:' + String(group || 'click') + '|' + String(detail || '')); }
+
+  function log(msg) {
+    emitBridge('__AUTOPILOT_LOG__:' + String(msg || ''));
+  }
+
+  function emitAction(group, detail) {
+    emitBridge('__AUTOPILOT_ACTION__:' + String(group || 'click') + '|' + String(detail || ''));
+  }
+
+  function getConfig() {
+    var c = window.__antigravityConfig || {};
+    return {
+      bump: {
+        enabled: c.bump ? c.bump.enabled !== false : true,
+        text: c.bump ? (c.bump.text || 'Proceed') : 'Proceed'
+      },
+      timing: {
+        pollIntervalMs: Math.max(150, Number(c.timing?.pollIntervalMs || 800)),
+        actionThrottleMs: Math.max(100, Number(c.timing?.actionThrottleMs || 250)),
+        stalledMs: Math.max(1000, Number(c.timing?.stalledMs || 7000)),
+        bumpCooldownMs: Math.max(1000, Number(c.timing?.bumpCooldownMs || 30000))
+      }
+    };
+  }
 
   function detectFork() {
     var title = String(document.title || '').toLowerCase();
@@ -45,40 +56,71 @@ export const AUTO_CONTINUE_SCRIPT = `
   function queryAllDeep(selector, root) {
     var out = [];
     var seen = new Set();
+
     function visit(node) {
       if (!node || !node.querySelectorAll) return;
+
       var list = [];
       try { list = node.querySelectorAll(selector); } catch (e) {}
       for (var i = 0; i < list.length; i++) {
-        if (!seen.has(list[i])) { seen.add(list[i]); out.push(list[i]); }
+        if (!seen.has(list[i])) {
+          seen.add(list[i]);
+          out.push(list[i]);
+        }
       }
+
       var all = [];
       try { all = node.querySelectorAll('*'); } catch (e) {}
       for (var j = 0; j < all.length; j++) {
-        try { if (all[j] && all[j].shadowRoot) visit(all[j].shadowRoot); } catch (e) {}
+        try {
+          if (all[j] && all[j].shadowRoot) visit(all[j].shadowRoot);
+        } catch (e) {}
       }
     }
+
     visit(root || document);
     return out;
   }
 
   function isVisible(el) {
     if (!el || !el.isConnected || el.disabled) return false;
-    var r = el.getBoundingClientRect();
-    if (!r || r.width <= 0 || r.height <= 0) return false;
-    var s = window.getComputedStyle(el);
-    return !(s.display === 'none' || s.visibility === 'hidden' || s.pointerEvents === 'none');
+    var rect = el.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+    var style = window.getComputedStyle(el);
+    return !(style.display === 'none' || style.visibility === 'hidden' || style.pointerEvents === 'none');
   }
 
   function normalizeText(el) {
-    var text = String(el.textContent || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+    var text = String(el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
     var aria = String(el.getAttribute('aria-label') || '').toLowerCase();
     var title = String(el.getAttribute('title') || '').toLowerCase();
     return [text, aria, title].join(' | ');
   }
 
+  function isBlockedSurface(el) {
+    if (!el || !el.closest) return false;
+
+    var blocked = '.part.titlebar, .part.activitybar, .part.statusbar, .menubar, .monaco-menu, [role="menu"], [role="menuitem"], [role="menubar"], .settings-editor, .extensions-viewlet';
+    var terminal = '.terminal-instance, .terminal-wrapper, .xterm, [class*="terminal" i]';
+
+    try {
+      if (el.closest(blocked) || el.closest(terminal)) return true;
+
+      if (el.tagName && el.tagName.toLowerCase() === 'textarea') {
+        if (el.closest('.part.editor') && !el.closest('[class*="chat" i], [class*="composer" i], .interactive-input-part, .chat-input-widget')) {
+          return true;
+        }
+      }
+    } catch (e) {
+      return false;
+    }
+
+    return false;
+  }
+
   function click(el, label, group) {
     if (!el) return false;
+
     try {
       try { el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true })); } catch (e) {}
       try { el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true })); } catch (e) {}
@@ -86,270 +128,239 @@ export const AUTO_CONTINUE_SCRIPT = `
       try { el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true })); } catch (e) {}
       try { el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); } catch (e) {}
       try { if (typeof el.click === 'function') el.click(); } catch (e) {}
+
       log('clicked ' + label);
       emitAction(group || 'click', String(label || 'clicked').toLowerCase());
       return true;
-    } catch (e) { return false; }
+    } catch (e) {
+      return false;
+    }
   }
-
-  // -------------------------------------------------------------------------------- //
-  //  CORE AUTOMATION 																  //
-  // -------------------------------------------------------------------------------- //
 
   var ACTION_SPECS = [
-    { key: 'clickRun', label: 'Run', regex: /(^|\b)(run(\s+in\s+terminal|\s+command)?|execute)(\b|$)/i },
-    { key: 'clickExpand', label: 'Expand', regex: /(expand|requires\s*input|step\s*requires\s*input)/i },
-    { key: 'clickAlwaysAllow', label: 'Always Allow', regex: /(always\s*allow|always\s*approve)/i },
-    { key: 'clickRetry', label: 'Retry', regex: /(\bretry\b|\btry\s+again\b)/i },
-    { key: 'clickAcceptAll', label: 'Accept all', regex: /(accept\s*all|apply\s*all|accept\s*all\s*changes|apply\s*all\s*changes)/i },
-    { key: 'clickKeep', label: 'Keep', regex: /\bkeep\b/i },
-    { key: 'clickProceed', label: 'Proceed', regex: /\bproceed\b/i },
-    { key: 'clickAllow', label: 'Allow', regex: /^allow$/i } 
+    { label: 'Run', regex: /(^|\b)(run(\s+in\s+terminal|\s+command)?|execute)(\b|$)/i },
+    { label: 'Expand', regex: /(\bexpand\b|requires\s*input|step\s*requires\s*input)/i },
+    { label: 'Always Allow', regex: /(always\s*allow|always\s*approve)/i },
+    { label: 'Retry', regex: /(\bretry\b|\btry\s+again\b)/i },
+    { label: 'Accept all', regex: /(accept\s*all|apply\s*all|accept\s*all\s*changes|apply\s*all\s*changes)/i },
+    { label: 'Keep', regex: /\bkeep\b/i },
+    { label: 'Proceed', regex: /\bproceed\b/i },
+    { label: 'Allow', regex: /(^|\b)allow(\b|$)/i }
   ];
 
-  function isBlockedSurface(el) {
-    if (!el || !el.closest) return false;
-    var blocked = '.part.titlebar, .part.activitybar, .part.statusbar, .menubar, .monaco-menu, [role="menu"], [role="menuitem"], [role="menubar"], .settings-editor, .extensions-viewlet';
-    var terminal = '.terminal-instance, .terminal-wrapper, .xterm, [class*="terminal" i]';
-    try {
-        if (el.closest(blocked) || el.closest(terminal)) return true;
-        // Strict guard against interacting with main text editors instead of chat
-        if (el.tagName && el.tagName.toLowerCase() === 'textarea') {
-            if (el.closest('.part.editor') && !el.closest('[class*="chat" i], [class*="composer" i], .interactive-input-part')) {
-                return true;
-            }
-        }
-    } catch (e) {
-        return false;
-    }
-    return false;
-  }
-
-  function tryClickButtons(cfg, isWaitingForInput) {
+  function detectAndClickButtons() {
     var nodes = queryAllDeep('button, [role="button"], a, .monaco-button, [aria-label], [title], [data-testid]');
+
     for (var i = 0; i < nodes.length; i++) {
-        var el = nodes[i].closest ? (nodes[i].closest('button, a, [role="button"], .monaco-button') || nodes[i]) : nodes[i];
-        if (!isVisible(el) || isBlockedSurface(el)) continue;
-        
-        // Prevent clicking runaway terminal buttons or irrelevant background toolbars
-        if (el.closest && el.closest('.terminal-instance, .xterm, [class*="terminal"]')) continue;
+      var el = nodes[i].closest ? (nodes[i].closest('button, a, [role="button"], .monaco-button') || nodes[i]) : nodes[i];
+      if (!isVisible(el) || isBlockedSurface(el)) continue;
+      if (el.closest && el.closest('.terminal-instance, .xterm, [class*="terminal"]')) continue;
 
-        var txt = normalizeText(el);
-
-        for (var j = 0; j < ACTION_SPECS.length; j++) {
-            var spec = ACTION_SPECS[j];
-            if (cfg.actions[spec.key] === false) continue; // Skip if disabled in config
-          if (spec.key === 'clickRun' && !isWaitingForInput) continue;
-            if (spec.regex.test(txt)) {
-                if (click(el, spec.label, 'click')) return true;
-            }
+      var txt = normalizeText(el);
+      for (var j = 0; j < ACTION_SPECS.length; j++) {
+        var spec = ACTION_SPECS[j];
+        if (spec.regex.test(txt)) {
+          if (click(el, spec.label, 'click')) return true;
         }
+      }
     }
+
     return false;
   }
 
-  function isGenerating() {
+  function detectGenerating() {
     var loaders = queryAllDeep('.codicon-loading, .typing-indicator, [title*="Stop" i], [aria-label*="Stop" i]');
     for (var i = 0; i < loaders.length; i++) {
-        var el = loaders[i].closest ? (loaders[i].closest('button, [role="button"]') || loaders[i]) : loaders[i];
-        if (isVisible(el) && !isBlockedSurface(el)) return true;
+      var el = loaders[i].closest ? (loaders[i].closest('button, [role="button"]') || loaders[i]) : loaders[i];
+      if (isVisible(el) && !isBlockedSurface(el)) return true;
     }
     return false;
   }
 
-  function checkStalledAndWaiting(fork) {
-    // 1. Fast check for thumbs up / down (Roo Code / Cline)
+  function detectWaitingSignal() {
     var fastNodes = queryAllDeep('.codicon-thumbsup, .codicon-thumbsdown, [class*="thumbsup" i], [class*="thumbsdown" i]');
-    for(var i = 0; i < fastNodes.length; i++) {
-        var el = fastNodes[i].closest ? (fastNodes[i].closest('button, [role="button"]') || fastNodes[i]) : fastNodes[i];
-        if (isVisible(el) && !isBlockedSurface(el)) return true;
+    for (var i = 0; i < fastNodes.length; i++) {
+      var el = fastNodes[i].closest ? (fastNodes[i].closest('button, [role="button"]') || fastNodes[i]) : fastNodes[i];
+      if (isVisible(el) && !isBlockedSurface(el)) return true;
     }
-    
-    // 2. Check for completion phrases strictly in likely message containers (not globally on all elements)
+
     var textNodes = queryAllDeep('.chat-body, .message-body, .chat-message, [data-testid*="message" i], .monaco-list-row, p, span.message');
     var completionPattern = /(all tasks completed|task completed|tasks completed|completed|done|finished|need anything else|anything else\?|waiting for input|requires input|thumbs up|thumbs down)/i;
+
     for (var j = 0; j < textNodes.length; j++) {
-        var el = textNodes[j];
-        if (!isVisible(el)) continue;
-        var txt = String(el.textContent || '').replace(/\s+/g, ' ').trim();
-        if (txt.length < 300 && completionPattern.test(txt)) {
-            return true;
-        }
+      var node = textNodes[j];
+      if (!isVisible(node)) continue;
+      var txt = String(node.textContent || '').replace(/\s+/g, ' ').trim();
+      if (txt.length < 400 && completionPattern.test(txt)) return true;
     }
+
     return false;
+  }
+
+  function detectStalledConversation(cfg, generating) {
+    var now = Date.now();
+    if (generating) {
+      lastProgressAt = now;
+      return false;
+    }
+    return (now - lastProgressAt) >= cfg.timing.stalledMs;
   }
 
   function findChatInput() {
     var inputs = queryAllDeep('textarea, [contenteditable="true"], [role="textbox"]');
+
     for (var i = 0; i < inputs.length; i++) {
-        var el = inputs[i];
-        if (!isVisible(el) || isBlockedSurface(el)) continue;
-        var tag = String(el.tagName || '').toLowerCase();
-        var editable = tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true';
-        if (!editable) continue;
-        
-        var sig = normalizeText(el) + " " + String(el.className || '') + " " + String(el.id || '');
-        // We match basic keywords to ensure it's a chat AI box
-        if (/(chat|message|ask|prompt|composer|copilot|assistant)/i.test(sig)) return el;
-        
-        if (el.closest && el.closest('[class*="chat" i], [class*="composer" i], .interactive-input-part, .chat-input-widget')) {
-            return el;
-        }
+      var el = inputs[i];
+      if (!isVisible(el) || isBlockedSurface(el)) continue;
+
+      var tag = String(el.tagName || '').toLowerCase();
+      var editable = tag === 'textarea' || el.isContentEditable || el.getAttribute('contenteditable') === 'true';
+      if (!editable) continue;
+
+      var sig = normalizeText(el) + ' ' + String(el.className || '') + ' ' + String(el.id || '');
+      if (/(chat|message|ask|prompt|composer|copilot|assistant)/i.test(sig)) return el;
+
+      if (el.closest && el.closest('[class*="chat" i], [class*="composer" i], .interactive-input-part, .chat-input-widget')) {
+        return el;
+      }
     }
+
     return null;
   }
 
-  function typeAndSubmitBump(input, bumpText, fork) {
-    // Type Text
+  function typeBumpText(input, bumpText) {
     try {
-        if (typeof input.focus === 'function') input.focus();
-        
-        if (input.isContentEditable || input.getAttribute('contenteditable') === 'true') {
-            try { document.execCommand('selectAll', false, null); } catch(e){}
-            try { document.execCommand('insertText', false, bumpText); } catch(e) { input.textContent = bumpText; }
-        } else {
-            var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
-            if (setter && setter.set && String(input.tagName || '').toLowerCase() === 'textarea') {
-                setter.set.call(input, bumpText);
-            } else {
-                input.value = bumpText;
-            }
-            try { input.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: bumpText })); } catch(e){}
-            try { input.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: bumpText })); } catch(e){}
-            try { input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true })); } catch(e){}
-        }
-        try { input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true })); } catch(e){}
-        log('typed bump text: ' + bumpText);
-    } catch(e) {
-        log('failed to type text');
-        // Let hybrid bump take over
+      if (typeof input.focus === 'function') input.focus();
+
+      if (input.isContentEditable || input.getAttribute('contenteditable') === 'true') {
+        try { document.execCommand('selectAll', false, null); } catch (e) {}
+        try { document.execCommand('insertText', false, bumpText); } catch (e) { input.textContent = bumpText; }
+      } else {
+        var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
+        if (setter && setter.set && String(input.tagName || '').toLowerCase() === 'textarea') setter.set.call(input, bumpText);
+        else input.value = bumpText;
+
+        try { input.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: bumpText })); } catch (e) {}
+        try { input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true })); } catch (e) {}
+      }
+
+      try { input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true })); } catch (e) {}
+      log('typed bump text: ' + bumpText);
+      return true;
+    } catch (e) {
+      log('failed to type bump text');
+      return false;
     }
-    
-    // Always dispatch a hybrid bump just in case DOM typing was blocked by React
+  }
+
+  function submitBumpText(input, bumpText) {
+    var container = (input.closest && input.closest('form, .interactive-input-part, [class*="chat-input" i]')) || document;
+    var buttons = queryAllDeep('[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], [aria-label*="Submit" i], .codicon-send, button[type="submit"]', container);
+
+    for (var i = 0; i < buttons.length; i++) {
+      var btn = buttons[i].closest ? (buttons[i].closest('button, [role="button"], a') || buttons[i]) : buttons[i];
+      if (isVisible(btn) && click(btn, 'Submit', 'submit')) {
+        return true;
+      }
+    }
+
+    try {
+      if (typeof input.focus === 'function') input.focus();
+
+      var combos = [
+        { altKey: true },
+        { ctrlKey: true },
+        { metaKey: true },
+        {}
+      ];
+
+      for (var j = 0; j < combos.length; j++) {
+        var mods = combos[j];
+        var args = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
+        for (var k in mods) args[k] = mods[k];
+        input.dispatchEvent(new KeyboardEvent('keydown', args));
+        input.dispatchEvent(new KeyboardEvent('keyup', args));
+      }
+
+      log('submitted bump text via keyboard fallbacks (Alt/Ctrl/Meta/Enter)');
+    } catch (e) {}
+
     emitBridge('__AUTOPILOT_HYBRID_BUMP__:' + bumpText);
-
-    // Give it a tiny delay to register the input value before pressing Send in DOM
-    setTimeout(function() {
-        if (window.__antigravityActiveInstance !== INSTANCE) return;
-        
-        // Find Send Button closest to input
-        var container = (input.closest && input.closest('form, .interactive-input-part, [class*="chat-input" i]')) || document;
-        var buttons = queryAllDeep('[title*="Send" i], [aria-label*="Send" i], [title*="Submit" i], .codicon-send, button[type="submit"]', container);
-        var clickedSend = false;
-        
-        for (var b = 0; b < buttons.length; b++) {
-            var btn = buttons[b].closest ? (buttons[b].closest('button, [role="button"], a') || buttons[b]) : buttons[b];
-            if (isVisible(btn)) {
-                if (click(btn, 'Submit', 'submit')) {
-                    clickedSend = true;
-                    break;
-                }
-            }
-        }
-
-        // Fallback to Enter Key
-        if (!clickedSend) {
-            try {
-                var modsList = [{}, { ctrlKey: true }, { metaKey: true }];
-                for(var m=0; m<modsList.length; m++) {
-                    var margs = modsList[m];
-                    margs.key = 'Enter'; margs.code = 'Enter'; margs.keyCode = 13; margs.which = 13; margs.bubbles = true; margs.cancelable = true;
-                    input.dispatchEvent(new KeyboardEvent('keydown', margs));
-                    input.dispatchEvent(new KeyboardEvent('keyup', margs));
-                }
-                log('submitted bump text via Enter key');
-            } catch(e) {}
-        }
-    }, 250);
-
     return true;
+  }
+
+  function updateRuntimeState(fork, generating, stalled, waiting) {
+    window.__antigravityRuntimeState = {
+      fork: fork,
+      mode: fork,
+      status: generating ? 'processing' : (waiting ? 'waiting_for_chat_message' : (stalled ? 'idle' : 'processing')),
+      waitingForChatMessage: waiting,
+      hasInput: true,
+      isGenerating: generating,
+      stalled: stalled,
+      completeStopSignal: waiting,
+      timestamp: Date.now()
+    };
   }
 
   function runLoop() {
     if (window.__antigravityActiveInstance !== INSTANCE) return;
+
     window.__antigravityHeartbeat = Date.now();
+
     var now = Date.now();
     var cfg = getConfig();
     var fork = detectFork();
+    var generating = detectGenerating();
+    var stalled = detectStalledConversation(cfg, generating);
+    var waitingSignal = detectWaitingSignal();
+    var waiting = waitingSignal || stalled;
 
-    if (!didInitialProbe) {
-        didInitialProbe = true;
-        log('probe fork=' + fork);
-    }
+    updateRuntimeState(fork, generating, stalled, waiting);
 
-    if ((now - lastActionAt) < 300) return; // Action Throttle
-
-    // 1. Track AI Generation state
-    var generating = isGenerating();
-    if (generating || wasGenerating) {
+    if ((now - lastActionAt) >= cfg.timing.actionThrottleMs) {
+      if (detectAndClickButtons()) {
+        lastActionAt = now;
         lastProgressAt = now;
-    }
-    wasGenerating = generating;
-
-    var stalledMs = Math.max(1000, Number(window.__antigravityConfig?.timing?.stalledMs || 7000));
-    var stalled = !generating && (now - lastProgressAt) >= stalledMs;
-    var isWaiting = checkStalledAndWaiting(fork);
-    
-    // If we have passed 1.5x the stalled time and we have an input available, bump it as a fallback
-    // This handles cases where the LLM stops generating but didn't output specific "completed" text.
-    var effectiveWaiting = isWaiting || (!generating && (now - lastProgressAt) >= (stalledMs * 1.5));
-
-    // 2. Attempt action clicks only after intent/state checks.
-    //    Run clicks are additionally gated to waiting-for-input state.
-    if (tryClickButtons(cfg, effectiveWaiting)) {
-      lastActionAt = now;
-      lastProgressAt = now;
-      return;
+        return;
+      }
     }
 
-    // Update state payload for upstream (used by cdp-strategy.ts)
-    window.__antigravityRuntimeState = {
-        fork: fork,
-        mode: fork,
-        status: generating ? 'processing' : (stalled && effectiveWaiting ? 'waiting_for_chat_message' : 'idle'),
-        waitingForChatMessage: stalled && effectiveWaiting,
-        hasInput: true,
-        isGenerating: generating,
-        stalled: stalled,
-        completeStopSignal: isWaiting,
-        timestamp: now
-    };
-
-    // 3. Automated Bumping (Only if nothing is generating and we are stuck on "Waiting for input")
-    if (!stalled || !effectiveWaiting || generating) return;
+    if (!waiting || generating) return;
     if (!cfg.bump.enabled || !cfg.bump.text) return;
-
-    var bumpCooldownMs = Math.max(1000, Number(window.__antigravityConfig?.timing?.bumpCooldownMs || 30000));
-    if ((now - lastBumpAt) < bumpCooldownMs) return; 
-    if (now < submitInFlightUntil) return;
+    if ((now - lastBumpAt) < cfg.timing.bumpCooldownMs) return;
 
     var input = findChatInput();
     if (!input) return;
 
-    if (typeAndSubmitBump(input, cfg.bump.text, fork)) {
-        var submitCooldownMs = Math.max(500, Number(window.__antigravityConfig?.timing?.submitCooldownMs || 3000));
-        submitInFlightUntil = now + submitCooldownMs;
-        lastBumpAt = now;
-        lastActionAt = now;
-        lastProgressAt = now;
-    }
+    typeBumpText(input, cfg.bump.text);
+    submitBumpText(input, cfg.bump.text);
+
+    lastBumpAt = now;
+    lastActionAt = now;
+    lastProgressAt = now;
   }
 
   function schedule() {
     if (window.__antigravityActiveInstance !== INSTANCE) return;
-    var pollMs = Math.max(150, Number(window.__antigravityConfig?.timing?.pollIntervalMs || 800));
+
+    var pollMs = getConfig().timing.pollIntervalMs;
     pollTimer = setTimeout(function () {
       try { runLoop(); } catch (e) { log('loop error: ' + String(e.message || e)); }
       schedule();
     }, pollMs);
   }
 
+  window.__antigravityGetState = function () {
+    return window.__antigravityRuntimeState || null;
+  };
+
   window.stopAutoContinue = function () {
     if (pollTimer) clearTimeout(pollTimer);
     window.__antigravityAutoContinueRunning = false;
   };
 
-  log('Autopilot Engine started');
+  log('Autopilot Engine started (minimal core)');
   try { runLoop(); } catch (e) { log('init loop error: ' + String(e.message || e)); }
   schedule();
 })();

@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.47] - 2026-03-09
+### Changed
+* **Minimal Runtime Core Refactor**: Rewrote `src/scripts/auto-continue.ts` to a simpler explicit loop focused on core functions only: fork detection, stalled/waiting detection, bump typing, bump submit, and button detection/clicking.
+* **Forced Action Click Path**: Runtime action detection now always attempts direct DOM click automation for `Run`, `Expand`, `Always Allow`, `Retry`, `Accept all`, `Keep`, `Proceed`, and `Allow` labels in visible non-blocked surfaces.
+* **Simplified Bump Pipeline**: Consolidated bump flow into direct `typeBumpText` + `submitBumpText` functions with submit fallbacks (`Send/Submit` click, then `Alt+Enter`, `Ctrl+Enter`, `Meta+Enter`, `Enter`, plus bridge hybrid payload).
+
+### Fixed
+* **Runtime API Parity After Simplification**: Preserved `window.__antigravityRuntimeState`, `window.__antigravityGetState()`, heartbeat updates, and `stopAutoContinue()` lifecycle hooks so existing strategy/handler integrations remain compatible.
+
 ## [6.2.46] - 2026-03-09
 ### Fixed
 * **Off-Target Bump Typing Guard**: Removed the generic fallback that selected the first visible `textarea`, so bump text no longer lands in unrelated inputs (for example extension search) when no chat composer is confidently identified.
