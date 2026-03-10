@@ -844,11 +844,25 @@ export class CDPStrategy implements IStrategy {
         });
 
         // ─── STALL DETECTION + BUMP ───
-        const STALL_MS = 10000;
-        const BUMP_COOLDOWN_MS = 30000;
+        const getTimingConfig = () => {
+            const pollIntervalMs = Math.max(500, config.get<number>('automation.timing.pollIntervalMs') || 800);
+            const stallTimeoutSec = Math.max(1, config.get<number>('actions.bump.stallTimeout') || 7);
+            const bumpCooldownSec = Math.max(1, config.get<number>('actions.bump.cooldown') || 30);
+            const submitDelayMs = Math.max(40, config.get<number>('actions.bump.submitDelayMs') || 120);
+            return {
+                pollIntervalMs,
+                stallMs: stallTimeoutSec * 1000,
+                bumpCooldownMs: bumpCooldownSec * 1000,
+                submitDelayMs
+            };
+        };
 
         this.stallTimer = setInterval(async () => {
             const now = Date.now();
+            const timing = getTimingConfig();
+            const STALL_MS = timing.stallMs;
+            const BUMP_COOLDOWN_MS = timing.bumpCooldownMs;
+            const SUBMIT_DELAY_MS = timing.submitDelayMs;
             const actAge = now - this.lastActivityAt;
             const bumpAge = now - this.lastBumpAt;
             const connected = this.cdpHandler.isConnected();
@@ -909,7 +923,7 @@ export class CDPStrategy implements IStrategy {
                     logToOutput('[Bump] Aborted: no connected CDP targets available for typing.');
                     return;
                 }
-                await new Promise(r => setTimeout(r, 300));
+                await new Promise(r => setTimeout(r, SUBMIT_DELAY_MS));
 
                 // ────────────────────────────────────────
                 // STEP 3: Submit via send-button click when available (session-aware)
@@ -961,7 +975,7 @@ export class CDPStrategy implements IStrategy {
             } catch (e: any) {
                 logToOutput('[Bump] ERROR: ' + (e?.message || e));
             }
-        }, 3000);
+        }, getTimingConfig().pollIntervalMs);
 
         vscode.window.showInformationMessage('Antigravity: CDP Strategy v9.1 ON');
     }

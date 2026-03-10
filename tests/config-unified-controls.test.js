@@ -143,4 +143,16 @@ describe('Config unified autopilot controls (real module)', () => {
         assert.deepStrictEqual(all.interactionClickMethodsAntigravity, ['dom-click', 'script-force']);
         assert.deepStrictEqual(all.interactionClickMethodsCursor, ['dom-click', 'cdp-mouse', 'native-accept']);
     });
+
+    it('keeps CDP strategy timing driven by user bump settings', () => {
+        const strategySource = fs.readFileSync(path.resolve(__dirname, '../src/strategies/cdp-strategy.ts'), 'utf-8');
+
+        assert.match(strategySource, /config\.get<number>\('automation\.timing\.pollIntervalMs'\)/, 'cdp-strategy should read poll interval from config');
+        assert.match(strategySource, /config\.get<number>\('actions\.bump\.stallTimeout'\)/, 'cdp-strategy should read stall timeout from config');
+        assert.match(strategySource, /config\.get<number>\('actions\.bump\.cooldown'\)/, 'cdp-strategy should read bump cooldown from config');
+        assert.match(strategySource, /config\.get<number>\('actions\.bump\.submitDelayMs'\)/, 'cdp-strategy should read submit delay from config');
+        assert.ok(!/const STALL_MS = 10000;/.test(strategySource), 'cdp-strategy should not hardcode stall timeout');
+        assert.ok(!/const BUMP_COOLDOWN_MS = 30000;/.test(strategySource), 'cdp-strategy should not hardcode bump cooldown');
+        assert.ok(!/\}, 3000\);/.test(strategySource), 'cdp-strategy should not hardcode a 3000ms polling loop');
+    });
 });

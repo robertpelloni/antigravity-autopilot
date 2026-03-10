@@ -1,6 +1,14 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.49] - 2026-03-10
+### Fixed
+* **CDP Bump Timing Now Respects Settings**: `src/strategies/cdp-strategy.ts` now reads `Poll Interval`, `Stall Timeout`, `Bump Cooldown`, and `Submit Delay` from user configuration instead of using hardcoded timing values.
+
+### Changed
+* **Timing UI Clarification**: The dashboard Timing card now explicitly states that its controls are applied live to the runtime/CDP bump loop.
+* **Regression Coverage**: Added a source-level regression test to prevent `cdp-strategy` from drifting back to hardcoded bump timing constants.
+
 ## [6.2.48] - 2026-03-09
 ### Changed
 * **Further Runtime Simplification**: Reduced `src/scripts/auto-continue.ts` to a tighter fork-driven core path while preserving only essential behaviors (fork detect, stalled detect, bump type/submit, action detect/click).

@@ -345,6 +345,7 @@ export class DashboardPanel {
 
   <div class="card">
     <h2>Timing</h2>
+    <p class="muted">These values are applied live to the runtime/CDP bump loop: scan frequency, stall detection, bump cooldown, and the type-to-submit delay.</p>
     <div class="row"><label>Poll Interval (ms)</label><input type="number" min="150" value="${pollIntervalMs}" onchange="setCfg('automation.timing.pollIntervalMs', Number(this.value) || 800)" /></div>
     <div class="row"><label>Stall Timeout (sec)</label><input type="number" min="1" value="${stallTimeoutSec}" onchange="setCfg('actions.bump.stallTimeout', Number(this.value) || 7)" /></div>
     <div class="row"><label>Bump Cooldown (sec)</label><input type="number" min="1" value="${bumpCooldownSec}" onchange="setCfg('actions.bump.cooldown', Number(this.value) || 30)" /></div>
