@@ -23,6 +23,7 @@ export const AUTO_CONTINUE_SCRIPT = `
     } catch(e) {}
   }
   function log(m) { emit('__AUTOPILOT_LOG__:' + m); }
+  function emitAction(group, detail) { emit('__AUTOPILOT_ACTION__:' + group + '|' + detail); }
 
   // ── Deep Query (traverses shadow DOM) ──
   function q(sel, root) {
@@ -51,6 +52,23 @@ export const AUTO_CONTINUE_SCRIPT = `
   function center(el) {
     var r = el.getBoundingClientRect();
     return [Math.round(r.left + r.width/2), Math.round(r.top + r.height/2)];
+  }
+
+  // ── DOM click (works for Electron buttons, does NOT work for Monaco text input) ──
+  function domClick(el, label) {
+    if (!el) return false;
+    try {
+      try { el.focus({preventScroll:true}); } catch(e){}
+      try { el.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,cancelable:true,pointerType:'mouse',isPrimary:true})); } catch(e){}
+      try { el.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,cancelable:true,pointerType:'mouse',isPrimary:true})); } catch(e){}
+      try { el.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true})); } catch(e){}
+      try { el.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,cancelable:true})); } catch(e){}
+      try { el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true})); } catch(e){}
+      try { if (typeof el.click === 'function') el.click(); } catch(e){}
+      log('clicked ' + label);
+      emitAction('click', label);
+      return true;
+    } catch(e) { return false; }
   }
 
   // ── Word-boundary-aware matching (avoids template literal \\b escaping issues) ──
@@ -127,9 +145,9 @@ export const AUTO_CONTINUE_SCRIPT = `
     return null;
   }
 
-  // ── Main Loop: SENSOR ONLY ──
-  // Detects state and emits bridge messages. ALL actions (clicking, typing, submitting)
-  // are performed by the Node.js CDP handler using native CDP Input commands.
+  // ── Main Loop ──
+  // Buttons: clicked via DOM (works in Electron)
+  // Typing/submitting: done via CDP bridge (only way that works for Monaco inputs)
   function run() {
     if (window.__antigravityActiveInstance !== ID) return;
     window.__antigravityHeartbeat = Date.now();
@@ -139,7 +157,7 @@ export const AUTO_CONTINUE_SCRIPT = `
 
     if ((now - lastClickAt) < 300) return;
 
-    // === PHASE 1: Find actionable buttons, request CDP click at their coordinates ===
+    // === PHASE 1: Click actionable buttons via DOM ===
     var btns = q('button,[role="button"],a,.monaco-button');
     for (var i=0; i<btns.length; i++) {
       var btn = btns[i];
@@ -148,9 +166,7 @@ export const AUTO_CONTINUE_SCRIPT = `
       if (text.length > 80) continue;
       var action = matchAction(text);
       if (action) {
-        var c = center(btn);
-        emit('__AUTOPILOT_CLICK__:' + c[0] + ',' + c[1] + ',' + action);
-        log('click ' + action + ' @' + c[0] + ',' + c[1]);
+        domClick(btn, action);
         lastClickAt = now;
         lastProgressAt = now;
         return;
@@ -180,13 +196,9 @@ export const AUTO_CONTINUE_SCRIPT = `
     var cooldown = Number(timing.bumpCooldownMs) || 30000;
     if ((now - lastBumpAt) < cooldown) return;
 
-    // Focus input via DOM (best effort), then request CDP bump
+    // Focus input via DOM (best effort), then request CDP typing
     var input = focusChatInput();
-    if (input) {
-      var ic = center(input);
-      emit('__AUTOPILOT_CLICK__:' + ic[0] + ',' + ic[1] + ',focusInput');
-    }
-    // Short delay so focus click settles before typing
+    // Short delay so focus settles before CDP types
     setTimeout(function() {
       if (window.__antigravityActiveInstance !== ID) return;
       emit('__AUTOPILOT_HYBRID_BUMP__:' + bumpText);
