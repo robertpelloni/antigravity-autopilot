@@ -662,10 +662,10 @@ export class CDPStrategy implements IStrategy {
 
     private async dispatchEnterOnPage(pageId: string): Promise<boolean> {
         const down = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
-            type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
+            type: 'keyDown', key: 'Enter', code: 'Enter'
         }, [pageId]);
         const up = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
-            type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
+            type: 'keyUp', key: 'Enter', code: 'Enter'
         }, [pageId]);
         logToOutput(`[TestMethod] submit:enter-key => down=${JSON.stringify(down)} up=${JSON.stringify(up)}`);
         return down.some((r) => r.startsWith('ok:')) || up.some((r) => r.startsWith('ok:'));
@@ -676,8 +676,8 @@ export class CDPStrategy implements IStrategy {
             type: 'keyDown',
             key: 'Enter',
             code: 'Enter',
-            windowsVirtualKeyCode: 13,
-            nativeVirtualKeyCode: 13,
+
+
             ctrlKey: modifiers?.ctrlKey === true,
             altKey: modifiers?.altKey === true,
             shiftKey: modifiers?.shiftKey === true,
@@ -687,8 +687,8 @@ export class CDPStrategy implements IStrategy {
             type: 'keyUp',
             key: 'Enter',
             code: 'Enter',
-            windowsVirtualKeyCode: 13,
-            nativeVirtualKeyCode: 13,
+
+
             ctrlKey: modifiers?.ctrlKey === true,
             altKey: modifiers?.altKey === true,
             shiftKey: modifiers?.shiftKey === true,
@@ -1048,15 +1048,15 @@ export class CDPStrategy implements IStrategy {
                     type: 'keyDown',
                     key: 'Enter',
                     code: 'Enter',
-                    windowsVirtualKeyCode: 13,
-                    nativeVirtualKeyCode: 13,
+
+
                 }, enterFallbackTargets);
                 const enterUp = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
                     type: 'keyUp',
                     key: 'Enter',
                     code: 'Enter',
-                    windowsVirtualKeyCode: 13,
-                    nativeVirtualKeyCode: 13,
+
+
                 }, enterFallbackTargets);
                 logToOutput('[Bump] Enter result: down=' + JSON.stringify(enterDown) + ' up=' + JSON.stringify(enterUp));
 
@@ -1229,8 +1229,8 @@ export class CDPStrategy implements IStrategy {
                     unmodifiedText: char,
                     key: char,
                     code: /^[a-z]$/i.test(char) ? ('Key' + char.toUpperCase()) : undefined,
-                    windowsVirtualKeyCode: Number.isFinite(vkCode) ? vkCode : undefined,
-                    nativeVirtualKeyCode: Number.isFinite(vkCode) ? vkCode : undefined
+
+
                 }, [firstTarget]);
                 const up = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
                     type: 'keyUp',
@@ -1238,8 +1238,8 @@ export class CDPStrategy implements IStrategy {
                     unmodifiedText: char,
                     key: char,
                     code: /^[a-z]$/i.test(char) ? ('Key' + char.toUpperCase()) : undefined,
-                    windowsVirtualKeyCode: Number.isFinite(vkCode) ? vkCode : undefined,
-                    nativeVirtualKeyCode: Number.isFinite(vkCode) ? vkCode : undefined
+
+
                 }, [firstTarget]);
                 if (down.some((r) => r.startsWith('ok:')) || up.some((r) => r.startsWith('ok:'))) {
                     okAny = true;
@@ -1561,23 +1561,23 @@ export class CDPStrategy implements IStrategy {
                     type: 'rawKeyDown',
                     key: char,
                     code: /^[a-z]$/i.test(char) ? ('Key' + char.toUpperCase()) : undefined,
-                    windowsVirtualKeyCode: Number.isFinite(vkCode) ? vkCode : undefined,
-                    nativeVirtualKeyCode: Number.isFinite(vkCode) ? vkCode : undefined
+
+
                 }, [firstTarget]);
                 const typed = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
                     type: 'char',
                     text: char,
                     unmodifiedText: char,
                     key: char,
-                    windowsVirtualKeyCode: Number.isFinite(vkCode) ? vkCode : undefined,
-                    nativeVirtualKeyCode: Number.isFinite(vkCode) ? vkCode : undefined
+
+
                 }, [firstTarget]);
                 const up = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
                     type: 'keyUp',
                     key: char,
                     code: /^[a-z]$/i.test(char) ? ('Key' + char.toUpperCase()) : undefined,
-                    windowsVirtualKeyCode: Number.isFinite(vkCode) ? vkCode : undefined,
-                    nativeVirtualKeyCode: Number.isFinite(vkCode) ? vkCode : undefined
+
+
                 }, [firstTarget]);
                 if (down.some((r) => r.startsWith('ok:')) || typed.some((r) => r.startsWith('ok:')) || up.some((r) => r.startsWith('ok:'))) {
                     anyOk = true;
@@ -1593,30 +1593,8 @@ export class CDPStrategy implements IStrategy {
         }
 
         if (method === 'typing:bridge-chat-command') {
-            const commandAttempts: Array<{ cmd: string; args: any[] }> = [
-                { cmd: 'antigravity.sendTextToChat', args: [bumpText] },
-                { cmd: 'antigravity.sendTextToChat', args: [{ text: bumpText }] },
-                { cmd: 'workbench.action.chat.open', args: [{ query: bumpText }] }
-            ];
-
-            let anySuccess = false;
-            for (const attempt of commandAttempts) {
-                try {
-                    await vscode.commands.executeCommand(attempt.cmd, ...attempt.args);
-                    anySuccess = true;
-                    logToOutput(`[TestMethod] typing:bridge-chat-command command-ok=${attempt.cmd}`);
-                    break;
-                } catch (e: any) {
-                    logToOutput(`[TestMethod] typing:bridge-chat-command command-fail=${attempt.cmd} err=${String(e?.message || e || 'unknown')}`);
-                }
-            }
-
-            const readback = await this.readComposerTextOnPage(firstTarget);
-            const readbackOk = readback.toLowerCase().includes(bumpText.toLowerCase());
-            const postFocus = await this.focusChatInputOnPage(firstTarget);
-            const ok = anySuccess && (readbackOk || (postFocus.ok && postFocus.active));
-            logToOutput(`[TestMethod] typing:bridge-chat-command => anySuccess=${anySuccess} readback="${readback}" readbackOk=${readbackOk} postFocusOk=${postFocus.ok} postFocusActive=${postFocus.active} ok=${ok}`);
-            return ok;
+            logToOutput(`[TestMethod] typing:bridge-chat-command disabled: vscode commands steal OS focus.`);
+            return false;
         }
 
         if (method === 'typing:composition-events') {

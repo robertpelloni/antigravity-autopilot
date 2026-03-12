@@ -1166,12 +1166,10 @@ export class CDPHandler extends EventEmitter {
                     // Submit with Enter key via native CDP Input
                     await this.sendCommand(pageId, 'Input.dispatchKeyEvent', {
                         type: 'rawKeyDown', key: 'Enter', code: 'Enter',
-                        windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
                         unmodifiedText: '\r', text: '\r'
                     }, undefined, target).catch(() => { });
                     await this.sendCommand(pageId, 'Input.dispatchKeyEvent', {
-                        type: 'keyUp', key: 'Enter', code: 'Enter',
-                        windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13
+                        type: 'keyUp', key: 'Enter', code: 'Enter'
                     }, undefined, target).catch(() => { });
                     logToOutput(`[CDP-Bump] Submitted Enter`);
 
@@ -1267,8 +1265,6 @@ export class CDPHandler extends EventEmitter {
                 type: 'rawKeyDown',
                 key: 'Enter',
                 code: 'Enter',
-                windowsVirtualKeyCode: 13,
-                nativeVirtualKeyCode: 13,
                 unmodifiedText: '\r',
                 text: '\r'
             }, undefined, targetSessionId).catch(() => { });
@@ -1276,9 +1272,7 @@ export class CDPHandler extends EventEmitter {
             await this.sendCommand(pageId, 'Input.dispatchKeyEvent', {
                 type: 'keyUp',
                 key: 'Enter',
-                code: 'Enter',
-                windowsVirtualKeyCode: 13,
-                nativeVirtualKeyCode: 13
+                code: 'Enter'
             }, undefined, targetSessionId).catch(() => { });
         };
 
