@@ -507,7 +507,7 @@ export class CDPStrategy implements IStrategy {
 
             const candidates = collectCandidates();
             for (const n of candidates) {
-                try { if (typeof n.focus === 'function') n.focus(); } catch {}
+                
                 const active = document.activeElement === n;
                 if (active) {
                     return { ok: true, selector: String(n.tagName || 'candidate').toLowerCase(), active, tag: String(n.tagName || '').toLowerCase() };
@@ -1273,7 +1273,7 @@ export class CDPStrategy implements IStrategy {
                 for (const c of candidates) {
                     if (!isVisible(c)) continue;
                     if (isTerminalLike(c)) continue;
-                    try { if (typeof c.focus === 'function') c.focus(); } catch {}
+                    
                     if (c.isContentEditable || c.getAttribute('contenteditable') === 'true') {
                         try { document.execCommand('selectAll', false, null); } catch {}
                         try { document.execCommand('insertText', false, text); } catch { c.textContent = text; }
@@ -1310,7 +1310,7 @@ export class CDPStrategy implements IStrategy {
                     if (isTerminalLike(t)) continue;
                     const r = t.getBoundingClientRect();
                     if (!r || r.width <= 0 || r.height <= 0) continue;
-                    try { if (typeof t.focus === 'function') t.focus(); } catch {}
+                    
                     try {
                         if (t.isContentEditable || t.getAttribute('contenteditable') === 'true') {
                             document.execCommand('selectAll', false, null);
@@ -1349,7 +1349,7 @@ export class CDPStrategy implements IStrategy {
                     if (isTerminalLike(t)) continue;
                     const r = t.getBoundingClientRect();
                     if (!r || r.width <= 0 || r.height <= 0) continue;
-                    try { if (typeof t.focus === 'function') t.focus(); } catch {}
+                    
                     try {
                         const tag = String(t.tagName || '').toLowerCase();
                         if (tag === 'textarea') {
@@ -1394,7 +1394,7 @@ export class CDPStrategy implements IStrategy {
                     if (isTerminalLike(t)) continue;
                     const r = t.getBoundingClientRect();
                     if (!r || r.width <= 0 || r.height <= 0) continue;
-                    try { if (typeof t.focus === 'function') t.focus(); } catch {}
+                    
                     if (t.isContentEditable || t.getAttribute('contenteditable') === 'true') {
                         t.textContent = text;
                     } else {
@@ -1431,7 +1431,7 @@ export class CDPStrategy implements IStrategy {
                     if (isTerminalLike(t)) continue;
                     const r = t.getBoundingClientRect();
                     if (!r || r.width <= 0 || r.height <= 0) continue;
-                    try { if (typeof t.focus === 'function') t.focus(); } catch {}
+                    
                     try {
                         if (typeof t.setSelectionRange === 'function') {
                             t.setSelectionRange(0, String(t.value || '').length);
@@ -1475,7 +1475,7 @@ export class CDPStrategy implements IStrategy {
                     if (isTerminalLike(e)) continue;
                     const r = e.getBoundingClientRect();
                     if (!r || r.width <= 0 || r.height <= 0) continue;
-                    try { if (typeof e.focus === 'function') e.focus(); } catch {}
+                    
                     const lines = String(text || '').split('\n');
                     if (lines.length > 1) {
                         e.innerHTML = lines.map((line) => '<p>' + (escapeHtml(line) || '<br>') + '</p>').join('');
@@ -1512,7 +1512,7 @@ export class CDPStrategy implements IStrategy {
                 for (const c of candidates) {
                     if (!c || c.disabled) continue;
                     if (isTerminalLike(c)) continue;
-                    try { if (typeof c.focus === 'function') c.focus(); } catch {}
+                    
                     c.value = '';
                     try { c.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text })); } catch {}
                     c.value = text;
@@ -1529,168 +1529,28 @@ export class CDPStrategy implements IStrategy {
         }
 
         if (method === 'typing:clipboard-paste' || method === 'clipboard-paste') {
-            try {
-                await vscode.env.clipboard.writeText(bumpText);
-                await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
-            } catch (e: any) {
-                logToOutput(`[TestMethod] typing:clipboard-paste command-error=${String(e?.message || e || 'unknown')}`);
-            }
-            const readback = await this.readComposerTextOnPage(firstTarget);
-            const ok = readback.toLowerCase().includes(bumpText.toLowerCase());
-            logToOutput(`[TestMethod] typing:clipboard-paste => readback="${readback}" ok=${ok}`);
-            return ok;
+            logToOutput(`[TestMethod] typing:clipboard-paste disabled: vscode commands steal OS focus.`);
+            return false;
         }
 
         if (method === 'typing:vscode-type' || method === 'vscode-type') {
-            const hostFocusOk = await this.focusHostChatComposerBestEffort();
-            await new Promise((resolve) => setTimeout(resolve, 80));
-            focusInfo = await this.focusChatInputOnPage(firstTarget);
-            const focusLockOk = hostFocusOk && focusInfo.ok && focusInfo.active;
-            logToOutput(`[TestMethod] typing:vscode-type focus-lock => hostFocusOk=${hostFocusOk} targetFocusOk=${focusInfo.ok} targetActive=${focusInfo.active} details=${focusInfo.details}`);
-
-            if (!focusLockOk) {
-                logToOutput('[TestMethod] typing:vscode-type => aborted: chat focus lock failed, refusing host type dispatch.');
-                return false;
-            }
-
-            let commandOk = false;
-            try {
-                await vscode.commands.executeCommand('type', { text: bumpText });
-                commandOk = true;
-            } catch (e: any) {
-                logToOutput(`[TestMethod] typing:vscode-type command-error=${String(e?.message || e || 'unknown')}`);
-            }
-            await new Promise((resolve) => setTimeout(resolve, 80));
-            const readback = await this.readComposerTextOnPage(firstTarget);
-            const readbackOk = readback.toLowerCase().includes(bumpText.toLowerCase());
-            const postTypeFocus = await this.focusChatInputOnPage(firstTarget);
-            const focusStillLocked = postTypeFocus.ok && postTypeFocus.active;
-            const monacoReadbackBlindSpotOk = commandOk && !readbackOk && focusStillLocked;
-            const ok = commandOk && (readbackOk || monacoReadbackBlindSpotOk);
-            if (commandOk && !readbackOk) {
-                if (monacoReadbackBlindSpotOk) {
-                    logToOutput('[TestMethod] typing:vscode-type => composer readback empty after command, but focus remained locked on chat input; accepting pass for Monaco proxy readback blind spot.');
-                } else {
-                    logToOutput('[TestMethod] typing:vscode-type => command executed but composer readback did not match; likely typed into non-chat focused control.');
-                }
-            }
-            logToOutput(`[TestMethod] typing:vscode-type => commandOk=${commandOk} readback="${readback}" readbackOk=${readbackOk} postFocusOk=${postTypeFocus.ok} postFocusActive=${postTypeFocus.active} ok=${ok}`);
-            return ok;
+            logToOutput(`[TestMethod] typing:vscode-type disabled: vscode commands steal OS focus.`);
+            return false;
         }
 
         if (method === 'typing:vscode-type-chunked') {
-            const hostFocusOk = await this.focusHostChatComposerBestEffort();
-            await new Promise((resolve) => setTimeout(resolve, 80));
-            focusInfo = await this.focusChatInputOnPage(firstTarget);
-            const focusLockOk = hostFocusOk && focusInfo.ok && focusInfo.active;
-            logToOutput(`[TestMethod] typing:vscode-type-chunked focus-lock => hostFocusOk=${hostFocusOk} targetFocusOk=${focusInfo.ok} targetActive=${focusInfo.active} details=${focusInfo.details}`);
-
-            if (!focusLockOk) {
-                logToOutput('[TestMethod] typing:vscode-type-chunked => aborted: chat focus lock failed.');
-                return false;
-            }
-
-            const chunks: string[] = [];
-            const chunkSize = 8;
-            for (let i = 0; i < bumpText.length; i += chunkSize) {
-                chunks.push(bumpText.slice(i, i + chunkSize));
-            }
-
-            let commandOk = true;
-            for (const chunk of chunks) {
-                try {
-                    await vscode.commands.executeCommand('type', { text: chunk });
-                    await new Promise((resolve) => setTimeout(resolve, 20));
-                } catch (e: any) {
-                    commandOk = false;
-                    logToOutput(`[TestMethod] typing:vscode-type-chunked command-error chunk="${chunk}" err=${String(e?.message || e || 'unknown')}`);
-                    break;
-                }
-            }
-
-            const readback = await this.readComposerTextOnPage(firstTarget);
-            const readbackOk = readback.toLowerCase().includes(bumpText.toLowerCase());
-            const postTypeFocus = await this.focusChatInputOnPage(firstTarget);
-            const focusStillLocked = postTypeFocus.ok && postTypeFocus.active;
-            const blindSpotOk = commandOk && !readbackOk && focusStillLocked;
-            const ok = commandOk && (readbackOk || blindSpotOk);
-            logToOutput(`[TestMethod] typing:vscode-type-chunked => chunks=${chunks.length} commandOk=${commandOk} readback="${readback}" readbackOk=${readbackOk} postFocusOk=${postTypeFocus.ok} postFocusActive=${postTypeFocus.active} ok=${ok}`);
-            return ok;
+            logToOutput(`[TestMethod] typing:vscode-type-chunked disabled: vscode commands steal OS focus.`);
+            return false;
         }
 
         if (method === 'typing:vscode-paste-commands') {
-            const hostFocusOk = await this.focusHostChatComposerBestEffort();
-            await new Promise((resolve) => setTimeout(resolve, 80));
-            focusInfo = await this.focusChatInputOnPage(firstTarget);
-            const focusLockOk = hostFocusOk && focusInfo.ok && focusInfo.active;
-            logToOutput(`[TestMethod] typing:vscode-paste-commands focus-lock => hostFocusOk=${hostFocusOk} targetFocusOk=${focusInfo.ok} targetActive=${focusInfo.active} details=${focusInfo.details}`);
-
-            if (!focusLockOk) {
-                logToOutput('[TestMethod] typing:vscode-paste-commands => aborted: chat focus lock failed.');
-                return false;
-            }
-
-            let anySuccess = false;
-            try {
-                await vscode.env.clipboard.writeText(bumpText);
-                const commands = [
-                    'editor.action.clipboardPasteAction',
-                    'paste',
-                    'workbench.action.chat.paste'
-                ];
-                for (const cmd of commands) {
-                    try {
-                        await vscode.commands.executeCommand(cmd);
-                        anySuccess = true;
-                        logToOutput(`[TestMethod] typing:vscode-paste-commands command-ok=${cmd}`);
-                        break;
-                    } catch (e: any) {
-                        logToOutput(`[TestMethod] typing:vscode-paste-commands command-fail=${cmd} err=${String(e?.message || e || 'unknown')}`);
-                    }
-                }
-            } catch (e: any) {
-                logToOutput(`[TestMethod] typing:vscode-paste-commands clipboard-error=${String(e?.message || e || 'unknown')}`);
-            }
-
-            const readback = await this.readComposerTextOnPage(firstTarget);
-            const readbackOk = readback.toLowerCase().includes(bumpText.toLowerCase());
-            const postFocus = await this.focusChatInputOnPage(firstTarget);
-            const ok = anySuccess && (readbackOk || (postFocus.ok && postFocus.active));
-            logToOutput(`[TestMethod] typing:vscode-paste-commands => anySuccess=${anySuccess} readback="${readback}" readbackOk=${readbackOk} postFocusOk=${postFocus.ok} postFocusActive=${postFocus.active} ok=${ok}`);
-            return ok;
+            logToOutput(`[TestMethod] typing:vscode-paste-commands disabled: vscode commands steal OS focus.`);
+            return false;
         }
 
         if (method === 'typing:vscode-insert-snippet') {
-            const hostFocusOk = await this.focusHostChatComposerBestEffort();
-            await new Promise((resolve) => setTimeout(resolve, 80));
-            focusInfo = await this.focusChatInputOnPage(firstTarget);
-            const focusLockOk = hostFocusOk && focusInfo.ok && focusInfo.active;
-            logToOutput(`[TestMethod] typing:vscode-insert-snippet focus-lock => hostFocusOk=${hostFocusOk} targetFocusOk=${focusInfo.ok} targetActive=${focusInfo.active} details=${focusInfo.details}`);
-
-            if (!focusLockOk) {
-                logToOutput('[TestMethod] typing:vscode-insert-snippet => aborted: chat focus lock failed.');
-                return false;
-            }
-
-            const snippet = bumpText
-                .replace(/\\/g, '\\\\')
-                .replace(/\$/g, '\\$')
-                .replace(/\}/g, '\\}');
-
-            let commandOk = false;
-            try {
-                await vscode.commands.executeCommand('editor.action.insertSnippet', { snippet });
-                commandOk = true;
-            } catch (e: any) {
-                logToOutput(`[TestMethod] typing:vscode-insert-snippet command-error=${String(e?.message || e || 'unknown')}`);
-            }
-
-            const readback = await this.readComposerTextOnPage(firstTarget);
-            const readbackOk = readback.toLowerCase().includes(bumpText.toLowerCase());
-            const postFocus = await this.focusChatInputOnPage(firstTarget);
-            const ok = commandOk && (readbackOk || (postFocus.ok && postFocus.active));
-            logToOutput(`[TestMethod] typing:vscode-insert-snippet => commandOk=${commandOk} readback="${readback}" readbackOk=${readbackOk} postFocusOk=${postFocus.ok} postFocusActive=${postFocus.active} ok=${ok}`);
-            return ok;
+            logToOutput(`[TestMethod] typing:vscode-insert-snippet disabled: vscode commands steal OS focus.`);
+            return false;
         }
 
         if (method === 'typing:cdp-key-stream') {
@@ -1776,7 +1636,7 @@ export class CDPStrategy implements IStrategy {
                     if (isTerminalLike(t)) continue;
                     const r = t.getBoundingClientRect();
                     if (!r || r.width <= 0 || r.height <= 0) continue;
-                    try { if (typeof t.focus === 'function') t.focus(); } catch {}
+                    
                     try {
                         t.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, cancelable: true, data: '' }));
                         t.dispatchEvent(new CompositionEvent('compositionupdate', { bubbles: true, cancelable: true, data: text }));
