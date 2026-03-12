@@ -562,23 +562,11 @@ export class CDPStrategy implements IStrategy {
     }
 
     private async focusHostChatComposerBestEffort(): Promise<boolean> {
-        const commands = [
-            'workbench.action.chat.focus',
-            'workbench.action.chat.open'
-        ];
-
-        let anySuccess = false;
-        for (const cmd of commands) {
-            try {
-                await vscode.commands.executeCommand(cmd);
-                anySuccess = true;
-                logToOutput(`[TestMethod] focus-host-chat command-ok=${cmd}`);
-            } catch (e: any) {
-                logToOutput(`[TestMethod] focus-host-chat command-fail=${cmd} err=${String(e?.message || e || 'unknown')}`);
-            }
-        }
-
-        return anySuccess;
+        // Disabled: executing 'workbench.action.chat.focus' forces the VS Code window
+        // to grab focus at the OS level, which steals focus from the user.
+        // CDP Input.insertText doesn't actually need the element to be focused natively.
+        logToOutput(`[TestMethod] focus-host-chat skipped to prevent OS focus stealing.`);
+        return true;
     }
 
     private async readComposerTextOnPage(pageId: string): Promise<string> {
