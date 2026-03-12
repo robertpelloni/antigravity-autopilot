@@ -10,9 +10,12 @@ export const AUTO_CONTINUE_SCRIPT = `
   window.__antigravityHeartbeat = Date.now();
 
   var lastClickAt = 0;
+  var lastBumpAt = 0;
   var lastProgressAt = Date.now();
   var wasGenerating = false;
   var timer = null;
+  var lastDiagAt = 0;
+  var diagIntervalMs = 10000;
 
   var FORK_PROFILES = {
     antigravity: {
@@ -275,6 +278,17 @@ export const AUTO_CONTINUE_SCRIPT = `
     return false;
   }
 
+  function proceedSignal(fork) {
+    var btns = q('button,[role="button"],.monaco-button,a');
+    for (var i = 0; i < btns.length; i++) {
+      var btn = btns[i];
+      if (!vis(btn) || blocked(btn) || !buttonish(btn) || !chatSurface(btn, fork)) continue;
+      var label = controlLabel(btn);
+      if (exactActionLabel('clickProceed', label)) return true;
+    }
+    return false;
+  }
+
   function textWaitingSignal(fork) {
     var profile = profileFor(fork);
     var texts = q('.chat-body,.message-body,.chat-message,[data-testid*="message" i],.monaco-list-row,p,span.message,[class*="message" i]');
@@ -290,13 +304,11 @@ export const AUTO_CONTINUE_SCRIPT = `
   function stalledSignal(fork) {
     var actions = visibleActionNames(fork);
     var hasThumbs = thumbsSignal(fork);
+    var hasProceed = proceedSignal(fork);
     var hasText = textWaitingSignal(fork);
 
     if (fork === 'vscode') {
-      return hasThumbs
-        || actions.indexOf('clickKeep') >= 0
-        || actions.indexOf('clickAllow') >= 0
-        || actions.indexOf('clickAlwaysAllow') >= 0;
+      return hasThumbs || hasProceed;
     }
 
     if (fork === 'cursor') {
@@ -322,6 +334,21 @@ export const AUTO_CONTINUE_SCRIPT = `
     var runtime = cfg.runtime || {};
     if (runtime.enforceLeader && runtime.isLeader !== true) return false;
     return true;
+  }
+
+  function focusChatInput(fork) {
+    var els = q('textarea,[contenteditable="true"],[role="textbox"]');
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      if (!vis(el) || blocked(el)) continue;
+      if (chatSurface(el, fork)) { try { el.focus(); } catch(e) {} return el; }
+    }
+    for (var j = 0; j < els.length; j++) {
+      if (vis(els[j]) && !blocked(els[j]) && (els[j].tagName||'').toLowerCase()==='textarea') {
+        try { els[j].focus(); } catch(e) {} return els[j];
+      }
+    }
+    return null;
   }
 
   function run() {
@@ -370,8 +397,47 @@ export const AUTO_CONTINUE_SCRIPT = `
       stalled: stalled,
       visibleActions: actions,
       hasThumbsStopSignal: thumbsSignal(fork),
+      hasProceedStopSignal: proceedSignal(fork),
       timestamp: now
     };
+
+    // === BUMP TEXT (when stalled and waiting, type + submit via CDP bridge) ===
+    if (stalled && waiting && !gen && shouldRunAutomation(cfg)) {
+      var bumpCfg = cfg.bump || {};
+      if (bumpCfg.enabled !== false) {
+        var bumpText = bumpCfg.text || 'Proceed';
+        var bumpCooldown = Math.max(5000, Number(timing.bumpCooldownMs) || 30000);
+        if ((now - lastBumpAt) >= bumpCooldown) {
+          var input = focusChatInput(fork);
+          log('bump attempt: input=' + (!!input) + ' text=' + bumpText);
+          setTimeout(function() {
+            if (window.__antigravityActiveInstance !== ID) return;
+            emit('__AUTOPILOT_HYBRID_BUMP__:' + bumpText);
+            log('bump dispatched: ' + bumpText);
+          }, 300);
+          lastBumpAt = now;
+        }
+      }
+    }
+
+    // === DIAGNOSTIC DUMP (every 10s) ===
+    if ((now - lastDiagAt) >= diagIntervalMs) {
+      lastDiagAt = now;
+      var canAct = shouldRunAutomation(cfg);
+      var runtime = cfg.runtime || {};
+      log('DIAG fork=' + fork
+        + ' gen=' + gen
+        + ' stalled=' + stalled
+        + ' waiting=' + waiting
+        + ' actions=[' + actions.join(',') + ']'
+        + ' canAct=' + canAct
+        + ' isLeader=' + (runtime.isLeader === true)
+        + ' enforceLeader=' + (!!runtime.enforceLeader)
+        + ' throttleOk=' + ((now - lastClickAt) >= actionThrottleMs)
+        + ' bumpCooldownOk=' + ((now - lastBumpAt) >= Math.max(5000, Number(timing.bumpCooldownMs) || 30000))
+        + ' progressAge=' + (now - lastProgressAt) + 'ms'
+      );
+    }
   }
 
   function loop() {

@@ -1,6 +1,21 @@
 # Changelog
 All notable changes to the Antigravity Autopilot extension will be documented in this file.
 
+## [6.2.53] - 2026-03-10
+### Fixed
+* **All Explicitly Stalled Windows Now Bump**: Automatic bump routing no longer narrows to a single “best” target; every connected window that reports an explicit stalled-chat stop signal is now bumped, regardless of focus.
+* **Explicit VS Code Stall Gate**: VS Code bump readiness now requires visible thumbs-up/down or a visible `Proceed`/`Continue` stop cue, preventing soft fallback states from being treated as stalled chats.
+
+### Changed
+* **Regression Coverage Refresh**: Reworked stalled-window tests to enforce all-window fan-out and explicit stop-cue gating for VS Code readiness.
+
+## [6.2.52] - 2026-03-10
+### Fixed
+* **Multi-Window Bump Target Drift**: Automatic bump routing in `src/strategies/cdp-strategy.ts` now scores ready targets by focus, visibility, active composer presence, runtime availability, and stall state instead of rotating blindly between ready pages, preventing bump text from drifting into the wrong VS Code window.
+
+### Changed
+* **Target Selection Regression Coverage**: Added focused unit coverage for score-based ready-target selection, broadcast-mode fan-out, and stable tie-breaking toward the previous bump target.
+
 ## [6.2.51] - 2026-03-10
 ### Fixed
 * **VS Code Label Narrowing**: The passive runtime no longer treats `Retry`, `Expand`, `Proceed`, `Accept all`, or `Run` as VS Code action targets, reducing false matches against non-chat controls and conversation-history UI in VS Code Insiders.

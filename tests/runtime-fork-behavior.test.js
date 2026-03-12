@@ -16,7 +16,9 @@ test('auto-continue runtime uses fork-aware waiting signals and avoids local foc
 
     assert.match(source, /function detectFork\(\)/, 'runtime should detect host fork on load');
     assert.match(source, /hasThumbsStopSignal/, 'runtime state should expose thumbs stop signal');
+    assert.match(source, /hasProceedStopSignal/, 'runtime state should expose proceed stop signal');
     assert.match(source, /thumbsSignal\(fork\)/, 'runtime should use thumbs up\/down for stopped-chat detection');
+    assert.match(source, /proceedSignal\(fork\)/, 'runtime should detect visible Proceed\/Continue cues without clicking them');
     assert.match(source, /if \(fork === 'vscode'\)/, 'runtime should use a dedicated VS Code waiting branch');
     assert.match(source, /if \(fork === 'cursor'\)/, 'runtime should keep a separate cursor waiting branch');
     assert.match(source, /actions\.indexOf\('clickExpand'\)/, 'runtime should use explicit Antigravity action buttons for waiting detection');
@@ -39,6 +41,17 @@ test('VS Code runtime does not look for Antigravity-style action labels', () => 
     assert.ok(!/clickAcceptAll: true/.test(vscodeProfile[1]), 'vscode should not look for Accept all');
     assert.ok(!/clickExpand: true/.test(vscodeProfile[1]), 'vscode should not look for Expand');
     assert.ok(!/clickRun: true/.test(vscodeProfile[1]), 'vscode should not look for Run by default in the passive runtime');
+});
+
+test('VS Code stalled detection requires explicit stopped-chat cues', () => {
+    const runtimeSource = read(AUTO_CONTINUE_PATH);
+    const strategySource = read(path.join(ROOT, 'src', 'strategies', 'cdp-strategy.ts'));
+
+    assert.match(runtimeSource, /return hasThumbs \|\| hasProceed;/, 'VS Code stalled detection should require explicit thumbs or Proceed stop cues');
+    assert.ok(!/actions\.indexOf\('clickKeep'\) >= 0[\s\S]*fork === 'vscode'/.test(runtimeSource), 'VS Code stalled detection should not rely on Keep/Allow-only cues');
+    assert.match(strategySource, /hasProceedStopSignal/, 'strategy readiness should inspect explicit proceed stop cues');
+    assert.match(strategySource, /runtime-missing-vscode-stop-cue/, 'strategy readiness should reject VS Code windows without thumbs or Proceed stop cues');
+    assert.ok(!/runtime-stalled-fallback/.test(strategySource), 'strategy should not use a generic stalled fallback for bump readiness');
 });
 
 test('cdp handler provides calmer default action throttle', () => {

@@ -67,8 +67,8 @@ export class CDPStrategy implements IStrategy {
 
     /**
      * Send a raw CDP command for bump input/submit.
-     * Default behavior targets only the primary connected page to avoid cross-window fan-out.
-     * Set antigravity.automation.bump.broadcastToAllPages=true to opt into legacy broadcast behavior.
+     * Automatic bumping resolves target pages from the explicit stalled-window scan so every
+     * genuinely stalled chat can be nudged, regardless of focus.
      */
     private async sendBumpInputCommand(method: string, params: any = {}, targetPageIds?: string[]): Promise<string[]> {
         const results: string[] = [];
@@ -234,27 +234,25 @@ export class CDPStrategy implements IStrategy {
             const readyToResume = state?.completionWaiting?.readyToResume === true;
             const stopped = state?.stalled === true;
             const completeSignal = state?.completeStopSignal === true;
-            const waitingForChatMessage = state?.waitingForChatMessage === true;
+            const hasThumbsStopSignal = state?.hasThumbsStopSignal === true;
+            const hasProceedStopSignal = state?.hasProceedStopSignal === true;
             const generating = state?.isGenerating === true;
-            const mode = String(state?.mode || '').toLowerCase();
             const fork = String(state?.fork || '').toLowerCase();
-            const status = String(state?.status || '').toLowerCase();
+            const explicitStopSignal = completeSignal && (fork !== 'vscode' || hasThumbsStopSignal || hasProceedStopSignal);
 
-            const ready = readyToResume && stopped && completeSignal;
+            const ready = readyToResume && stopped && explicitStopSignal && !generating;
             if (ready) {
                 return { ready: true, reason: 'runtime-ready-to-resume' };
             }
 
-            // Explicit complete-stop markers can occasionally drift out-of-sync while runtime
-            // is clearly stalled and waiting. Allow a guarded fallback across forks so bump
-            // typing can proceed instead of permanently starving on signal drift.
-            const waitingState = waitingForChatMessage || status === 'waiting_for_chat_message' || status === 'idle';
-            if (stopped && !generating && waitingState) {
-                return { ready: true, reason: 'runtime-stalled-fallback' };
+            if (stopped && explicitStopSignal && !generating) {
+                return { ready: true, reason: 'runtime-explicit-stop-signal' };
             }
 
             if (!stopped) return { ready: false, reason: 'runtime-not-stalled' };
+            if (generating) return { ready: false, reason: 'runtime-still-generating' };
             if (!completeSignal) return { ready: false, reason: 'runtime-missing-stop-signal' };
+            if (fork === 'vscode' && !hasThumbsStopSignal && !hasProceedStopSignal) return { ready: false, reason: 'runtime-missing-vscode-stop-cue' };
             return { ready: false, reason: 'runtime-not-ready' };
         })()`;
 
@@ -313,16 +311,6 @@ export class CDPStrategy implements IStrategy {
             } else {
                 skipped.push(`${pageId.substring(0, 8)}:${signal.reason}`);
             }
-        }
-
-        const broadcastToAll = config.get<boolean>('automation.bump.broadcastToAllPages') === true;
-        if (!broadcastToAll && readyTargets.length > 1) {
-            const lastTarget = this.lastBumpTargetPageId;
-            const lastIndex = lastTarget ? readyTargets.indexOf(lastTarget) : -1;
-            const nextIndex = lastIndex >= 0
-                ? (lastIndex + 1) % readyTargets.length
-                : 0;
-            return { readyTargets: [readyTargets[nextIndex]], skipped };
         }
 
         return { readyTargets, skipped };
@@ -722,65 +710,178 @@ export class CDPStrategy implements IStrategy {
         return down.some((r) => r.startsWith('ok:')) || up.some((r) => r.startsWith('ok:'));
     }
 
+    private async evaluateTargetSelectionSnapshot(pageId: string): Promise<{ pageId: string; score: number; details: string }> {
+        const handler = this.cdpHandler as any;
+        const conn = handler?.connections?.get?.(pageId);
+        const signal = await this.hasCompleteStopSignalOnPage(pageId).catch(() => ({ ready: false, reason: 'signal-eval-failed' }));
+        const expression = `(() => {
+            const isMonacoProxyInput = (el) => {
+                if (!el || !el.isConnected) return false;
+                const tag = String(el.tagName || '').toLowerCase();
+                if (tag !== 'textarea') return false;
+                const cls = String(el.className || '').toLowerCase();
+                if (cls.includes('inputarea') || cls.includes('monaco')) return true;
+                return !!el.closest?.('.monaco-editor');
+            };
+            const isVisible = (el) => {
+                if (!el || !el.isConnected || el.disabled) return false;
+                const r = el.getBoundingClientRect();
+                if (!r || r.width <= 0 || r.height <= 0) {
+                    return isMonacoProxyInput(el);
+                }
+                const s = window.getComputedStyle(el);
+                return !(s.display === 'none' || s.visibility === 'hidden' || s.pointerEvents === 'none');
+            };
+            const getContextHint = (el) => {
+                const own = [el?.id, el?.className, el?.getAttribute?.('data-testid'), el?.getAttribute?.('aria-label'), el?.getAttribute?.('title'), el?.getAttribute?.('placeholder')]
+                    .map((v) => String(v || '').toLowerCase())
+                    .join(' ');
+                const parent = String(el?.closest?.('[id], [class], [data-testid], [aria-label], [title]')?.outerHTML || '').toLowerCase();
+                return own + ' ' + parent;
+            };
+            const isTerminalLike = (el) => {
+                if (!el || !el.isConnected) return false;
+                if (el.closest?.('.terminal, .xterm, .xterm-screen, .xterm-helper-textarea, [data-testid*="terminal" i], [class*="terminal" i], [id*="terminal" i], [aria-label*="terminal" i], [class*="xterm-helper" i], [id*="xterm" i]')) return true;
+                const hint = getContextHint(el);
+                return /\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(hint);
+            };
+            const isExcludedWorkbenchSurface = (el) => {
+                if (!el || !el.isConnected) return false;
+                if (el.closest?.('.extensions-viewlet, .search-view, .search-widget, .settings-editor, .explorer-viewlet, .scm-viewlet, .debug-viewlet')) return true;
+                const hint = getContextHint(el);
+                return /extensions?-viewlet|marketplace|extension search|search extensions|extensions search|search for extensions|search view|search panel/.test(hint);
+            };
+            const isLikelyChatComposer = (el) => {
+                if (!el || !el.isConnected) return false;
+                if (isTerminalLike(el)) return false;
+                if (isExcludedWorkbenchSurface(el)) return false;
+                if (el.closest?.('.interactive-session, .interactive-input, .chat-input-container, .chat-editor, [data-testid*="chat" i], [data-testid*="composer" i], [class*="chat" i], [class*="composer" i], [id*="chat" i]')) {
+                    return true;
+                }
+                const hint = getContextHint(el);
+                return /\bchat\b|composer|ask|message|prompt|copilot/.test(hint);
+            };
+
+            const visible = document.visibilityState === 'visible';
+            const focused = (typeof document.hasFocus === 'function') ? document.hasFocus() : true;
+            const runtime = window.__antigravityRuntimeState || null;
+            const hasRuntime = !!runtime;
+            const composerCandidates = Array.from(document.querySelectorAll('textarea, .monaco-editor textarea, [contenteditable="true"], [role="textbox"]'));
+            const composers = composerCandidates.filter((el) => isVisible(el) && isLikelyChatComposer(el));
+            const active = document.activeElement;
+            const activeComposer = !!active && isVisible(active) && isLikelyChatComposer(active);
+            const activeTag = String(active?.tagName || '').toLowerCase();
+            const isGenerating = runtime?.isGenerating === true;
+            const isStalled = runtime?.stalled === true;
+            return {
+                visible,
+                focused,
+                hasRuntime,
+                hasComposer: composers.length > 0,
+                composerCount: composers.length,
+                activeComposer,
+                activeTag,
+                isGenerating,
+                isStalled
+            };
+        })()`;
+
+        const evaluate = async (sessionId?: string): Promise<{ value: any; context: string } | null> => {
+            const result = await handler.sendCommand(pageId, 'Runtime.evaluate', {
+                expression,
+                returnByValue: true,
+                awaitPromise: true
+            }, undefined, sessionId).catch(() => null);
+            const value = result?.result?.value;
+            if (!value || typeof value !== 'object') {
+                return null;
+            }
+            return {
+                value,
+                context: sessionId ? `session:${String(sessionId).substring(0, 8)}` : 'main'
+            };
+        };
+
+        const snapshots: Array<{ value: any; context: string }> = [];
+        const mainSnapshot = await evaluate();
+        if (mainSnapshot) {
+            snapshots.push(mainSnapshot);
+        }
+
+        const sessions: string[] = conn?.sessions ? Array.from(conn.sessions) : [];
+        for (const sessionId of sessions) {
+            const snapshot = await evaluate(sessionId);
+            if (snapshot) {
+                snapshots.push(snapshot);
+            }
+        }
+
+        const computeScore = (value: any): number => {
+            let score = 0;
+            if (value?.visible === true) score += 10;
+            if (value?.focused === true) score += 12;
+            if (value?.activeComposer === true) score += 12;
+            if (value?.hasComposer === true) score += 8;
+            if (value?.hasRuntime === true) score += 3;
+            if (signal.ready === true) score += 4;
+            if (value?.isStalled === true) score += 2;
+            if (value?.isGenerating !== true) score += 1;
+            return score;
+        };
+
+        let bestScore = signal.ready === true ? 4 : 0;
+        let bestDetails = `ctx=none visible=false focused=false activeComposer=false hasComposer=false hasRuntime=false stalled=false ready=${signal.ready === true}:${signal.reason}`;
+
+        for (const snapshot of snapshots) {
+            const score = computeScore(snapshot.value);
+            const details = `ctx=${snapshot.context} visible=${snapshot.value?.visible === true} focused=${snapshot.value?.focused === true} activeComposer=${snapshot.value?.activeComposer === true} hasComposer=${snapshot.value?.hasComposer === true} composerCount=${Number(snapshot.value?.composerCount || 0)} hasRuntime=${snapshot.value?.hasRuntime === true} stalled=${snapshot.value?.isStalled === true} generating=${snapshot.value?.isGenerating === true} activeTag=${String(snapshot.value?.activeTag || 'none')} ready=${signal.ready === true}:${signal.reason}`;
+            if (score > bestScore) {
+                bestScore = score;
+                bestDetails = details;
+            }
+        }
+
+        return { pageId, score: bestScore, details: bestDetails };
+    }
+
+    private pickBestTargetFromScores(scores: Array<{ pageId: string; score: number; details: string }>, options?: { preferLastBumpTarget?: boolean }): { pageId: string; score: number; details: string } | null {
+        if (!Array.isArray(scores) || scores.length === 0) {
+            return null;
+        }
+
+        const lastTarget = options?.preferLastBumpTarget === true ? this.lastBumpTargetPageId : null;
+        const ranked = [...scores].sort((a, b) => {
+            if (b.score !== a.score) {
+                return b.score - a.score;
+            }
+
+            if (lastTarget) {
+                const aIsLast = a.pageId === lastTarget ? 1 : 0;
+                const bIsLast = b.pageId === lastTarget ? 1 : 0;
+                if (bIsLast !== aIsLast) {
+                    return bIsLast - aIsLast;
+                }
+            }
+
+            return a.pageId.localeCompare(b.pageId);
+        });
+
+        return ranked[0] || null;
+    }
+
     private async pickBestManualTestTarget(method: string, targetPageIds: string[]): Promise<string | null> {
         if (!Array.isArray(targetPageIds) || targetPageIds.length === 0) {
             return null;
         }
 
-        const handler = this.cdpHandler as any;
         const scores: Array<{ pageId: string; score: number; details: string }> = [];
 
         for (const pageId of targetPageIds) {
-            const signal = await this.hasCompleteStopSignalOnPage(pageId).catch(() => ({ ready: false, reason: 'signal-eval-failed' }));
-            const evalResult = await handler.sendCommand(pageId, 'Runtime.evaluate', {
-                expression: `(() => {
-                    const visible = document.visibilityState === 'visible';
-                    const focused = (typeof document.hasFocus === 'function') ? document.hasFocus() : true;
-                    const runtime = window.__antigravityRuntimeState || null;
-                    const hasRuntime = !!runtime;
-                    const composerCandidates = Array.from(document.querySelectorAll('textarea, .monaco-editor textarea, [contenteditable="true"], [role="textbox"]'));
-                    const hasComposer = composerCandidates.some((el) => {
-                        if (!el || !el.isConnected) return false;
-                        if (el.closest?.('.terminal, .xterm, .xterm-screen, .xterm-helper-textarea, [data-testid*="terminal" i], [class*="terminal" i], [id*="terminal" i], [aria-label*="terminal" i], [class*="xterm-helper" i], [id*="xterm" i]')) return false;
-                        const ownHint = [el?.id, el?.className, el?.getAttribute?.('data-testid'), el?.getAttribute?.('aria-label'), el?.getAttribute?.('title'), el?.getAttribute?.('placeholder')]
-                            .map((v) => String(v || '').toLowerCase())
-                            .join(' ');
-                        if (/\bterminal\b|\bxterm\b|\bshell\b|debug console|output panel|problems panel|search view|terminal panel/.test(ownHint)) return false;
-                        const r = el.getBoundingClientRect();
-                        if (!r || r.width <= 0 || r.height <= 0) {
-                            const tag = String(el.tagName || '').toLowerCase();
-                            const cls = String(el.className || '').toLowerCase();
-                            if (!(tag === 'textarea' && (cls.includes('inputarea') || cls.includes('monaco') || !!el.closest?.('.monaco-editor')))) {
-                                return false;
-                            }
-                        }
-                        return true;
-                    });
-                    const isGenerating = runtime?.isGenerating === true;
-                    const isStalled = runtime?.stalled === true;
-                    return { visible, focused, hasRuntime, hasComposer, isGenerating, isStalled };
-                })()`,
-                returnByValue: true,
-                awaitPromise: true
-            }).catch(() => null);
-
-            const value = evalResult?.result?.value || {};
-            let score = 0;
-            if (value.visible === true) score += 8;
-            if (value.focused === true) score += 7;
-            if (value.hasComposer === true) score += 6;
-            if (value.hasRuntime === true) score += 3;
-            if (signal.ready === true) score += 4;
-            if (value.isGenerating !== true) score += 1;
-
-            const details = `visible=${value.visible === true} focused=${value.focused === true} hasComposer=${value.hasComposer === true} hasRuntime=${value.hasRuntime === true} stalled=${value.isStalled === true} ready=${signal.ready === true}:${signal.reason}`;
-            scores.push({ pageId, score, details });
+            scores.push(await this.evaluateTargetSelectionSnapshot(pageId));
         }
 
-        scores.sort((a, b) => b.score - a.score);
-        const best = scores[0] || null;
         logToOutput(`[TestMethod] target-scores method=${method} => ${scores.map((s) => `${s.pageId.substring(0, 8)}=${s.score}(${s.details})`).join(' | ')}`);
-        return best ? best.pageId : null;
+        return this.pickBestTargetFromScores(scores)?.pageId || null;
     }
 
     private async clickSendByCdpMouseOnPage(pageId: string): Promise<boolean> {

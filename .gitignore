@@ -3,3 +3,4 @@ dist
 tmp_submodules
 .yoke
 *.vsix
+.antigravity/

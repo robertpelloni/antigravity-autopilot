@@ -106,3 +106,13 @@ When dealing with "ghost" UI actions (e.g., the window layout mysteriously toggl
 - **Keep Must Stay Exact and Button-Gated:** `Keep` matching must remain restricted to exact short button labels and explicitly reject search, menu, quick-input, and extension surfaces to avoid false positives.
 - **Runtime Should Stay Passive About Bump Typing:** Avoid runtime-side focus stealing, DOM typing, or local hybrid bump emission; host-side CDP submission is safer for Monaco-backed chat inputs.
 - **Default Action Throttle Should Be Multi-Second:** Sub-second click throttles create hammering and mixed-surface risk; keep default action clicks on a calmer seconds-scale cadence.
+
+## Recent Hardening Notes (v6.2.52)
+
+- **Ready-Target Scoring Beats Round-Robin:** In multi-window VS Code sessions, auto-bump target narrowing must prefer the best ready chat target by focus, visibility, and active-composer signals rather than cycling between ready pages.
+- **Tie-Break Only After Safety Signals Match:** Use the previous bump target only as a stable tie-breaker once candidate pages score equally; never let last-target rotation override a clearly focused chat composer.
+
+## Recent Hardening Notes (v6.2.53)
+
+- **Focus Must Not Gate Stalled-Window Bumps:** When multiple windows each show an explicit stalled-chat stop cue, bump all of them; focus should not decide which stalled window gets resumed.
+- **VS Code Readiness Must Stay Explicit:** Treat VS Code windows as stalled only when visible thumbs-up/down or a visible `Proceed`/`Continue` cue is present; do not reintroduce generic stalled/idle fallback readiness.
