@@ -181,11 +181,6 @@ export const AUTO_CONTINUE_SCRIPT = `
   function domClick(el, label) {
     if (!el) return false;
     try {
-      try { el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true })); } catch (e) {}
-      try { el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true })); } catch (e) {}
-      try { el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); } catch (e) {}
-      try { el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true })); } catch (e) {}
-      try { el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); } catch (e) {}
       try { if (typeof el.click === 'function') el.click(); } catch (e) {}
       log('clicked ' + label);
       emitAction('click', label);
@@ -336,16 +331,16 @@ export const AUTO_CONTINUE_SCRIPT = `
     return true;
   }
 
-  function focusChatInput(fork) {
+  function findChatInput(fork) {
     var els = q('textarea,[contenteditable="true"],[role="textbox"]');
     for (var i = 0; i < els.length; i++) {
       var el = els[i];
       if (!vis(el) || blocked(el)) continue;
-      if (chatSurface(el, fork)) { try { el.focus(); } catch(e) {} return el; }
+      if (chatSurface(el, fork)) return el;
     }
     for (var j = 0; j < els.length; j++) {
       if (vis(els[j]) && !blocked(els[j]) && (els[j].tagName||'').toLowerCase()==='textarea') {
-        try { els[j].focus(); } catch(e) {} return els[j];
+        return els[j];
       }
     }
     return null;
@@ -408,7 +403,7 @@ export const AUTO_CONTINUE_SCRIPT = `
         var bumpText = bumpCfg.text || 'Proceed';
         var bumpCooldown = Math.max(5000, Number(timing.bumpCooldownMs) || 30000);
         if ((now - lastBumpAt) >= bumpCooldown) {
-          var input = focusChatInput(fork);
+          var input = findChatInput(fork);
           log('bump attempt: input=' + (!!input) + ' text=' + bumpText);
           setTimeout(function() {
             if (window.__antigravityActiveInstance !== ID) return;
