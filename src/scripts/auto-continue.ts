@@ -58,9 +58,9 @@ export const AUTO_CONTINUE_SCRIPT = `
 
   var ACTIONS = [
     ['clickAlwaysAllow', ['always allow', 'always approve']],
-    ['clickAcceptAll', ['accept all changes', 'apply all changes', 'accept all', 'apply all']],
+    ['clickAcceptAll', ['accept all changes', 'apply all changes', 'accept all', 'apply all', 'accept']],
     ['clickExpand', ['step requires input', 'requires input', 'expand']],
-    ['clickRun', ['run in terminal', 'run command', 'execute command', 'execute', 'run']],
+    ['clickRun', ['run in terminal', 'run command', 'execute command', 'execute', 'run', 'run this']],
     ['clickRetry', ['retry', 'try again']],
     ['clickKeep', ['keep']],
     ['clickProceed', ['proceed', 'continue']],
@@ -174,8 +174,8 @@ export const AUTO_CONTINUE_SCRIPT = `
       owner ? (owner.outerHTML || '') : ''
     ].join(' '));
 
-    if (/extensions?-viewlet|marketplace|extension search|search extensions|quick input|command palette|terminal|output panel|debug console|problems panel/.test(hint)) return false;
-    return /chat|copilot|assistant|composer|prompt|message|interactive|launchpad|agent/.test(hint);
+    if (/extensions?-viewlet|marketplace|extension search|search extensions|quick input|command palette|output panel|debug console|problems panel/.test(hint)) return false;
+    return true; // Broader acceptance of any visible button not explicitly blocked
   }
 
   function domClick(el, label) {
@@ -202,13 +202,13 @@ export const AUTO_CONTINUE_SCRIPT = `
   function exactActionLabel(action, label) {
     if (!label) return false;
     if (action === 'clickKeep') return /^keep(?:\s*[!.?])?$/.test(label);
-    if (action === 'clickRun') return /^(run|run in terminal|run command|execute|execute command)$/.test(label);
+    if (action === 'clickRun') return /^(run|run in terminal|run command|execute|execute command|run this)$/.test(label);
     if (action === 'clickExpand') return /^(expand|requires input|step requires input)$/.test(label);
     if (action === 'clickRetry') return /^(retry|try again)$/.test(label);
     if (action === 'clickProceed') return /^(proceed|continue)$/.test(label);
     if (action === 'clickAllow') return /^(allow|allow once)$/.test(label);
     if (action === 'clickAlwaysAllow') return /^(always allow|always approve)$/.test(label);
-    if (action === 'clickAcceptAll') return /^(accept all changes|apply all changes|accept all|apply all)$/.test(label);
+    if (action === 'clickAcceptAll') return /^(accept all changes|apply all changes|accept all|apply all|accept)$/.test(label);
     return false;
   }
 
@@ -302,27 +302,17 @@ export const AUTO_CONTINUE_SCRIPT = `
     var hasProceed = proceedSignal(fork);
     var hasText = textWaitingSignal(fork);
 
-    if (fork === 'vscode') {
-      return hasThumbs || hasProceed;
-    }
-
-    if (fork === 'cursor') {
-      return hasThumbs
-        || actions.indexOf('clickKeep') >= 0
-        || actions.indexOf('clickProceed') >= 0
-        || actions.indexOf('clickRetry') >= 0
-        || actions.indexOf('clickAcceptAll') >= 0
-        || actions.indexOf('clickAllow') >= 0
-        || actions.indexOf('clickAlwaysAllow') >= 0;
-    }
-
     return actions.indexOf('clickExpand') >= 0
       || actions.indexOf('clickRun') >= 0
       || actions.indexOf('clickRetry') >= 0
       || actions.indexOf('clickProceed') >= 0
       || actions.indexOf('clickAcceptAll') >= 0
+      || actions.indexOf('clickAllow') >= 0
+      || actions.indexOf('clickAlwaysAllow') >= 0
+      || actions.indexOf('clickKeep') >= 0
       || hasText
-      || hasThumbs;
+      || hasThumbs
+      || hasProceed;
   }
 
   function shouldRunAutomation(cfg) {
@@ -396,24 +386,10 @@ export const AUTO_CONTINUE_SCRIPT = `
       timestamp: now
     };
 
-    // === BUMP TEXT (when stalled and waiting, type + submit via CDP bridge) ===
-    if (stalled && waiting && !gen && shouldRunAutomation(cfg)) {
-      var bumpCfg = cfg.bump || {};
-      if (bumpCfg.enabled !== false) {
-        var bumpText = bumpCfg.text || 'Proceed';
-        var bumpCooldown = Math.max(5000, Number(timing.bumpCooldownMs) || 30000);
-        if ((now - lastBumpAt) >= bumpCooldown) {
-          var input = findChatInput(fork);
-          log('bump attempt: input=' + (!!input) + ' text=' + bumpText);
-          setTimeout(function() {
-            if (window.__antigravityActiveInstance !== ID) return;
-            emit('__AUTOPILOT_HYBRID_BUMP__:' + bumpText);
-            log('bump dispatched: ' + bumpText);
-          }, 300);
-          lastBumpAt = now;
-        }
-      }
-    }
+    // === BUMP TEXT (REMOVED) ===
+    // We no longer send typed "Proceed" messages since typing via CDP Input steals focus 
+    // and causes the "Ghost Typing" and "ProceedProceed" bugs.
+    // Automation now purely relies on DOM button clicking (Run, Continue, Expand, etc).
 
     // === DIAGNOSTIC DUMP (every 10s) ===
     if ((now - lastDiagAt) >= diagIntervalMs) {

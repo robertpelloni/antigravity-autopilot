@@ -991,79 +991,86 @@ export class CDPStrategy implements IStrategy {
             if (readyTargets.length > 0) {
                 this.lastBumpTargetPageId = readyTargets[0];
             }
-            logToOutput('[Bump] FIRING — stalled ' + actAge + 'ms, text: "' + BUMP_TEXT + '"');
-
             try {
-                // ────────────────────────────────────────
-                // STEP 1: No host-focus stealing
-                // Keep fallback fully background-safe; do not pull focus every tick.
-                // ────────────────────────────────────────
-                logToOutput('[Bump] Step 1: Background-safe bump (skip focus command).');
-
-                // ────────────────────────────────────────
-                // STEP 2: Type text via CDP Input.insertText
-                // This is BROWSER-LEVEL input — Monaco sees it as real keyboard typing
-                // No DOM manipulation, no textarea.value, no native setters
-                // ────────────────────────────────────────
-                logToOutput('[Bump] Step 2: CDP Input.insertText "' + BUMP_TEXT + '"...');
-                const typeResults = await this.sendBumpInputCommand('Input.insertText', { text: BUMP_TEXT }, readyTargets);
-                logToOutput('[Bump] Type result: ' + JSON.stringify(typeResults));
-                if (typeResults.length === 0 || typeResults.includes('no-connections')) {
-                    logToOutput('[Bump] Aborted: no connected CDP targets available for typing.');
-                    return;
-                }
-                await new Promise(r => setTimeout(r, SUBMIT_DELAY_MS));
-
-                // ────────────────────────────────────────
-                // STEP 3: Submit via send-button click when available (session-aware)
-                // Fallback to Enter only for targets without a clickable send control.
-                // ────────────────────────────────────────
-                const typedTargets = this.getSuccessfulTargetsFromResults(typeResults, readyTargets);
-                if (typedTargets.length === 0) {
-                    logToOutput('[Bump] Aborted: no targets confirmed typed bump text.');
-                    return;
-                }
-
-                const enterFallbackTargets: string[] = [];
-                const submitClickedTargets: string[] = [];
-
-                for (const pageId of typedTargets) {
-                    const clicked = await this.clickSubmitButtonOnPage(pageId, BUMP_TEXT);
-                    if (clicked) {
-                        submitClickedTargets.push(pageId.substring(0, 8));
-                    } else {
-                        enterFallbackTargets.push(pageId);
+                const expression = `(() => {
+                    function getChatInput() {
+                        var els = document.querySelectorAll('textarea,[contenteditable="true"],[role="textbox"]');
+                        for (var i = 0; i < els.length; i++) {
+                            var el = els[i];
+                            var s = window.getComputedStyle(el);
+                            if (s.display !== 'none' && s.visibility !== 'hidden' && el.isConnected) {
+                                var owner = el.closest ? el.closest('[class*="chat" i],[class*="composer" i],[class*="interactive" i],[data-testid*="chat" i]') : null;
+                                if (owner) return el;
+                                if ((el.tagName||'').toLowerCase()==='textarea') return el;
+                            }
+                        }
+                        return null;
                     }
-                }
+                    
+                    var el = getChatInput();
+                    if (!el) return false;
+                    
+                    try {
+                        var text = ${JSON.stringify(BUMP_TEXT)};
+                        
+                        // Method 1: Paste Event (Safest for Monaco)
+                        var dt = new DataTransfer();
+                        dt.setData('text/plain', text);
+                        el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+                        
+                        // Method 2: Native Setter fallback
+                        if (!el.value || el.value === '') {
+                            var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value");
+                            if (setter && setter.set) {
+                                setter.set.call(el, text);
+                            } else {
+                                el.value = text;
+                            }
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
 
-                logToOutput('[Bump] Submit click result: clicked=' + JSON.stringify(submitClickedTargets) + ' enterFallback=' + JSON.stringify(enterFallbackTargets.map((id) => id.substring(0, 8))));
+                        // Method 3: execCommand fallback (Requires focus, try avoiding if possible)
+                        if (!el.value || el.value === '') {
+                            el.focus({preventScroll: true});
+                            document.execCommand('insertText', false, text);
+                        }
+                        
+                        // Submit Sequence
+                        el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true }));
+                        el.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true }));
+                        
+                        // Fallback click on any Send buttons
+                        setTimeout(() => {
+                            var btns = document.querySelectorAll('button,[role="button"],.monaco-button,a');
+                            for(var i=0; i<btns.length; i++) {
+                                var btn = btns[i];
+                                var s = window.getComputedStyle(btn);
+                                if(s.display!=='none' && s.visibility!=='hidden') {
+                                    var l = (btn.getAttribute('aria-label')||btn.title||btn.textContent||'').toLowerCase();
+                                    if(l.indexOf('send')>=0 || l.indexOf('submit')>=0) {
+                                        try{ btn.click(); }catch(e){}
+                                    }
+                                }
+                            }
+                        }, 50);
 
-                if (enterFallbackTargets.length === 0) {
-                    logToOutput('[Bump] Done — submit via send button');
-                    return;
-                }
+                        return true;
+                    } catch (e) {
+                        return false;
+                    }
+                })()`;
 
-                logToOutput('[Bump] Step 4: CDP Input.dispatchKeyEvent Enter (fallback)...');
-                const enterDown = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
-                    type: 'keyDown',
-                    key: 'Enter',
-                    code: 'Enter',
-
-
-                }, enterFallbackTargets);
-                const enterUp = await this.sendBumpInputCommand('Input.dispatchKeyEvent', {
-                    type: 'keyUp',
-                    key: 'Enter',
-                    code: 'Enter',
-
-
-                }, enterFallbackTargets);
-                logToOutput('[Bump] Enter result: down=' + JSON.stringify(enterDown) + ' up=' + JSON.stringify(enterUp));
-
-                logToOutput('[Bump] Done — CDP Input domain (browser-level)');
-            } catch (e: any) {
-                logToOutput('[Bump] ERROR: ' + (e?.message || e));
+                await this.cdpHandler.sendCommand(this.lastBumpTargetPageId, 'Runtime.evaluate', {
+                    expression,
+                    returnByValue: true,
+                    awaitPromise: true
+                });
+                
+                logToOutput(`[Bump] Injected "${BUMP_TEXT}" via silent DOM paste to prevent focus stealing.`);
+            } catch (err: any) {
+                logToOutput(`[Bump] Error during DOM injection: ${err.message || err}`);
             }
+
         }, getTimingConfig().pollIntervalMs);
 
         vscode.window.showInformationMessage('Antigravity: CDP Strategy v9.1 ON');
@@ -1932,7 +1939,7 @@ export class CDPStrategy implements IStrategy {
                     .filter((el) => !isTerminalLike(el));
                 const input = candidates[0];
                 if (!input) return false;
-                try { if (typeof input.focus === 'function') input.focus(); } catch {}
+                // Removed to prevent focus stealing
                 const eventBase = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
                 try { input.dispatchEvent(new KeyboardEvent('keydown', eventBase)); } catch {}
                 try { input.dispatchEvent(new KeyboardEvent('keypress', eventBase)); } catch {}
