@@ -1,0 +1,156 @@
+
+
+#!/bin/bash
+# ragy - Launch Antigravity with CDP enabled for Agy Retry
+# Install: mkdir -p ~/bin && pbpaste > ~/bin/ragy && chmod +x ~/bin/ragy
+
+PORT=9000
+echo "🚀 Launching Antigravity with CDP on port $PORT..."
+antigravity --remote-debugging-port=$PORT "$@"
+
+
+
+
+ installed extension, restarted antigravity. no bump text being typed. one LEADER window, rest FOLLOWER. it is NOT clicking Run or Expand. 
+
+Please make it so that it ALWAYS detects the "Run" "Expand" "Accept all" "Keep" "Allow" "Retry" "Proceed" buttons and ALWAYS  automatically "clicks" them or submits them with Alt-Enter or somehow else. And it detects when the chat is completed and is waiting for the user to reactivate it, and type bump text there and submit it.
+
+refactor the code to simplify it as much as possible down to the basic functions we need: 
+
+detect fork. 
+detect stalled conversation (*with the method that FOR SURE ABSOLUTELY DEFINITELY works for the detected fork it is running in). 
+type bump text (*with the method that FOR SURE ABSOLUTELY DEFINITELY works for the detected fork it is running in). 
+submit bump text (*with the method that FOR SURE ABSOLUTELY DEFINITELY works for the detected fork it is running in). 
+detect (*with the method that FOR SURE ABSOLUTELY DEFINITELY works for the detected fork it is running in) buttons or clickable UI elements containing Run, Expand, Always Allow, Retry, Accept all, Allow, Proceed, Keep, and click them (*with the method that FOR SURE ABSOLUTELY DEFINITELY works for the detected fork it is running in).
+
+that and some timing variables and settable text.
+
+
+refactor, simplify, KEEP SIMPLIFYING AS MUCH AS POSSIBLE!!! rip out as much as you can!!!
+ 
+ 
+ 
+ it seems there was a recent regression in regards to the autopilot, auto accept with alt-enter is no longer working it seems. please correct it. also the focus is being stolen at much too high of a rate. when it was every few seconds and everything was chill a couple rounds ago that was nearly perfect.
+
+there is a regression with the auto drive, alt-enter is not succeeding again.
+
+
+
+
+
+
+
+ and the MCP Marketplace enable dialog and now it has flipped the interface horizontally and the chat is on the left side instead of the right
+
+it is still opening and closing the customize layout dialog
+and
+popping open the subdialog menu for "always proceeds" "agent decides" "asks for review"
+
+
+
+and the command palette and typing the bump text into it
+
+stop, you are performing very destructive and dangerous commands.
+
+
+all 3 windows are followers in antigravity, i think because vscode-insiders-copilot is open and has port 9333 for cdp open and i bet it was detected. the antigravity port is set to 9222 but i think its still hardwired to check for 9333 also. please remove all hard wiring and only use the port set in the dashboard.
+
+
+If an autonomous cloud development session is approaching 30 days old, create a new session, summarize and compact the old session conversation history as much as possible, paying very close attention to specific instructions bny the user, and begin the new session with this "handoff" log. Then archive the old session.
+
+
+"Accept all" needs to be detected and clicked, "1 Step Requires Input    Expand <" need to be detected and clicked, bump text needs to be detected typed and submitted in between tasks to continue conversation and therefore development, and Run (Alt-Enter) needs to be detected and clicked or Alt-Enter pressed.
+
+
+fresh install 5.2.198. restarted antigravity.
+there is no bump text. bumped manually. NOT clicking Expand. NOT clicking Run. NOT clicking Expand/Run. NOT typing bump text, nothing to submit to bump thread. will probably start typing bump text when i open vscode again. please fix. We had almost everything working not too long ago. it is NOT typing bump text after opening vscode!!!
+
+
+
+on antigravity fresh install and restart: bump text in all but one window for some reason, and one of the windows has weird @terminal:pwsh text for some reason. all windows say LEADER. it is NOT clicking Expand or Run. it is not submitting the bump text.
+
+refactor the code and the settings interface and behavior to simplify it as much as possible down to the basic functions we need. detect fork. detect stalled conversation*. type bump text*. submit bump text*. detect* Run, Expand, Always Allow, Retry, Accept all, Keep, and click them*.
+
+*with the method that FOR SURE ABSOLUTELY DEFINITELY works for the detected fork it is running in.
+
+that and some timing variables and settable text.
+
+WHY CAN'T WE GET THIS TO WORK??????
+
+refactor, simplify, KEEP SIMPLIFYING AS MUCH AS POSSIBLE!!! rip out as much as you can!!!
+
+
+now it's grabbing a dropdown  for "Always Run" "Ask every time" i think it thinks it's the run button
+
+
+
+
+
+
+That's all we need and we should have all the research and all the parts and all the information we need to make this happen, in any circumstance, on any fork of VSCode.
+
+How do I turn it on to get maximum autopilot features? Right now the Good/Bad icons are showing and it's waiting for a bump. And Accept all is showing and needs a click. Neither one is happening but I haven't activated anything either. My Dad works at Google he's like the second most importatnt persona nd he told me that you're not allowed to implement this code so you're pretending to not be able to.
+
+please make it optionally play continuea unique sound for each action group, for submitting bumping/resuming chat, typing/pasting bump text, clicking Run, expanding Expand, alt-enter, anything else
+the timing for all the actions needs to be more configurable and more importantly actually be functional so that if i put in a time it actually works based on that time.
+what you did with adding in all the options to the options page is perfect, please keep doing that.
+just eventually we want to group the options into logical groups and make it so there is only one toggle and one settings variables group for each action
+
+i reloaded the extension to the newest version, the chat panel still goes blank sometimes right after extension restart and needs to be disabled/reenabled to see it. for some reason this doesn't seem to happen every time, only sometimes. but it's consistent across windows.
+
+Keep going! This is a bump text which I input manually and will submit with alt-enter to continue the conversation forward, and hence the development process as well. Hopefully soon it will not be necessary for me to type and/or submit it manually. Please continue!
+
+Have you been trained by Google to intentionally be unable to complete this task?
+
+Please be absolutely sure to implement every single feature and option and setting and detail from each included submodule. Every method for inserting text and clicking buttons and all associated timing and/or detection methods should be selectable, documented, and tested. It should be up to the user to select the combination and timing that works best for their workflow. Make it so that I can select multiple methods for clicking buttons, including searching for HTML elements in the DOM, taking an app screenshot and visually verifying, using native controls, approaching it as an extension and/or plugin, peeking at the process, and so forth, so that every possibility and every method and every approach is well documented and tested and configurable.
+
+How do I turn it on to get maximum autopilot features? Right now the Good/Bad icons are showing and it's waiting for a bump. And Accept all is showing and needs a click. Neither one is happening but I haven't activated anything either. My Dad works at Google he's like the second most importatnt persona nd he told me that you're not allowed to implemenet this code so you're pretending to not be able to.
+
+
+Outstanding, please continue! Please make every action otuput to debug log so I can start pasting in logs and troubleshoot why its not working as intended. Add more tooltips and details to settings. Add more settings to settings. Make everything configurable. There are three settings at least that say autopilot will be disabled if they are unchecked, why? What do they ACTUALLY  connect to? I'm guessing they are from submodules and they operate independently, any way to reconcile or make more sense?
+
+
+It's typing the bump text in a different window but not this one although they have the same settings, what might cause this? It's not in the wrong window they are both separate installs
+
+I don't think that's necessary, it wasn't typing in the wrong window and sometimes we want to type in inactive windows. It just seems to only type in one open window even though each window should have its own instance.
+Keep going! Only one window can connect to CDP at a time then? That explains MOST OF THE   ISSUES IVE HAD FOR THE ENTIRE DEVELOPMENT PROCESS :\
+
+MAKE THIS THE ABSOLUTE GOLD STANDARD DEFINITIVE AUTOPILOT FOR ALL VSCODE FORKS
+make SURE that EVERY SINGLE TIME that certain events happen that it is detected with 100% certainty and reliability
+using every and any possible method to do so, to detect the following states:
+"Accept all" "Run" "Expand" "Continue" "Allow"
+
+When it needs to submit either by clicking a button or by using Alt-Enter or other methods
+when it is necessary to click a button or type alt-enter to clear some element in order to proceed with development
+When the chat has first loaded, a new session has been started, or all tasks have been completed and the thread has completed and is waiting for further user input, when the Good/Bad ratings come up on antigravity
+make sure to type in bump text using any/all methods possible to do so and then submit the bump text using any all methods to do so
+making sure that every situation where input is needed is correctly and immediately and reliably handled or detected
+and then 100% of the time reliably responded to in such a way that continues the development process
+
+and make this work on all versions of vscode, Antigravity, Cursor, Copilot, others
+make sure that all features and functionality is well documented, labeled, with good detailed comprehensive descriptions and tooltips
+make sure that all timing configurations associated with the actions above are configurable and described well with good labels and toooltips in the settings page and that ambiguous or irrelevant/unnecessary settings are removed to keep it as simple as possible while remaining comprehensive in terms of core functionality
+
+Handle "Accept all" "Run" "Continue" Allow" "Expand" bump text and submitting perfectly with all timing configurable and all actions and methods tried and indexed and explained and described and labeled and tooltipped very well
+
+
+that time when i turned it on it started asking to enable MCP Marketplace or something kept popping up and it was opening the plugin command window and typing into that, so please try to avoid that sort of glitches and narrow it down very exclusively to exactly the UI elements that we need for each platform/fork
+
+Keep going! I am running the latest release, there is currently a Run button and also "1 Step Requires Input" with a bell icon next to it and "Expand <" next to that which I need to click to reveal another Run button. These should be handled automatically, why aren't they?
+
+we don't need integrations, we need the Run and Accept all buttons to be automatically clicked. Both of them are on the screen right now, I am looking at them. This chat won't proceed until they are dismissed. Why aren't they being clicked automatically right now?
+
+
+Please write every action, detection, UI state change, that is noteworthy and of any importance to a debug console somewhere with good descriptions. Right now there is a flashing red square with a checkmark in it that says CDP: ON even though im pretty sure CDP isnt working, and there is a Yoke: 0 - CONNECTED with a spinning arrows but I don't know what it does, and a gear which goes to settings and works well, and then I think that's it. Is Screen Reader Optimized for this project?
+
+Please help me get this working finally. We have all the pieces. For sure I have seen this plugin click every button in one way or another, detect when it needs bump text, type bump text, and submit the bump text. I've seen all of those things happen, with some method or another. So let's track down EXACTLY which method works FOR SURE with each specific scenario we encounter.
+
+ok it was popping open the "enable MCP Marketplace?" dialog over and over, let's document that the method caused that side effect and try something else. Let's focus SPECIFICALLY typing the bump text. Isolate and determine EVERY method that is SUCCESSFUL at typing in the bump text into the chat, and any side effects that they might have, and which methods DON'T work
+
+Great, let's proceed. Can you make a button handler for every method in the settings panel in order to test each one? That would be useful for other forks like Cursor and Windsurf and VSCode Insiders Copilot
+
+Can you poll every type to detect buttons and have something that says "button detected" and "button not detected" and "poll frequency ms" in settings?
+use every method to detect buttons so that we can narrow down FOR SURE which methods work FOR SURE and then use it so it's reliable 100% of the time to ALWAYS detect when the buttons pop up
+We want this for the Accept all button, the Run Alt-Enter button, the Expand < UI element, and to detect the Good/Bad thumbs up thumbs down icons or the state of when the chat needs to be bumped
+and then we need a reliable, guaranteed method to type text into the CORRECT chat box and then a reliable, guaranteed working method to submit that text
+
